@@ -1,0 +1,4 @@
+# Downloaded firmware binaries (large files, can be re-downloaded)
+downloads/
+# Extracted firmware (can be regenerated from downloads)
+extracted/
