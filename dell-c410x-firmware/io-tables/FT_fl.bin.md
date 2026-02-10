@@ -1,21 +1,36 @@
-# FT_fl.bin - Function Table
+# FT_fl.bin -- Driver Configuration Table (Function Table)
 
-## Overview
+## What This File Does
+
+FT_fl.bin is a tiny configuration file -- just 26 bytes -- that tells each hardware
+driver how to behave at startup. Each driver type gets a single configuration byte.
+Most drivers use the default value (0x00), but a few need specific settings to match
+the C410X hardware: how many fan zones to manage, which I2C mux channels have devices
+connected, and other per-driver parameters.
+
+Unlike the other IO table files (which use `MakeMemFileV2()` and get a 16-byte wrapper),
+this file is loaded with the simpler `MakeMemFile()` -- just a raw malloc'd buffer with
+no wrapper header.
 
 | Property | Value |
 |----------|-------|
-| **File** | `etc/default/ipmi/evb/FT_fl.bin` |
+| **Location on BMC filesystem** | `/etc/default/ipmi/evb/FT_fl.bin` |
+| **bmcsetting section name** | `[FTTABLE]` |
 | **Size** | 26 bytes |
-| **Format** | Binary, little-endian |
-| **bmcsetting section** | `[FTTABLE]` |
-| **Loading function** | `HWInitFunctionTable()` at 0x0007a4b4 in fullfw |
+| **Loading function in fullfw** | `HWInitFunctionTable()` at address 0x0007a4b4 |
 | **Global pointer** | `G_u32FunTblStartAddr` at 0x00110bb0 |
 
-FT_fl.bin provides per-driver-type runtime configuration parameters. Unlike the other
-IO table files which use `MakeMemFileV2()`, this file uses the simpler `MakeMemFile()`
-which just reads the raw file into a malloc'd buffer without adding a wrapper header.
+## File Structure
 
-## Raw Content
+```c
+struct function_table {
+    uint8_t  version;           // Byte 0: format version (= 1)
+    uint8_t  max_driver_type;   // Byte 1: highest driver type index (= 24)
+    uint8_t  config[24];        // Bytes 2-25: one config byte per driver type
+};
+```
+
+## Raw File Contents
 
 ```
 Offset  Hex                                              ASCII
@@ -24,112 +39,104 @@ Offset  Hex                                              ASCII
 0x0010  00 00 00 00 00 00 00 be 00 00                    ..........
 ```
 
-## Structure
+## Configuration Byte Meanings
 
-```c
-struct function_table {
-    uint8_t  version;              // byte 0: version = 1
-    uint8_t  max_driver_type;      // byte 1: max type index = 24 (0x18)
-    uint8_t  config[24];           // bytes 2-25: one byte per driver type (0-23)
-};
+Most driver types use 0x00 (default/unconfigured). The four non-zero values configure
+specific hardware features:
+
+### Index 6 = 0x01: Fan Controller -- One Cooling Zone
+
+The Dell C410X treats all 8 fans as a single cooling zone. This means all fans ramp
+up and down together based on the hottest temperature reading anywhere on the board.
+A value of 0x01 tells the fan controller driver "you have 1 zone to manage."
+
+Some other MergePoint-based BMCs use multiple zones (e.g., separate front and rear
+fan banks), which would use a higher value here.
+
+### Index 7 = 0x10: PMBus PSU Configuration
+
+Value 16 (0x10) is a PMBus configuration parameter used during power supply enumeration.
+This likely specifies the bus identifier or an address offset that the PMBus driver uses
+when scanning for the four hot-swappable power supply units.
+
+### Index 10 = 0x18: Virtual Driver Parameter
+
+Value 24 (0x18) configures the "virtual other" driver. This may reference the number of
+virtual sensor entries or a configuration table size used by the software-defined sensor
+management layer.
+
+### Index 21 = 0xBE: PCA9548 I2C Mux Channel Enable Mask
+
+This is the most interesting configuration byte. The C410X uses two PCA9548 8-channel
+I2C multiplexers on bus 0xF4 to reach the 16 TMP100 per-slot temperature sensors. This
+byte is a bitmask telling the firmware which of the 8 mux channels have devices connected:
+
+```
+0xBE = 1 0 1 1 1 1 1 0  (binary, MSB first)
+       | | | | | | | |
+       | | | | | | | +-- Channel 0: DISABLED (no device)
+       | | | | | | +---- Channel 1: ENABLED
+       | | | | | +------ Channel 2: ENABLED
+       | | | | +-------- Channel 3: ENABLED
+       | | | +---------- Channel 4: ENABLED
+       | | +------------ Channel 5: ENABLED
+       | +-------------- Channel 6: DISABLED (no device)
+       +---------------- Channel 7: ENABLED
 ```
 
-## Per-Driver-Type Configuration
+Six of 8 channels are active. Channels 0 and 6 are disabled because those I2C mux paths
+don't connect to physical sensors on the C410X board. The firmware skips these channels
+during sensor polling, avoiding I2C bus errors from addressing non-existent devices.
 
-The 24 configuration bytes (one per driver type index 0-23):
+This matches the physical hardware: the C410X has 16 PCIe slots served by two PCA9548
+muxes, but not every possible mux channel connects to a temperature sensor. The board
+layout routes TMP100 sensors through specific channels based on PCB trace routing
+constraints.
 
-| Index | Driver Type | Config | Interpretation |
-|-------|------------|--------|----------------|
+## Complete Configuration Table
+
+| Index | Driver Type | Config | Meaning |
+|-------|------------|--------|---------|
 | 0 | ISR Controller | 0x00 | Default |
 | 1 | GPIO Sensor | 0x00 | Default |
 | 2 | OEM Power | 0x00 | Default |
 | 3 | LED Controller | 0x00 | Default |
 | 4 | IRQ Handler | 0x00 | Default |
 | 5 | GPIO Control | 0x00 | Default |
-| 6 | **Fan Controller** | **0x01** | **1 fan controller zone active** |
-| 7 | **PMBus PSU** | **0x10** | **PMBus config parameter (16)** |
+| **6** | **Fan Controller** | **0x01** | **1 fan cooling zone** |
+| **7** | **PMBus PSU** | **0x10** | **PMBus bus/address config (16)** |
 | 8 | Fan IOSAPI | 0x00 | Default |
 | 9 | EEPROM | 0x00 | Default |
-| 10 | **Virtual Other** | **0x18** | **Virtual driver config = 24** |
+| **10** | **Virtual Other** | **0x18** | **Virtual driver parameter (24)** |
 | 11 | PMBus Sensor | 0x00 | Default |
-| 12 | - | 0x00 | Unused |
-| 13 | - | 0x00 | Unused |
-| 14 | - | 0x00 | Unused |
-| 15 | - | 0x00 | Unused |
-| 16 | - | 0x00 | Unused |
-| 17 | - | 0x00 | Unused |
-| 18 | - | 0x00 | Unused |
-| 19 | - | 0x00 | Unused |
-| 20 | - | 0x00 | Unused |
-| 21 | **PCA9548 I2C Mux** | **0xBE** | **I2C mux channel enable bitmask** |
+| 12-20 | (unused) | 0x00 | Reserved for future driver types |
+| **21** | **PCA9548 I2C Mux** | **0xBE** | **Channel enable mask: channels 1-5,7 active** |
 | 22 | PCA9555 GPIO | 0x00 | Default |
 | 23 | GPU Hot-Plug | 0x00 | Default |
 
-### Notable Configuration Values
+## How Drivers Use This Table
 
-**Index 6 = 0x01 (Fan Controller):** Indicates 1 fan controller zone is active.
-The Dell C410X treats all 8 fans as a single cooling zone.
-
-**Index 7 = 0x10 (PMBus PSU):** PMBus configuration parameter, likely the bus
-number (16 = 0x10) or an address offset used during PMBus device enumeration.
-
-**Index 10 = 0x18 (Virtual Other):** Virtual driver parameter = 24, possibly
-referencing the number of virtual sensor entries or a configuration table size.
-
-**Index 21 = 0xBE (PCA9548 I2C Mux):** This is a channel-enable bitmask for the
-PCA9548 8-channel I2C multiplexer:
+During the firmware initialization sequence, after all four table files are loaded into
+memory, each IOAPI driver's init function reads its configuration byte:
 
 ```
-0xBE = 10111110 binary
-
-Bit 7 (0x80): Channel 7 = ENABLED
-Bit 6 (0x40): Channel 6 = DISABLED
-Bit 5 (0x20): Channel 5 = ENABLED
-Bit 4 (0x10): Channel 4 = ENABLED
-Bit 3 (0x08): Channel 3 = ENABLED
-Bit 2 (0x04): Channel 2 = ENABLED
-Bit 1 (0x02): Channel 1 = ENABLED
-Bit 0 (0x01): Channel 0 = DISABLED
+1. HWInitIOTableV3()         -- loads IO_fl.bin (hardware map)
+2. HWInitIOSensorTable()     -- loads IS_fl.bin (sensor definitions)
+3. HWInitSmartIOIndexTable() -- loads IX_fl.bin (index cross-references)
+4. HWInitFunctionTable()     -- loads FT_fl.bin (THIS FILE)
+5. Driver init functions run (called from G_aSysPostInitFunctionTable)
+   - Fan controller reads config[6] = 0x01 -> sets up 1 cooling zone
+   - PCA9548 driver reads config[21] = 0xBE -> enables 6 of 8 channels
+   - PMBus driver reads config[7] = 0x10 -> configures bus parameters
+   - etc.
 ```
-
-6 of 8 PCA9548 channels are active. Channels 0 and 6 are disabled, likely because
-those I2C bus segments have no downstream devices populated on the C410X board. This
-matches the hardware where not all possible I2C mux paths connect to physical sensors.
-
-## Relationship to System Init
-
-The firmware initialization sequence (`HWInit`) loads FT_fl.bin after IO_fl.bin,
-IS_fl.bin, and IX_fl.bin:
-
-```
-1. HWInitIOTableV3()         -- IO_fl.bin
-2. HWInitIOSensorTable()     -- IS_fl.bin
-3. HWInitSmartIOIndexTable() -- IX_fl.bin
-4. HWInitFunctionTable()     -- FT_fl.bin  ← this file
-5. HWInitTOC()               -- table of contents
-6. HWInitFWInfo()            -- firmware info
-7. HWInitNVRAMSubSystem()    -- NVRAM
-8. HWLoadDefaultValueTable() -- oemdef.bin
-```
-
-Individual IOAPI drivers read their configuration byte from FT_fl.bin during their
-initialization phase (called from `G_aSysPostInitFunctionTable`). The `MakeMemFile`
-loader keeps the entire 26-byte file in memory for quick access.
-
-## Hardcoded Function Tables in fullfw
 
 The firmware also contains four hardcoded function pointer arrays in `.rodata` that
-are NOT configured by FT_fl.bin but work alongside it:
+work alongside this table during initialization:
 
-| Table | Address | Entries | Purpose |
-|-------|---------|---------|---------|
-| `G_aSysPreInitFunctionTable` | 0x000f6e80 | 25 | Pre-initialization functions |
-| `G_aSysPostInitFunctionTable` | 0x000f6ee8 | 35 | Post-initialization functions |
-| `G_aCalcMemSizeFunctionTable` | 0x000f6f78 | 20 | Memory size calculation |
-| `G_aSysPrepareStopFuncionTable` | 0x000fc5b0 | 5 | Shutdown preparation |
-
-## Further Investigation
-
-- [ ] Verify PCA9548 channel mapping matches physical PCIe slot wiring
-- [ ] Determine which OEM dispatch table indices correspond to which driver types
-- [ ] Cross-reference fan zone configuration with ADT7462 PWM control
+| Table | Address | Entries | When It Runs |
+|-------|---------|---------|-------------|
+| `G_aSysPreInitFunctionTable` | 0x000f6e80 | 25 | Before hardware init |
+| `G_aSysPostInitFunctionTable` | 0x000f6ee8 | 35 | After table loading (reads FT_fl.bin) |
+| `G_aCalcMemSizeFunctionTable` | 0x000f6f78 | 20 | Memory allocation planning |
+| `G_aSysPrepareStopFuncionTable` | 0x000fc5b0 | 5 | Shutdown/cleanup |

@@ -1,364 +1,305 @@
-# IO_fl.bin - IO Hardware Mapping Table (Version 3)
+# IO_fl.bin -- Master Hardware IO Table
 
-## Overview
+## What This File Does
+
+IO_fl.bin is the master hardware inventory for the BMC. It describes **every piece of
+hardware** the BMC can talk to: GPIO pins, I2C devices, LEDs, fans, power supplies,
+communication interfaces, and non-volatile storage. Each entry says "here is a device,
+this is how to access it, and this is the driver that knows how to talk to it."
+
+The file contains 192 entries organized by device type. When the firmware needs to
+toggle a GPIO pin, read a fan speed, or turn on an LED, it looks up the entry in this
+table to find the right driver and hardware address.
 
 | Property | Value |
 |----------|-------|
-| **File** | `etc/default/ipmi/evb/IO_fl.bin` |
-| **Size** | 2456 bytes (0x998) |
-| **Format** | Binary, little-endian |
-| **bmcsetting section** | `[IOTABLE]` |
-| **Loading function** | `HWInitIOTableV3()` at 0x00079a48 in fullfw |
-| **Global pointers** | `G_sIOTableHeaderVer3Ptr` (0x00110b98), `G_sIOTablePtr` (0x00110b9c) |
+| **Location on BMC filesystem** | `/etc/default/ipmi/evb/IO_fl.bin` |
+| **bmcsetting section name** | `[IOTABLE]` |
+| **Size** | 2,456 bytes |
+| **Loading function in fullfw** | `HWInitIOTableV3()` at address 0x00079a48 |
 
-IO_fl.bin is the master hardware I/O configuration table for the Avocent MergePoint
-IPMI engine. It maps every hardware peripheral the BMC manages (GPIO pins, I2C devices,
-communication channels, LEDs, fans, PSUs) to its corresponding IOAPI driver structure,
-along with the hardware addressing parameters needed to access each device.
+## File Structure
 
-## Binary Layout
+The file has three parts:
 
 ```
-Offset  Size    Content
-------  ------  --------------------------------------------------
-0x0000  4       Header (version, flags, entry hint)
-0x0004  148     Dispatch table (37 entries x 4 bytes)
-0x0098  2304    Entry table (192 entries x 12 bytes)
+Bytes 0-3:      Header (version number and entry count hint)
+Bytes 4-151:    Dispatch table (37 slots, 4 bytes each)
+Bytes 152-2455: Entry table (192 entries, 12 bytes each)
 ```
 
-## Header (4 bytes)
+### Header
 
-```
-Offset  Type   Value   Meaning
-------  ----   -----   -------
-0x00    u8     0x03    Table version (V3 format)
-0x01    u8     0x00    Reserved
-0x02    u16LE  0x0096  Entry count hint = 150 (informational; actual count is 192)
-```
+- **Byte 0** = 0x03: This is version 3 of the IO table format
+- **Byte 1** = 0x00: Reserved
+- **Bytes 2-3** = 150 (little-endian): A hint about the number of entries. The actual
+  entry count (192) is larger; the firmware calculates the real count from the file size.
 
-The `HWInitIOTableV3()` function memory-maps the entire file via `MakeMemFileV2()`,
-stores the base pointer in `G_sIOTableHeaderVer3Ptr`, then computes the entry table
-pointer as `G_sIOTablePtr = base + 0x98`. This +0x98 offset was confirmed from ARM
-disassembly at 0x00079b80.
+### Dispatch Table -- Finding Entries by Device Type
 
-## Dispatch Table (148 bytes at 0x0004)
-
-37 entries of 4 bytes each. Each entry maps a logical **IO Type ID** to a contiguous
-range of entries in the entry table:
+The dispatch table is an array of 37 slots, one per device type. Each slot is 4 bytes
+and says "entries for this device type start at index X and there are Y of them":
 
 ```c
-struct dispatch_entry {
-    uint16_t count;        // Number of entries for this type
-    uint16_t start_index;  // Index of first entry in the entry table
+struct { uint16_t count; uint16_t start_index; }
+```
+
+For example, the slot for "LED Control" (type 24) says count=34, start=154, meaning
+LED entries are at indices 154 through 187 in the entry table.
+
+Not all 37 type slots are used. Types 3, 4, 7, 8, 15-17, 19, 21-22, and 25-35 have
+count=0 and contain no entries.
+
+### Entry Table -- 192 Hardware Descriptors
+
+Each entry is 12 bytes describing one hardware resource:
+
+```c
+struct io_entry {
+    uint16_t  address_or_mask;    // Hardware address, bitmask, or flags
+    uint16_t  register_or_bus;    // Register offset or bus routing info
+    uint16_t  port_or_config;     // Port selector or device configuration
+    uint32_t  driver_pointer;     // Address of the IOAPI driver vtable in firmware RAM
+    uint16_t  device_id;          // Logical device identifier or I2C address
 };
 ```
 
-### Active Type IDs
+The meaning of each field depends on the device type. For GPIO entries, `address_or_mask`
+is a bit mask selecting which pin. For I2C entries, it might encode an I2C address. The
+`driver_pointer` always points to a specific IOAPI driver structure in the fullfw binary.
 
-| Type ID | Count | Entries | IO Type Name | Primary IOAPI Driver |
-|---------|-------|---------|-------------|---------------------|
-| 0 | 1 | 0-0 | IPMB Channel | `G_sONCHIP_IPMB_IOAPI` |
-| 1 | 7 | 1-7 | IPMB Sub-channels | (null - virtual) |
-| 2 | 2 | 8-9 | KCS/VKCS | `G_sONCHIP_KCS_IOAPI` / `G_sONCHIP_VKCS_IOAPI` |
-| 5 | 1 | 10-10 | LAN | `G_sONCHIP_vDrvLAN_IOAPI` |
-| 6 | 1 | 11-11 | UART/Serial | `G_sONCHIP_UART_IOAPI` |
-| 9 | 2 | 12-13 | EEPROM/FRU | `G_sEE24Cxx_EEPROM_IOAPI` / `G_sONCHIP_vDrvFRU_IOAPI` |
-| 10 | 1 | 14-14 | SDR Repository | `G_sONCHIP_vDrvSDR_IOAPI` |
-| 11 | 1 | 15-15 | SEL Repository | `G_sONCHIP_vDrvSEL_IOAPI` |
-| 12 | 1 | 16-16 | Persistent Storage | `G_sONCHIP_vDrvPS_IOAPI` |
-| 13 | 8 | 17-24 | Fan/Temp (ADT7462) | `G_sOEMADT7462_I2CFAN_IOAPI` |
-| 14 | 118 | 25-142 | Sensor/GPIO | `G_sONCHIP_GPIO_IOAPI` / `G_sPCA9555_I2CGPIO_IOAPI` |
-| 18 | 1 | 143-143 | OEM Power Control | `G_sOEMPower_vDrvPOWER_IOAPI` |
-| 20 | 4 | 144-147 | I2C Mux (PCA9544) | `G_sOEMPCA9544_I2CSWITCH_IOAPI` |
-| 23 | 6 | 148-153 | IRQ/Interrupt | `G_sONCHIP_Generic_ISRAPI` |
-| 24 | 34 | 154-187 | LED Control | `G_sONCHIP_LED_IOAPI` |
-| 31 | 4 | 188-191 | PMBus PSU | `G_sPMBus_PSU_IOAPI` |
+## Device Types and What They Control
 
-Types 3, 4, 7, 8, 15-17, 19, 21-22, 25-30, 32-35 are unused (count=0).
+### Communication Interfaces
 
-## Entry Table (2304 bytes at 0x0098)
+**Type 0 -- IPMB Channel** (1 entry)
 
-192 entries, each 12 bytes:
+IPMB (Intelligent Platform Management Bus) is the I2C-based communication bus between
+the BMC and other management controllers. The single entry configures the BMC's I2C
+slave address as 0x20, which is the standard address for the primary BMC.
 
-```c
-struct io_table_entry_v3 {
-    uint16_t  param_a;      // bytes 0-1: bitmask, flags, or I2C address
-    uint16_t  param_b;      // bytes 2-3: register offset or bus routing
-    uint16_t  param_c;      // bytes 4-5: port group selector or device config
-    uint32_t  ioapi_ptr;    // bytes 6-9: pointer to IOAPI driver vtable (LE)
-    uint16_t  param_d;      // bytes 10-11: logical IO index or I2C address encoding
-};
-```
+**Type 1 -- IPMB Sub-channels** (7 entries)
 
-Field meanings are context-dependent based on the IOAPI driver type.
+Seven virtual sub-channels within the IPMB interface. These allow the firmware to
+multiplex different message types (normal commands, bridged messages, etc.) over the
+single physical IPMB bus.
 
-## IOAPI Driver Structures
+**Type 2 -- KCS Interfaces** (2 entries)
 
-Each IOAPI struct is a vtable of function pointers in the `.rodata` section of fullfw:
+KCS (Keyboard Controller Style) is how software on the host server sends IPMI commands
+to the BMC through a shared I/O port region:
 
-| Address | Symbol | Size | Driver Purpose |
-|---------|--------|------|---------------|
-| 0x000f76f0 | `G_sONCHIP_GPIO_IOAPI` | 16 | AST2050 on-chip GPIO control |
-| 0x000f7804 | `G_sONCHIP_Generic_ISRAPI` | 4 | Interrupt service registration |
-| 0x000fc330 | `G_sEE24Cxx_EEPROM_IOAPI` | 20 | 24Cxx I2C EEPROM read/write |
-| 0x000fc354 | `G_sPCA9555_I2CGPIO_IOAPI` | 16 | PCA9555 I2C GPIO expander |
-| 0x000fc374 | `G_sONCHIP_LED_IOAPI` | 12 | LED control (on/off/blink) |
-| 0x000fc3b8 | `G_sPMBus_PSU_IOAPI` | 24 | PMBus power supply management |
-| 0x000fcba4 | `G_sOEMPCA9544_I2CSWITCH_IOAPI` | 12 | PCA9544A I2C mux switching |
-| 0x000fcbec | `G_sOEMADT7462_I2CFAN_IOAPI` | 16 | ADT7462 fan/temperature controller |
-| 0x000fcc3c | `G_sOEMPower_vDrvPOWER_IOAPI` | 28 | System power on/off/cycle |
-| 0x000fcf08 | `G_sONCHIP_vDrvLAN_IOAPI` | 60 | Ethernet LAN (MAC/IP/link) |
-| 0x000fcf44 | `G_sONCHIP_vDrvPS_IOAPI` | 20 | Persistent storage (NVRAM) |
-| 0x000fcfa8 | `G_sONCHIP_vDrvSDR_IOAPI` | 20 | Sensor Data Record repository |
-| 0x000fd00c | `G_sONCHIP_vDrvFRU_IOAPI` | 20 | Field Replaceable Unit storage |
-| 0x000fd0d4 | `G_sONCHIP_vDrvSEL_IOAPI` | 20 | System Event Log storage |
-| 0x000fd1fc | `G_sONCHIP_IPMB_IOAPI` | 16 | IPMB messaging channel |
-| 0x000fd20c | `G_sONCHIP_KCS_IOAPI` | 16 | KCS (Keyboard Controller Style) |
-| 0x000fd21c | `G_sONCHIP_VKCS_IOAPI` | 16 | Virtual KCS channel |
-| 0x000fd258 | `G_sONCHIP_UART_IOAPI` | 84 | UART/serial with routing mux |
+| Entry | Interface | I/O Base | Notes |
+|-------|-----------|----------|-------|
+| 8 | Hardware KCS | 0x0CA2 | Physical I/O port shared with host CPU |
+| 9 | Virtual KCS | (software) | Software-based IPMI channel for internal use |
 
-## Detailed Entry Decode by Type
+**Type 5 -- LAN** (1 entry)
 
-### Type 0: IPMB Channel (Entry 0)
+The BMC's Ethernet interface, used for remote IPMI-over-LAN access (RMCP/RMCP+).
 
-| Entry | param_a | param_b | param_c | IOAPI | param_d | Notes |
-|-------|---------|---------|---------|-------|---------|-------|
-| 0 | 0x0020 | 0x0000 | 0x0000 | IPMB | 0x0000 | BMC IPMB address 0x20 |
+**Type 6 -- UART/Serial** (1 entry)
 
-### Type 1: IPMB Sub-channels (Entries 1-7)
+The serial port, used for Serial Over LAN (SOL) which lets administrators access the
+host server's serial console remotely through the BMC.
 
-Virtual IPMB sub-channels (null driver). param_d encodes sub-channel ID:
+### Non-Volatile Storage
 
-| Entry | param_d | Notes |
-|-------|---------|-------|
-| 1 | 0x0001 | IPMB sub-channel 1 |
-| 2 | 0x0002 | IPMB sub-channel 2 |
-| 3 | 0x0003 | IPMB sub-channel 3 |
-| 4 | 0x0404 | IPMB sub-channel 4 (special flags) |
-| 5 | 0x0005 | IPMB sub-channel 5 |
-| 6 | 0x0006 | IPMB sub-channel 6 |
-| 7 | 0x0002 | IPMB sub-channel 7 (alias to 2) |
+**Type 9 -- EEPROM and FRU** (2 entries)
 
-### Type 2: KCS (Entries 8-9)
+| Entry | Storage | Details |
+|-------|---------|---------|
+| 12 | Physical EEPROM | 24Cxx I2C EEPROM at address 0xA0 on bus 0xF2 (stores FRU data: chassis model, serial number, part numbers) |
+| 13 | Virtual FRU | NVRAM-based FRU storage for data that doesn't fit in the physical EEPROM |
 
-| Entry | param_a | param_b | IOAPI | Notes |
-|-------|---------|---------|-------|-------|
-| 8 | 0x0000 | 0x0CA2 | KCS | Hardware KCS at I/O base 0x0CA2 |
-| 9 | 0x0000 | 0x0000 | VKCS | Virtual KCS (software channel) |
+**Type 10 -- SDR Repository** (1 entry)
 
-### Type 5: LAN (Entry 10)
+4KB region storing IPMI Sensor Data Records -- the metadata describing all 72 sensors
+(names, units, thresholds, conversion formulas).
 
-| Entry | param_a | IOAPI | Notes |
-|-------|---------|-------|-------|
-| 10 | 0xFF00 | LAN | Ethernet interface, mask 0xFF00 |
+**Type 11 -- SEL Repository** (1 entry)
 
-### Type 6: UART (Entry 11)
+8KB region for the System Event Log. When a sensor crosses a threshold or a hardware
+event occurs, the BMC records it here with a timestamp.
 
-| Entry | param_a | param_b | IOAPI | param_d | Notes |
-|-------|---------|---------|-------|---------|-------|
-| 11 | 0xFFFF | 0x0001 | UART | 0x0110 | Serial port, config 0x0110 |
+**Type 12 -- Persistent Storage** (1 entry)
 
-### Type 9: EEPROM/FRU Storage (Entries 12-13)
+12KB general-purpose NVRAM for runtime configuration that persists across reboots
+(network settings, user accounts, etc.).
 
-| Entry | param_a | param_b | param_c | IOAPI | param_d | Notes |
-|-------|---------|---------|---------|-------|---------|-------|
-| 12 | 0xF2A0 | 0x0400 | 0x0500 | EEPROM | 0x0204 | 24Cxx at I2C addr 0xA0, bus 0xF2, 1KB size |
-| 13 | 0x0000 | 0x0000 | 0x0000 | vDrvFRU | 0x0240 | Virtual FRU storage in NVRAM |
+### Fan and Temperature Monitoring
 
-### Type 10-12: NVRAM Repositories (Entries 14-16)
+**Type 13 -- ADT7462 Fan/Temperature Controllers** (8 entries)
 
-| Entry | param_a | IOAPI | param_d | Notes |
-|-------|---------|-------|---------|-------|
-| 14 | 0x1000 | vDrvSDR | 0x0280 | SDR Repository, 4KB |
-| 15 | 0x2000 | vDrvSEL | 0x02A0 | SEL Repository, 8KB |
-| 16 | 0x3000 | vDrvPS  | 0x0000 | Persistent Storage, 12KB |
+The C410X has two Analog Devices ADT7462 chips for thermal management. Each ADT7462
+can monitor temperatures and control fan speeds. They sit on I2C bus 0xF1, behind a
+PCA9544A 4-channel I2C multiplexer at address 0x70.
 
-### Type 13: ADT7462 Fan/Temperature Controllers (Entries 17-24)
+| Entry | Chip | Mux Select | Channel | Function |
+|-------|------|------------|---------|----------|
+| 17 | ADT7462 #1 | 0xB0 | A (0xAA) | Board region 1 -- Remote Temp 1 + fan tach |
+| 18 | ADT7462 #1 | 0xB0 | B (0xAB) | Board region 1 -- Remote Temp 2 |
+| 19 | ADT7462 #1 | 0xB0 | C (0xAC) | Board region 1 -- Local Temp |
+| 20 | ADT7462 #1 | 0xB0 | D (0xAD) | Board region 1 -- additional channel |
+| 21 | ADT7462 #2 | 0xB8 | A (0xAA) | Board region 2 -- Remote Temp 1 + fan tach |
+| 22 | ADT7462 #2 | 0xB8 | B (0xAB) | Board region 2 -- Remote Temp 2 |
+| 23 | ADT7462 #2 | 0xB8 | C (0xAC) | Board region 2 -- Local Temp |
+| 24 | ADT7462 #2 | 0xB8 | D (0xAD) | Board region 2 -- additional channel |
 
-The Dell C410X has **two ADT7462 chips** on I2C bus 0xF1, each behind a PCA9544A mux.
-Each ADT7462 has 4 fan/temperature channels (sub-addresses 0xAA-0xAD).
+To read ADT7462 #1, the firmware first writes to the PCA9544A mux at 0x70 to select
+the 0xB0 channel, then reads from the ADT7462's registers.
 
-| Entry | Bus (param_b) | Mux Addr | ADT7462 Addr (param_c) | I2C 7-bit | Notes |
-|-------|---------------|----------|------------------------|-----------|-------|
-| 17 | 0xF1B0 | 0xB0 (0x58) | 0xAA (0x55) | ADT7462 #1, Ch A | Board Temp 1, Fan 1-2 |
-| 18 | 0xF1B0 | 0xB0 (0x58) | 0xAB (0x55+) | ADT7462 #1, Ch B | Board Temp 2 |
-| 19 | 0xF1B0 | 0xB0 (0x58) | 0xAC (0x56) | ADT7462 #1, Ch C | Board Temp 3 |
-| 20 | 0xF1B0 | 0xB0 (0x58) | 0xAD (0x56+) | ADT7462 #1, Ch D | |
-| 21 | 0xF1B8 | 0xB8 (0x5C) | 0xAA (0x55) | ADT7462 #2, Ch A | Board Temp 4, Fan 5-6 |
-| 22 | 0xF1B8 | 0xB8 (0x5C) | 0xAB (0x55+) | ADT7462 #2, Ch B | Board Temp 5 |
-| 23 | 0xF1B8 | 0xB8 (0x5C) | 0xAC (0x56) | ADT7462 #2, Ch C | Board Temp 6 |
-| 24 | 0xF1B8 | 0xB8 (0x5C) | 0xAD (0x56+) | ADT7462 #2, Ch D | param_d=0x04 (flag) |
+### GPIO Pins -- The Largest Section
 
-**I2C bus encoding**: param_b high byte (0xF1) = I2C bus ID, low byte = PCA9544A 8-bit
-address used as a mux selector.
+**Type 14 -- Sensor/GPIO** (118 entries)
 
-### Type 14: Sensor/GPIO (Entries 25-142) - 118 Entries
+This is by far the biggest section, with 118 entries covering all GPIO pins used by
+the BMC. There are two kinds:
 
-This is the largest section, containing all GPIO pins used for sensor monitoring.
-It includes two driver types:
+#### AST2050 On-Chip GPIO (38 entries)
 
-#### AST2050 On-Chip GPIO (38 entries, IOAPI = 0x000f76f0)
+These are pins directly on the BMC SoC. Each entry specifies:
+- **Which pin**: a bitmask (e.g., 0x0010 = bit 4 within the port group)
+- **What register**: data (read/write the pin), direction (input/output), interrupt enable, or interrupt sense
+- **Which port group**: GPIOA-D, GPIOE-H, GPIOI-L, or GPIOM-P
 
-Entry format for on-chip GPIO:
-- **param_a** = GPIO bit mask (single bit position, e.g., 0x0010 = bit 4)
-- **param_b** = Register sub-offset within GPIO bank (0x0000=data, 0x0002=direction, 0x0008=int enable, 0x000a=int sense)
-- **param_c** = GPIO port group: 0x4000=GPIOA-D, 0x4002=GPIOE-H, 0x4004=GPIOI-L, 0x4006=GPIOM-P
-- **param_d** = Logical GPIO index
+The AST2050's GPIO registers live at base address 0x1E780000:
 
-| Entry | Bit Mask | Register | Port Group | GPIO Index | Likely GPIO Pin |
-|-------|----------|----------|------------|------------|-----------------|
-| 25 | 0x0010 | 0x08 (IntEn) | 0x4000 (A-D) | 0x05 | GPIOA4 |
-| 26 | 0x0020 | 0x08 (IntEn) | 0x4000 (A-D) | 0x08 | GPIOA5 |
-| 27 | 0x0100 | 0x08 (IntEn) | 0x4000 (A-D) | 0x09 | GPIOB0 |
-| 28 | 0x0200 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0A | GPIOB1 |
-| 29 | 0x0400 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0B | GPIOB2 |
-| 30 | 0x0800 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0C | GPIOB3 |
-| 31 | 0x1000 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0D | GPIOB4 |
-| 32 | 0x2000 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0E | GPIOB5 |
-| 33 | 0x4000 | 0x08 (IntEn) | 0x4000 (A-D) | 0x0F | GPIOB6 |
-| 34 | 0x8000 | 0x08 (IntEn) | 0x4000 (A-D) | 0x11 | GPIOB7 |
-| 35 | 0x0002 | 0x00 (Data) | 0x4002 (E-H) | 0x12 | GPIOE1 |
-| 36 | 0x0004 | 0x08 (IntEn) | 0x4002 (E-H) | 0x13 | GPIOE2 |
-| 37 | 0x0008 | 0x00 (Data) | 0x4002 (E-H) | 0x14 | GPIOE3 |
-| 38 | 0x0010 | 0x0A (IntSense) | 0x4002 (E-H) | 0x20 | GPIOE4 |
-| 39-54 | 0x0001-0x8000 | 0x00 (Data) | 0x4004 (I-L) | 0x21-0x30 | GPIOI0-GPIOL7 |
-| 55 | 0x0001 | 0x00 (Data) | 0x4006 (M-P) | 0x31 | GPIOM0 |
-| 56 | 0x0002 | 0x00 (Data) | 0x4006 (M-P) | 0x3C | GPIOM1 |
-| 57 | 0x1000 | 0x00 (Data) | 0x4006 (M-P) | 0x3D | GPION4 |
-| 58 | 0x2000 | 0x00 (Data) | 0x4006 (M-P) | 0x10 | GPION5 |
-| 59 | 0x0001 | 0x00 (Data) | 0x4002 (E-H) | 0x15 | GPIOE0 |
-| 60 | 0x0020 | 0x00 (Data) | 0x4002 (E-H) | 0x1E | GPIOE5 |
-| 61 | 0x4000 | 0x00 (Data) | 0x4002 (E-H) | 0x3E | GPIOG6 |
-| 62 | 0x4000 | 0x02 (Dir) | 0x4006 (M-P) | -- | GPIOO6 (direction setup) |
+| Port Group | Firmware Code | Register Offset | Entries | Usage |
+|------------|--------------|-----------------|---------|-------|
+| GPIOA-D | 0x4000 | +0x000 | 10 pins | Interrupt-driven inputs: hardware alerts, sensor events |
+| GPIOE-H | 0x4002 | +0x020 | 7 pins | Mixed: I2C device interrupts, status signals |
+| GPIOI-L | 0x4004 | +0x070 | 16 pins | PCIe/system status monitoring data lines |
+| GPIOM-P | 0x4006 | +0x078 | 5 pins | System control outputs (power, resets) |
 
-The GPIO base register for the AST2050 is at 0x1E780000:
-- Group 0x4000 (GPIOA-D): base + 0x000
-- Group 0x4002 (GPIOE-H): base + 0x020
-- Group 0x4004 (GPIOI-L): base + 0x070
-- Group 0x4006 (GPIOM-P): base + 0x078
+Most GPIOA-D pins are configured with interrupt enable, meaning the BMC gets notified
+immediately when these signals change (rather than having to poll).
 
-#### PCA9555 I2C GPIO Expander (80 entries, IOAPI = 0x000fc354)
+#### PCA9555 I2C GPIO Expanders (80 entries)
 
-Entry format for PCA9555:
-- **param_a** = Bit mask within PCA9555 port (0x01-0x80, one bit per I/O pin)
-- **param_b** = PCA9555 register: 0x0000=Output Port, 0x0008=Input Port, 0x000a=Config
-- **param_c** = Port select: 0x4000=Port 0, 0x4002=Port 1, 0x0002=alternate mode
-- **param_d** = I2C address encoding: high byte=bus ID (0xF6 or 0xF1), low byte=8-bit I2C addr
+The C410X needs far more GPIO pins than the AST2050 provides natively, so it uses five
+PCA9555 chips. Each PCA9555 is a 16-bit I2C GPIO expander (two 8-bit ports). These
+are the workhorses for managing the 16 PCIe slots:
 
-**PCA9555 Device Mapping:**
+| I2C Bus | 7-bit Address | 8-bit Address | Function |
+|---------|---------------|---------------|----------|
+| 0xF6 | 0x20 | 0x40 | **PCIe slots 1-8 presence detect** -- Port 0 and Port 1 pins map to individual slot PRSNT# signals |
+| 0xF6 | 0x21 | 0x42 | **PCIe slots 9-16 presence detect** -- same layout for the upper 8 slots |
+| 0xF6 | 0x22 | 0x44 | **PCIe slot power control** -- output pins enable/disable 12V power to each slot |
+| 0xF6 | 0x23 | 0x46 | **PCIe slot status and LEDs** -- drives per-slot indicator LEDs and reads status signals |
+| 0xF1 | 0x20 | 0x40 | **Additional status/control** -- miscellaneous GPIO for system management |
 
-| param_d | I2C Bus | 8-bit Addr | 7-bit Addr | Device Function |
-|---------|---------|------------|------------|-----------------|
-| 0xF640 | Bus 0xF6 | 0x40 | 0x20 | PCA9555 #1 - PCIe slot presence (slots 1-8) |
-| 0xF642 | Bus 0xF6 | 0x42 | 0x21 | PCA9555 #2 - PCIe slot presence (slots 9-16) |
-| 0xF644 | Bus 0xF6 | 0x44 | 0x22 | PCA9555 #3 - PCIe slot power control |
-| 0xF646 | Bus 0xF6 | 0x46 | 0x23 | PCA9555 #4 - PCIe slot status/LED |
-| 0xF140 | Bus 0xF1 | 0x40 | 0x20 | PCA9555 #5 - Additional GPIO/status |
+Each PCA9555 entry specifies:
+- A **bit mask** (0x01-0x80) selecting which of the 8 pins in a port
+- A **register selector**: 0x0000 for output, 0x0008 for input, 0x000a for direction config
+- A **port selector**: Port 0 or Port 1 within the PCA9555
 
-Each PCA9555 provides 16 GPIO lines (2 ports x 8 bits). With 5 devices, that's
-80 I2C-based GPIO lines for PCIe slot management, in addition to the 38 on-chip GPIOs.
+### Power Management
 
-### Type 18: OEM Power Control (Entry 143)
+**Type 18 -- OEM Power Control** (1 entry)
 
-| Entry | param_a | param_b | IOAPI | Notes |
-|-------|---------|---------|-------|-------|
-| 143 | 0xFFFF | 0x00FF | POWER | System power on/off/cycle controller |
+Controls the system power state (power on, power off, power cycle). This is how
+IPMI Chassis Control commands get translated into physical power actions.
 
-### Type 20: PCA9544A I2C Mux (Entries 144-147)
+**Type 31 -- PMBus Power Supplies** (4 entries)
 
-4 I2C multiplexer channel configurations:
+The C410X supports 4 hot-swappable power supplies that communicate over PMBus (a
+protocol built on I2C for power supply management). Each entry configures one PSU:
 
-| Entry | param_a | param_b | param_d | Notes |
-|-------|---------|---------|---------|-------|
-| 144 | 0x00E0 | 0x0001 | 0x000C | Mux channel 0, 8-bit addr 0xE0 (7-bit 0x70) |
-| 145 | 0x01E0 | 0x0001 | 0x000C | Mux channel 1 |
-| 146 | 0x02E0 | 0x0001 | 0x000C | Mux channel 2 |
-| 147 | 0x03E0 | 0x0001 | 0x0010 | Mux channel 3 (different config) |
+| Entry | PSU | Notes |
+|-------|-----|-------|
+| 188 | PSU 1 | PMBus capabilities bitmask 0x01FE |
+| 189 | PSU 2 | Same configuration |
+| 190 | PSU 3 | Same configuration |
+| 191 | PSU 4 | Different address encoding (last PSU slot) |
 
-param_a encodes: high byte = channel select, low byte = 8-bit I2C address of PCA9544A.
-The PCA9544A at 7-bit address 0x70 (8-bit 0xE0) routes I2C buses to downstream
-ADT7462, TMP100, and INA219 devices.
+### I2C Multiplexer Control
 
-### Type 23: IRQ/Interrupt (Entries 148-153)
+**Type 20 -- PCA9544A I2C Mux** (4 entries)
 
-| Entry | param_a | param_b | param_d | Notes |
-|-------|---------|---------|---------|-------|
-| 148 | 0x0001 | 0x0120 | 0x0015 | IRQ for GPIO index 0x15 (PCA9555 interrupt) |
-| 149 | 0x0001 | 0x0180 | 0x001E | IRQ for GPIO index 0x1E |
-| 150 | 0x0001 | 0x0120 | 0x0011 | IRQ for GPIO index 0x11 |
-| 151 | 0x0001 | 0x0020 | 0x0013 | IRQ for GPIO index 0x13 |
-| 152 | 0x0001 | 0x0020 | 0x003E | IRQ for GPIO index 0x3E |
-| 153 | 0x0001 | 0x0080 | 0x0000 | IRQ for GPIO index 0x00 (primary) |
+Four entries configuring the PCA9544A 4-channel I2C multiplexer at 7-bit address 0x70
+(8-bit 0xE0). This mux sits on bus 0xF1 and routes to the ADT7462 thermal management
+chips and other devices. Each entry represents one mux channel:
 
-param_b likely encodes the interrupt vector/priority configuration.
+| Entry | Channel | Downstream Devices |
+|-------|---------|-------------------|
+| 144 | 0 | ADT7462 #1 (via mux address 0xB0) |
+| 145 | 1 | Additional I2C segment |
+| 146 | 2 | Additional I2C segment |
+| 147 | 3 | ADT7462 #2 (via mux address 0xB8), different config |
 
-### Type 24: LED Control (Entries 154-187)
+### Interrupt Handling
 
-34 LEDs with various configurations:
+**Type 23 -- IRQ/Interrupt** (6 entries)
 
-| Entry | param_a | param_d | Notes |
-|-------|---------|---------|-------|
-| 154 | 0x0404 | 0x01 | LED 1 (blink mode) |
-| 155 | 0x0404 | 0x02 | LED 2 (blink mode) |
-| 156-180 | 0x0000 | 0x03-0x1E | LEDs 3-30 (steady mode) |
-| 181 | 0x0000 | 0x53 | LED 83 (special/OEM) |
-| 182 | 0x0000 | 0x0B | LED 11 (duplicate entry) |
-| 183-184 | 0x0404 | 0x0D | LED 13 (blink, 2 entries) |
-| 185 | 0x0101 | 0x01 | LED 1 (alternate blink) |
-| 186 | 0x0000 | 0x01 | LED 1 (steady mode alias) |
-| 187 | 0x0101 | 0x01B2 | LED 0x1B2 (special) |
+Six hardware interrupt sources that the BMC monitors for asynchronous events:
 
-param_a LED modes: 0x0000=steady, 0x0404=blink, 0x0101=alternate blink.
+| Entry | Interrupt Source | Purpose |
+|-------|-----------------|---------|
+| 148 | GPIO index 0x15 | PCA9555 interrupt (card presence change) |
+| 149 | GPIO index 0x1E | Hardware event notification |
+| 150 | GPIO index 0x11 | Hardware event notification |
+| 151 | GPIO index 0x13 | Hardware event notification |
+| 152 | GPIO index 0x3E | Hardware event notification |
+| 153 | GPIO index 0x00 | Primary system interrupt |
 
-### Type 31: PMBus PSU (Entries 188-191)
+When one of these GPIO pins triggers, the BMC's interrupt handler runs the appropriate
+service routine to determine what changed and take action (e.g., log a card removal
+event to the System Event Log).
 
-4 power supply units on PMBus:
+### LED Control
 
-| Entry | param_a | param_d | Notes |
-|-------|---------|---------|-------|
-| 188 | 0x01FE | 0x11B2 | PSU 1 - PMBus addr encoding in param_d |
-| 189 | 0x01FE | 0x21B2 | PSU 2 |
-| 190 | 0x01FE | 0x31B2 | PSU 3 |
-| 191 | 0x01FE | 0xCFE2 | PSU 4 (different encoding) |
+**Type 24 -- LEDs** (34 entries)
 
-param_a = 0x01FE: bitmask for PMBus capabilities. param_d high nibble selects
-the PSU unit (1-3 for first three, 0xC for the fourth).
+34 LEDs for front-panel status indication. Each entry configures one LED with:
+- A **mode** encoded in the first field: 0x0000 = steady on/off, 0x0404 = blinking, 0x0101 = alternate blink pattern
+- A **logical LED index** identifying which physical LED
 
-## Hardware Topology Summary
+Most LEDs (entries 156-180) are straightforward steady-state indicators. Two LEDs
+(entries 154-155) default to blinking mode, suggesting they indicate active/fault status.
+The last few entries include alternate configurations for LEDs that have multiple modes
+(e.g., a health LED that blinks amber for warning and steady green for OK).
 
-```
-AST2050 BMC SoC
-├── On-chip GPIO (38 pins across 4 port groups)
-│   ├── GPIOA-D: Interrupt-enabled sensor inputs
-│   ├── GPIOE-H: Mixed input/output
-│   ├── GPIOI-L: 16 data lines (PCIe/system status)
-│   └── GPIOM-P: System control outputs
-├── IPMB (I2C-based, address 0x20)
-├── KCS Interface (I/O base 0x0CA2) + Virtual KCS
-├── Ethernet LAN
-├── UART Serial Port
-├── NVRAM Storage (SDR 4KB + SEL 8KB + PS 12KB)
-├── 24Cxx EEPROM (I2C addr 0xA0, bus 0xF2)
-├── PCA9544A I2C Mux (7-bit 0x70, bus 0xF1)
-│   ├── Channel 0-2: ADT7462 #1 (mux 0xB0) → 4 fan/temp channels
-│   └── Channel 3:   ADT7462 #2 (mux 0xB8) → 4 fan/temp channels
-├── PCA9555 I2C GPIO Expanders (80 additional pins)
-│   ├── Bus 0xF6, addr 0x20: PCIe slot presence (1-8)
-│   ├── Bus 0xF6, addr 0x21: PCIe slot presence (9-16)
-│   ├── Bus 0xF6, addr 0x22: PCIe slot power control
-│   ├── Bus 0xF6, addr 0x23: PCIe slot status/LED
-│   └── Bus 0xF1, addr 0x20: Additional GPIO/status
-├── 34 LEDs
-├── OEM Power Controller
-├── 4x PMBus PSUs
-└── 6 IRQ/Interrupt Lines
-```
+## IOAPI Driver Reference
 
-## Further Investigation
+Every entry points to an IOAPI driver structure (a vtable of function pointers) in the
+fullfw binary. These are the 19 distinct drivers used:
 
-- [ ] Map GPIO logical indices to specific Dell C410X board functions (PCIe slot
-  presence, power good signals, etc.)
-- [ ] Decode PCA9555 pin assignments to specific PCIe slots
-- [ ] Determine exact PMBus addresses from param_d encoding
-- [ ] Cross-reference IRQ entries with AST2050 interrupt controller registers
-- [ ] Compare LED indices with Dell C410X front panel LED layout
+| Driver (symbol in fullfw) | Purpose | Entries Using It |
+|---------------------------|---------|-----------------|
+| `G_sONCHIP_GPIO_IOAPI` | Read/write AST2050 GPIO pins | 38 |
+| `G_sPCA9555_I2CGPIO_IOAPI` | Read/write PCA9555 I2C GPIO expander pins | 80 |
+| `G_sONCHIP_LED_IOAPI` | Control front-panel LEDs | 34 |
+| `G_sOEMADT7462_I2CFAN_IOAPI` | Talk to ADT7462 thermal management chips | 8 |
+| `G_sONCHIP_Generic_ISRAPI` | Register interrupt service routines | 6 |
+| `G_sOEMPCA9544_I2CSWITCH_IOAPI` | Control PCA9544A I2C multiplexer | 4 |
+| `G_sPMBus_PSU_IOAPI` | Communicate with PSUs over PMBus | 4 |
+| `G_sONCHIP_IPMB_IOAPI` | IPMB messaging (I2C slave) | 1 |
+| `G_sONCHIP_KCS_IOAPI` | Hardware KCS interface | 1 |
+| `G_sONCHIP_VKCS_IOAPI` | Virtual/software KCS interface | 1 |
+| `G_sONCHIP_vDrvLAN_IOAPI` | Ethernet networking | 1 |
+| `G_sONCHIP_UART_IOAPI` | Serial port / SOL | 1 |
+| `G_sEE24Cxx_EEPROM_IOAPI` | Read/write I2C EEPROM | 1 |
+| `G_sONCHIP_vDrvFRU_IOAPI` | Virtual FRU data storage | 1 |
+| `G_sONCHIP_vDrvSDR_IOAPI` | Sensor Data Record repository | 1 |
+| `G_sONCHIP_vDrvSEL_IOAPI` | System Event Log repository | 1 |
+| `G_sONCHIP_vDrvPS_IOAPI` | Persistent NVRAM storage | 1 |
+| `G_sOEMPower_vDrvPOWER_IOAPI` | System power control | 1 |
+| (null -- virtual entries) | IPMB sub-channel placeholders | 7 |
+
+## How the Firmware Uses This Table
+
+When the firmware starts, `HWInitIOTableV3()` memory-maps the entire file using
+`MakeMemFileV2()` (which adds a 16-byte in-memory header wrapper). Two global pointers
+are set:
+
+- `G_sIOTableHeaderVer3Ptr` (at 0x00110b98): points to the start of the in-memory buffer
+- `G_sIOTablePtr` (at 0x00110b9c): points to the first entry (at offset +0x98 from the header)
+
+When code needs to access hardware of a given type (say, type 13 for ADT7462), it reads
+the dispatch table at `type * 4` bytes from the start, gets the count and start index,
+then iterates through entries starting at `G_sIOTablePtr + start_index * 12`.
+
+Each entry's `driver_pointer` field is a RAM address pointing to the IOAPI vtable, which
+contains function pointers for operations like `init()`, `read()`, `write()`, and
+`close()`. The firmware calls through these pointers to perform the actual hardware I/O.
