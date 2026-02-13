@@ -38,16 +38,16 @@
 	compatible = "dell,poweredge-c410x-bmc", "aspeed,ast2400";
 
 	aliases {
-		serial0 = &uart5;
+		serial0 = &uart1;
 	};
 
 	chosen {
-		stdout-path = &uart5;
-		bootargs = "console=ttyS4,115200n8";
+		stdout-path = &uart1;
+		bootargs = "console=ttyS0,115200n8";
 	};
 
 	memory@40000000 {
-		reg = <0x40000000 0x02000000>; /* 32 MB SDRAM */
+		reg = <0x40000000 0x08000000>; /* 128 MB SDRAM (mem=96M to Linux) */
 	};
 
 	reserved-memory {
@@ -117,7 +117,7 @@
  * The BMC serial console runs at 115200 8N1. Also used for Serial Over LAN
  * (SOL) which allows remote serial console access via IPMI.
  */
-&uart5 {
+&uart1 {
 	status = "okay";
 };
 
@@ -131,7 +131,7 @@
  */
 &mac0 {
 	status = "okay";
-	use-ncsi;
+	phy-mode = "rmii";
 };
 
 /*
@@ -157,27 +157,36 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 
-			/* Partition layout is approximate based on typical
-			 * Avocent MergePoint firmware images */
+			/*
+			 * Partition layout from U-Boot environment variables:
+			 *   kernel_start=14100000 (offset 0x100000)
+			 *   kernel_size=200000
+			 *   rootfs_start=14300000 (offset 0x300000)
+			 *   rootfs_size=D00000
+			 *   bootargs: root=/dev/mtdblock3
+			 *
+			 * U-Boot/env split within the first 1 MB is estimated;
+			 * kernel and rootfs offsets/sizes are confirmed.
+			 */
 			u-boot@0 {
 				label = "u-boot";
-				reg = <0x000000 0x040000>; /* 256 KB */
+				reg = <0x000000 0x080000>; /* 512 KB (estimated) */
 				read-only;
 			};
 
-			u-boot-env@40000 {
+			u-boot-env@80000 {
 				label = "u-boot-env";
-				reg = <0x040000 0x010000>; /* 64 KB */
+				reg = <0x080000 0x080000>; /* 512 KB (fills to kernel) */
 			};
 
-			kernel@50000 {
+			kernel@100000 {
 				label = "kernel";
-				reg = <0x050000 0x200000>; /* 2 MB */
+				reg = <0x100000 0x200000>; /* 2 MB */
 			};
 
-			rootfs@250000 {
+			rootfs@300000 {
 				label = "rootfs";
-				reg = <0x250000 0xdb0000>; /* ~13.7 MB */
+				reg = <0x300000 0xd00000>; /* 13 MB */
 			};
 		};
 	};
@@ -738,9 +747,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
-			tmp-slot1: temperature-sensor@4e {
+			tmp-slot1: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>; /* 7-bit; firmware reports 0x5C */
+				reg = <0x5c>;
 				label = "pcie1-temp";
 			};
 		};
@@ -749,9 +758,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
-			tmp-slot2: temperature-sensor@4e {
+			tmp-slot2: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie2-temp";
 			};
 		};
@@ -760,9 +769,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
-			tmp-slot3: temperature-sensor@4e {
+			tmp-slot3: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie3-temp";
 			};
 		};
@@ -771,9 +780,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
-			tmp-slot4: temperature-sensor@4e {
+			tmp-slot4: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie4-temp";
 			};
 		};
@@ -782,9 +791,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;
-			tmp-slot5: temperature-sensor@4e {
+			tmp-slot5: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie5-temp";
 			};
 		};
@@ -793,9 +802,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <5>;
-			tmp-slot6: temperature-sensor@4e {
+			tmp-slot6: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie6-temp";
 			};
 		};
@@ -804,9 +813,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <6>;
-			tmp-slot7: temperature-sensor@4e {
+			tmp-slot7: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie7-temp";
 			};
 		};
@@ -815,9 +824,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <7>;
-			tmp-slot8: temperature-sensor@4e {
+			tmp-slot8: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie8-temp";
 			};
 		};
@@ -834,9 +843,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
-			tmp-slot9: temperature-sensor@4e {
+			tmp-slot9: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie9-temp";
 			};
 		};
@@ -845,9 +854,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
-			tmp-slot10: temperature-sensor@4e {
+			tmp-slot10: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie10-temp";
 			};
 		};
@@ -856,9 +865,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
-			tmp-slot11: temperature-sensor@4e {
+			tmp-slot11: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie11-temp";
 			};
 		};
@@ -867,9 +876,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
-			tmp-slot12: temperature-sensor@4e {
+			tmp-slot12: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie12-temp";
 			};
 		};
@@ -878,9 +887,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;
-			tmp-slot13: temperature-sensor@4e {
+			tmp-slot13: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie13-temp";
 			};
 		};
@@ -889,9 +898,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <5>;
-			tmp-slot14: temperature-sensor@4e {
+			tmp-slot14: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie14-temp";
 			};
 		};
@@ -900,9 +909,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <6>;
-			tmp-slot15: temperature-sensor@4e {
+			tmp-slot15: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie15-temp";
 			};
 		};
@@ -911,9 +920,9 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <7>;
-			tmp-slot16: temperature-sensor@4e {
+			tmp-slot16: temperature-sensor@5c {
 				compatible = "ti,tmp75";
-				reg = <0x4e>;
+				reg = <0x5c>;
 				label = "pcie16-temp";
 			};
 		};
