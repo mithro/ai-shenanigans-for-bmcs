@@ -1,0 +1,4 @@
+# Downloaded firmware binaries (large files, require HPE Passport auth)
+backup/
+# Extracted firmware (can be regenerated from backup)
+extracted/
