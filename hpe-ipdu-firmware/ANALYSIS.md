@@ -320,12 +320,28 @@ With Y1 = 29.4912 MHz and PLL configured for full speed:
 | Flow Control | None |
 | Header | J25 "Digi UART" |
 
+## Core Unit Connector Layout (from HP iPDU Manual)
+
+| Callout | Description |
+|---------|-------------|
+| 1-6 | Circuit breakers for load segments 1-6 (phases A/B/C on 3-phase models) |
+| 7 | Serial connector for additional iPDU daisy-chain |
+| 8 | Serial connector for Display Unit connection |
+| 9 | Network connector (Ethernet RJ-45) |
+| 10 | Reset button (maintains outlet power, resets management only) |
+| 11-16 | IEC-320 C19 outlets for load segments 6 through 1 |
+
+Total of 6 load segments per Core Unit. Up to 6 Extension Bars can be connected,
+providing up to 30 IEC-320 C13 outlets total.
+
 ## Firmware Structure
 
 The firmware is distributed as `image.bin` inside ZIP files with names like
-`Henning_<version>_<part>.zip`. The firmware can be flashed via:
-1. **Serial Flash Mode**: Through the Display Unit's serial port
-2. **FTP Flash Mode**: Over the network via FTP
+`Henning_<version>_<part>.zip`. Configuration is in `config.bin`. Flashing modes:
+1. **Serial Flash Mode**: Through the Display Unit's serial port (requires "LED
+   Pass-Through mode" to be set first, firmware only)
+2. **FTP Flash Mode**: Over the network via FTP (supports firmware and config,
+   single or multiple units)
 
 Known firmware versions (codename "Henning"):
 
@@ -363,22 +379,24 @@ The firmware `image.bin` file likely contains:
 ## Communication Architecture
 
 ```
-                    Ethernet (RJ-45)
+                    Ethernet (RJ-45, connector 9)
                          |
                     [NS9360 CPU]
                     /    |    \     \
-               UART-A  UART-B  SPI   I2C
-                |        |      |      |
-            Debug     Display  MAXQ   Test
-            (J25)     Unit    3180   Point
+               UART-A  UART-B  SPI   I2C     UART-C or D?
+                |        |      |      |          |
+            Debug     Display  MAXQ   Test    Daisy-chain
+            (J25)     Unit    3180   Point   to next iPDU
+                    (conn 8)                  (conn 7)
                        |
                     [MAX3243EI]
                        |
                     RS-232
                        |
-                    Serial
-                    Console
+                    Serial Console
+                    (host computer)
 ```
 
 The Display Unit acts as the serial console gateway -- you cannot bypass it for console
-access without connecting directly to J25 "Digi UART".
+access without connecting directly to J25 "Digi UART". The reset button (connector 10)
+resets management only; outlet power is maintained.
