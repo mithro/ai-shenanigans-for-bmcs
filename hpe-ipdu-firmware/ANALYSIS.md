@@ -646,6 +646,173 @@ AJAX (XMLHttpRequest), session tracking, Japanese localisation.
 - OpenSSL 0.9.7b from 2003 (never updated)
 - YAFFS filesystem module (v1.6.4.1, 2007)
 
+## NVRAM / Configuration Storage
+
+### Storage Architecture
+
+The firmware uses a multi-layer configuration storage system:
+
+1. **YAFFS Filesystem on NOR Flash** -- persistent file storage
+2. **NVRAM Sections** -- structured data with per-section corruption detection
+3. **XML Configuration** -- import/export format for configuration backup
+4. **KLone Web Framework** -- configuration for the v2.0+ web server
+
+### YAFFS Filesystem
+
+YAFFS (Yet Another Flash File System) v1.6.4.1 (2007) is used for persistent
+storage on NOR Flash. Key configuration:
+
+| Parameter | Notes |
+|-----------|-------|
+| Source | `yaffscfg2k.c,v 1.2.2.10 2007/06/04` |
+| Build date | 2018-10-03 13:26:44 (in v2.0.51.12) |
+| Author | jlacombe (Digi International) |
+| Block size | Reports startBlock, endBlock for partition |
+| ECC | YAFFS software ECC (eccFixed/eccUnfixed counters) |
+| NOR Flash ID | Reports nManufID, nDeviceID (MX29LV640EB) |
+| Endianness | isLittleEndian flag (likely 0 = big-endian) |
+
+YAFFS filesystem paths found in firmware:
+- `/etc/kloned.conf` -- KLone web server configuration
+- `/etc/kloned.pem` -- SSL/TLS certificate
+- `/tmp` -- temporary storage
+- `/www/...` -- web content served by KLone
+- `/Eventlog.csv` -- event log export
+
+### NVRAM Data Sections
+
+The NVRAM is divided into 12 independently managed sections, each with corruption
+detection and factory-default restoration capability. The section names are
+derived from the "Restoring Corrupt..." recovery messages:
+
+| # | Section | Description |
+|---|---------|-------------|
+| 1 | Board Parameters | Hardware-specific: serial number, MAC address, board revision |
+| 2 | System Data | System name, contact info, location |
+| 3 | Time Data | NTP settings, timezone, DST configuration |
+| 4 | Configuration Data | Network settings, DHCP/static IP |
+| 5 | SNMP Data | SNMP managers, community strings, trap receivers |
+| 6 | User Account Data | Usernames, passwords, admin privileges |
+| 7 | Device Data | Outlet device assignments, UUID mappings |
+| 8 | Threshold Data | Warning/critical thresholds per load segment |
+| 9 | Pairing Data | Redundancy pairing configuration |
+| 10 | Event Settings | Event notification configuration |
+| 11 | Certificate | SSL/TLS certificate and private key |
+| 12 | Rack Data | Rack location, height, row, room information |
+
+NVRAM access is protected by a mutex ("NVRam Mutex") and updates are logged
+("NVRAM Update Completed Successfully!"). A corruption detection mechanism
+identifies damaged sections and restores them to factory defaults individually.
+
+### NOR Flash Partition Layout (Inferred)
+
+Based on flash address references in the firmware (CS0 at 0x40000000,
+CS1 at 0x50000000), the MX29LV640EB (8MB each, 2 chips) has this layout:
+
+| Region | CS0 Address | Flash Offset | Size | Contents |
+|--------|------------|--------------|------|----------|
+| Boot sector | 0x40000000 | 0x000000 | 64K-128K | Bootloader ROM |
+| Application | 0x40020000 | 0x020000 | ~3.5-3.6MB | image.bin (header + LZSS2 data + CRC) |
+| Config area | 0x40590000 | 0x590000 | ~2.7MB? | YAFFS / NVRAM storage |
+| Second chip | 0x50000000 | -- | 8MB | CS1 (possibly YAFFS continuation) |
+
+Partition-like address references found at code address 0x002A8818:
+- 0x40240000 (2304K), 0x40590000 (5696K) -- these may be firmware region boundaries
+
+### XML Configuration Format (config.bin)
+
+The configuration import/export uses an XML format. The root element is
+`<PDU_GENERAL_CONFIG>` with product="HP iPDU" and firmware version. The XML
+structure maps directly to the NVRAM sections:
+
+```xml
+<?xml version="1.0"?>
+<PDU_GENERAL_CONFIG PRODUCT="HP iPDU" VERSION="%s">
+  <LOGIN USER_LOGIN="%s" PASSWORD="%s">
+  <USER_CONFIGURATION>...</USER_CONFIGURATION>
+  <NETWORK_SETTINGS>
+    <DHCPENABLED/> <STATICENABLED/> <IPv4ADDRESS/>
+    <NETMASK/> <DEFAULTGATEWAY/>
+    <IPv6LINKLOCALADDRESS/> <IPv6AAUTOCONFIGUREDADDRES/>
+  </NETWORK_SETTINGS>
+  <NTP_CONFIGURATION>...</NTP_CONFIGURATION>
+  <DATE_CONFIGURATION>...</DATE_CONFIGURATION>
+  <MANUALTIME_CONFIGURATION>...</MANUALTIME_CONFIGURATION>
+  <CONTACT_CONFIGURATION>
+    <SYSTEMNAME/> <CONTACTNAME/> <CONTACTNUMBER/>
+    <CONTACTEMAIL/> <CONTACTLOCATION/>
+  </CONTACT_CONFIGURATION>
+  <SNMP_CONFIGURATION>
+    <SNMP_MANAGER_%d>
+      <ENABLE/> <IP/> <READ_COMMUNITY/>
+      <WRITE_COMMUNITY/> <ACCESS_TYPE/>
+    </SNMP_MANAGER_%d>
+  </SNMP_CONFIGURATION>
+  <!-- ...plus TRAP, EMAIL, EVENT, REMOTEACCESS, THRESHOLD,
+       OUTLETCONTROL, OUTLETDEVICEASSIGNMENT, RACKLOCATION sections -->
+</PDU_GENERAL_CONFIG>
+```
+
+A second XML document `<PDU_SPECIFIC_CONFIG>` handles per-outlet and per-load-segment
+configuration. These are used by the "Download Configuration" and "Upload Configuration"
+web UI features, and correspond to config.bin in the firmware ZIP.
+
+### RIBCL XML Command Interface
+
+The firmware also implements an HP RIBCL (Remote Insight Board Command Language)
+compatible XML command interface, similar to HP iLO. Commands include:
+
+- `RESTORE_PDU_FACTORY_DEFAULTS` -- reset all settings
+- `GET_PDU_COMMAND_SUPPORT` -- query available commands
+- `GET/SET_PDU_SPATIAL_INFO` -- rack location management
+- `GET_PDU_PAIRING_TOPOLOGY` -- redundancy topology
+- `SET_PDU_REDUNDANCY_CONFIG` -- pairing configuration
+- `SET_REMOTE_PDU_REBOOT_FLAG` -- remote reboot
+- `PDU_SPECIFIC_CONFIG` -- per-outlet configuration
+
+### Debug CLI Commands
+
+A serial debug CLI (accessible via J25 "Digi UART") provides direct hardware
+access including flash and NVRAM operations:
+
+| Command | Description |
+|---------|-------------|
+| `flash` | Examine data in flash memory (loaddr hiaddr (b\|w\|q)) |
+| `mem` | Examine data in memory (hiaddr loaddr (b\|w\|q)) |
+| `w_ser` | Writes NVRAM Serial Number |
+| `restoreall` | Restores NVRAM and Logs |
+| `gmcal` | Calibrate maxim voltage |
+| `gmsave` | Saves calibrated results into FLASH |
+| `gmstats` | Reads calibrated results for verification |
+| `gmstats2` | Reads secondary PDU metering data |
+| `boot` | Gets the board boot version |
+| `vers` | Display the firmware version numbers |
+| `uart` | Display serial statistics (port 1-4) |
+| `nets` | Display network statistics |
+| `rtc` | Examine real time clock registers |
+| `spstats` | Monitored stick protocol statistics |
+| `mpstats` | Metering protocol statistics |
+| `uuid` | UUID test |
+| `7seg` | Detects 7 segment display |
+| `detectpins` | Tests Upstream & Downstream Detect Pins |
+| `dipd` | Debug IPMI protocol |
+| `ipd_dump` | Dump IPD data |
+
+ThreadX RTOS debug commands: `txev` (event flags), `txmu` (mutexes),
+`txqu` (message queues), `txse` (semaphores), `txth` (threads), `txti` (timers).
+
+### KLone Web Framework (v2.0+)
+
+Firmware v2.0+ uses the KLone embedded web framework (www.koanlogic.com) alongside
+RomPager. KLone configuration is stored at `/etc/kloned.conf` in the YAFFS
+filesystem. Key KLone infrastructure:
+
+- `u_config_save_to_buf` -- save config to buffer
+- `u_config_do_load_drv` -- load config driver
+- `u_config_include` -- include sub-configuration
+- `drv_fs_open` -- filesystem driver
+- Serves web content from `/www/` prefix (`.kl1` extension = KLone pages)
+
 ## Security Assessment
 
 ### CVE-2014-9222: Misfortune Cookie (RomPager)

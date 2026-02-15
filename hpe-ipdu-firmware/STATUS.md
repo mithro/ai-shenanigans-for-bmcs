@@ -80,6 +80,16 @@
 - JavaScript libraries: jQuery 1.10.2, Raphael 1.5.2, stringencoders
 - Created extract_web_ui.py
 
+### NVRAM/Configuration Storage Analysis
+- Identified 12 NVRAM data sections with per-section corruption detection/recovery
+- YAFFS filesystem v1.6.4.1 on NOR flash for persistent storage
+- XML configuration format documented (PDU_GENERAL_CONFIG / PDU_SPECIFIC_CONFIG)
+- RIBCL XML command interface (HP iLO-compatible) documented
+- 20+ debug CLI commands identified (flash, mem, NVRAM, calibration, ThreadX)
+- KLone web framework configuration (/etc/kloned.conf) documented
+- NOR flash partition layout partially reconstructed
+- Created analyse_nvram.py
+
 ### CRC32 Algorithm Identified
 - **Algorithm**: CRC-32 with polynomial 0x04C11DB7, non-reflected, init=0, xor_out=0
 - Verified against all 3 firmware versions (100% match)
@@ -106,6 +116,7 @@
 | extract_web_ui.py | Complete | RomPager web UI resource extraction |
 | identify_crc.py | Complete | CRC32 algorithm identification (lookup table approach) |
 | identify_crc_reveng.py | Complete | CRC32 reverse-engineering with crcmod brute-force |
+| analyse_nvram.py | Complete | NVRAM/config storage analysis (YAFFS, flash partitions, CLI) |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -154,7 +165,7 @@
 - MAXQ3180 SPI communication protocol not extracted
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified
-- NVRAM/configuration storage format not documented
+- **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)
 - **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
 
 ### Datasheet Gaps
