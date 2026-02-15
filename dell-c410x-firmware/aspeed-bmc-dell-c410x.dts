@@ -1,0 +1,1162 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+//
+// Device Tree Source for Dell PowerEdge C410X BMC
+//
+// The C410X is a 16-slot PCIe GPU expansion chassis with no host CPU or
+// memory. It is managed entirely by an Aspeed AST2050 BMC (ARM926EJ-S,
+// also sold as AST1100) running the Avocent MergePoint firmware platform
+// on Linux 2.6.23.1.
+//
+// This device tree was reverse-engineered from firmware version 1.35
+// (BM3P135.pec) by analyzing the fullfw ELF binary, IO configuration
+// tables (IO_fl.bin, IS_fl.bin, IX_fl.bin, FT_fl.bin), and kernel
+// modules (aess_i2cdrv.ko, aess_gpiodrv.ko).
+//
+// NOTE: The AST2050 is an older generation than the AST2400 but shares
+// compatible register layouts for I2C, GPIO, UART, and SCU peripherals.
+// We use aspeed-g4.dtsi (AST2400) as the base since no upstream dtsi
+// exists for the AST2050. The AST2050 has 7 I2C engines (vs 14 on
+// AST2400) and an ARM926EJ-S core (vs ARM1176JZF-S on AST2400).
+//
+// Hardware summary:
+//   - 16x PCIe x16 slots for GPUs/accelerators
+//   - 4x hot-swappable PSUs
+//   - 8x cooling fans (2x ADT7462 controllers)
+//   - PLX PEX8696 (96-lane) + PEX8647 (48-lane) PCIe switches
+//   - 72 IPMI sensors (temperature, power, fan, presence)
+//   - Dell internal codename: "Titanium"
+
+/dts-v1/;
+
+#include "aspeed-g4.dtsi"
+#include <dt-bindings/gpio/aspeed-gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/leds/common.h>
+
+/ {
+	model = "Dell PowerEdge C410X BMC";
+	compatible = "dell,poweredge-c410x-bmc", "aspeed,ast2400";
+
+	aliases {
+		serial0 = &uart1;
+	};
+
+	chosen {
+		stdout-path = &uart1;
+		bootargs = "console=ttyS0,115200n8";
+	};
+
+	memory@40000000 {
+		reg = <0x40000000 0x08000000>; /* 128 MB SDRAM (mem=96M to Linux) */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		vga_memory: framebuffer@47800000 {
+			no-map;
+			reg = <0x47800000 0x00800000>; /* 8 MB VGA */
+		};
+	};
+
+	/*
+	 * Front-panel LEDs
+	 *
+	 * The C410X has several front-panel LEDs controlled via PCA9555 GPIO
+	 * expander pins on I2C bus 1 (PCA9555 #5 at address 0x20). The
+	 * AST2050's on-chip LED controller handles blink timing for some LEDs,
+	 * but the physical LED connections go through the PCA9555.
+	 *
+	 * Fan LEDs are on PCA9555 #5 Port 1 bits 0-7.
+	 * System power and status LEDs also route through this PCA9555.
+	 *
+	 * Note: The on-chip AST2050 LED controller entries (IO_fl.bin type 24,
+	 * 34 entries) handle blink patterns but are not modeled here as there
+	 * is no standard DT binding for the Aspeed hardware LED controller.
+	 * In a modern Linux kernel, these would be controlled via the
+	 * leds-pca955x or gpio-leds drivers on the PCA9555 outputs.
+	 */
+	gpio-leds {
+		compatible = "gpio-leds";
+
+		/* Front panel - chassis identify (blue) */
+		led-identify {
+			label = "identify";
+			gpios = <&gpio_mgmt ASPEED_GPIO(E, 5) GPIO_ACTIVE_HIGH>;
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_INDICATOR;
+			linux,default-trigger = "none";
+		};
+	};
+
+	/*
+	 * Front-panel buttons
+	 *
+	 * GPIOE4: Power button (active-low with hardware polarity inversion,
+	 *         so firmware sees active-high). Short press toggles power.
+	 * The ID button shares GPIOE5 which is used as an output for the
+	 * ID LED driver, so only the power button is modeled as a gpio-key.
+	 */
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-power {
+			label = "power-button";
+			linux,code = <116>; /* KEY_POWER */
+			gpios = <&gpio_mgmt ASPEED_GPIO(E, 4) GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+/*
+ * ==========================================================================
+ * UART -- Serial Console
+ * ==========================================================================
+ * The BMC serial console runs at 115200 8N1. Also used for Serial Over LAN
+ * (SOL) which allows remote serial console access via IPMI.
+ */
+&uart1 {
+	status = "okay";
+};
+
+/*
+ * ==========================================================================
+ * Ethernet -- BMC Management Network
+ * ==========================================================================
+ * Single 10/100 Ethernet port for IPMI-over-LAN (RMCP/RMCP+) remote
+ * management. Factory default IP: 192.168.0.120 (DHCP enabled).
+ * Uses RMII interface to an external PHY.
+ */
+&mac0 {
+	status = "okay";
+	phy-mode = "rmii";
+};
+
+/*
+ * ==========================================================================
+ * SPI Flash -- BMC Firmware Storage
+ * ==========================================================================
+ * The BMC firmware image is stored in SPI NOR flash, accessed through the
+ * Aspeed FMC (Firmware Memory Controller). The flash contains the U-Boot
+ * bootloader, Linux kernel, and SquashFS root filesystem with the Avocent
+ * MergePoint firmware.
+ */
+&fmc {
+	status = "okay";
+
+	flash@0 {
+		status = "okay";
+		label = "bmc";
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			/*
+			 * Partition layout from U-Boot environment variables:
+			 *   kernel_start=14100000 (offset 0x100000)
+			 *   kernel_size=200000
+			 *   rootfs_start=14300000 (offset 0x300000)
+			 *   rootfs_size=D00000
+			 *   bootargs: root=/dev/mtdblock3
+			 *
+			 * U-Boot/env split within the first 1 MB is estimated;
+			 * kernel and rootfs offsets/sizes are confirmed.
+			 */
+			u-boot@0 {
+				label = "u-boot";
+				reg = <0x000000 0x080000>; /* 512 KB (estimated) */
+				read-only;
+			};
+
+			u-boot-env@80000 {
+				label = "u-boot-env";
+				reg = <0x080000 0x080000>; /* 512 KB (fills to kernel) */
+			};
+
+			kernel@100000 {
+				label = "kernel";
+				reg = <0x100000 0x200000>; /* 2 MB */
+			};
+
+			rootfs@300000 {
+				label = "rootfs";
+				reg = <0x300000 0xd00000>; /* 13 MB */
+			};
+		};
+	};
+};
+
+/*
+ * ==========================================================================
+ * GPIO Controller
+ * ==========================================================================
+ * The AST2050 GPIO controller provides up to 128 GPIO pins organized as
+ * ports A through P (8 pins per port). This board uses 38 on-chip GPIO
+ * pins across ports A, B, E, F, I, J, M, and N.
+ *
+ * GPIO pin assignments were reverse-engineered from the fullfw binary's
+ * SysGPIOInit() function, interrupt handler registrations, and the
+ * IO_fl.bin type 14 entries.
+ */
+&gpio {
+	gpio-line-names =
+		/* Port A (GPIOA0-A7) -- System interrupt inputs */
+		/*  A0 */ "",
+		/*  A1 */ "",
+		/*  A2 */ "",
+		/*  A3 */ "",
+		/*  A4 */ "gpu-presence-irq-n",
+		/*  A5 */ "psu-presence-irq-n",
+		/*  A6 */ "",
+		/*  A7 */ "",
+		/* Port B (GPIOB0-B7) -- Hardware event notification inputs */
+		/*  B0 */ "adt7462-1-irq-n",
+		/*  B1 */ "adt7462-2-irq-n",
+		/*  B2 */ "pmbus-alert-n",
+		/*  B3 */ "tmp100-alert-n",
+		/*  B4 */ "slot-attention-irq-n",
+		/*  B5 */ "slot-status-irq-n",
+		/*  B6 */ "pex8696-irq-n",
+		/*  B7 */ "pex8647-irq-n",
+		/* Port C (GPIOC0-C7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port D (GPIOD0-D7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port E (GPIOE0-E7) -- Mixed control and status */
+		/*  E0 */ "bmc-ready",
+		/*  E1 */ "ps-on-buf-en",
+		/*  E2 */ "pwrgd-in",
+		/*  E3 */ "ina219-bus-en",
+		/*  E4 */ "power-button-in",
+		/*  E5 */ "id-led-driver",
+		/*  E6 */ "",
+		/*  E7 */ "",
+		/* Port F (GPIOF0-F7) -- PCIe switch control */
+		/*  F0 */ "",
+		/*  F1 */ "",
+		/*  F2 */ "",
+		/*  F3 */ "",
+		/*  F4 */ "",
+		/*  F5 */ "",
+		/*  F6 */ "pex8696-rst-n",
+		/*  F7 */ "",
+		/* Port G (GPIOG0-G7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port H (GPIOH0-H7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port I (GPIOI0-I7) -- Multi-host configuration data bus */
+		/*  I0 */ "multihost-data-0",
+		/*  I1 */ "multihost-data-1",
+		/*  I2 */ "multihost-data-2",
+		/*  I3 */ "multihost-data-3",
+		/*  I4 */ "multihost-data-4",
+		/*  I5 */ "multihost-data-5",
+		/*  I6 */ "multihost-data-6",
+		/*  I7 */ "multihost-data-7",
+		/* Port J (GPIOJ0-J7) -- System status data bus */
+		/*  J0 */ "sysstatus-data-0",
+		/*  J1 */ "sysstatus-data-1",
+		/*  J2 */ "sysstatus-data-2",
+		/*  J3 */ "sysstatus-data-3",
+		/*  J4 */ "sysstatus-data-4",
+		/*  J5 */ "sysstatus-data-5",
+		/*  J6 */ "sysstatus-data-6",
+		/*  J7 */ "sysstatus-data-7",
+		/* Port K (GPIOK0-K7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port L (GPIOL0-L7) -- Unused */
+		"", "", "", "", "", "", "", "",
+		/* Port M (GPIOM0-M7) -- System power control */
+		/*  M0 */ "ps-on-n",
+		/*  M1 */ "sys-reset-n",
+		/*  M2 */ "",
+		/*  M3 */ "",
+		/*  M4 */ "",
+		/*  M5 */ "",
+		/*  M6 */ "",
+		/*  M7 */ "",
+		/* Port N (GPION0-N7) -- Secondary power/reset control */
+		/*  N0 */ "",
+		/*  N1 */ "",
+		/*  N2 */ "",
+		/*  N3 */ "",
+		/*  N4 */ "pex8647-rst-n",
+		/*  N5 */ "slot-pwr-en",
+		/*  N6 */ "fan-tach-mux-sel",
+		/*  N7 */ "";
+
+	/*
+	 * GPIO hogs -- pins with fixed functions set at boot
+	 *
+	 * These pins are driven to known states during BMC initialization
+	 * and remain fixed throughout normal operation (or are toggled only
+	 * by specific firmware state machines, not user control).
+	 */
+
+	/* BMC initialization complete indicator */
+	bmc-ready-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(E, 0) GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "bmc-ready";
+	};
+
+	/* PS_ON# buffer enable -- gate for PSU power control */
+	ps-on-buf-en-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(E, 1) GPIO_ACTIVE_HIGH>;
+		output-low; /* Start disabled (PSUs off at boot) */
+		line-name = "ps-on-buf-en";
+	};
+
+	/* INA219 I2C bus isolation -- disabled until 12V stable */
+	ina219-bus-en-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(E, 3) GPIO_ACTIVE_HIGH>;
+		output-low; /* Start isolated */
+		line-name = "ina219-bus-en";
+	};
+
+	/* PEX8696 primary PCIe switch reset */
+	pex8696-rst-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(F, 6) GPIO_ACTIVE_LOW>;
+		output-high; /* Deasserted (not in reset) */
+		line-name = "pex8696-rst-n";
+	};
+
+	/* PS_ON# signal to PSUs (active-low) */
+	ps-on-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(M, 0) GPIO_ACTIVE_LOW>;
+		output-high; /* Deasserted (PSUs in standby) */
+		line-name = "ps-on-n";
+	};
+
+	/* Board-level system reset (active-low) */
+	sys-reset-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(M, 1) GPIO_ACTIVE_LOW>;
+		output-high; /* Deasserted (not in reset) */
+		line-name = "sys-reset-n";
+	};
+
+	/* PEX8647 secondary PCIe switch reset */
+	pex8647-rst-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(N, 4) GPIO_ACTIVE_LOW>;
+		output-high; /* Deasserted (not in reset) */
+		line-name = "pex8647-rst-n";
+	};
+
+	/* GPU slot power sequencing master enable */
+	slot-pwr-en-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(N, 5) GPIO_ACTIVE_HIGH>;
+		output-low; /* Start disabled */
+		line-name = "slot-pwr-en";
+	};
+
+	/* Fan tachometer mux select (alternated during fan polling) */
+	fan-tach-mux-hog {
+		gpio-hog;
+		gpios = <ASPEED_GPIO(N, 6) GPIO_ACTIVE_HIGH>;
+		output-low;
+		line-name = "fan-tach-mux-sel";
+	};
+};
+
+/* Alias for gpio-leds and gpio-keys references */
+gpio_mgmt: &gpio {};
+
+/*
+ * ==========================================================================
+ * I2C Bus 0 (Firmware bus 0xF0) -- PCIe Slot Power Monitoring
+ * ==========================================================================
+ * Register base: 0x1E78A040 (AST2050 I2C engine 0, dedicated pins)
+ *
+ * 16x Texas Instruments INA219 high-side current/power monitors, one per
+ * PCIe slot. Each INA219 sits on the slot's 12V power rail with a shunt
+ * resistor, measuring voltage drop to calculate current and power.
+ *
+ * The bus is isolated behind a buffer controlled by GPIOE3 to prevent
+ * I2C errors from unpowered INA219s during standby. The buffer is
+ * enabled only after PWRGD confirms the 12V rail is stable.
+ *
+ * I2C addresses 0x40-0x4F are set by hardware address pins (A0-A3)
+ * on each INA219, providing unique addresses without multiplexing.
+ *
+ * IPMI sensors 0x50-0x5F read register 0x04 (Power) from each chip.
+ */
+&i2c0 {
+	status = "okay";
+
+	/* Shunt resistor values are estimated; actual values require
+	 * physical board measurement or INA219 calibration register
+	 * readback. 2 milliohm is typical for 75-150W per slot. */
+
+	ina219@40 {
+		compatible = "ti,ina219";
+		reg = <0x40>;
+		label = "pcie1-power";
+		shunt-resistor = <2000>; /* 2 milliohm (estimated) */
+	};
+
+	ina219@41 {
+		compatible = "ti,ina219";
+		reg = <0x41>;
+		label = "pcie2-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@42 {
+		compatible = "ti,ina219";
+		reg = <0x42>;
+		label = "pcie3-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@43 {
+		compatible = "ti,ina219";
+		reg = <0x43>;
+		label = "pcie4-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@44 {
+		compatible = "ti,ina219";
+		reg = <0x44>;
+		label = "pcie5-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@45 {
+		compatible = "ti,ina219";
+		reg = <0x45>;
+		label = "pcie6-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@46 {
+		compatible = "ti,ina219";
+		reg = <0x46>;
+		label = "pcie7-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@47 {
+		compatible = "ti,ina219";
+		reg = <0x47>;
+		label = "pcie8-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@48 {
+		compatible = "ti,ina219";
+		reg = <0x48>;
+		label = "pcie9-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@49 {
+		compatible = "ti,ina219";
+		reg = <0x49>;
+		label = "pcie10-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4a {
+		compatible = "ti,ina219";
+		reg = <0x4a>;
+		label = "pcie11-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4b {
+		compatible = "ti,ina219";
+		reg = <0x4b>;
+		label = "pcie12-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4c {
+		compatible = "ti,ina219";
+		reg = <0x4c>;
+		label = "pcie13-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4d {
+		compatible = "ti,ina219";
+		reg = <0x4d>;
+		label = "pcie14-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4e {
+		compatible = "ti,ina219";
+		reg = <0x4e>;
+		label = "pcie15-power";
+		shunt-resistor = <2000>;
+	};
+
+	ina219@4f {
+		compatible = "ti,ina219";
+		reg = <0x4f>;
+		label = "pcie16-power";
+		shunt-resistor = <2000>;
+	};
+};
+
+/*
+ * ==========================================================================
+ * I2C Bus 1 (Firmware bus 0xF1) -- Fan/Thermal Control + System Management
+ * ==========================================================================
+ * Register base: 0x1E78A080 (AST2050 I2C engine 1, dedicated pins)
+ *
+ * This bus carries:
+ *   1. PCA9544A 4-channel I2C mux at 0x70, with two ADT7462 thermal
+ *      management ICs on channels 0 and 1
+ *   2. PCA9555 #5 GPIO expander at 0x20 for PSU management, fan LEDs,
+ *      and miscellaneous system signals
+ *
+ * The two ADT7462 chips each monitor 3 temperature zones and control
+ * 4 fan tachometer inputs. Together they manage all 8 chassis fans
+ * and 6 board temperature zones.
+ */
+&i2c1 {
+	status = "okay";
+
+	/*
+	 * PCA9555 #5 -- System Management GPIO
+	 *
+	 * Port 0: PSU presence/fail (bits 0-3 input), PS_ON# control
+	 *         (bit 4 output), PSU fan speed (bit 5), status output
+	 *         (bit 6), BMC heartbeat (bit 7)
+	 * Port 1: Fan 1-8 bicolor status LEDs (bits 0-7, all outputs)
+	 *         Green = normal, Red = fan failed/below min RPM
+	 *
+	 * #INT output -> GPIOA5 (PSU presence/failure interrupt)
+	 */
+	gpio_sys: gpio@20 {
+		compatible = "nxp,pca9555";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio>;
+		interrupts = <ASPEED_GPIO(A, 5) IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		gpio-line-names =
+			/* Port 0 */
+			"psu1-present-n",    /* P0.0 - PSU bay 1 status */
+			"psu2-present-n",    /* P0.1 - PSU bay 2 status */
+			"psu3-present-n",    /* P0.2 - PSU bay 3 status */
+			"psu4-present-n",    /* P0.3 - PSU bay 4 status */
+			"ps-on-ctrl",        /* P0.4 - PS_ON# I2C control */
+			"psu-fan-speed",     /* P0.5 - PSU fan override */
+			"sys-status-out-n",  /* P0.6 - Critical error summary */
+			"bmc-heartbeat",     /* P0.7 - Watchdog toggle */
+			/* Port 1 */
+			"fan1-led",          /* P1.0 - Fan 1 green/red LED */
+			"fan2-led",          /* P1.1 - Fan 2 green/red LED */
+			"fan3-led",          /* P1.2 - Fan 3 green/red LED */
+			"fan4-led",          /* P1.3 - Fan 4 green/red LED */
+			"fan5-led",          /* P1.4 - Fan 5 green/red LED */
+			"fan6-led",          /* P1.5 - Fan 6 green/red LED */
+			"fan7-led",          /* P1.6 - Fan 7 green/red LED */
+			"fan8-led";          /* P1.7 - Fan 8 green/red LED */
+	};
+
+	/*
+	 * PCA9544A 4-channel I2C mux
+	 *
+	 * Firmware accesses this at 0x70 and writes channel select values
+	 * to reach the two ADT7462 chips. The mux select values from the
+	 * firmware (0xB0 and 0xB8) are 8-bit I2C addresses of the ADT7462
+	 * chips: 0xB0 >> 1 = 0x58, 0xB8 >> 1 = 0x5C.
+	 *
+	 * ADT7462 #1 (addr 0x58) on channel 0: Board region 1
+	 *   - Monitors Board Temp 1-3 (IPMI sensors 0x01-0x03)
+	 *   - Controls Fan 1, 2, 5, 6 (IPMI sensors 0x80-0x81, 0x84-0x85)
+	 *
+	 * ADT7462 #2 (addr 0x5C) on channel 1: Board region 2
+	 *   - Monitors Board Temp 4-6 (IPMI sensors 0x04-0x06)
+	 *   - Controls Fan 3, 4, 7, 8 (IPMI sensors 0x82-0x83, 0x86-0x87)
+	 */
+	i2c-mux@70 {
+		compatible = "nxp,pca9544";
+		reg = <0x70>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@0 {
+			/* Channel 0: ADT7462 #1 -- Board thermal zone 1 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			adt7462@58 {
+				compatible = "adi,adt7462";
+				reg = <0x58>;
+				/* Monitors:
+				 *   Reg 0x8B = Remote Temp 1 (Board Temp 1)
+				 *   Reg 0x8D = Remote Temp 2 (Board Temp 2)
+				 *   Reg 0x8F = Local Temp    (Board Temp 3)
+				 * Fan tach:
+				 *   Reg 0x98 = TACH1 (Fan 6)
+				 *   Reg 0x9A = TACH2 (Fan 5)
+				 *   Reg 0x9C = TACH3 (Fan 2)
+				 *   Reg 0x9E = TACH4 (Fan 1)
+				 * #INT -> GPIOB0
+				 */
+			};
+		};
+
+		i2c@1 {
+			/* Channel 1: ADT7462 #2 -- Board thermal zone 2 */
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+
+			adt7462@5c {
+				compatible = "adi,adt7462";
+				reg = <0x5c>;
+				/* Monitors:
+				 *   Reg 0x8B = Remote Temp 1 (Board Temp 4)
+				 *   Reg 0x8D = Remote Temp 2 (Board Temp 5)
+				 *   Reg 0x8F = Local Temp    (Board Temp 6)
+				 * Fan tach:
+				 *   Reg 0x98 = TACH1 (Fan 7)
+				 *   Reg 0x9A = TACH2 (Fan 8)
+				 *   Reg 0x9C = TACH3 (Fan 3)
+				 *   Reg 0x9E = TACH4 (Fan 4)
+				 * #INT -> GPIOB1
+				 */
+			};
+		};
+	};
+};
+
+/*
+ * ==========================================================================
+ * I2C Bus 2 (Firmware bus 0xF2) -- Non-Volatile Storage
+ * ==========================================================================
+ * Register base: 0x1E78A0C0 (AST2050 I2C engine 2, multi-function pins)
+ *
+ * Contains a 24Cxx-series I2C EEPROM storing FRU (Field Replaceable Unit)
+ * data: chassis model number, serial number, part numbers, and Dell
+ * asset tags. The EEPROM is at 8-bit address 0xA0 (7-bit 0x50).
+ */
+&i2c2 {
+	status = "okay";
+	/* AST2050 engine 2 uses multi-function pins (SCU pin group I2C3) */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c3_default>;
+
+	eeprom@50 {
+		compatible = "atmel,24c256";
+		reg = <0x50>;
+		label = "fru-eeprom";
+		/* Stores IPMI FRU data:
+		 *   - Chassis type, part number, serial number
+		 *   - Board manufacturer (Dell), product name (C410X)
+		 *   - Dell asset tag and service tag
+		 * Accessed by IO_fl.bin type 9 entry 12
+		 */
+	};
+};
+
+/*
+ * ==========================================================================
+ * I2C Bus 3 (Firmware bus 0xF3) -- PCIe Switch Management
+ * ==========================================================================
+ * Register base: 0x1E78A100 (AST2050 I2C engine 3, multi-function pins)
+ *
+ * The BMC communicates with the PLX/Broadcom PEX8696 and PEX8647 PCIe
+ * switches over this I2C bus. The switches expose configuration registers
+ * via I2C for:
+ *   - Hot-plug controller management (per-slot power enable/disable)
+ *   - Link training status monitoring
+ *   - Error reporting and recovery
+ *   - Multi-host configuration (iPass cable topology)
+ *
+ * The PEX8696 (primary, 96-lane) fans out to 16 downstream PCIe slots.
+ * The PEX8647 (secondary, 48-lane) handles the upstream link(s) to the
+ * host server via iPass cables.
+ *
+ * Note: PLX/Broadcom PCIe switch I2C slave addresses are typically
+ * configured by hardware straps. Exact addresses require board-level
+ * verification. Common defaults are 0x38 and 0x39.
+ */
+&i2c3 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c4_default>;
+
+	/* PEX8696 and PEX8647 registers are accessed via vendor-specific
+	 * I2C protocols. No standard Linux driver exists for these as
+	 * I2C-managed devices; the Avocent firmware accesses them directly
+	 * through raw I2C transactions in fullfw.
+	 *
+	 * Reset control:
+	 *   PEX8696: GPIOF6 (active-low)
+	 *   PEX8647: GPION4 (active-low)
+	 */
+};
+
+/*
+ * ==========================================================================
+ * I2C Bus 4 (Firmware bus 0xF4) -- Per-Slot Temperature Sensing
+ * ==========================================================================
+ * Register base: 0x1E78A140 (AST2050 I2C engine 4, multi-function pins)
+ *
+ * 16 TMP100 temperature sensors (one per PCIe slot) sit behind two
+ * PCA9548 8-channel I2C multiplexers. All TMP100 sensors share the same
+ * I2C address (7-bit 0x5C per firmware tables; this is non-standard for
+ * TMP100 which normally uses 0x48-0x4B -- the actual chip may be a
+ * compatible variant like TMP75 or LM75 with extended addressing).
+ *
+ * The mux index encoding in the firmware:
+ *   0x00-0x07 = PCA9548 #1, channels 0-7 (slots 1-8)
+ *   0x10-0x17 = PCA9548 #2, channels 0-7 (slots 9-16)
+ *
+ * IPMI sensors 0x07-0x16 read from these sensors.
+ * Alert interrupt -> GPIOB3
+ */
+&i2c4 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c5_default>;
+
+	/* PCA9548 #1 -- Slots 1-8 temperature sensors */
+	i2c-mux@70 {
+		compatible = "nxp,pca9548";
+		reg = <0x70>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+			tmp-slot1: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie1-temp";
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			tmp-slot2: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie2-temp";
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			tmp-slot3: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie3-temp";
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+			tmp-slot4: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie4-temp";
+			};
+		};
+
+		i2c@4 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <4>;
+			tmp-slot5: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie5-temp";
+			};
+		};
+
+		i2c@5 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <5>;
+			tmp-slot6: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie6-temp";
+			};
+		};
+
+		i2c@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <6>;
+			tmp-slot7: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie7-temp";
+			};
+		};
+
+		i2c@7 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <7>;
+			tmp-slot8: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie8-temp";
+			};
+		};
+	};
+
+	/* PCA9548 #2 -- Slots 9-16 temperature sensors */
+	i2c-mux@71 {
+		compatible = "nxp,pca9548";
+		reg = <0x71>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		i2c@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+			tmp-slot9: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie9-temp";
+			};
+		};
+
+		i2c@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+			tmp-slot10: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie10-temp";
+			};
+		};
+
+		i2c@2 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <2>;
+			tmp-slot11: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie11-temp";
+			};
+		};
+
+		i2c@3 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <3>;
+			tmp-slot12: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie12-temp";
+			};
+		};
+
+		i2c@4 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <4>;
+			tmp-slot13: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie13-temp";
+			};
+		};
+
+		i2c@5 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <5>;
+			tmp-slot14: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie14-temp";
+			};
+		};
+
+		i2c@6 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <6>;
+			tmp-slot15: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie15-temp";
+			};
+		};
+
+		i2c@7 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <7>;
+			tmp-slot16: temperature-sensor@5c {
+				compatible = "ti,tmp75";
+				reg = <0x5c>;
+				label = "pcie16-temp";
+			};
+		};
+	};
+};
+
+/*
+ * ==========================================================================
+ * I2C Bus 6 (Firmware bus 0xF6) -- Slot Management and Front Board
+ * ==========================================================================
+ * Register base: 0x1E78A1C0 (AST2050 I2C engine 6, multi-function pins)
+ *
+ * This bus carries four PCA9555 GPIO expanders that manage the 16 PCIe
+ * slots (presence detection, power control, attention buttons, status
+ * LEDs) plus a standalone front-board temperature sensor.
+ *
+ * Note: Firmware bus 0xF5 (engine 5) is not used on the C410X.
+ */
+&i2c6 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c7_default>;
+
+	/*
+	 * PCA9555 #1 -- GPU Card Presence Detect
+	 *
+	 * All 16 pins are inputs reading PCIe PRSNT# signals (active-low,
+	 * inverted by firmware so 1 = card present). The chip's #INT output
+	 * connects to GPIOA4 for immediate notification of card changes.
+	 *
+	 * Port 0 bits 0-7: Slots 1-8 PRSNT#
+	 * Port 1 bits 0-7: Slots 9-16 PRSNT#
+	 *
+	 * Read by io_expander_gpu_present() at 0x00035f14.
+	 * IPMI discrete sensors 0xA0-0xAF.
+	 */
+	gpio_presence: gpio@20 {
+		compatible = "nxp,pca9555";
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio>;
+		interrupts = <ASPEED_GPIO(A, 4) IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		gpio-line-names =
+			"slot1-prsnt-n", "slot2-prsnt-n",
+			"slot3-prsnt-n", "slot4-prsnt-n",
+			"slot5-prsnt-n", "slot6-prsnt-n",
+			"slot7-prsnt-n", "slot8-prsnt-n",
+			"slot9-prsnt-n", "slot10-prsnt-n",
+			"slot11-prsnt-n", "slot12-prsnt-n",
+			"slot13-prsnt-n", "slot14-prsnt-n",
+			"slot15-prsnt-n", "slot16-prsnt-n";
+	};
+
+	/*
+	 * PCA9555 #2 -- Per-Slot Power Good Feedback
+	 *
+	 * All 16 pins are inputs monitoring per-slot 12V regulator PWRGD
+	 * signals. Active-low with polarity inversion (1 = power good).
+	 *
+	 * Port 0 bits 0-7: Slots 1-8 PWRGD
+	 * Port 1 bits 0-7: Slots 9-16 PWRGD
+	 *
+	 * #INT -> GPIOB5
+	 */
+	gpio_pwrgd: gpio@21 {
+		compatible = "nxp,pca9555";
+		reg = <0x21>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio>;
+		interrupts = <ASPEED_GPIO(B, 5) IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		gpio-line-names =
+			"slot1-pwrgd", "slot2-pwrgd",
+			"slot3-pwrgd", "slot4-pwrgd",
+			"slot5-pwrgd", "slot6-pwrgd",
+			"slot7-pwrgd", "slot8-pwrgd",
+			"slot9-pwrgd", "slot10-pwrgd",
+			"slot11-pwrgd", "slot12-pwrgd",
+			"slot13-pwrgd", "slot14-pwrgd",
+			"slot15-pwrgd", "slot16-pwrgd";
+	};
+
+	/*
+	 * PCA9555 #3 -- Attention Buttons (Input) + Slot Power Control
+	 *
+	 * Port 0 bits 0-7: Slots 1-8 attention buttons (inputs, active-low)
+	 * Port 1 bits 0-7: Slots 9-16 attention buttons (inputs, active-low)
+	 *
+	 * When a button is pressed, Slot_Pwr_Btn_Trigger() initiates
+	 * a hot-plug power sequence for that slot (only single-button
+	 * presses are accepted; simultaneous multi-press is rejected).
+	 *
+	 * Read by get_gpu_attention() at 0x00031fb4.
+	 * #INT -> GPIOB4
+	 */
+	gpio_attention: gpio@22 {
+		compatible = "nxp,pca9555";
+		reg = <0x22>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio>;
+		interrupts = <ASPEED_GPIO(B, 4) IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		gpio-line-names =
+			"slot1-attn-btn-n", "slot2-attn-btn-n",
+			"slot3-attn-btn-n", "slot4-attn-btn-n",
+			"slot5-attn-btn-n", "slot6-attn-btn-n",
+			"slot7-attn-btn-n", "slot8-attn-btn-n",
+			"slot9-attn-btn-n", "slot10-attn-btn-n",
+			"slot11-attn-btn-n", "slot12-attn-btn-n",
+			"slot13-attn-btn-n", "slot14-attn-btn-n",
+			"slot15-attn-btn-n", "slot16-attn-btn-n";
+	};
+
+	/*
+	 * PCA9555 #4 -- Manual Retention Latch (MRL) Sensors
+	 *
+	 * All 16 pins are inputs monitoring the physical card retention
+	 * bracket position for each slot.
+	 *   Open = card can be removed
+	 *   Closed = card is locked in place
+	 *
+	 * Used in conjunction with attention buttons for safe PCIe hot-plug:
+	 * the firmware only allows card removal when the MRL is open.
+	 *
+	 * Port 0 bits 0-7: Slots 1-8 MRL state
+	 * Port 1 bits 0-7: Slots 9-16 MRL state
+	 *
+	 * #INT -> GPIOB5 (shared with PCA9555 #2)
+	 */
+	gpio_mrl: gpio@23 {
+		compatible = "nxp,pca9555";
+		reg = <0x23>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio>;
+		interrupts = <ASPEED_GPIO(B, 5) IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+
+		gpio-line-names =
+			"slot1-mrl", "slot2-mrl",
+			"slot3-mrl", "slot4-mrl",
+			"slot5-mrl", "slot6-mrl",
+			"slot7-mrl", "slot8-mrl",
+			"slot9-mrl", "slot10-mrl",
+			"slot11-mrl", "slot12-mrl",
+			"slot13-mrl", "slot14-mrl",
+			"slot15-mrl", "slot16-mrl";
+	};
+
+	/*
+	 * Front Board Temperature Sensor
+	 *
+	 * Standalone temperature sensor on the main board, separate from
+	 * the per-slot TMP100 sensors. At 8-bit address 0x9E (7-bit 0x4F).
+	 * Uses a dedicated IOSAPI driver (0x000fc344), distinct from the
+	 * TMP100 driver, suggesting a different sensor type (likely LM75
+	 * compatible based on the address range 0x48-0x4F).
+	 *
+	 * IPMI sensor 0x17 (FB Temp).
+	 */
+	temperature-sensor@4f {
+		compatible = "national,lm75";
+		reg = <0x4f>;
+		label = "front-board-temp";
+	};
+};
+
+/*
+ * ==========================================================================
+ * Unused I2C buses
+ * ==========================================================================
+ * I2C engine 5 (firmware bus 0xF5) is not used on the C410X.
+ * I2C engines 7-13 exist in the AST2400 dtsi but the AST2050 only
+ * has engines 0-6.
+ */
+
+/*
+ * ==========================================================================
+ * WDT -- Watchdog Timer
+ * ==========================================================================
+ */
+&wdt1 {
+	aspeed,reset-type = "soc";
+	status = "okay";
+};
+
+/*
+ * ==========================================================================
+ * Notes on Hardware Not Modeled in This Device Tree
+ * ==========================================================================
+ *
+ * 1. AST2050 On-Chip LED Controller
+ *    The BMC has a hardware LED controller (IO_fl.bin type 24, 34 entries)
+ *    that generates blink patterns for front-panel LEDs. The Linux kernel
+ *    has no standard DT binding for this Aspeed peripheral. The firmware
+ *    uses this for system power LED, status LED, and identify LED blink
+ *    timing. In a modern port, these would be handled via the gpio-leds
+ *    framework with software timers instead.
+ *
+ * 2. IPMI / KCS Interface
+ *    The KCS (Keyboard Controller Style) interface at I/O base 0x0CA2
+ *    provides the host-to-BMC IPMI channel. This is an Aspeed LPC
+ *    peripheral that would need the aspeed-kcs-ipmi driver.
+ *
+ * 3. IPMB (I2C Slave)
+ *    The BMC listens on I2C address 0x20 as an IPMB slave for
+ *    inter-controller communication.
+ *
+ * 4. PMBus PSU Communication
+ *    The four hot-swappable PSUs communicate via PMBus protocol for
+ *    power reporting (IPMI sensors 0x60-0x63) and fault diagnostics.
+ *    The physical bus connection for PMBus was not identified in the
+ *    firmware I2C bus mapping -- it may use a dedicated PMBus controller
+ *    or an additional I2C engine not in the standard table.
+ *
+ * 5. Per-Slot GPU Power Status LEDs (16x bicolor green/amber)
+ *    These are controlled through the PCA9555 expanders but the exact
+ *    pin mapping for the LED outputs was not fully resolved from the
+ *    IO_fl.bin entries. IO indices 0x8040-0x804F (IX_fl.bin entries
+ *    64-79) map to PCA9555 sub-indices 14-29.
+ *
+ * 6. Video (VGA)
+ *    The AST2050 has an integrated 2D/VGA graphics engine with 8MB
+ *    dedicated VRAM. Not typically used on the C410X (headless chassis)
+ *    but available via the BMC's VGA output connector.
+ */
