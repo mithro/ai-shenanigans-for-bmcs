@@ -37,14 +37,32 @@ Mainline U-Boot (2025) supports:
 | **AST2500** | ARM1176JZF-S | Full support (`evb-ast2500_defconfig`) |
 | **AST2600** | Cortex-A7 (dual) | Full support (`evb-ast2600_defconfig`) |
 | **AST2700** | RISC-V | Initial support (`ibex-ast2700_defconfig`) |
+| **AST2400** | ARM926EJ-S | **Drivers only** — no buildable platform |
 | **AST2050** | ARM926EJ-S | **No support** |
-| **AST2400** | ARM926EJ-S | **No support** |
 
-**Zero references to AST2050, AST2100, AST1100, or AST2400 exist in mainline U-Boot.**
+**Zero references to AST2050 or AST1100 exist in mainline U-Boot.**
 
 The mainline architecture lives under `arch/arm/mach-aspeed/` with subdirectories
 for `ast2500/` and `ast2600/` only. The Kconfig offers a choice between
 `ASPEED_AST2500` and `ASPEED_AST2600`.
+
+However, **AST2400 has partial driver support** — several mainline drivers have
+`aspeed,ast2400-*` compatible strings even though there is no Kconfig target,
+defconfig, SDRAM driver, or clock driver for AST2400:
+
+| Mainline Driver | AST2400 Compatible | Relevant to AST2050? |
+|----------------|-------------------|---------------------|
+| `drivers/spi/spi-aspeed-smc.c` | `aspeed,ast2400-fmc`, `aspeed,ast2400-spi` | **No** — AST2050 uses legacy SMC at `0x16000000`, not FMC |
+| `drivers/watchdog/ast_wdt.c` | `aspeed,ast2400-wdt` | **Likely yes** — WDT at `0x1E785000` is similar |
+| `drivers/gpio/gpio-aspeed.c` | `aspeed,ast2400-gpio` | **Possibly** — GPIO base `0x1E780000` matches, pin mux differs |
+| `drivers/timer/ast_timer.c` | "supports ast2400/ast2500" | **Likely yes** — timer base `0x1E782000` matches |
+| `drivers/i2c/ast_i2c.c` | "supports AST2400/AST2500" | **Possibly** — I2C base matches, channel config differs |
+| `dts/upstream/src/arm/aspeed/aspeed-g4.dtsi` | AST2400 device tree | **Template** — useful starting point for AST2050 DTS |
+
+Since AST2050 and AST2400 share the ARM926EJ-S core and many peripheral IP blocks,
+the AST2400 driver code is a closer starting point than AST2500 for most peripherals.
+The major exceptions are the SPI flash controller (completely different hardware) and
+the DRAM controller (DDR2 vs DDR3).
 
 ---
 
