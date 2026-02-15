@@ -151,6 +151,7 @@
 | analyse_maxq3180.py | Complete | MAXQ3180 SPI protocol, calibration, metering, stick protocol |
 | analyse_display_mcu.py | Complete | Display MCU protocol, CLI commands, serial console menus |
 | analyse_interconnect.py | Complete | Inter-PDU daisy-chain, PLC investigation, redundancy |
+| analyse_deep_binary.py | Complete | GPIO config values, DMA mapping, I2C bus, peripheral address map |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -191,22 +192,32 @@
 - **Reset handler traced** -- boot sequence from 0xB7F64 through BSP init chain
 - **Default config table found** -- board name, default IPs, MAC OUI, credentials
 - **GPIO init functions located** -- 4 code clusters referencing GPIO config registers
-- **Serial port mapping** -- Port B primary (DMA), Port A debug, Port C secondary (DMA)
+- **Serial port mapping** -- Port B primary (DMA Ch7), Port A debug, Port C secondary (DMA Ch15)
 - **Cross-version comparison** -- v1.6→v2.0 major rewrite, v2.0.22→v2.0.51 minor patch
 - **Security assessment** -- CVE-2014-9222 confirmed, OpenSSL 0.9.7b, full attack surface mapped
 - **Web UI extracted** -- 1192 URLs, HTML/CSS/JS/images extracted
-- GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
 - **MAXQ3180 SPI communication analysed**: DMA-based SPI, calibration system, metering parameters, extension bar protocol, IPMI discovery (see MAXQ3180 section above)
 - **TMP89FM42LUG display MCU analysed**: HpBlSeR09 serial protocol, Dialog.c module, 7-segment display, LEDs, buzzer, health monitoring (see Display MCU section above)
 - **PLC modem: NOT PRESENT in firmware** -- J10 "PLC DIAG" purpose unclear, no PLC protocol strings found
 - **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)
 - **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
 
+### Deep Binary Analysis
+- **GPIO config values partially extracted** from literal pools in Cluster 1 (0x000A97CC):
+  - Config #1 = 0x33333333: All pins 0-7 as GPIO inputs, **SPI B completely disabled**
+  - Config #2 = 0x13130101: Mixed -- Serial A RX (pin 9) + CTS (pin 11) in peripheral mode, rest GPIO
+- **Peripheral address map discovered** at 0x757114: MMU region table confirms all NS9360 peripheral ranges
+- **I2C bus confirmed active**: 20 register references, semaphore-protected driver (I2C_SEM, I2C_HOST_SEMAPHORE), event-based (i2cHostEvent), debug output ("I2C Bus:")
+- **DMA channel mapping**: Ch7 (23 refs) → Port B, Ch15 (7 refs) → Port C, Ch0 (3 refs) → system
+- **SPI B disabled via GPIO mux** -- MAXQ3180 SPI port still not definitively identified (no named SPI API calls; uses direct register access)
+- GPIO config VALUES for registers 3-10 still not extracted (passed via stack operations)
+- Created analyse_deep_binary.py
+
 ### Datasheet Gaps
 - ~~TMP89FM42LUG datasheet not yet downloaded~~ **DOWNLOADED** (5.5 MB / 428 pages)
 - ~~ICS1893AFLF Ethernet PHY datasheet not yet downloaded~~ **DOWNLOADED** (1.2 MB / 152 pages)
 
 ### Cross-References Needed
-- Confirm SPI port assignment (which NS9360 SPI connects to MAXQ3180)
-- Determine if I2C bus has any devices (test point visible but usage unknown)
-- Map NS9360 GPIO pins to board-level functions from firmware disassembly
+- ~~Confirm SPI port assignment~~ SPI B confirmed disabled; MAXQ3180 port uses direct register access (not named SPI APIs), exact port still TBD
+- ~~Determine if I2C bus has any devices~~ **I2C bus confirmed active** (20 register refs, semaphore driver, event system). Specific device addresses not yet extracted.
+- ~~Map NS9360 GPIO pins to board-level functions~~ **Partial**: pins 0-15 decoded from GPIO config values. Remaining pins (16-72) need decompiler for stack-passed values.

@@ -184,18 +184,18 @@ control pin muxing.
 
 | GPIO | Pin | Mux 00 (UART/SPI) | Likely Board Function |
 |------|-----|--------------------|-----------------------|
-| gpio[0] | W5 | Ser B TXData / SPI B dout | RS-232 TX (to Display Unit?) |
-| gpio[1] | V6 | Ser B RXData / SPI B din | RS-232 RX (from Display Unit?) |
-| gpio[2] | Y5 | Ser B RTS | RS-232 flow control |
-| gpio[3] | W6 | Ser B CTS | RS-232 flow control |
-| gpio[4] | V7 | Ser B DTR | RS-232 flow control |
-| gpio[5] | Y6 | Ser B DSR | RS-232 flow control |
-| gpio[6] | W7 | Ser B RI / SPI B clk | RS-232 RI or SPI clock |
-| gpio[7] | Y7 | Ser B DCD / SPI B enable | RS-232 DCD or SPI CS |
-| gpio[8] | V8 | Ser A TXData / SPI A dout | Debug UART TX (J25 "Digi UART") |
-| gpio[9] | W8 | Ser A RXData / SPI A din | Debug UART RX (J25 "Digi UART") |
-| gpio[10] | Y8 | Ser A RTS | Debug UART flow control |
-| gpio[11] | V9 | Ser A CTS | Debug UART flow control |
+| gpio[0] | W5 | Ser B TXData / SPI B dout | **GPIO input** (SPI B disabled, see below) |
+| gpio[1] | V6 | Ser B RXData / SPI B din | **GPIO input** (SPI B disabled) |
+| gpio[2] | Y5 | Ser B RTS | **GPIO input** |
+| gpio[3] | W6 | Ser B CTS | **GPIO input** |
+| gpio[4] | V7 | Ser B DTR | **GPIO input** |
+| gpio[5] | Y6 | Ser B DSR | **GPIO input** |
+| gpio[6] | W7 | Ser B RI / SPI B clk | **GPIO input** (SPI B disabled) |
+| gpio[7] | Y7 | Ser B DCD / SPI B enable | **GPIO input** (SPI B disabled) |
+| gpio[8] | V8 | Ser A TXData / SPI A dout | GPIO output (mux=1) |
+| gpio[9] | W8 | Ser A RXData / SPI A din | **Ser A RX** (mux=0, peripheral mode) |
+| gpio[10] | Y8 | Ser A RTS | GPIO output (mux=1) |
+| gpio[11] | V9 | Ser A CTS | **Ser A CTS** (mux=0, peripheral mode) |
 | gpio[20] | Y12 | Ser C DTR | Daisy-chain UART or SPI? |
 | gpio[22] | V12 | Ser C RI / SPI C clk | |
 | gpio[23] | Y13 | Ser C DCD / SPI C enable | |
@@ -552,9 +552,46 @@ The ARM reset vector at 0x4000 loads PC from literal pool → 0x000B7F64.
 | 7 | 0x000B85A4 | BL 0x000A86CC -- BSP GPIO/serial init |
 
 The GPIO configuration registers at 0x9060_xxxx are written from functions
-in the 0x000A9xxx range, called from the BSP init chain. Values are passed
-through the stack (not hardcoded in literal pools), making static extraction
-difficult without a full decompiler.
+in the 0x000A9xxx range, called from the BSP init chain. Some values are
+visible in literal pools, others passed through the stack.
+
+### GPIO Configuration Values (partial, from literal pool analysis)
+
+Four GPIO init code clusters were found. Cluster 1 (at 0x000A97CC) had
+config values in its literal pool:
+
+| Register | Value | Meaning |
+|----------|-------|---------|
+| GPIO Config #1 (pins 0-7) | 0x33333333 | **All 8 pins as GPIO inputs** -- SPI B completely disabled |
+| GPIO Config #2 (pins 8-15) | 0x13130101 | Mixed: pin 9 (Ser A RX) and pin 11 (CTS) in peripheral mode, rest GPIO |
+
+**Key finding: SPI B is NOT used.** All SPI B pins (gpio[0] CLK, gpio[1] DIN, gpio[6] CLK, gpio[7] EN)
+are reconfigured as GPIO inputs. The MAXQ3180 must connect via a different SPI port.
+
+GPIO Config #2 shows Serial Port A is partially active with RX (pin 9) and CTS (pin 11) in
+peripheral mode. Pins 8, 10, 13, 15 are set to mux=1 (GPIO output or LCD function), and
+pins 12, 14 are GPIO inputs.
+
+Cluster 4 (at 0x0029B378) contained a repeating pattern of 0x06000000 values, which configure
+one pin per register (pin position 6) as interrupt-capable GPIO input with signal inversion.
+These may be templates or default configurations.
+
+### NS9360 Peripheral Address Map (from firmware MMU table)
+
+A peripheral memory region table was found at 0x757114, used by NET+OS to configure the
+ARM926EJ-S MMU. This confirms the complete peripheral address ranges:
+
+| Base Address | End Address | Size | Peripheral |
+|-------------|-------------|------|------------|
+| 0x9000_0000 | 0x9000_01D3 | 468 B | System / DMA controller |
+| 0x9020_0000 | 0x9020_007B | 124 B | Serial Ports B + A |
+| 0x9030_0000 | 0x9030_007B | 124 B | Serial Ports C + D |
+| 0x9040_0000 | 0x9040_017B | 380 B | Ethernet MAC |
+| 0x9050_0000 | 0x9050_000F | 16 B | I2C controller (4 registers) |
+| 0x9060_0000 | 0x9060_0093 | 148 B | GPIO / BBus utility |
+| 0x9070_0000 | 0x9070_0034 | 52 B | Timer |
+| 0x9080_0000 | 0x9080_1FFF | 8 KB | Endian / USB module |
+| 0x9090_0000 | 0x9091_FFFF | 128 KB | LCD controller |
 
 ## Communication Architecture
 
@@ -565,8 +602,8 @@ difficult without a full decompiler.
                     /    |    \     \
                UART-A  UART-B  SPI   I2C     UART-C or D?
                 |        |      |      |          |
-            Debug     Display  MAXQ   Test    Daisy-chain
-            (J25)     Unit    3180   Point   to next iPDU
+            Debug     Display  MAXQ   ???     Daisy-chain
+            (J25)     Unit    3180            to next iPDU
                     (conn 8)                  (conn 7)
                        |
                     [MAX3243EI]
@@ -660,21 +697,35 @@ bar firmware over the daisy-chain link.
 Searching the decompressed firmware for NS9360 serial port register addresses reveals
 which ports are actively used and how they are configured:
 
-| Port | Base Address | Register Refs | DMA | Usage |
-|------|-------------|---------------|-----|-------|
-| Port B | 0x9020_0000 | 13 (6 types) | Yes | Primary communication (Display Unit?) |
-| Port C | 0x9030_0000 | 3 (FIFO only) | Yes | Secondary communication (daisy-chain?) |
-| Port A | 0x9020_0040 | 1 (FIFO only) | No | Debug UART (J25, polled/interrupt) |
-| Port D | 0x9030_0040 | 1 (FIFO only) | No | Minimal use (MAXQ3180 SPI?) |
+| Port | Base Address | Register Refs | Ctrl A Refs | DMA | Usage |
+|------|-------------|---------------|-------------|-----|-------|
+| Port B | 0x9020_0000 | 14 (7 types) | 6 | Yes | Primary communication (Display Unit?) |
+| Port C | 0x9030_0000 | 4 (Ctrl A only) | 4 | Yes | Secondary communication (daisy-chain?) |
+| Port A | 0x9020_0040 | 1 (Ctrl A only) | 1 | No | Debug UART (J25, polled/interrupt) |
+| Port D | 0x9030_0040 | 1 (Ctrl A only) | 1 | No | Minimal use |
 
 **Port B** has by far the most register references (Control A, Control B, Bit Rate,
-Status A, RX Char Timer), indicating it is the primary communication port with full
-configuration. A DMA descriptor table at ~0x757130 maps Port B and Port C to dedicated
-DMA channels, while Port A and Port D are absent (polled or interrupt-driven).
+Status A, RX Buf Gap Timer, RX Match, RX Match Mask), indicating it is the primary
+communication port with full configuration. A peripheral memory region table at 0x757114
+maps Port B and Port C into DMA-capable address ranges, while Port A and Port D use
+polled or interrupt-driven I/O.
 
 Port B Control A value `0x83030A00` found in literal pool at 0xACC38 -- but this is
 written to the FIFO register during init, not to Control A itself. The actual UART
 configuration (baud rate, mode) is set through the NET+OS serial driver API.
+
+**DMA Channel Usage** (from deep binary analysis):
+
+| DMA Channel | Base Address | References | Likely Assignment |
+|-------------|-------------|------------|-------------------|
+| Channel 7 | 0xA070_00E0 | 23 | Port B (primary serial) |
+| Channel 15 | 0xA070_01E0 | 7 | Port C (secondary serial) |
+| Channel 0 | 0xA070_0000 | 3 | System / other |
+| Channel 4 | 0xA070_0080 | 1 | Minimal use |
+| Channel 8 | 0xA070_0100 | 1 | Minimal use |
+
+Channel 7's dominant reference count (23) correlates with Port B's heavy usage (14 register refs).
+Channel 15's secondary count (7) aligns with Port C's moderate usage (4 refs).
 
 The firmware contains baud rate divisor values for 115200 baud (divisor 23, 47 occurrences)
 and 9600 baud (divisor 287, 6 occurrences), suggesting both rates are used.
@@ -801,6 +852,34 @@ Interface) support, revealed by two debug CLI commands:
 
 This suggests the iPDU may use IPMI for inter-device communication, possibly with
 extension bars or for integration with server management systems.
+
+### I2C Bus Analysis
+
+The NS9360 I2C controller at 0x9050_0000 is **actively used** in the firmware,
+with 20 total register references and a semaphore-protected driver:
+
+| Register | Address | References |
+|----------|---------|------------|
+| I2C Slave Address | 0x9050_0000 | 10 |
+| I2C Data | 0x9050_0004 | 2 |
+| I2C Status | 0x9050_0008 | 3 |
+| I2C Master Address | 0x9050_000C | 5 |
+
+**I2C Driver Strings**:
+- `I2C_SEM` (0x0072_1DBC) -- semaphore for bus access serialisation
+- `I2C_HOST_SEMAPHORE` (0x0072_1DC4) -- host-level access serialisation
+- `i2cHostEvent` (0x0072_1DD8) -- event notification string
+- `I2C open failed.` (0x0072_1DE8) -- error handling
+- `I2C Bus:` (0x006A_0FD4) -- debug/diagnostic output
+
+The dual semaphore architecture (bus-level + host-level) suggests the I2C bus is accessed
+from multiple RTOS threads. The "I2C Bus:" debug string appears in the diagnostic output
+region, indicating a debug CLI command can show I2C status.
+
+**I2C device(s) on the bus are not yet identified** -- the firmware doesn't contain
+obvious I2C device address constants in nearby literal pools. The test point visible
+on the PCB near the I2C pull-up resistors suggests HP used it for manufacturing test.
+Possible I2C devices: EEPROM for board identification, temperature sensor, or RTC.
 
 ### Display MCU -- TMP89FM42LUG Serial Communication
 
