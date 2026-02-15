@@ -203,8 +203,8 @@
 - **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
 
 ### Datasheet Gaps
-- TMP89FM42LUG datasheet not yet downloaded (URL found, ~5 MB / 408 pages)
-- ICS1893AFLF Ethernet PHY datasheet not yet downloaded (URL found)
+- ~~TMP89FM42LUG datasheet not yet downloaded~~ **DOWNLOADED** (5.5 MB / 428 pages)
+- ~~ICS1893AFLF Ethernet PHY datasheet not yet downloaded~~ **DOWNLOADED** (1.2 MB / 152 pages)
 
 ### Cross-References Needed
 - Confirm SPI port assignment (which NS9360 SPI connects to MAXQ3180)
