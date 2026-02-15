@@ -58,6 +58,9 @@
 | parse_header.py | Complete | Detailed bootHdr header parser and cross-version comparison |
 | disasm_payload.py | Complete | ARM disassembly of raw payload (confirmed compression) |
 | decompress_firmware.py | Complete | LZSS2 decompressor (Python port of gsuberland C# reference) |
+| analyse_decompressed.py | Complete | Full disassembly, MMIO reference scan, string analysis |
+| extract_gpio_init.py | Complete | GPIO init function cluster analysis |
+| trace_bsp_init.py | Complete | Reset handler trace, BSP GPIO table search |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -94,8 +97,11 @@
 
 ### Firmware Deep Analysis
 - **Firmware decompressed** -- all 3 versions decompressed with LZSS2, load address 0x4000
-- ARM disassembly of decompressed firmware not yet performed
-- GPIO configuration register writes not yet extracted from disassembly
+- **Full ARM disassembly** performed -- MMIO references mapped, function calls traced
+- **Reset handler traced** -- boot sequence from 0xB7F64 through BSP init chain
+- **Default config table found** -- board name, default IPs, MAC OUI, credentials
+- **GPIO init functions located** -- 4 code clusters referencing GPIO config registers
+- GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
 - MAXQ3180 SPI communication protocol not extracted
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified

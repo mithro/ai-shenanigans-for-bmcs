@@ -469,6 +469,48 @@ Key strings found in decompressed binary:
 
 Overall: ~52% printable bytes (extensive embedded web UI content).
 
+## Default Configuration (from firmware data table)
+
+The firmware contains a default configuration data table near the board
+name string at 0x0069C784:
+
+| Field | Default Value |
+|-------|---------------|
+| Board name | "Brookline" |
+| Admin username | "admin" |
+| IP address | 172.16.100.102 |
+| Subnet mask | 255.255.0.0 |
+| Gateway | 172.16.0.1 |
+| DNS server 1 | 129.6.15.29 |
+| DNS server 2 | 129.6.15.28 |
+| Serial number | N99999999 (placeholder) |
+| MAC address 1 | 00:40:9d:43:35:97 |
+| MAC address 2 | 00:40:9d:43:35:98 |
+| Phase config | "Single Phase" |
+
+The MAC OUI `00:40:9d` is registered to Digi International, confirming
+this is a Digi-based platform. The DNS servers 129.6.15.x are NIST
+time servers (time.nist.gov).
+
+## Boot Sequence (from reset handler trace)
+
+The ARM reset vector at 0x4000 loads PC from literal pool → 0x000B7F64.
+
+| Step | Address | Function |
+|------|---------|----------|
+| 1 | 0x000B7F64 | CP15 setup (alignment check, cache enable) |
+| 2 | 0x000B7F80 | System control register init (0xA0900000) |
+| 3 | 0x000B7FB4 | PLL and clock configuration |
+| 4 | 0x000B7FD4 | Mode switch to SVC, stack setup (SP = 0x4000) |
+| 5 | 0x000B84B4 | BL 0x000A817C -- BSP system init |
+| 6 | 0x000B8510 | BL 0x000A81A8 -- BSP peripheral init |
+| 7 | 0x000B85A4 | BL 0x000A86CC -- BSP GPIO/serial init |
+
+The GPIO configuration registers at 0x9060_xxxx are written from functions
+in the 0x000A9xxx range, called from the BSP init chain. Values are passed
+through the stack (not hardcoded in literal pools), making static extraction
+difficult without a full decompiler.
+
 ## Communication Architecture
 
 ```
