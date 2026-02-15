@@ -347,34 +347,75 @@ Known firmware versions (codename "Henning"):
 
 | Version | Date | Notes |
 |---------|------|-------|
-| 1.1 | ~2010 | Initial release |
-| 1.2 | ~2011 | |
-| 1.3 | ~2012 | |
-| 1.4 | ~2013 | |
-| 2.0.0 | ~2014 | Major version bump |
-| 2.0.1 | ~2015 | |
-| 2.0.2 | ~2016 | |
-| 2.0.3 | ~2017 | |
-| 2.0.51 | ~2018 | |
-| 2.0.51.12 | 2019 | Latest known (Z7550-09130) |
+| 1.0.09.09 | ~2010 | Initial release (IPv6 link-local support) |
+| 1.1.02.09 | ~2010 | Redundancy management |
+| 1.2.10.09 | ~2011 | Config download/upload |
+| 1.3.11.09 | ~2011 | Daisy-chain, group control, outlet delay |
+| 1.4.13.09 | ~2013 | AF547A support, IE9 |
+| 1.5.16.09 | 2012-10-08 | Location Discovery Services |
+| 1.6.16.12 | 2013-10-11 | Energy metering, 1024-bit SSL |
+| 2.0.21.12 | 2015-02-03 | New web server, LDAP auth |
+| 2.0.22.12 | 2015-09-02 | Rack View optimization |
+| 2.0.49.12 | 2018-05-22 | New H/W enablement |
+| 2.0.51.12 | 2019-03-06 | Latest known (Z7550-02475) |
 
-Note: AF531A is NOT listed in the supported models for the latest firmware release.
-Supported models are: AF520A, AF521A, AF522A, AF523A, AF525A, AF526A, AF527A,
-AF533A, AF901A.
+**Upgrade path**: 1.0.9.09 → 1.3.11.09 → 1.6.16.12 → 2.0.49.12 (FTP only for
+v1.6→v2.0 upgrade; serial mode does not work for this transition).
 
-## Firmware Internals (Expected)
+Supported iPDU models (from v2.0.51.12 README): AF520A, AF521A, AF522A, AF523A,
+**AF531A**, AF532A, AF533A, AF534A, AF535A, AF537A, AF538A, AF525A, AF526A,
+AF527A, AF900A, AF901A, AF902A.
 
-Based on the NS9360 platform and NET+ARM SDK:
-- **Bootloader**: Likely Digi/NetSilicon bootstrap loader in first flash sector
-- **Kernel**: Linux 2.6.x (NET+ARM kernel) or possibly ThreadX RTOS
-- **Filesystem**: Could be JFFS2, SquashFS, or CramFS in NOR flash
-- **Application**: iPDU management daemon (IPMI-like), web server, SNMP agent
+## Firmware Internals (Confirmed from Binary Analysis)
 
-The firmware `image.bin` file likely contains:
-1. A header with version info and checksums
-2. Kernel image (compressed)
-3. Root filesystem image
-4. Possibly a separate configuration partition
+The firmware runs **NET+OS** (Digi's ThreadX-based RTOS), **NOT Linux**. The
+`image.bin` is a monolithic flat ARM binary, not a filesystem image.
+
+### Operating System
+- **RTOS**: Digi NET+OS (ThreadX-based), confirmed by "netos" and "netos_stubs.c"
+  strings in the binary. Source file reference: `netos_stubs.c`
+- **NOT Linux**: No Linux kernel strings, no filesystem (SquashFS/JFFS2/CramFS)
+- **Board codename**: "Brooklyn" (from string: "NS9360 Brooklyn Board Debug
+  Output Serial port")
+- **Firmware codename**: "Henning" (from ZIP file names)
+
+### Web Server
+- **Allegro RomPager Version 4.01** -- (C) 1995-2000 S&S Software Development Corp.
+- Known embedded HTTP server for RTOS platforms
+- Note: RomPager has known vulnerabilities (CVE-2014-9222 "Misfortune Cookie")
+- Web UI uses jQuery, Raphael.js (for rack view), and stringencoders library
+
+### Image Format (bootHdr)
+
+| Offset | Size | Value (v2.0.51.12) | Description |
+|--------|------|--------------------|-------------|
+| 0x00 | 4 | 0x0000002C (44) | Offset to ARM code start |
+| 0x04 | 4 | 0x00000024 (36) | Header payload size |
+| 0x08 | 8 | "bootHdr\0" | Digi boot header magic |
+| 0x10 | 8 | 0x0000000000000009 | Unknown (constant across versions) |
+| 0x18 | 4 | 0x00020000 | Unknown (constant, possibly load address offset) |
+| 0x1C | 4 | 0x00004000 | Unknown (constant, possibly block size) |
+| 0x20 | 4 | 0x0037E794 | Image data size (file_size - 48) |
+| 0x24 | 8 | "HPPDU00\0" | Product identifier |
+| 0x2C | ... | ARM code | Executable firmware starts here |
+
+The size field at offset 0x20 equals (file_size - 48) for all three firmware versions:
+- v1.6.16.12: 0x002C2667 (2893415), file=2893463, diff=48
+- v2.0.22.12: 0x0037C2F1 (3654385), file=3654433, diff=48
+- v2.0.51.12: 0x0037E794 (3663764), file=3663812, diff=48
+
+### Binary Structure (entropy analysis)
+
+| Region | Content | Entropy |
+|--------|---------|---------|
+| 0x000000-0x18FFFF | ARM code (compressed/linked binary) | High (~7.5 bits/byte) |
+| 0x190000-0x24FFFF | Web UI resources (HTML, CSS, JS, GIF) | Mixed (16-29% text) |
+| 0x250000-0x31FFFF | More binary code | High (~7.5 bits/byte) |
+| 0x320000-0x37E7C4 | NET+OS strings, HTTP server, config | Mixed (12-22% text) |
+
+The entire firmware is a single compiled binary with no separate filesystem.
+All web resources (HTML pages, JavaScript, GIF images) are compiled directly
+into the binary as embedded data.
 
 ## Communication Architecture
 

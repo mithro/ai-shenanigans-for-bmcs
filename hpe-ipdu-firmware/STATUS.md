@@ -19,13 +19,7 @@
 - Documented boot configuration (NOR Flash boot, PLL settings)
 - Documented serial port assignments (4x UART/SPI)
 - Documented I2C and Ethernet pin assignments
-
-### Firmware Research
-- Identified firmware codename "Henning" and 10 known versions (1.1 to 2.0.51.12)
-- Identified HP Power Device Flash Utility for firmware flashing
-- Determined AF531A shares platform with AF520A and other iPDU models
-- Documented firmware update methods (Serial Flash and FTP Flash)
-- Serial console settings: 115200/8/N/1/None
+- Extracted GPIO Configuration Register map from HW Reference Manual
 
 ### Ethernet PHY Identified
 - U10 (marked "P47932M / 1893AFLF") is an ICS 1893AFLF Ethernet PHY Transceiver
@@ -33,12 +27,24 @@
 - 10Base-T/100Base-TX Integrated PHYceiver (Renesas/IDT)
 - Pairs with NS9360 on-chip Ethernet MAC via MII/RMII interface
 
+### Firmware Obtained and Analysed
+- Three firmware versions obtained: 1.6.16.12, 2.0.22.12, 2.0.51.12
+- **OS identified: NET+OS (Digi ThreadX-based RTOS)** -- NOT Linux
+- Board codename identified: "Brooklyn" (firmware codename: "Henning")
+- Confirmed AF531A is a supported model in firmware v2.0.51.12 README
+- Image format: Digi bootHdr (48-byte header + monolithic ARM binary)
+- Web server: Allegro RomPager Version 4.01
+- Firmware is a flat binary with embedded web UI, no filesystem
+- Documented upgrade path: 1.0.9.09 → 1.3.11.09 → 1.6.16.12 → 2.0.49.12
+- Created extract_firmware.py for automated analysis
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
-| ANALYSIS.md | Complete | Board component inventory, NS9360 I/O architecture |
+| ANALYSIS.md | Complete | Board inventory, NS9360 I/O, firmware internals |
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
+| extract_firmware.py | Complete | Firmware extraction and analysis script |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -58,14 +64,11 @@
 | GPIO | Up to 73 pins (muxed with peripherals) |
 | System Crystal | 29.4912 MHz |
 | Debug Header | J25 "Digi UART" |
+| OS | NET+OS (ThreadX-based RTOS) |
+| Web Server | Allegro RomPager 4.01 |
+| Board Codename | "Brooklyn" |
 
 ## Open Items
-
-### Firmware Acquisition (Blocked)
-- HPE firmware downloads require HPE Passport account authentication
-- All support.hpe.com and myenterpriselicense.hpe.com URLs return auth walls
-- Eaton ePDU firmware may be compatible (OEM rebrand theory) but not confirmed
-- Need to either: obtain HPE account, find mirror, or dump flash from hardware
 
 ### Hardware Investigation (Requires Physical Access)
 - Boot log not yet captured (user will provide at a later date)
@@ -76,22 +79,22 @@
 - J10 "PLC DIAG" Power Line Communication circuit not traced
 - Extension bar bus protocol (J1, J6 connectors) not documented
 
-### Firmware Analysis (Blocked on Firmware Acquisition)
-- Firmware binary not yet obtained for analysis
-- Bootloader type and version unknown
-- Linux kernel version unknown (expected 2.6.x)
-- Filesystem type unknown (likely JFFS2, SquashFS, or CramFS)
-- Flash memory layout not mapped
-- I/O configuration tables not extracted
-- GPIO pin assignments not confirmed from firmware
+### Firmware Deep Analysis
+- ARM disassembly not yet performed (need to determine load address)
+- GPIO pin assignments not confirmed from firmware (no config tables like Dell C410X)
+- MAXQ3180 SPI communication protocol not extracted
+- TMP89FM42LUG serial protocol not extracted
+- PLC (Power Line Communication) modem interface not identified
+- RomPager CVE-2014-9222 ("Misfortune Cookie") vulnerability not assessed
+- NVRAM/configuration storage format not documented
+- Web UI resource extraction not complete (embedded in binary)
 
 ### Datasheet Gaps
 - TMP89FM42LUG datasheet not yet downloaded (URL found, ~5 MB / 408 pages)
 - ICS1893AFLF Ethernet PHY datasheet not yet downloaded (URL found)
-- NS9360 HW Reference downloaded; GPIO register addresses extracted into ANALYSIS.md
 
 ### Cross-References Needed
 - Confirm serial port assignment (which NS9360 port maps to which connector)
 - Confirm SPI port assignment (which NS9360 SPI connects to MAXQ3180)
 - Determine if I2C bus has any devices (test point visible but usage unknown)
-- Map NS9360 GPIO pins to board-level functions from firmware analysis
+- Map NS9360 GPIO pins to board-level functions from firmware disassembly
