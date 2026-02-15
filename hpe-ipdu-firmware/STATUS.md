@@ -164,6 +164,7 @@
 | analyse_interconnect.py | Complete | Inter-PDU daisy-chain, PLC investigation, redundancy |
 | analyse_deep_binary.py | Complete | GPIO config values, DMA mapping, I2C bus, peripheral address map |
 | analyse_stick_protocol.py | Complete | Extension bar protocol strings, firmware update, outlet addressing |
+| analyse_firmware_map.py | Complete | Binary layout map: code/data/web regions, landmarks, type statistics |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |

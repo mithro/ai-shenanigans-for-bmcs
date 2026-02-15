@@ -371,6 +371,33 @@ AF527A, AF900A, AF901A, AF902A.
 The firmware runs **NET+OS** (Digi's ThreadX-based RTOS), **NOT Linux**. The
 `image.bin` is a monolithic flat ARM binary, not a filesystem image.
 
+### Decompressed Binary Layout (v2.0.51.12, 7.6 MB)
+
+| Address Range | Size | Type | Content |
+|---------------|------|------|---------|
+| 0x0000_4000 - 0x0029_6FFF | 2,636 KB | ARM code | BSP, RTOS kernel, drivers, application, crypto |
+| 0x0029_7000 - 0x0029_AFFF | 16 KB | Data tables | Configuration/init data |
+| 0x0029_B000 - 0x0029_FFFF | 20 KB | ARM code | GPIO init clusters 3-4 |
+| 0x002A_0000 - 0x002B_4FFF | 84 KB | Mixed code | KLone framework, OpenSSL strings |
+| 0x002B_5000 - 0x0069_CFFF | 3,872 KB | Web content | HTML, JavaScript, CSS, images (RomPager) |
+| 0x0069_D000 - 0x0074_CFFF | 704 KB | String tables | CLI commands, error messages, protocol strings |
+| 0x0074_D000 - 0x0079_BFFF | 316 KB | Mixed | Late code, peripheral map, web URLs |
+
+**Region type breakdown**:
+- ARM code: 3.4 MB (43.5%) -- RTOS, drivers, application logic
+- Web content (JS + HTML + strings): 3.7 MB (46.6%) -- embedded web UI
+- Images (GIF/PNG/JPEG): 340 KB (4.3%) -- web UI graphics
+- Padding (zero-filled): 414 KB (5.2%) -- alignment/unused space
+
+Key landmarks in the code region:
+- 0x0000_4000: ARM reset vector table (LDR PC, [PC, #0x38])
+- 0x000A_8000: BSP init functions (system, peripheral, GPIO/serial)
+- 0x000A_97CC: GPIO configuration literal pools
+- 0x000A_CC3C: Serial port configuration
+- 0x000B_1000: I2C driver functions
+- 0x000B_7F64: Reset handler entry point
+- 0x0029_B000: GPIO init clusters 3-4 (late init)
+
 ### Operating System
 - **RTOS**: Digi NET+OS (ThreadX-based), confirmed by "netos" and "netos_stubs.c"
   strings in the binary. Source file reference: `netos_stubs.c`
