@@ -315,3 +315,136 @@ related to PEX8696/PEX8647 PCIe switch control and I2C communication.
 | `0x00111E60` |  | `b` | `bAIMSerialMUXRegister.4` |
 | `0x00112838` |  | `B` | `G_u8MuxTblRecIdx` |
 | `0x00114478` |  | `B` | `G_u16AIMMUXEventID` |
+
+---
+
+## String References
+
+Extracted via `arm-linux-gnueabi-strings fullfw` with filtering for PEX/I2C/GPU patterns.
+
+### Debug Log Strings (LMD prefix)
+
+These are firmware debug/logging strings (likely "Log Message Debug") that reveal
+function behavior, parameters, and error conditions. The `%02X` format specifiers
+show what values are logged at runtime.
+
+#### PEX Register Operations
+
+| String | Significance |
+|--------|-------------|
+| `LMD : pex8696_slot_power_on %02X %02X` | Logs PEX address and port when powering on a slot |
+| `LMD : pex8696_un_protect %02X %02X` | Logs address/port when removing write-protection |
+| `LMD : all_slot_power_off` | Logged when all slots are powered down |
+| `LMD : pex8696_all_slot_power_off` | Logged during all-slot power-off sequence |
+| `LMD : slot_power_off` | Logged when individual slot powers off |
+| `LMD : dump_PEX8696_reg` | Logged when dumping PEX8696 registers |
+| `LMD : set_PEX8696_reg` | Logged when setting PEX8696 registers |
+
+#### Multi-Host Configuration
+
+| String | Significance |
+|--------|-------------|
+| `LMD : Multi_Host_Cfg %02X %02X %02X %02X` | 4 bytes of multi-host config state |
+| `LMD : Multi_Host_Cfg_8 %02X` | PEX8647 8-host configuration mode |
+| `LMD : multi_host %02X %02X` | Multi-host mode parameters |
+| `LMD : get_mode_cfg_ipass` | Reading iPass connector configuration |
+| `LMD : get_mode_cfg_eeprom` | Reading mode config from EEPROM |
+| `LMD : set_mode_cfg_eeprom` | Writing mode config to EEPROM |
+
+#### I2C Transport
+
+| String | Significance |
+|--------|-------------|
+| `LMD : PI2CWriteRead Fail` | I2C transaction failure (appears 6 times!) |
+| `LMD : PI2CWriteRead fail` | Alternate casing of I2C failure |
+| `LMD : tx_queue_send fail` | I2C message queue send failure |
+| `LMD : tx_queue_send 1 fail` through `5 fail` | Numbered queue failures in sequences |
+
+#### GPU Power Sequence
+
+| String | Significance |
+|--------|-------------|
+| `LMD : all_gpu_power_off` | All GPUs being powered down |
+| `LMD : gpu_power_on_4_8_12_16` | Power-on group 1 (slots 4,8,12,16) |
+| `LMD : gpu_power_on_3_7_11_15` | Power-on group 2 (slots 3,7,11,15) |
+| `LMD : gpu_power_on_2_6_10_14` | Power-on group 3 (slots 2,6,10,14) |
+| `LMD : gpu_power_on_1_5_9_13` | Power-on group 4 (slots 1,5,9,13) |
+| `LMD : gpu_power_attention_pulse on_gpu %02X %02X` | Attention pulse with GPU bitmap (16 bits) |
+| `LMD : gpu_un_protect %02X` | GPU write-protection removal |
+| `LMD : gpu_force_power_off_reg %02X` | Forced power-off register value |
+| `LMD : is_gpu_power_on %02X %02X %02X` | 3-byte GPU power state check |
+| `LMD : GPU_Power_Button_Press %02X %02X` | Power button event for GPUs |
+| `LMD : GPU_Attention %02X %02X` | GPU attention/interrupt signal |
+| `LMD : GPU_Present %02X %02X` | GPU presence detection (16 bits for 16 slots) |
+| `LMD : no_gpu_no_power` | Skip power if no GPU present |
+| `LMD : GPU off` / `LMD : GPU on` | Simple power state transitions |
+| `LMD : GPU ON` / `LMD : GPU not ON` | Power verification results |
+
+#### PLX EEPROM Operations
+
+| String | Significance |
+|--------|-------------|
+| `LMD : read_plx_eeprom %02X %02X %04X` | Read EEPROM: bus, addr, 16-bit offset |
+| `LMD : write_plx_eeprom %02X %02X %04X %02X %02X %02X %02X` | Write EEPROM: bus, addr, offset, 4 data bytes |
+| `LMD : get_plx_serial_number %02X %02X` | Read serial number: bus, addr |
+| `LMD : set_plx_serial_number %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X` | Write serial: bus, addr, 8 data bytes |
+
+#### I2C Command Patterns
+
+| String | Significance |
+|--------|-------------|
+| `LMD : cmd %02X %02X` | 2-byte I2C command (likely bus + addr) |
+| `LMD : cmd %02X %02X %02X` | 3-byte I2C command (bus + addr + reg?) |
+| `LMD : cmd %02X %02X %02X %02X` | 4-byte I2C command |
+| `LMD : cmd %02X %02X %02X %02X %02X` | 5-byte I2C command |
+| `LMD : cmd %02X %02X %02X %02X %02X %02X %02X %02X %02X` | 9-byte I2C command (full PLX I2C transaction?) |
+| `LMD : value %02X %02X` | 2-byte value read/written |
+| `LMD : value %02X %02X %02X %02X` | 4-byte value (32-bit PLX register?) |
+| `LMD : value %02X` | 1-byte value |
+
+### I2C Infrastructure Strings
+
+| String | Significance |
+|--------|-------------|
+| `/dev/aess_i2cdrv` | Linux device node for Avocent I2C driver |
+| `Can not open device 'dev/aess_i2cdrv' (%s)` | Error when I2C driver unavailable |
+| `I2C0` through `I2C6` | 7 I2C bus names (bus 3 = 0xF3 for PEX) |
+| `aess_i2cdrv` | Avocent Embedded Software Services I2C driver |
+| `I2CDrvTranTimer` | I2C transaction timeout timer name |
+| `PI2C` | Private I2C subsystem identifier |
+| `INA219_Address` | INA219 current sensor I2C address variable |
+
+### GPU/Slot Management Strings
+
+| String | Significance |
+|--------|-------------|
+| `G_GPU_HOT_PLUG_IOSAPI` | Hot-plug IO service API for GPUs |
+| `Is_iPASS_Support_1_8` | Check for iPass connector 1.8V support |
+| `get_mode_cfg_ipass_gpio` | Read iPass GPIO configuration |
+| `get_mode_cfg_ipass_link_status` | Read iPass link status |
+| `CmdOEMSlotPwrCtrl` | OEM IPMI command for slot power control |
+| `Count_GPU_Present` | Count present GPUs in chassis |
+| `GPU_Plug_Unplug` | GPU hot-plug/unplug event handler |
+| `GPU_MIC_Init` | GPU MIC (Intel Xeon Phi?) initialization |
+
+### Power Sequencing Observations
+
+The GPU power-on groups (4/8/12/16, then 3/7/11/15, etc.) reveal the firmware
+powers GPUs in a staggered pattern across the 4 PEX8696 switches:
+- Each PEX8696 manages 4 slots (one per group)
+- Slots are powered in round-robin across switches to distribute inrush current
+- The 16-slot addresses follow the known I2C addresses: 0x18, 0x1A, 0x19, 0x1B
+
+The `%02X %02X` parameters in `pex8696_slot_power_on` likely correspond to
+the PEX8696 I2C address and the downstream port number being controlled.
+
+### Key Findings from String Analysis
+
+1. **PLX I2C Protocol**: The 9-byte command format (`cmd %02X x9`) matches the
+   PLX I2C register access protocol: bus, address, reg_hi, reg_lo, data[4], control
+2. **Debug Logging**: Extensive `LMD :` prefix logging means decompiled functions
+   will have clear debug output showing exact register values
+3. **EEPROM Access**: Separate read/write paths for PLX EEPROM with 16-bit offsets
+4. **Hot-Plug**: `pex8696_hp_on`/`hp_off`/`hp_ctrl` directly control PCIe hot-plug
+5. **Multi-Host**: Supports 2, 4, and 8-host configurations via PEX8696 and PEX8647
+6. **iPass Connectors**: Multi-host mode reads configuration from iPass connector GPIOs
