@@ -98,6 +98,8 @@ jobs:
       - name: Apply AST2050 clock driver patch
         run: |
           cd "${{ runner.temp }}/linux"
+          git config user.email "ci@github.actions"
+          git config user.name "CI"
           git am --3way "$GITHUB_WORKSPACE/dell-c410x-firmware/kernel/patches/"*.patch
 
       - name: Copy device tree source into kernel tree

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -67,6 +68,29 @@ def download_busybox(version: str, build_dir: Path) -> Path:
     return source_dir
 
 
+def set_kconfig(config_text: str, option: str, value: bool | str) -> str:
+    """Set a Kconfig option in a .config file, handling all cases robustly.
+
+    Removes any existing setting for the option (whether set or unset),
+    then appends the desired value. Works regardless of defconfig format.
+    """
+    # Remove existing line: either "CONFIG_X=..." or "# CONFIG_X is not set"
+    config_text = re.sub(
+        rf'^(CONFIG_{option}=.*|# CONFIG_{option} is not set)\n',
+        '',
+        config_text,
+        flags=re.MULTILINE,
+    )
+    # Append new setting
+    if value is True:
+        config_text += f'CONFIG_{option}=y\n'
+    elif value is False:
+        config_text += f'# CONFIG_{option} is not set\n'
+    else:
+        config_text += f'CONFIG_{option}={value}\n'
+    return config_text
+
+
 def configure_busybox(source_dir: Path) -> None:
     """Configure BusyBox with defconfig + static linking + useful applets."""
     env = os.environ.copy()
@@ -81,22 +105,28 @@ def configure_busybox(source_dir: Path) -> None:
         check=True,
     )
 
-    # Enable static linking and useful applets for BMC debugging
     config_path = source_dir / ".config"
     config_text = config_path.read_text()
 
-    replacements = {
-        "# CONFIG_STATIC is not set": "CONFIG_STATIC=y",
-        "# CONFIG_FEATURE_DEVMEM is not set": "CONFIG_FEATURE_DEVMEM=y",
-        "# CONFIG_I2CGET is not set": "CONFIG_I2CGET=y",
-        "# CONFIG_I2CSET is not set": "CONFIG_I2CSET=y",
-        "# CONFIG_I2CDUMP is not set": "CONFIG_I2CDUMP=y",
-        "# CONFIG_I2CDETECT is not set": "CONFIG_I2CDETECT=y",
-        "# CONFIG_I2CTRANSFER is not set": "CONFIG_I2CTRANSFER=y",
-    }
+    # Enable static linking (required for initramfs, no shared libs)
+    config_text = set_kconfig(config_text, "STATIC", True)
 
-    for old, new in replacements.items():
-        config_text = config_text.replace(old, new)
+    # Enable useful applets for BMC hardware debugging
+    for applet in [
+        "FEATURE_DEVMEM", "I2CGET", "I2CSET", "I2CDUMP",
+        "I2CDETECT", "I2CTRANSFER",
+    ]:
+        config_text = set_kconfig(config_text, applet, True)
+
+    # Disable SHA hardware acceleration - uses x86 SHA-NI intrinsics
+    # that are unavailable when cross-compiling for ARM
+    config_text = set_kconfig(config_text, "SHA1_HWACCEL", False)
+    config_text = set_kconfig(config_text, "SHA256_HWACCEL", False)
+    config_text = set_kconfig(config_text, "SHA3_SMALL", True)
+
+    # Disable tc (traffic control) applet - requires CBQ kernel headers
+    # that were removed in recent kernel versions
+    config_text = set_kconfig(config_text, "TC", False)
 
     config_path.write_text(config_text)
 
