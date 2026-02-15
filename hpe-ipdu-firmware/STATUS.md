@@ -107,6 +107,17 @@
 - IPMI protocol support discovered (dipd, ipd_dump debug commands)
 - Created analyse_maxq3180.py
 
+### Display MCU (TMP89FM42LUG) Communication Analysis
+- Display module identified: "HP Intelligent Modular PDU Display Module"
+- Serial protocol: Dialog.c module, APP_DIALOG_PORT define, HpBlSeR09 handshake
+- Display capabilities: 7-segment display, error LED, UID LEDs, buzzer (LED Beep Codes)
+- Health monitoring: Display Connected/Disconnected events, configurable alarm
+- Front Bezel Testing: fbt_init, fbt_init2 commands
+- Complete debug CLI command table: 34+ commands (system, network, ThreadX, metering, etc.)
+- Serial console menu structure: full telnet menu with network/system/user/PDU configuration
+- Firmware thread architecture: Core Async/Proto, LED Task, Ribcl, Stick Async
+- Created analyse_display_mcu.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
@@ -128,6 +139,7 @@
 | identify_crc_reveng.py | Complete | CRC32 reverse-engineering with crcmod brute-force |
 | analyse_nvram.py | Complete | NVRAM/config storage analysis (YAFFS, flash partitions, CLI) |
 | analyse_maxq3180.py | Complete | MAXQ3180 SPI protocol, calibration, metering, stick protocol |
+| analyse_display_mcu.py | Complete | Display MCU protocol, CLI commands, serial console menus |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -174,7 +186,7 @@
 - **Web UI extracted** -- 1192 URLs, HTML/CSS/JS/images extracted
 - GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
 - **MAXQ3180 SPI communication analysed**: DMA-based SPI, calibration system, metering parameters, extension bar protocol, IPMI discovery (see MAXQ3180 section above)
-- TMP89FM42LUG serial protocol not extracted
+- **TMP89FM42LUG display MCU analysed**: HpBlSeR09 serial protocol, Dialog.c module, 7-segment display, LEDs, buzzer, health monitoring (see Display MCU section above)
 - PLC (Power Line Communication) modem interface not identified
 - **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)
 - **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)

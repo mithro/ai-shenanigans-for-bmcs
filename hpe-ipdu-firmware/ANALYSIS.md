@@ -728,6 +728,196 @@ Interface) support, revealed by two debug CLI commands:
 This suggests the iPDU may use IPMI for inter-device communication, possibly with
 extension bars or for integration with server management systems.
 
+### Display MCU -- TMP89FM42LUG Serial Communication
+
+The front panel display unit is identified in firmware as "HP Intelligent Modular PDU
+Display Module" (0x0069_EE54). It contains a Toshiba TMP89FM42LUG 8-bit TLCS-870/C
+microcontroller that manages the 7-segment display, LEDs, and buzzer.
+
+#### Serial Protocol ("Dialog")
+
+Communication with the display MCU is implemented in the firmware source file `Dialog.c`.
+The serial port is defined by the `APP_DIALOG_PORT` macro (error message at 0x0072_FF40:
+"APP_DIALOG_PORT improperly defined").
+
+The protocol identifier string `HpBlSeR09` (0x0069_D3C0) suggests a proprietary HP
+Bezel Serial protocol at revision 09. This string appears alongside firmware update
+and hardware discovery messages, indicating it may serve as a handshake/identification
+sequence between the main CPU and the display MCU.
+
+Key error string: "error when change baud rate in Dialog.c" (0x0072_FF64) confirms
+the serial link operates at a configurable baud rate.
+
+#### Display Capabilities
+
+The front panel display unit provides:
+
+- **7-segment display**: Confirmed by `7seg` CLI command ("Detects 7 segment display")
+- **Error LED**: Controllable via CLI ("Turn the error LED on and off (on|off)")
+- **UID LEDs**: Blue identification LEDs per stick/outlet (toggled via web UI)
+- **Buzzer**: Confirmed by "Please Report The LED Beep Code To Support" (0x0072_19D9)
+- **LED Beep Codes**: Error reporting via LED blink patterns and buzzer tones
+
+#### Health Monitoring
+
+The firmware monitors display MCU connectivity as a configurable alarm:
+
+| Event | String |
+|-------|--------|
+| Display Connected | `Display Connected` (0x006E_1098) |
+| Display Disconnected | `Display Disconnected` (0x006E_10AC) |
+| Alarm Enable | `Display Communications Alarm Enabled, Please save and reboot` (0x006A_4526) |
+| Alarm Disable | `Display Communications Alarm Disabled, Please save and reboot` (0x006A_4676) |
+
+The Display Communication alarm can be toggled via the serial console menu:
+"1. Toggle Display Communication On/Off" (under PDU Configuration).
+
+#### Front Bezel Testing (FBT)
+
+Two test initialisation commands exist for the display unit:
+
+| CLI Command | Description | Status Messages |
+|-------------|-------------|-----------------|
+| `fbt_init` | Enables FBT Testing | "FBT Init Successful" / "FBT Init Failed" |
+| `fbt_init2` | Enables Secondary FBT Testing | (same status messages) |
+
+### Firmware Thread Architecture
+
+The firmware binary contains task/thread names that reveal the internal architecture:
+
+| Thread Name | Description |
+|-------------|-------------|
+| Core Async | Core asynchronous processing |
+| Core Proto | Core protocol handler |
+| Core DC Proto Task | Core daisy-chain protocol task |
+| Core DC Proto Que | Core daisy-chain protocol queue |
+| LED Task | LED management task (display MCU communication) |
+| LED Module Communication | LED module communication handler |
+| Ribcl | RIBCL XML command processing |
+| Stick Async | Extension bar asynchronous processing |
+
+### Debug CLI -- Complete Command Reference
+
+The debug CLI is accessible via J25 "Digi UART" header and provides 34+ commands:
+
+#### System Commands
+
+| Command | Description |
+|---------|-------------|
+| `exit` | Close this debug window |
+| `help` | Display this help dialog |
+| `reset` | Restart the card |
+| `endCLI` | This removes the debug CLI thread |
+| `haltRTC` | This Halts the RTC |
+| `vers` | Display the firmware version numbers |
+| `boot` | Gets the board boot version |
+
+#### Network & Serial
+
+| Command | Description |
+|---------|-------------|
+| `ips` | Display current interface configuration |
+| `nets` | Display network statistics |
+| `tnet` | Test the network loopback device (i\|e) |
+| `tser` | Test the serial loopback device (port 1-6) |
+| `uart` | Display serial statistics (port 1-4) |
+
+#### ThreadX RTOS Inspection
+
+| Command | Description |
+|---------|-------------|
+| `txev` | List available threadx event flags |
+| `txmu` | List available threadx mutexes |
+| `txqu` | List available threadx message queues |
+| `txse` | List available threadx semaphores |
+| `txth` | List available threadx threads |
+| `txti` | List available threadx timers |
+
+#### Power Metering & Calibration
+
+| Command | Description |
+|---------|-------------|
+| `gmcal` | Calibrate maxim voltage |
+| `cc` | Calibrate maxim current (p\|c) |
+| `gmsave` | Saves calibrated results into FLASH |
+| `gmstats` | Reads calibrated results for verification |
+| `gmstats2` | Reads secondary PDU metering data |
+| `mgain` | Metering Gain Values |
+
+#### Extension Bar & Display
+
+| Command | Description |
+|---------|-------------|
+| `sd` | Stick Identification |
+| `uuid` | UUID test |
+| `7seg` | Detects 7 segment display |
+| `spstats` | Monitored stick protocol statistics |
+| `mpstats` | Metering protocol statistics |
+| `detectpins` | Tests Upstream & Downstream Detect Pins |
+
+#### IPMI & NVRAM
+
+| Command | Description |
+|---------|-------------|
+| `dipd` | Debug IPMI protocol |
+| `ipd_dump` | Dump IPD data |
+| `w_ser` | Writes NVRAM Serial Number |
+| `restoreall` | Restores NVRAM and Logs |
+
+#### Testing
+
+| Command | Description |
+|---------|-------------|
+| `fbt_init` | Enables FBT Testing |
+| `fbt_init2` | Enables Secondary FBT Testing |
+
+### Serial Console Menu Structure
+
+The firmware includes a full serial console menu accessible via telnet or the display
+unit's serial connection. Access is restricted to admin users ("ONLY ADMIN USERS WILL
+GET ACCESS TO TELNET MENU").
+
+```
+Main Menu
+├── 1. Network Configuration
+│   ├── 1. IPV4 Network Settings
+│   │   ├── 1. IPV4 Static Address
+│   │   ├── 2. IPV4 Static Subnet Mask
+│   │   ├── 3. IPV4 Static Gateway
+│   │   ├── 4. IPV4 Toggle Boot Mode
+│   │   └── 5. IPV4 Ping Utility
+│   ├── 2. IPV6 Network Settings
+│   ├── 3. Remote Console
+│   ├── 4. Web Access
+│   ├── 5. File Transfer (FTP)
+│   ├── 6. SNMP
+│   ├── 7. Emails
+│   ├── 8. Session Settings
+│   └── 9. IP Connections
+├── 2. System Configuration
+│   ├── 1. Date/Time Configuration
+│   │   ├── 1. Network Time Protocol (NTP)
+│   │   ├── 2. Manual Date/Time
+│   │   └── 3. Daylight Savings Time
+│   └── (other items)
+├── 3. User Accounts
+│   ├── 1. Change User Name
+│   ├── 2. Change Password
+│   ├── 3. Administrator Privilege
+│   └── 4. Delete User
+├── 4. PDU Configuration
+│   ├── 1. Toggle Display Communication On/Off
+│   ├── 2. Toggle Topology Discovery On/Off
+│   ├── 1. Toggle Outlet Control On/Off
+│   ├── 2. Alarm Configuration
+│   ├── 3. Reset Energy Measurement Data
+│   └── 4. Force Firmware Flash on Secondary Core/Upper Row Core
+├── 5. My Account
+├── x. Exit Without Saving
+├── s. Save New Changes and Restart
+└── d. Restore Configuration to Manufacturer Settings
+```
+
 ## Cross-Version Firmware Comparison
 
 ### Size and Complexity
