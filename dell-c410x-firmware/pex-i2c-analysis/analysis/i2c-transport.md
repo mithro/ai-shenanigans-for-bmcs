@@ -154,13 +154,27 @@ equivalent PEX8647 and generic functions.
 
 ### 2.1 Register Address Format
 
-PLX switches have a 24-bit register address space. In the firmware,
-registers are accessed via a "register start byte" that encodes part
-of the address. The full register address is built from:
+**Background:** Smaller PLX switches (e.g. PEX8733) use a simple 16-bit
+register address space accessible via a 2-byte I2C address (big-endian).
+This is the protocol implemented in
+[plxtools](https://github.com/mithro/plxtools/blob/main/src/plxtools/backends/i2c.py):
+```
+Write: [START] [addr+W] [reg_hi] [reg_lo] [val0] [val1] [val2] [val3] [STOP]
+Read:  [START] [addr+W] [reg_hi] [reg_lo]
+       [RS]    [addr+R] [val0] [val1] [val2] [val3] [STOP]
+```
 
-- `param_3` ("reg_start_byte"): The low byte of the register address
-- `param_4` ("value_ptr"): A pointer to a buffer that also carries
-  higher address bytes
+**The PEX8696** is a much larger switch (96 lanes, 24 ports) with a
+per-port register space. In PCIe BAR space, each port has a 0x1000-byte
+register window (port N's registers are at offset `N * 0x1000`). Over
+I2C, the PEX8696 uses an **extended 4-byte address format** that includes
+both the port number and the register offset within that port.
+
+In the firmware, registers are accessed via:
+
+- `param_3` ("reg_start_byte"): A mode/byte-enable field
+- `param_4` ("value_ptr"): A pointer to a buffer containing the port
+  number, register offset, and (for writes) the register value
 
 The actual register address and data are packed into the I2C write buffer
 differently for read vs write operations.
@@ -325,25 +339,39 @@ Examining typical PLX register access patterns from the caller code:
 | Read Link Status          | 4       | port_num     | 0x3C     | 0x8A    | 0x8A3C.4     |
 | Read Write-protect        | 4       | port_num     | 0x3C     | 0x1F    | 0x1F3C       |
 
-**Interpretation of the 4-byte register address:**
+**Interpretation of the 4-byte register address (PEX8696 extended I2C protocol):**
 
-The PLX I2C byte-enable protocol (from PLX/Broadcom documentation):
 ```
-    Byte [0]: Byte-enable / start byte indicator
-              3 = write starting at byte 3 (full 32-bit word write)
-              4 = read starting at byte 4 (read from beginning of register)
-    Byte [1]: Port number (selects which PCIe port's register space)
-    Byte [2]: Register offset low byte  (e.g. 0x3C for Slot Control)
+    Byte [0]: Byte count / mode field
+              3 = full 32-bit register write (write all 4 data bytes)
+              4 = full 32-bit register read (read all 4 data bytes)
+              Other values may select partial register access (byte enables)
+    Byte [1]: Port number (0-23, selects which PCIe port's register space)
+    Byte [2]: Register offset low byte  (e.g. 0x3C)
     Byte [3]: Register offset high byte (e.g. 0x20 for offset 0x203C)
 ```
 
-Note: The "byte enable" / start byte field (byte[0]) with values 3 and 4
-corresponds to PLX-specific I2C addressing where:
-- Value `3` = write access with byte enables for a full word
-- Value `4` = read access from start of the register
+The register offset is `(byte[3] << 8) | byte[2]` (little-endian within
+the address bytes). For example, `0x3C, 0x20` encodes offset `0x203C`.
 
-The register offset is `(byte[3] << 8) | byte[2]`, giving e.g. `0x203C`
-which is the PCIe Slot Control register in the PEX port's configuration space.
+This is equivalent to accessing PCIe configuration space register `0x203C`
+of port N, which in the flat BAR space would be at `port * 0x1000 + 0x3C`
+(since `0x20xx` offsets map to the standard PCIe capability structures at
+offsets within each port's 0x1000-byte window).
+
+**Comparison with plxtools 2-byte protocol:**
+
+| Feature            | plxtools (2-byte addr) | Dell firmware (4-byte addr) |
+|--------------------|------------------------|-----------------------------|
+| Address bytes      | 2 (big-endian)         | 4 (mode, port, offset LE)   |
+| Port selection     | Via BAR offset          | Via byte[1] in I2C address  |
+| Register offset    | 16-bit flat            | 16-bit per-port             |
+| Byte enables       | None (always 32-bit)   | byte[0] field               |
+| Target switches    | Smaller PLX parts      | PEX8696, PEX8647            |
+
+The 4-byte protocol is necessary for the PEX8696 because it has 24 ports,
+each with their own register space that cannot all be addressed with a
+16-bit flat register offset.
 
 ---
 
