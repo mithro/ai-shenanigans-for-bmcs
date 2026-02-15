@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "pyghidra-mcp": {
+      "command": "uvx",
+      "args": [
+        "pyghidra-mcp",
+        "--transport", "stdio",
+        "--project-path", "/home/tim/github/mithro/ai-shenanigans-for-bmcs/tmp/pyghidra-projects",
+        "--project-name", "bmc-firmware"
+      ],
+      "env": {
+        "GHIDRA_INSTALL_DIR": "/home/tim/tools/ghidra"
+      }
+    }
+  }
+}

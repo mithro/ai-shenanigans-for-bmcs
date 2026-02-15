@@ -1,2 +1,5 @@
 # Git worktrees (managed by Claude)
 .worktrees/
+
+# Project-local temporary files
+tmp/
