@@ -97,6 +97,12 @@ def main():
     println("Found %d matching functions" % len(matching_functions))
     println("-" * 70)
 
+    # Count function name occurrences to detect duplicates
+    name_counts = {}
+    for func in matching_functions:
+        n = func.getName()
+        name_counts[n] = name_counts.get(n, 0) + 1
+
     # Decompile each function and write to file
     exported = []
     failed = []
@@ -106,6 +112,12 @@ def main():
         entry = func.getEntryPoint()
         body = func.getBody()
         size = body.getNumAddresses()
+
+        # Use address suffix for duplicate function names
+        if name_counts[name] > 1:
+            file_basename = "%s_%s" % (name, entry.toString())
+        else:
+            file_basename = name
 
         println("Decompiling: %s @ 0x%s (size: %d bytes)" % (
             name, entry.toString(), size))
@@ -119,7 +131,7 @@ def main():
                 signature = decomp_func.getSignature()
 
                 # Write the .c file with a header comment
-                c_filepath = os.path.join(output_dir, "%s.c" % name)
+                c_filepath = os.path.join(output_dir, "%s.c" % file_basename)
                 with open(c_filepath, "w") as f:
                     f.write("/* Decompiled from Dell C410X BMC firmware (fullfw)\n")
                     f.write(" * Function: %s\n" % name)
@@ -138,9 +150,9 @@ def main():
                     "address": "0x%s" % entry.toString(),
                     "size": size,
                     "signature": signature if signature else "N/A",
-                    "file": "%s.c" % name,
+                    "file": "%s.c" % file_basename,
                 })
-                println("  -> Exported to %s.c" % name)
+                println("  -> Exported to %s.c" % file_basename)
             else:
                 failed.append({
                     "name": name,
