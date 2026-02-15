@@ -97,6 +97,16 @@
 - Polynomial constant found in firmware binary at offset 0x000B3D58
 - Created identify_crc.py and identify_crc_reveng.py
 
+### MAXQ3180 SPI Communication Analysis
+- SPI interface uses DMA-based transfers (4 error strings: tx/rx/slave tx/slave rx)
+- Dual SPI modes: master (MAXQ3180) and slave (extension bars?)
+- Calibration system: voltage → current → verify, persisted to flash
+- Debug CLI commands: gmcal, gmsave, gmstats, gmstats2, mgain
+- Measured parameters: watts, VA, voltage, current, power factor, frequency, energy
+- Extension bar ("stick") protocol: up to 6 sticks per core, 2 cores max
+- IPMI protocol support discovered (dipd, ipd_dump debug commands)
+- Created analyse_maxq3180.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
@@ -117,6 +127,7 @@
 | identify_crc.py | Complete | CRC32 algorithm identification (lookup table approach) |
 | identify_crc_reveng.py | Complete | CRC32 reverse-engineering with crcmod brute-force |
 | analyse_nvram.py | Complete | NVRAM/config storage analysis (YAFFS, flash partitions, CLI) |
+| analyse_maxq3180.py | Complete | MAXQ3180 SPI protocol, calibration, metering, stick protocol |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -162,7 +173,7 @@
 - **Security assessment** -- CVE-2014-9222 confirmed, OpenSSL 0.9.7b, full attack surface mapped
 - **Web UI extracted** -- 1192 URLs, HTML/CSS/JS/images extracted
 - GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
-- MAXQ3180 SPI communication protocol not extracted
+- **MAXQ3180 SPI communication analysed**: DMA-based SPI, calibration system, metering parameters, extension bar protocol, IPMI discovery (see MAXQ3180 section above)
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified
 - **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)

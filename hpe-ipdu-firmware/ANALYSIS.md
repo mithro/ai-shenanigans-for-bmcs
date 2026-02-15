@@ -609,6 +609,125 @@ Key strings: "NS9360 Brookline Board Debug Output Serial port" (Port A/J25),
 "Display serial statistics (port 1-4)", "Serial Debug CLI",
 "error when change baud rate in Dialog.c", "calibrate maxim voltage" (MAXQ3180 over SPI).
 
+### MAXQ3180 Power Measurement AFE -- SPI Communication
+
+The MAXQ3180 is a 3-phase power/energy measurement Analog Front-End (AFE) from Maxim,
+connected to the NS9360 via SPI. It provides voltage, current, power, energy, power
+factor and frequency measurements for each load segment.
+
+#### SPI Interface
+
+The firmware uses **DMA-based SPI transfers** to communicate with the MAXQ3180. Four
+SPI error strings are present in the firmware:
+
+| Address | String |
+|---------|--------|
+| 0x0072_1D8C | `spi tx DMA Cache error` |
+| 0x0072_1DA4 | `spi rx DMA Cache error` |
+| 0x0073_05CC | `spi slave rx DMA Cache error` |
+| 0x0073_05EC | `spi slave tx DMA Cache error` |
+
+The presence of both "spi" and "spi slave" error strings suggests the NS9360 may
+operate in both SPI master mode (communicating with the MAXQ3180) and SPI slave mode
+(communicating with extension bars or daisy-chained units).
+
+NS9360 serial port register reference counts confirm SPI/UART usage:
+
+| Port | Base Address | References | Likely Role |
+|------|-------------|------------|-------------|
+| Port B | 0x9020_0000 | 14 | Primary communication (DMA-enabled, display unit) |
+| Port C | 0x9030_0000 | 4 | Secondary communication (DMA-enabled, daisy-chain) |
+| Port A | 0x9020_0040 | 1 | Debug UART (J25, polled) |
+| Port D | 0x9030_0040 | 1 | Minimal use (possibly MAXQ3180 SPI) |
+
+#### Calibration
+
+The firmware implements a voltage and current calibration system for the MAXQ3180,
+accessible through the debug CLI:
+
+| CLI Command | Description |
+|-------------|-------------|
+| `gmcal` | Calibrate maxim voltage |
+| `gmcal` (variant) | Calibrate maxim current (p\|c) |
+| `gmsave` | Saves calibrated results into FLASH |
+| `gmstats` | Reads calibrated results for verification |
+| `gmstats2` | Reads secondary PDU metering data |
+| `mgain` | Metering Gain Values |
+
+Calibration status strings indicate a multi-step process:
+
+1. **Voltage Calibration** (0x0069_D4AC): "Voltage Calibration Failed" / "Voltage Calibration Completed"
+2. **Current Calibration** (0x0069_D4E8): "Current Calibration Failed" / "Current Calibration Completed"
+3. **Verify Calibration** (0x0069_D554): "Verify calibration Failed" / "Verify calibration Completed"
+4. **Gain Check** (0x0069_D014): "Failed To Read Gain Values" / "Metering Gain Values"
+
+Calibrated results are persisted to NOR flash via `gmsave`, and can be read back with
+`gmstats` for verification.
+
+#### Measured Parameters
+
+The MAXQ3180 provides the following measurements (extracted from RIBCL XML responses
+and web UI):
+
+| Parameter | XML Tag | Unit |
+|-----------|---------|------|
+| Total Watts | `<TOTAL_WATTS>` | W |
+| Total VA | `<TOTAL_VA>` | VA |
+| Total Load Percent | `<TOTAL_LOAD_PERCENT>` | % |
+| Voltage | `<VOLTAGE>` | V (VAC) |
+| Current | per-outlet / per-segment | A |
+| Power Factor | per-segment | ratio |
+| Frequency | system | Hz |
+| Energy | `<ENERGY>` | Wh |
+| KVA Rating | `<KVA_RATING>` | kVA |
+
+Per-segment data is reported via XML with core and load segment IDs:
+```xml
+<ID CORE="%d" LOAD="%d">
+  <WARNING VALUE="%d"/>
+  <CRITICAL VALUE="%d"/>
+</ID>
+```
+
+The web UI formats data as `Core%dr%dVA` (per-core, per-row VA), `Core%dr%dPF`
+(power factor), `Core%dr%dc%dPF` (per-core, per-row, per-column).
+
+#### Extension Bar ("Stick") Protocol
+
+The iPDU supports up to 6 extension bars ("sticks") per core, with up to 2 cores.
+The firmware has extensive UI support for stick management:
+
+- **spstats**: "Monitored stick protocol statistics" -- debug CLI command
+- **mpstats**: "Metering protocol statistics" -- metering data from extension bars
+- **detectpins**: "Tests Upstream & Downstream Detect Pins" -- physical link detection
+- **Stick Identification**: identification command in debug CLI
+- **STICK_HISTORY**: XML tag for per-stick historical data (`<STICK_HISTORY CORE="%d" LOAD="%d">`)
+
+Each stick has:
+- UID (Unique ID) LED control (blue indicator, toggled via web UI)
+- Per-outlet voltage, current, watts, power factor measurements
+- Per-outlet power on/off/cycle control
+- Model and part number fields (`LNG_STICK_MODEL`, `LNG_STICK_PARTNUMBER`)
+
+The web UI references arrays for up to 6 load segments/sticks per core:
+- `Secondary_Voltage_Array[0..5]` / `Secondary_Current_Array[0..5]` / `Secondary_Load_Array[0..5]`
+- `Voltage_Array[0..5]` / `Current_Array[0..5]`
+- Color bar visualisation functions: `stick_paintColorBar()`, `stick_paintColorBar2()`,
+  `stick_VpaintColorBar2()`
+
+#### IPMI Protocol
+
+An unexpected finding: the firmware includes IPMI (Intelligent Platform Management
+Interface) support, revealed by two debug CLI commands:
+
+| CLI Command | Description |
+|-------------|-------------|
+| `dipd` | Debug IPMI protocol |
+| `ipd_dump` | Dump IPD data |
+
+This suggests the iPDU may use IPMI for inter-device communication, possibly with
+extension bars or for integration with server management systems.
+
 ## Cross-Version Firmware Comparison
 
 ### Size and Complexity
