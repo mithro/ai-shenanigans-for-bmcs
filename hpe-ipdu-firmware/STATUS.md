@@ -128,6 +128,17 @@
 - Extension bar firmware update capability over daisy-chain
 - Created analyse_interconnect.py
 
+### Extension Bar ("Stick") Protocol Analysis
+- Protocol framing: `stick.Start` / `stick.End` delimiters
+- Three stick types: Monitored, Non-Monitored, Unknown
+- RTOS tasks: `Stick Async`, `Stick Task`
+- Extension bar firmware update over serial link (Managed Ext. Bar + HP AC Module paths)
+- Outlet addressing: PDU number, Load segment, Outlet number
+- Protocol stack with packet buffering
+- ADDP (Digi Advanced Device Discovery Protocol) for network discovery
+- Hidden serial upgrade command for manufacturing/field service
+- Created analyse_stick_protocol.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
@@ -152,6 +163,7 @@
 | analyse_display_mcu.py | Complete | Display MCU protocol, CLI commands, serial console menus |
 | analyse_interconnect.py | Complete | Inter-PDU daisy-chain, PLC investigation, redundancy |
 | analyse_deep_binary.py | Complete | GPIO config values, DMA mapping, I2C bus, peripheral address map |
+| analyse_stick_protocol.py | Complete | Extension bar protocol strings, firmware update, outlet addressing |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |

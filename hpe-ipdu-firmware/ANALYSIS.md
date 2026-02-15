@@ -828,25 +828,79 @@ The web UI formats data as `Core%dr%dVA` (per-core, per-row VA), `Core%dr%dPF`
 #### Extension Bar ("Stick") Protocol
 
 The iPDU supports up to 6 extension bars ("sticks") per core, with up to 2 cores.
-The firmware has extensive UI support for stick management:
+The firmware implements a dedicated serial protocol for stick communication.
 
-- **spstats**: "Monitored stick protocol statistics" -- debug CLI command
+**Protocol Framing**: The firmware contains `stick.Start` (0x0069_E8FC) and `stick.End`
+(0x0069_E908) strings that appear to be protocol delimiters for extension bar
+communication frames.
+
+**Stick Types**:
+- "Monitored stick" (0x0069_D484) -- intelligent extension bar with per-outlet metering
+- "Non Monitored stick" (0x0069_D468) -- basic extension bar without metering
+- "Unknown stick" (0x0069_D49C) -- unrecognised extension bar type
+
+**RTOS Tasks**:
+- `Stick Async` (0x0069_EEC4) -- asynchronous extension bar I/O
+- `Stick Task` (0x0069_F09C) -- main extension bar management task
+
+**Debug CLI Commands**:
+- **spstats**: "Monitored stick protocol statistics" -- protocol error/success counters
 - **mpstats**: "Metering protocol statistics" -- metering data from extension bars
 - **detectpins**: "Tests Upstream & Downstream Detect Pins" -- physical link detection
-- **Stick Identification**: identification command in debug CLI
-- **STICK_HISTORY**: XML tag for per-stick historical data (`<STICK_HISTORY CORE="%d" LOAD="%d">`)
+- **Stick Identification**: identification command
+
+**Extension Bar Firmware Update**:
+The iPDU can flash firmware to connected extension bars over the serial link:
+- "Managed Ext. Bar Firmware not found." (0x0069_EF68)
+- "Managed Ext. Bar Firmware image corrupt." (0x0069_EF90)
+- "Managed Ext. Bar Firmware upgrade failed." (0x0069_F070)
+- "Updated Managed Ext. Bar Firmware Detected" (0x006D_B85C)
+- "Firmware Update for the Managed Ext. Bar Successful/Failed" (0x006D_BAD0/0x006D_BB08)
+- "Management Ext. Bar Firmware is newer than PDU. Upgrade the PDU Firmware" (0x006D_D8E0)
+- "Force Firmware Flash on Secondary Core/Upper Row Core" (0x006A_206B) -- hidden menu option
+
+A separate "HP AC Module, Single Phase, Intlgnt" firmware update path exists with the
+same status messages, suggesting different extension bar hardware revisions.
+
+**Outlet Addressing Format**: `%s: %s, PDU %d, L%d, Outlet %d` (0x0069_F0DC) --
+PDU number, Load segment number, Outlet number.
+
+**STICK_HISTORY**: XML tag for per-stick historical data (`<STICK_HISTORY CORE="%d" LOAD="%d">`)
 
 Each stick has:
 - UID (Unique ID) LED control (blue indicator, toggled via web UI)
 - Per-outlet voltage, current, watts, power factor measurements
 - Per-outlet power on/off/cycle control
 - Model and part number fields (`LNG_STICK_MODEL`, `LNG_STICK_PARTNUMBER`)
+- Module serial number tracking
+
+**Protocol Stack**: "Protocol stack had no buffer for packet" (0x0069_D894) indicates
+a buffered packet-based protocol stack for extension bar communication.
 
 The web UI references arrays for up to 6 load segments/sticks per core:
 - `Secondary_Voltage_Array[0..5]` / `Secondary_Current_Array[0..5]` / `Secondary_Load_Array[0..5]`
 - `Voltage_Array[0..5]` / `Current_Array[0..5]`
 - Color bar visualisation functions: `stick_paintColorBar()`, `stick_paintColorBar2()`,
   `stick_VpaintColorBar2()`
+
+#### ADDP Protocol (Digi Advanced Device Discovery)
+
+The firmware contains ADDP (Advanced Device Discovery Protocol) support, a Digi
+proprietary protocol for network device discovery:
+- "Unknown ADDP command" (0x0072_3F38)
+- "bad ADDP packet. size=%d" (0x0072_3FF8)
+- "Unsupported ADDP command (%d)" (0x0072_4028)
+- "Unexpected ADDP command (%d)" (0x0072_4048)
+- "Received ADDP command (%d)" (0x0072_40C0)
+
+ADDP uses UDP broadcast for device discovery, allowing Digi management tools to find
+the NS9360-based iPDU on the network.
+
+#### Hidden Serial Upgrade Command
+
+"hidden command to support automated serial upgrade" (0x0069_C998) -- the firmware has
+a hidden debug CLI command for automated serial firmware upgrade, likely used in
+manufacturing or field service.
 
 #### IPMI Protocol
 
