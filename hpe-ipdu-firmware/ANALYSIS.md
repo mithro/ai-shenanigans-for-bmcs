@@ -581,6 +581,80 @@ The Display Unit acts as the serial console gateway -- you cannot bypass it for 
 access without connecting directly to J25 "Digi UART". The reset button (connector 10)
 resets management only; outlet power is maintained.
 
+### Inter-PDU Communication ("Core DC Proto")
+
+The firmware implements a daisy-chain protocol for connecting multiple iPDU units,
+managed by dedicated RTOS tasks:
+
+| Task Name | Description |
+|-----------|-------------|
+| Core DC Proto Task | Daisy-chain protocol handler task |
+| Core DC Proto Que | Daisy-chain protocol message queue |
+| Core Async | Core asynchronous processing |
+| Core Proto | Core protocol handler |
+| Stick Async | Extension bar asynchronous processing |
+| Ipd | IPMI protocol handler |
+
+**Connection Types** (from web UI JavaScript):
+- `connectionType == 0`: Standalone PDU (single unit)
+- `connectionType == 1`: Cascaded PDU (primary/secondary pair)
+- `connectionType == 2`: Extended cascaded configuration
+
+**Physical Link Detection**: The `detectpins` CLI command "Tests Upstream & Downstream
+Detect Pins", confirming that physical GPIO pins are used to detect which end of a
+daisy-chain a unit is connected to.
+
+**Discovery**: Extension bars are detected as either "Monitored stick" or "Non Monitored
+stick" (0x0069_D468/0x0069_D484). "Discovery Capable Device Connected/Disconnected"
+events track hotplug of discovery-capable devices.
+
+### PLC Modem -- Not Present
+
+Despite the "PLC DIAG" label on header J10, the firmware contains **no Power Line
+Communication protocol references** (no HomePlug, X10, INSTEON, or Z-Wave strings).
+All "power line" references relate to SVG drawing in the web UI.
+
+The "PLC" in J10's label likely refers to either:
+- Programmable Logic Controller diagnostics
+- An optional module not supported by this firmware version
+- A planned but never implemented feature
+
+### Redundancy Management
+
+The firmware supports redundant PDU pairs for high-availability power distribution:
+
+| Feature | Details |
+|---------|---------|
+| Pairing | Primary/Secondary PDU pair via IP network |
+| XML Tags | `<PAIRED_PDU_IP>`, `<PAIRED_PDU_cUUID>`, `<PAIRED_PDU_AC_FEED>` |
+| Status | "Redundant Communication OK" / "Redundant Communication Error" |
+| Outlet Control | Grouped redundant outlet control across paired PDUs |
+| Requirements | Different power feeds, matching user credentials, matching model |
+
+Error conditions: IP mismatch, power feed mismatch, model mismatch, credential
+mismatch, loss of redundant power, exceeded outlet redundancy limits.
+
+### Firmware Module Names
+
+The firmware binary contains a product identification and module table (0x0069_EDD8):
+
+| Address | String | Purpose |
+|---------|--------|---------|
+| 0x0069_EDD8 | `bootHdr` | Boot header identifier |
+| 0x0069_EDE0 | `HP Intelligent PDU Management : Running` | System startup banner |
+| 0x0069_EE54 | `HP Intelligent Modular PDU Display Module` | Display unit firmware |
+| 0x0069_EF18 | `2.0.51.12` | Firmware version |
+| 0x0069_EF24 | `Ipd` | IPD/IPMI protocol module |
+| 0x0069_EF28 | `AF528A` | Supported model AF528A |
+| 0x0069_EF30 | `AF529A` | Supported model AF529A |
+| 0x0069_EF38 | `AF547A` | Supported model AF547A |
+| 0x0069_EF40 | `AF475A` | Supported model AF475A |
+| 0x0069_EF68 | `Managed Ext. Bar Firmware not found.` | Extension bar firmware load |
+| 0x0069_EFBC | `HP AC Module, Single Phase, Intlgnt Firmware not found.` | AC module firmware |
+
+This confirms the firmware supports multiple HP iPDU models and can update extension
+bar firmware over the daisy-chain link.
+
 ### Serial Port Analysis (from firmware register references)
 
 Searching the decompressed firmware for NS9360 serial port register addresses reveals

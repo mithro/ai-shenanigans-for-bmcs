@@ -118,6 +118,16 @@
 - Firmware thread architecture: Core Async/Proto, LED Task, Ribcl, Stick Async
 - Created analyse_display_mcu.py
 
+### Inter-PDU Communication and Interconnect Analysis
+- **PLC modem: NOT PRESENT** -- despite "PLC DIAG" label on J10, no PLC protocol in firmware
+- Daisy-chain protocol: "Core DC Proto" task/queue, physical detect pins for link detection
+- Three connection modes: standalone (0), cascaded (1), extended cascaded (2)
+- Redundancy management: primary/secondary PDU pairing via IP network
+- Extension bar discovery: Monitored vs Non-Monitored sticks
+- Firmware module table: supports AF528A, AF529A, AF547A, AF475A models
+- Extension bar firmware update capability over daisy-chain
+- Created analyse_interconnect.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
@@ -140,6 +150,7 @@
 | analyse_nvram.py | Complete | NVRAM/config storage analysis (YAFFS, flash partitions, CLI) |
 | analyse_maxq3180.py | Complete | MAXQ3180 SPI protocol, calibration, metering, stick protocol |
 | analyse_display_mcu.py | Complete | Display MCU protocol, CLI commands, serial console menus |
+| analyse_interconnect.py | Complete | Inter-PDU daisy-chain, PLC investigation, redundancy |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -171,7 +182,7 @@
 - NOR flash contents not dumped
 - PLL bootstrap pin configuration not measured (determines CPU speed)
 - J11 "Mox SPI" connection target unknown (MAXQ3180? SPI flash? external?)
-- J10 "PLC DIAG" Power Line Communication circuit not traced
+- J10 "PLC DIAG" circuit not traced (firmware has no PLC protocol -- may be PLC=Programmable Logic Controller)
 - Extension bar bus protocol (J1, J6 connectors) not documented
 
 ### Firmware Deep Analysis
@@ -187,7 +198,7 @@
 - GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
 - **MAXQ3180 SPI communication analysed**: DMA-based SPI, calibration system, metering parameters, extension bar protocol, IPMI discovery (see MAXQ3180 section above)
 - **TMP89FM42LUG display MCU analysed**: HpBlSeR09 serial protocol, Dialog.c module, 7-segment display, LEDs, buzzer, health monitoring (see Display MCU section above)
-- PLC (Power Line Communication) modem interface not identified
+- **PLC modem: NOT PRESENT in firmware** -- J10 "PLC DIAG" purpose unclear, no PLC protocol strings found
 - **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)
 - **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
 
