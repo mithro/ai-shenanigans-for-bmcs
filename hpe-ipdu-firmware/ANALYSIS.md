@@ -404,7 +404,7 @@ NET+OS firmware parser (Eaton/MGE UPS cards use the same Digi platform).
 | 0x20 | 4 | Image size | varies | Compressed data size (= file_size - 48) |
 | 0x24 | 8 | Custom header | "HPPDU00\0" | OEM product identifier |
 | 0x2C | ... | LZSS2 data | | Compressed ARM firmware |
-| last 4 | 4 | CRC32 | varies | Checksum (algorithm TBD) |
+| last 4 | 4 | CRC32 | varies | Integrity checksum (see below) |
 
 **Header flags** (from NET+OS bootloader source):
 - Bit 0: `BL_WRITE_TO_FLASH` -- write image to flash storage
@@ -438,6 +438,51 @@ position in the ring buffer and 4-bit length (+threshold).
 
 Implementation: `decompress_firmware.py` (Python port of the C# reference
 from gsuberland/open-network-ms).
+
+### CRC32 Integrity Checksum
+
+The trailing 4 bytes of each firmware image contain a CRC32 integrity checksum.
+The bootloader validates this CRC during boot via the `isImageValid()` function
+(in `blmain.c` of the NET+OS BSP). The `BL_BYPASS_CRC_CHECK` flag (bit 4 = 0x10)
+can disable validation, but all known HPE iPDU firmware images have this flag
+clear (flags = 0x09).
+
+**Algorithm identified** (verified against all 3 firmware versions):
+
+| Parameter | Value |
+|-----------|-------|
+| Polynomial | 0x04C11DB7 (standard CRC-32 polynomial) |
+| Bit order | Non-reflected (MSB-first, big-endian) |
+| Initial value | 0x00000000 |
+| Final XOR | 0x00000000 |
+| CRC stored as | Big-endian, trailing 4 bytes |
+| Data range | Header + compressed payload (all bytes except trailing 4) |
+| Closest named algorithm | CRC-32/MPEG-2 with init=0 (non-standard init) |
+
+This is **not** the standard CRC-32 (ISO-HDLC/zlib), which uses init=0xFFFFFFFF,
+xor_out=0xFFFFFFFF, and reflected bit order. The Digi implementation uses the
+simplest possible form of CRC-32: no initialization, no finalization, no reflection.
+This is consistent with a minimal bootloader CRC implementation on a big-endian
+ARM platform (the NS9360 runs in big-endian mode).
+
+The CRC-32 polynomial constant 0x04C11DB7 was also found in the decompressed
+firmware binary at offset 0x000B3D58 (address 0x000B7D58), confirming the
+polynomial is embedded in the application image as well.
+
+Verification:
+
+| Version | Stored CRC (BE) | Computed CRC | Match |
+|---------|----------------|--------------|-------|
+| v1.6.16.12 | 0xA8B1DCFB | 0xA8B1DCFB | Yes |
+| v2.0.22.12 | 0x928D9048 | 0x928D9048 | Yes |
+| v2.0.51.12 | 0x5CA35970 | 0x5CA35970 | Yes |
+
+To compute the CRC in Python:
+```python
+import crcmod
+crc_func = crcmod.mkCrcFun(0x104C11DB7, initCrc=0, rev=False, xorOut=0)
+crc = crc_func(data[:-4])  # CRC of everything except trailing 4 bytes
+```
 
 ### Decompressed Firmware Structure
 

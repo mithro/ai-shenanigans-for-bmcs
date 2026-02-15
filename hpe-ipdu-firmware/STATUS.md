@@ -80,6 +80,13 @@
 - JavaScript libraries: jQuery 1.10.2, Raphael 1.5.2, stringencoders
 - Created extract_web_ui.py
 
+### CRC32 Algorithm Identified
+- **Algorithm**: CRC-32 with polynomial 0x04C11DB7, non-reflected, init=0, xor_out=0
+- Verified against all 3 firmware versions (100% match)
+- Not standard CRC-32/zlib (which uses init=0xFFFFFFFF, reflected)
+- Polynomial constant found in firmware binary at offset 0x000B3D58
+- Created identify_crc.py and identify_crc_reveng.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
@@ -97,6 +104,8 @@
 | compare_firmware_versions.py | Complete | Cross-version string, URL, and binary comparison |
 | assess_rompager_vuln.py | Complete | CVE-2014-9222 vulnerability assessment |
 | extract_web_ui.py | Complete | RomPager web UI resource extraction |
+| identify_crc.py | Complete | CRC32 algorithm identification (lookup table approach) |
+| identify_crc_reveng.py | Complete | CRC32 reverse-engineering with crcmod brute-force |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -146,7 +155,7 @@
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified
 - NVRAM/configuration storage format not documented
-- CRC32 algorithm not yet matched (stored CRC doesn't match simple crc32 of data)
+- **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
 
 ### Datasheet Gaps
 - TMP89FM42LUG datasheet not yet downloaded (URL found, ~5 MB / 408 pages)
