@@ -375,7 +375,7 @@ The firmware runs **NET+OS** (Digi's ThreadX-based RTOS), **NOT Linux**. The
 - **RTOS**: Digi NET+OS (ThreadX-based), confirmed by "netos" and "netos_stubs.c"
   strings in the binary. Source file reference: `netos_stubs.c`
 - **NOT Linux**: No Linux kernel strings, no filesystem (SquashFS/JFFS2/CramFS)
-- **Board codename**: "Brooklyn" (from string: "NS9360 Brooklyn Board Debug
+- **Board codename**: "Brookline" (from string: "NS9360 Brookline Board Debug
   Output Serial port")
 - **Firmware codename**: "Henning" (from ZIP file names)
 
@@ -385,37 +385,89 @@ The firmware runs **NET+OS** (Digi's ThreadX-based RTOS), **NOT Linux**. The
 - Note: RomPager has known vulnerabilities (CVE-2014-9222 "Misfortune Cookie")
 - Web UI uses jQuery, Raphael.js (for rack view), and stringencoders library
 
-### Image Format (bootHdr)
+### Image Format (Digi NET+OS bootHdr)
 
-| Offset | Size | Value (v2.0.51.12) | Description |
-|--------|------|--------------------|-------------|
-| 0x00 | 4 | 0x0000002C (44) | Offset to ARM code start |
-| 0x04 | 4 | 0x00000024 (36) | Header payload size |
-| 0x08 | 8 | "bootHdr\0" | Digi boot header magic |
-| 0x10 | 8 | 0x0000000000000009 | Unknown (constant across versions) |
-| 0x18 | 4 | 0x00020000 | Unknown (constant, possibly load address offset) |
-| 0x1C | 4 | 0x00004000 | Unknown (constant, possibly block size) |
-| 0x20 | 4 | 0x0037E794 | Image data size (file_size - 48) |
-| 0x24 | 8 | "HPPDU00\0" | Product identifier |
-| 0x2C | ... | ARM code | Executable firmware starts here |
+The firmware uses the Digi NET+OS `bootHdr` format with LZSS2 compression.
+All header fields are big-endian. The format was confirmed by cross-referencing
+with the [gsuberland/open-network-ms](https://github.com/gsuberland/open-network-ms)
+NET+OS firmware parser (Eaton/MGE UPS cards use the same Digi platform).
 
-The size field at offset 0x20 equals (file_size - 48) for all three firmware versions:
-- v1.6.16.12: 0x002C2667 (2893415), file=2893463, diff=48
-- v2.0.22.12: 0x0037C2F1 (3654385), file=3654433, diff=48
-- v2.0.51.12: 0x0037E794 (3663764), file=3663812, diff=48
+| Offset | Size | Field | Value (all versions) | Description |
+|--------|------|-------|---------------------|-------------|
+| 0x00 | 4 | Complete header size | 0x0000002C (44) | Total header including custom section |
+| 0x04 | 4 | NET+OS header size | 0x00000024 (36) | Standard header (pre-7.4 format) |
+| 0x08 | 8 | Signature | "bootHdr\0" | Digi boot header magic |
+| 0x10 | 4 | Version | 0x00000000 | NET+OS version (pre-7.4) |
+| 0x14 | 4 | Flags | 0x00000009 | BL_WRITE_TO_FLASH \| BL_LZSS2_COMPRESSED |
+| 0x18 | 4 | Flash address | 0x00020000 | Where to store in NOR flash (128K offset) |
+| 0x1C | 4 | RAM address | 0x00004000 | Where to decompress to in RAM (16K offset) |
+| 0x20 | 4 | Image size | varies | Compressed data size (= file_size - 48) |
+| 0x24 | 8 | Custom header | "HPPDU00\0" | OEM product identifier |
+| 0x2C | ... | LZSS2 data | | Compressed ARM firmware |
+| last 4 | 4 | CRC32 | varies | Checksum (algorithm TBD) |
 
-### Binary Structure (entropy analysis)
+**Header flags** (from NET+OS bootloader source):
+- Bit 0: `BL_WRITE_TO_FLASH` -- write image to flash storage
+- Bit 1: `BL_LZSS_COMPRESSED_MAYBE` -- original LZSS compression
+- Bit 2: `BL_EXECUTE_FROM_ROM` -- execute directly from flash
+- Bit 3: `BL_LZSS2_COMPRESSED` -- LZSS2 compression (used here)
+- Bit 4: `BL_BYPASS_CRC_CHECK` -- skip CRC verification
+- Bit 5: `BL_BYPASS_IMGLEN_CHECK` -- skip image length check
+
+Compressed data sizes across firmware versions:
+- v1.6.16.12: 2,893,415 bytes → 5,710,958 bytes decompressed (1.97x)
+- v2.0.22.12: 3,654,385 bytes → 7,948,582 bytes decompressed (2.18x)
+- v2.0.51.12: 3,663,764 bytes → 7,965,684 bytes decompressed (2.17x)
+
+### LZSS2 Compression
+
+The firmware payload is compressed using Digi's LZSS2 algorithm (a variant of
+Lempel-Ziv-Storer-Szymanski). Parameters:
+
+| Parameter | Value |
+|-----------|-------|
+| Window size (N) | 4096 bytes |
+| Look-ahead buffer (F) | 18 bytes |
+| Minimum match (Threshold) | 2 bytes |
+| Ring buffer init | Spaces (0x20) |
+| Flag byte | 8 bits per flag byte, bit 0 = first |
+
+Each flag byte controls 8 subsequent tokens. If the flag bit is 1, the next
+byte is a literal. If 0, the next 2 bytes encode a back-reference: 12-bit
+position in the ring buffer and 4-bit length (+threshold).
+
+Implementation: `decompress_firmware.py` (Python port of the C# reference
+from gsuberland/open-network-ms).
+
+### Decompressed Firmware Structure
+
+After LZSS2 decompression, the firmware is a flat big-endian ARM binary
+loaded at address 0x00004000 in RAM.
+
+**ARM Vector Table** (at load address 0x00004000):
+- 0x00: `LDR PC, [PC, #0x38]` -- Reset vector (jumps via literal pool)
+- 0x04-0x3C: `NOP` (MOV R0, R0) -- Unused exception vectors
+- 0x40+: Literal pool with handler addresses
+
+**Binary Structure** (v2.0.51.12, 7,965,684 bytes):
 
 | Region | Content | Entropy |
 |--------|---------|---------|
-| 0x000000-0x18FFFF | ARM code (compressed/linked binary) | High (~7.5 bits/byte) |
-| 0x190000-0x24FFFF | Web UI resources (HTML, CSS, JS, GIF) | Mixed (16-29% text) |
-| 0x250000-0x31FFFF | More binary code | High (~7.5 bits/byte) |
-| 0x320000-0x37E7C4 | NET+OS strings, HTTP server, config | Mixed (12-22% text) |
+| 0x000000-0x0000FF | ARM vector table + literal pool | Low |
+| 0x000100-~0x500000 | ARM code (functions, libraries) | ~5.8 bits/byte |
+| ~0x500000-~0x680000 | Web UI resources (HTML, CSS, JS, GIF) | Mixed |
+| ~0x680000-~0x798000 | String tables, config, SNMP MIBs | Low entropy |
 
-The entire firmware is a single compiled binary with no separate filesystem.
-All web resources (HTML pages, JavaScript, GIF images) are compiled directly
-into the binary as embedded data.
+Key strings found in decompressed binary:
+- "NS9360 Brookline Board Debug Output Serial port"
+- "NET+ARM", "NET+OS", "netos_stubs.c"
+- "ThreadX" (underlying RTOS)
+- "Allegro RomPager Version 4.01" (web server)
+- "MAXQ" (power measurement IC communication)
+- SNMP MIBs, HTML/JavaScript web UI, FTP/Telnet service strings
+- HP Copyright 2003-2013
+
+Overall: ~52% printable bytes (extensive embedded web UI content).
 
 ## Communication Architecture
 

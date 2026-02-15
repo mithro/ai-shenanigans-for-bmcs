@@ -30,13 +30,23 @@
 ### Firmware Obtained and Analysed
 - Three firmware versions obtained: 1.6.16.12, 2.0.22.12, 2.0.51.12
 - **OS identified: NET+OS (Digi ThreadX-based RTOS)** -- NOT Linux
-- Board codename identified: "Brooklyn" (firmware codename: "Henning")
+- Board codename identified: "Brookline" (firmware codename: "Henning")
 - Confirmed AF531A is a supported model in firmware v2.0.51.12 README
 - Image format: Digi bootHdr (48-byte header + monolithic ARM binary)
 - Web server: Allegro RomPager Version 4.01
 - Firmware is a flat binary with embedded web UI, no filesystem
 - Documented upgrade path: 1.0.9.09 → 1.3.11.09 → 1.6.16.12 → 2.0.49.12
 - Created extract_firmware.py for automated analysis
+
+### Firmware Decompression (LZSS2)
+- Identified compression algorithm: Digi LZSS2 (Lempel-Ziv-Storer-Szymanski variant)
+- Ported decompressor from C# reference (gsuberland/open-network-ms)
+- Successfully decompressed all 3 firmware versions
+- Confirmed decompressed output is valid big-endian ARM code (ARM926EJ-S)
+- ARM vector table verified: `LDR PC, [PC, #0x38]` reset vector + NOPs
+- RAM load address: 0x00004000
+- Flash address: 0x00020000
+- Created parse_header.py, disasm_payload.py, decompress_firmware.py
 
 ### Documentation Created
 | File | Status | Description |
@@ -45,6 +55,9 @@
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
 | extract_firmware.py | Complete | Firmware extraction and analysis script |
+| parse_header.py | Complete | Detailed bootHdr header parser and cross-version comparison |
+| disasm_payload.py | Complete | ARM disassembly of raw payload (confirmed compression) |
+| decompress_firmware.py | Complete | LZSS2 decompressor (Python port of gsuberland C# reference) |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -66,7 +79,7 @@
 | Debug Header | J25 "Digi UART" |
 | OS | NET+OS (ThreadX-based RTOS) |
 | Web Server | Allegro RomPager 4.01 |
-| Board Codename | "Brooklyn" |
+| Board Codename | "Brookline" |
 
 ## Open Items
 
@@ -80,14 +93,16 @@
 - Extension bar bus protocol (J1, J6 connectors) not documented
 
 ### Firmware Deep Analysis
-- ARM disassembly not yet performed (need to determine load address)
-- GPIO pin assignments not confirmed from firmware (no config tables like Dell C410X)
+- **Firmware decompressed** -- all 3 versions decompressed with LZSS2, load address 0x4000
+- ARM disassembly of decompressed firmware not yet performed
+- GPIO configuration register writes not yet extracted from disassembly
 - MAXQ3180 SPI communication protocol not extracted
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified
 - RomPager CVE-2014-9222 ("Misfortune Cookie") vulnerability not assessed
 - NVRAM/configuration storage format not documented
 - Web UI resource extraction not complete (embedded in binary)
+- CRC32 algorithm not yet matched (stored CRC doesn't match simple crc32 of data)
 
 ### Datasheet Gaps
 - TMP89FM42LUG datasheet not yet downloaded (URL found, ~5 MB / 408 pages)
