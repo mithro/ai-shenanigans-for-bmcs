@@ -48,10 +48,42 @@
 - Flash address: 0x00020000
 - Created parse_header.py, disasm_payload.py, decompress_firmware.py
 
+### Serial Port Analysis
+- Mapped all 4 serial port register references in firmware
+- Port B: primary communication port (13 refs, 6 register types, DMA-enabled)
+- Port C: secondary communication (3 refs, DMA-enabled)
+- Port A: debug UART (1 ref, polled/interrupt, J25 header)
+- Port D: minimal use (1 ref, polled/interrupt)
+- Found DMA descriptor table at ~0x757130 mapping Port B and C to DMA channels
+- Baud rates: 115200 (47 occurrences) and 9600 (6 occurrences) most common
+- Created analyse_serial_ports.py
+
+### Cross-Version Comparison
+- Compared all 3 firmware versions (v1.6.16.12, v2.0.22.12, v2.0.51.12)
+- v1.6→v2.0: major rewrite (+39%, LDAP, SSL, Rack View, jQuery, KLone)
+- v2.0.22→v2.0.51: minor patch (+0.2%, same URL paths, same features)
+- All versions share: RomPager 4.01, ThreadX G4.0.4.0, OpenSSL 0.9.7b, YAFFS
+- Default config identical across all versions
+- Created compare_firmware_versions.py
+
+### Security Assessment
+- **CVE-2014-9222** (Misfortune Cookie): all versions VULNERABLE (RomPager 4.01 < 4.34)
+- **OpenSSL 0.9.7b** (2003): hundreds of known CVEs, never updated
+- Attack surface: HTTP, HTTPS, Telnet, FTP, SNMP all network-accessible
+- Cookie handling code confirmed in binary ("Set-Cookie", session management)
+- Created assess_rompager_vuln.py
+
+### Web UI Extraction
+- Extracted embedded web resources from RomPager firmware
+- 1,192 URL paths, 912 RomPager directives
+- 12 HTML blocks (~11 MB), 66 GIF images, 47 PNG images
+- JavaScript libraries: jQuery 1.10.2, Raphael 1.5.2, stringencoders
+- Created extract_web_ui.py
+
 ### Documentation Created
 | File | Status | Description |
 |------|--------|-------------|
-| ANALYSIS.md | Complete | Board inventory, NS9360 I/O, firmware internals |
+| ANALYSIS.md | Complete | Board inventory, NS9360 I/O, firmware internals, security |
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
 | extract_firmware.py | Complete | Firmware extraction and analysis script |
@@ -61,6 +93,10 @@
 | analyse_decompressed.py | Complete | Full disassembly, MMIO reference scan, string analysis |
 | extract_gpio_init.py | Complete | GPIO init function cluster analysis |
 | trace_bsp_init.py | Complete | Reset handler trace, BSP GPIO table search |
+| analyse_serial_ports.py | Complete | Serial port register analysis, baud rate extraction |
+| compare_firmware_versions.py | Complete | Cross-version string, URL, and binary comparison |
+| assess_rompager_vuln.py | Complete | CVE-2014-9222 vulnerability assessment |
+| extract_web_ui.py | Complete | RomPager web UI resource extraction |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -81,7 +117,7 @@
 | System Crystal | 29.4912 MHz |
 | Debug Header | J25 "Digi UART" |
 | OS | NET+OS (ThreadX-based RTOS) |
-| Web Server | Allegro RomPager 4.01 |
+| Web Server | Allegro RomPager 4.01 + KLone (v2.0+) |
 | Board Codename | "Brookline" |
 
 ## Open Items
@@ -101,13 +137,15 @@
 - **Reset handler traced** -- boot sequence from 0xB7F64 through BSP init chain
 - **Default config table found** -- board name, default IPs, MAC OUI, credentials
 - **GPIO init functions located** -- 4 code clusters referencing GPIO config registers
+- **Serial port mapping** -- Port B primary (DMA), Port A debug, Port C secondary (DMA)
+- **Cross-version comparison** -- v1.6→v2.0 major rewrite, v2.0.22→v2.0.51 minor patch
+- **Security assessment** -- CVE-2014-9222 confirmed, OpenSSL 0.9.7b, full attack surface mapped
+- **Web UI extracted** -- 1192 URLs, HTML/CSS/JS/images extracted
 - GPIO configuration VALUES not yet fully extracted (passed via stack, needs decompiler)
 - MAXQ3180 SPI communication protocol not extracted
 - TMP89FM42LUG serial protocol not extracted
 - PLC (Power Line Communication) modem interface not identified
-- RomPager CVE-2014-9222 ("Misfortune Cookie") vulnerability not assessed
 - NVRAM/configuration storage format not documented
-- Web UI resource extraction not complete (embedded in binary)
 - CRC32 algorithm not yet matched (stored CRC doesn't match simple crc32 of data)
 
 ### Datasheet Gaps
@@ -115,7 +153,6 @@
 - ICS1893AFLF Ethernet PHY datasheet not yet downloaded (URL found)
 
 ### Cross-References Needed
-- Confirm serial port assignment (which NS9360 port maps to which connector)
 - Confirm SPI port assignment (which NS9360 SPI connects to MAXQ3180)
 - Determine if I2C bus has any devices (test point visible but usage unknown)
 - Map NS9360 GPIO pins to board-level functions from firmware disassembly

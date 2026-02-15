@@ -535,3 +535,115 @@ difficult without a full decompiler.
 The Display Unit acts as the serial console gateway -- you cannot bypass it for console
 access without connecting directly to J25 "Digi UART". The reset button (connector 10)
 resets management only; outlet power is maintained.
+
+### Serial Port Analysis (from firmware register references)
+
+Searching the decompressed firmware for NS9360 serial port register addresses reveals
+which ports are actively used and how they are configured:
+
+| Port | Base Address | Register Refs | DMA | Usage |
+|------|-------------|---------------|-----|-------|
+| Port B | 0x9020_0000 | 13 (6 types) | Yes | Primary communication (Display Unit?) |
+| Port C | 0x9030_0000 | 3 (FIFO only) | Yes | Secondary communication (daisy-chain?) |
+| Port A | 0x9020_0040 | 1 (FIFO only) | No | Debug UART (J25, polled/interrupt) |
+| Port D | 0x9030_0040 | 1 (FIFO only) | No | Minimal use (MAXQ3180 SPI?) |
+
+**Port B** has by far the most register references (Control A, Control B, Bit Rate,
+Status A, RX Char Timer), indicating it is the primary communication port with full
+configuration. A DMA descriptor table at ~0x757130 maps Port B and Port C to dedicated
+DMA channels, while Port A and Port D are absent (polled or interrupt-driven).
+
+Port B Control A value `0x83030A00` found in literal pool at 0xACC38 -- but this is
+written to the FIFO register during init, not to Control A itself. The actual UART
+configuration (baud rate, mode) is set through the NET+OS serial driver API.
+
+The firmware contains baud rate divisor values for 115200 baud (divisor 23, 47 occurrences)
+and 9600 baud (divisor 287, 6 occurrences), suggesting both rates are used.
+
+Key strings: "NS9360 Brookline Board Debug Output Serial port" (Port A/J25),
+"Display serial statistics (port 1-4)", "Serial Debug CLI",
+"error when change baud rate in Dialog.c", "calibrate maxim voltage" (MAXQ3180 over SPI).
+
+## Cross-Version Firmware Comparison
+
+### Size and Complexity
+
+| Version | Size | Functions | Printable | Copyright |
+|---------|------|-----------|-----------|-----------|
+| v1.6.16.12 | 5.4 MB | ~5,863 | 53% | 2003-2012 |
+| v2.0.22.12 | 7.6 MB | ~6,871 | 52% | 2003-2014 |
+| v2.0.51.12 | 7.6 MB | ~6,912 | 52% | 2003-2016 |
+
+- v1.6 → v2.0.22: **+39% growth** (+2.2 MB, +1,008 functions) -- major rewrite
+- v2.0.22 → v2.0.51: **+0.2% growth** (+17 KB, +41 functions) -- minor patch
+
+### Feature Evolution (v1.6 → v2.0)
+
+Major additions in v2.0:
+- **LDAP authentication** (OpenLDAP, SASL, DIGEST-MD5)
+- **SSL/TLS** with OpenSSL 0.9.7b (certificate management, HTTPS)
+- **Rack View** with Raphael.js vector graphics (14U-60U rack sizes)
+- **SNMP managers** (up to 5, configurable access)
+- **jQuery 1.10.2** (replacing inline JavaScript)
+- **KLone web framework** (www.koanlogic.com) alongside RomPager
+- **NTP time sync** (dual server support)
+- **IPv6 validation** (partial)
+- **XML configuration** import/export
+
+Web UI rewrite: 359 → 1,439 URL paths, 2 → 10 RomPager directive types, added
+AJAX (XMLHttpRequest), session tracking, Japanese localisation.
+
+### Unchanged Between Versions
+
+- Default configuration (Brookline, admin, 172.16.100.102, Digi MAC OUI)
+- RomPager 4.01 (never updated)
+- ThreadX ARM7/Green Hills Version G4.0.4.0 (never updated)
+- OpenSSL 0.9.7b from 2003 (never updated)
+- YAFFS filesystem module (v1.6.4.1, 2007)
+
+## Security Assessment
+
+### CVE-2014-9222: Misfortune Cookie (RomPager)
+
+| Field | Value |
+|-------|-------|
+| CVE | CVE-2014-9222 |
+| Affected | Allegro RomPager < 4.34 |
+| Firmware Version | 4.01 (**VULNERABLE**) |
+| CVSS | 9.8 (Critical) |
+| Disclosed | 2014-12-23 |
+| Patched in firmware | **Never** (all 3 versions use 4.01) |
+
+The vulnerability allows remote code execution without authentication via a
+crafted HTTP Cookie header. The firmware contains cookie handling code ("Set-Cookie: C"
+at 0x722490, "cookie" at 0x7234D0) and full HTTP header parsing.
+
+### OpenSSL 0.9.7b (2003)
+
+The firmware includes OpenSSL 0.9.7b dated 2003-04-10. This version has hundreds
+of known CVEs including:
+- Heartbleed (CVE-2014-0160) -- may not apply if TLS heartbeat not compiled in
+- POODLE (CVE-2014-3566) -- SSLv3 padding oracle
+- FREAK (CVE-2015-0204) -- export cipher downgrade
+- Numerous buffer overflow, null pointer, and DoS vulnerabilities
+
+### Attack Surface Summary
+
+| Service | Protocol | Port | Authentication |
+|---------|----------|------|----------------|
+| HTTP | TCP | 80 | Cookie-based session |
+| HTTPS | TCP | 443 | SSL/TLS + cookie |
+| Telnet | TCP | 23 | Username/password |
+| FTP | TCP | 21 | Username/password |
+| SNMP | UDP | 161/162 | Community strings |
+
+All services are network-accessible through the Ethernet management port.
+The SNMP implementation has 257 references in the binary.
+
+### Recommendations
+
+1. **Isolate management network** -- place iPDU management port on dedicated VLAN
+2. **Restrict access** -- ACL/firewall to allow only trusted management hosts
+3. **Disable unnecessary services** -- turn off Telnet, restrict FTP access
+4. **Monitor** -- watch for exploit attempts (malformed cookies, unusual HTTP)
+5. **Physical security** -- protect J25 debug UART header from unauthorized access
