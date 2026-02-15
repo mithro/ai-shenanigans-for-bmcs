@@ -30,18 +30,17 @@ Tested on Dell PowerEdge C410X (AST2050 BMC, ARM926EJ-S @ 200MHz).
 
 Signed-off-by: Tim Ansell <me@mith.ro>
 ---
- drivers/clk/clk-aspeed.c | 122 +++++++++++++++++++++++++++++++++++++-
- 1 file changed, 120 insertions(+), 2 deletions(-)
+ drivers/clk/clk-aspeed.c | 120 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 120 insertions(+)
 
 diff --git a/drivers/clk/clk-aspeed.c b/drivers/clk/clk-aspeed.c
-index 1ec2890..2a3b4c1 100644
+index ff84191..9148011 100644
 --- a/drivers/clk/clk-aspeed.c
 +++ b/drivers/clk/clk-aspeed.c
-@@ -117,6 +117,43 @@ static struct clk_hw *aspeed_ast2400_calc_pll(const char *name, u32 val)
- 	return clk_hw_register_fixed_factor(NULL, name, "clkin", 0,
+@@ -146,6 +146,43 @@ static struct clk_hw *aspeed_ast2400_calc_pll(const char *name, u32 val)
  			mult, div);
  };
-
+ 
 +static struct clk_hw *aspeed_ast2050_calc_pll(const char *name, u32 val)
 +{
 +	unsigned int mult, div;
@@ -82,10 +81,10 @@ index 1ec2890..2a3b4c1 100644
  static struct clk_hw *aspeed_ast2500_calc_pll(const char *name, u32 val)
  {
  	unsigned int mult, div;
-@@ -145,6 +182,13 @@ static const struct aspeed_clk_soc_data ast2500_data = {
+@@ -174,6 +211,13 @@ static const struct aspeed_clk_soc_data ast2500_data = {
  	.calc_pll = aspeed_ast2500_calc_pll,
  };
-
+ 
 +static const struct aspeed_clk_soc_data ast2050_data = {
 +	.div_table = ast2400_div_table,
 +	.eclk_div_table = ast2400_div_table,
@@ -96,18 +95,18 @@ index 1ec2890..2a3b4c1 100644
  static const struct aspeed_clk_soc_data ast2400_data = {
  	.div_table = ast2400_div_table,
  	.eclk_div_table = ast2400_div_table,
-@@ -426,6 +470,7 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+@@ -567,6 +611,7 @@ static int aspeed_clk_probe(struct platform_device *pdev)
  static const struct of_device_id aspeed_clk_dt_ids[] = {
  	{ .compatible = "aspeed,ast2400-scu", .data = &ast2400_data },
  	{ .compatible = "aspeed,ast2500-scu", .data = &ast2500_data },
 +	{ .compatible = "aspeed,ast2050-scu", .data = &ast2050_data },
  	{ }
  };
-
-@@ -495,6 +540,79 @@ static void __init aspeed_ast2400_cc(struct regmap *map)
+ 
+@@ -648,6 +693,78 @@ static void __init aspeed_ast2400_cc(struct regmap *map)
  	aspeed_clk_data->hws[ASPEED_CLK_APB] = hw;
  }
-
+ 
 +static void __init aspeed_ast2050_cc(struct regmap *map)
 +{
 +	struct clk_hw *hw;
@@ -183,8 +182,8 @@ index 1ec2890..2a3b4c1 100644
  static void __init aspeed_ast2500_cc(struct regmap *map)
  {
  	struct clk_hw *hw;
-@@ -556,6 +674,8 @@ static void __init aspeed_cc_init(struct device_node *np)
-
+@@ -729,6 +846,8 @@ static void __init aspeed_cc_init(struct device_node *np)
+ 
  	if (of_device_is_compatible(np, "aspeed,ast2400-scu"))
  		aspeed_ast2400_cc(map);
 +	else if (of_device_is_compatible(np, "aspeed,ast2050-scu"))
@@ -192,10 +191,11 @@ index 1ec2890..2a3b4c1 100644
  	else if (of_device_is_compatible(np, "aspeed,ast2500-scu"))
  		aspeed_ast2500_cc(map);
  	else
-@@ -567,3 +687,4 @@ static void __init aspeed_cc_init(struct device_node *np)
+@@ -739,3 +858,4 @@ static void __init aspeed_cc_init(struct device_node *np)
  };
  CLK_OF_DECLARE_DRIVER(aspeed_cc_g5, "aspeed,ast2500-scu", aspeed_cc_init);
  CLK_OF_DECLARE_DRIVER(aspeed_cc_g4, "aspeed,ast2400-scu", aspeed_cc_init);
 +CLK_OF_DECLARE_DRIVER(aspeed_cc_g2, "aspeed,ast2050-scu", aspeed_cc_init);
---
+-- 
 2.43.0
+
