@@ -16,7 +16,8 @@
 // compatible register layouts for I2C, GPIO, UART, and SCU peripherals.
 // We use aspeed-g4.dtsi (AST2400) as the base since no upstream dtsi
 // exists for the AST2050. The AST2050 has 7 I2C engines (vs 14 on
-// AST2400) and an ARM926EJ-S core (vs ARM1176JZF-S on AST2400).
+// AST2400) and an ARM926EJ-S core (same as AST2400, not ARM1176JZF-S
+// which is only on the AST2500/G5).
 //
 // Hardware summary:
 //   - 16x PCIe x16 slots for GPUs/accelerators
@@ -108,6 +109,23 @@
 			gpios = <&gpio_mgmt ASPEED_GPIO(E, 4) GPIO_ACTIVE_HIGH>;
 		};
 	};
+};
+
+/*
+ * ==========================================================================
+ * SCU -- System Control Unit (Clock + Strap Override)
+ * ==========================================================================
+ * Override the base dtsi compatible to add "aspeed,ast2050-scu" as the
+ * primary match. The kernel clock driver (clk-aspeed.c) needs this to
+ * use the correct SCU70 bit positions for the AST2050:
+ *   - H-PLL strap frequency: bits [11:9] (not [9:8] as on AST2400)
+ *   - CPU:AHB ratio: bits [13:12] (not [11:10])
+ *   - Input clock: always 24MHz (no 25MHz/48MHz crystal options)
+ * The "aspeed,ast2400-scu" fallback ensures pinctrl, reset controller,
+ * and other drivers that only match AST2400 still work correctly.
+ */
+&syscon {
+	compatible = "aspeed,ast2050-scu", "aspeed,ast2400-scu", "syscon", "simple-mfd";
 };
 
 /*
