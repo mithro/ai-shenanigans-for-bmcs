@@ -209,7 +209,9 @@
 - **Peripheral address map discovered** at 0x757114: MMU region table confirms all NS9360 peripheral ranges
 - **I2C bus confirmed active**: 20 register references, semaphore-protected driver (I2C_SEM, I2C_HOST_SEMAPHORE), event-based (i2cHostEvent), debug output ("I2C Bus:")
 - **DMA channel mapping**: Ch7 (23 refs) → Port B, Ch15 (7 refs) → Port C, Ch0 (3 refs) → system
-- **SPI B disabled via GPIO mux** -- MAXQ3180 SPI port still not definitively identified (no named SPI API calls; uses direct register access)
+- **SPI B disabled via GPIO mux** -- MAXQ3180 SPI port still not definitively identified
+- **Port C strongest SPI candidate**: has Control A refs but no Bit Rate refs (SPI uses clock divider in Ctrl A, not Bit Rate register). Port B has Bit Rate refs → likely UART.
+- **I2C device addresses not extractable**: driver is generic, takes addresses as function parameters. Needs decompiler to trace through call chains.
 - GPIO config VALUES for registers 3-10 still not extracted (passed via stack operations)
 - Created analyse_deep_binary.py
 
@@ -218,6 +220,6 @@
 - ~~ICS1893AFLF Ethernet PHY datasheet not yet downloaded~~ **DOWNLOADED** (1.2 MB / 152 pages)
 
 ### Cross-References Needed
-- ~~Confirm SPI port assignment~~ SPI B confirmed disabled; MAXQ3180 port uses direct register access (not named SPI APIs), exact port still TBD
-- ~~Determine if I2C bus has any devices~~ **I2C bus confirmed active** (20 register refs, semaphore driver, event system). Specific device addresses not yet extracted.
+- ~~Confirm SPI port assignment~~ SPI B confirmed disabled; Port C is strongest SPI candidate (Ctrl A refs, no Bit Rate refs). Exact port needs decompiler to decode Control A register values.
+- ~~Determine if I2C bus has any devices~~ **I2C bus confirmed active** (20 register refs, semaphore driver, event system). Device addresses passed as function parameters -- not extractable without decompiler.
 - ~~Map NS9360 GPIO pins to board-level functions~~ **Partial**: pins 0-15 decoded from GPIO config values. Remaining pins (16-72) need decompiler for stack-passed values.

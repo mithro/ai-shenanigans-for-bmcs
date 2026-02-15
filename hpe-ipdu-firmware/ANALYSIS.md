@@ -756,14 +756,22 @@ The presence of both "spi" and "spi slave" error strings suggests the NS9360 may
 operate in both SPI master mode (communicating with the MAXQ3180) and SPI slave mode
 (communicating with extension bars or daisy-chained units).
 
-NS9360 serial port register reference counts confirm SPI/UART usage:
+NS9360 serial port register reference counts:
 
-| Port | Base Address | References | Likely Role |
-|------|-------------|------------|-------------|
-| Port B | 0x9020_0000 | 14 | Primary communication (DMA-enabled, display unit) |
-| Port C | 0x9030_0000 | 4 | Secondary communication (DMA-enabled, daisy-chain) |
-| Port A | 0x9020_0040 | 1 | Debug UART (J25, polled) |
-| Port D | 0x9030_0040 | 1 | Minimal use (possibly MAXQ3180 SPI) |
+| Port | Base Address | Ctrl A Refs | Bit Rate Refs | Likely Role |
+|------|-------------|-------------|---------------|-------------|
+| Port B | 0x9020_0000 | 6 | 1 | Primary UART (DMA Ch7, display unit) |
+| Port C | 0x9030_0000 | 4 | 0 | **Possibly SPI** (DMA Ch15, no Bit Rate ref) |
+| Port A | 0x9020_0040 | 1 | 0 | Debug UART (J25, polled) |
+| Port D | 0x9030_0040 | 1 | 0 | Minimal use |
+
+**SPI port not yet definitively identified**: SPI B is confirmed disabled (GPIO Config #1
+= 0x33333333, all SPI B pins repurposed as GPIO inputs). The firmware uses no named SPI
+API calls (no `NSSerialSPIConfig`, `NSSPIConfig`, etc.) — all SPI access is through direct
+register manipulation. Port C is the strongest candidate for the MAXQ3180 SPI connection
+because it has Control A references but no Bit Rate register references (SPI mode uses a
+clock divider in Control A, not the separate Bit Rate register). However, the actual
+Control A register values are not accessible from static literal pool analysis alone.
 
 #### Calibration
 
@@ -876,10 +884,16 @@ The dual semaphore architecture (bus-level + host-level) suggests the I2C bus is
 from multiple RTOS threads. The "I2C Bus:" debug string appears in the diagnostic output
 region, indicating a debug CLI command can show I2C status.
 
-**I2C device(s) on the bus are not yet identified** -- the firmware doesn't contain
-obvious I2C device address constants in nearby literal pools. The test point visible
-on the PCB near the I2C pull-up resistors suggests HP used it for manufacturing test.
-Possible I2C devices: EEPROM for board identification, temperature sensor, or RTC.
+**I2C device addresses not extractable from static analysis** -- the I2C driver is
+generic and takes device addresses as function parameters rather than using hardcoded
+immediate values. The driver functions at 0x000BAD74-0x000BB5F0 implement standard
+I2C master transactions (start, address, read/write, stop) with the address passed in
+a register. Device addresses would need to be traced through function call chains from
+the application layer, requiring a decompiler.
+
+Possible I2C devices based on the board design: EEPROM for board identification/serial
+number, temperature sensor, or RTC. The test point visible on the PCB near the I2C
+pull-up resistors suggests HP used it for manufacturing test.
 
 ### Display MCU -- TMP89FM42LUG Serial Communication
 
