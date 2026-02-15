@@ -765,7 +765,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
-			tmp-slot1: temperature-sensor@5c {
+			tmp_slot1: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie1-temp";
@@ -776,7 +776,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
-			tmp-slot2: temperature-sensor@5c {
+			tmp_slot2: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie2-temp";
@@ -787,7 +787,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
-			tmp-slot3: temperature-sensor@5c {
+			tmp_slot3: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie3-temp";
@@ -798,7 +798,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
-			tmp-slot4: temperature-sensor@5c {
+			tmp_slot4: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie4-temp";
@@ -809,7 +809,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;
-			tmp-slot5: temperature-sensor@5c {
+			tmp_slot5: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie5-temp";
@@ -820,7 +820,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <5>;
-			tmp-slot6: temperature-sensor@5c {
+			tmp_slot6: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie6-temp";
@@ -831,7 +831,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <6>;
-			tmp-slot7: temperature-sensor@5c {
+			tmp_slot7: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie7-temp";
@@ -842,7 +842,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <7>;
-			tmp-slot8: temperature-sensor@5c {
+			tmp_slot8: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie8-temp";
@@ -861,7 +861,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0>;
-			tmp-slot9: temperature-sensor@5c {
+			tmp_slot9: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie9-temp";
@@ -872,7 +872,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <1>;
-			tmp-slot10: temperature-sensor@5c {
+			tmp_slot10: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie10-temp";
@@ -883,7 +883,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <2>;
-			tmp-slot11: temperature-sensor@5c {
+			tmp_slot11: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie11-temp";
@@ -894,7 +894,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <3>;
-			tmp-slot12: temperature-sensor@5c {
+			tmp_slot12: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie12-temp";
@@ -905,7 +905,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <4>;
-			tmp-slot13: temperature-sensor@5c {
+			tmp_slot13: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie13-temp";
@@ -916,7 +916,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <5>;
-			tmp-slot14: temperature-sensor@5c {
+			tmp_slot14: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie14-temp";
@@ -927,7 +927,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <6>;
-			tmp-slot15: temperature-sensor@5c {
+			tmp_slot15: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie15-temp";
@@ -938,7 +938,7 @@ gpio_mgmt: &gpio {};
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <7>;
-			tmp-slot16: temperature-sensor@5c {
+			tmp_slot16: temperature-sensor@5c {
 				compatible = "ti,tmp75";
 				reg = <0x5c>;
 				label = "pcie16-temp";
