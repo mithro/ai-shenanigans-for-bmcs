@@ -309,7 +309,7 @@ Again, **one slot per switch** (0x34, 0x36, 0x32, 0x30).
 
 ### 4.3 Phase 2 Transaction Summary
 
-Identical structure to Phase 1:
+Identical structure to Phase 1 (see Section 3.5 for wire-level detail):
 
 | Step                       | Txns Per Slot | Slots | Total Txns | Delays      |
 |----------------------------|--------------|-------|------------|-------------|
@@ -344,6 +344,8 @@ Again, **one slot per switch** (0x30, 0x32, 0x36, 0x34).
 
 ### 5.3 Phase 3 Transaction Summary
 
+Identical structure to Phase 1 (see Section 3.5 for wire-level detail):
+
 | Step                       | Txns Per Slot | Slots | Total Txns | Delays      |
 |----------------------------|--------------|-------|------------|-------------|
 | `pex8696_un_protect`       | 2            | 4     | 8          | None        |
@@ -376,6 +378,8 @@ Again, **one slot per switch** (0x30, 0x32, 0x36, 0x34).
 | 4th              | 12         | Slot 13       | #1             | 0x34     |
 
 ### 6.3 Phase 4 Transaction Summary
+
+Identical structure to Phase 1 (see Section 3.5 for wire-level detail):
 
 | Step                       | Txns Per Slot | Slots | Total Txns | Delays      |
 |----------------------------|--------------|-------|------------|-------------|
