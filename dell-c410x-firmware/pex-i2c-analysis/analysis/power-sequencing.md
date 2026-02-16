@@ -221,7 +221,54 @@ Additionally, `pex8696_un_protect_reg` performs 2 transactions per slot:
 | 1     | READ  | 0x07C    | Read Write-Protect register             |
 | 2     | WRITE | 0x07C    | Clear write-protect bit (bit 18)        |
 
-### 3.5 Phase 1 Transaction Summary
+### 3.5 Wire-Level Example: Slot 4 Power-On
+
+Complete I2C wire trace for Slot 4 (index 3, switch #1 at 0x34, port byte 0x0A):
+
+#### Unprotect Step (pex8696_un_protect_reg)
+
+```
+Txn 1 - READ register 0x07C (Write-Protect Control):
+  I2C Write to 0x34: [04] [0A] [3C] [1F]
+  I2C Read  from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 2 - WRITE register 0x07C (clear write-protect bit 18):
+  I2C Write to 0x34: [03] [0A] [3C] [1F] [v0] [v1] [v2 & 0xFB] [v3]
+```
+
+#### Power-On Step (pex8696_slot_power_on_reg)
+
+```
+Txn 3 - READ register 0x080 (Slot Control/Status):
+  I2C Write to 0x34: [04] [0A] [3C] [20]
+  I2C Read  from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 4 - WRITE register 0x080 (Power Indicator=ON, Attention=OFF):
+  I2C Write to 0x34: [03] [0A] [3C] [20] [v0] [(v1&0xFC|0x01)&0xFB] [v2] [v3]
+
+Txn 5 - READ register 0x234 (Hot-Plug Power Control):
+  I2C Write to 0x34: [04] [0A] [3C] [8D]
+  I2C Read  from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 6 - WRITE register 0x234 (assert Power Controller Control):
+  I2C Write to 0x34: [03] [0A] [3C] [8D] [v0|0x01] [v1] [v2] [v3]
+
+--- SLEEP 100ms (10 RTOS ticks) ---
+
+Txn 7 - WRITE register 0x234 (de-assert Power Controller Control):
+  I2C Write to 0x34: [03] [0A] [3C] [8D] [v0&0xFE] [v1] [v2] [v3]
+
+Txn 8 - READ register 0x228 (Link/MRL Control):
+  I2C Write to 0x34: [04] [0A] [3C] [8A]
+  I2C Read  from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 9 - WRITE register 0x228 (set MRL/LED enable bit 21):
+  I2C Write to 0x34: [03] [0A] [3C] [8A] [v0] [v1] [v2|0x20] [v3]
+```
+
+**Total for Slot 4: 9 I2C transactions (4 reads + 5 writes) + 100ms delay**
+
+### 3.6 Phase 1 Transaction Summary
 
 For 4 slots in Phase 1:
 
@@ -229,8 +276,8 @@ For 4 slots in Phase 1:
 |----------------------------|--------------|-------|------------|-------------|
 | `pex8696_un_protect`       | 2            | 4     | 8          | None        |
 | `pex8696_slot_power_on`    | 7            | 4     | 28         | 4 x 100ms   |
-| `gpu_power_attention_pulse`| TBD          | 4     | TBD        | TBD         |
-| **Subtotal (I2C only)**    |              |       | **36+**    | **400ms+**  |
+| `gpu_power_attention_pulse`| (via queue)  | 4     | (separate) | (separate)  |
+| **Phase subtotal**         | **9**        | **4** | **36**     | **400ms**   |
 
 The `pex8696_slot_power_on` dispatcher also sends 2 additional queue messages
 (to I2C bus 0/mux 8 and bus 4/mux 5) for each phase, which may add further
@@ -268,8 +315,8 @@ Identical structure to Phase 1:
 |----------------------------|--------------|-------|------------|-------------|
 | `pex8696_un_protect`       | 2            | 4     | 8          | None        |
 | `pex8696_slot_power_on`    | 7            | 4     | 28         | 4 x 100ms   |
-| `gpu_power_attention_pulse`| TBD          | 4     | TBD        | TBD         |
-| **Subtotal (I2C only)**    |              |       | **36+**    | **400ms+**  |
+| `gpu_power_attention_pulse`| (via queue)  | 4     | (separate) | (separate)  |
+| **Phase subtotal**         | **9**        | **4** | **36**     | **400ms**   |
 
 ---
 
@@ -301,8 +348,8 @@ Again, **one slot per switch** (0x30, 0x32, 0x36, 0x34).
 |----------------------------|--------------|-------|------------|-------------|
 | `pex8696_un_protect`       | 2            | 4     | 8          | None        |
 | `pex8696_slot_power_on`    | 7            | 4     | 28         | 4 x 100ms   |
-| `gpu_power_attention_pulse`| TBD          | 4     | TBD        | TBD         |
-| **Subtotal (I2C only)**    |              |       | **36+**    | **400ms+**  |
+| `gpu_power_attention_pulse`| (via queue)  | 4     | (separate) | (separate)  |
+| **Phase subtotal**         | **9**        | **4** | **36**     | **400ms**   |
 
 ---
 
@@ -334,8 +381,8 @@ Again, **one slot per switch** (0x30, 0x32, 0x36, 0x34).
 |----------------------------|--------------|-------|------------|-------------|
 | `pex8696_un_protect`       | 2            | 4     | 8          | None        |
 | `pex8696_slot_power_on`    | 7            | 4     | 28         | 4 x 100ms   |
-| `gpu_power_attention_pulse`| TBD          | 4     | TBD        | TBD         |
-| **Subtotal (I2C only)**    |              |       | **36+**    | **400ms+**  |
+| `gpu_power_attention_pulse`| (via queue)  | 4     | (separate) | (separate)  |
+| **Phase subtotal**         | **9**        | **4** | **36**     | **400ms**   |
 
 ---
 
