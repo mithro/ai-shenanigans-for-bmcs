@@ -771,3 +771,513 @@ No delays between slots. No inrush current concern on power-off.
    I2C transaction time when fewer than 16 GPUs are installed
 4. **Asymmetric on/off** -- Power-on requires 9 I2C transactions per slot
    plus 100ms delay; power-off requires only 1-2 transactions with no delay
+
+---
+
+## 9. Multi-Host Mode Configuration
+
+The Dell C410X supports three host-to-GPU fan-out modes, selectable via IPMI
+commands from the Dell chassis management controller.
+
+### 9.1 Supported Modes
+
+| Mode | Hosts | GPUs/Host | Description |
+|------|-------|-----------|-------------|
+| 2:1 | Up to 8 | 2 | Each iPass cable serves 2 GPU slots |
+| 4:1 | Up to 4 | 4 | Default mode, each iPass serves 4 GPU slots |
+| 8:1 | Up to 2 | 8 | Each iPass cable serves 8 GPU slots |
+
+Mode switching is triggered via IPMI sensor IDs:
+
+| IPMI Sensor ID | PEX8696 Switch | I2C Addr |
+|----------------|----------------|----------|
+| 0x802D | #0 | 0x30 |
+| 0x802E | #2 | 0x32 |
+| 0x802F | #1 | 0x34 |
+| other | #3 | 0x36 |
+
+### 9.2 Mode Switch Order of Operations
+
+The orchestrator at `0x38A98` performs mode switching in this order:
+
+```
+1. Power off all GPU slots
+   -> pex8696_all_slot_power_off()
+   -> 16 write-only I2C transactions
+
+2. Configure PEX8696 downstream switches (per-mode register values)
+   -> pex8696_multi_host_mode_cfg()
+   -> 4 switches x 2 register writes = 8 I2C transactions
+
+3. Configure PEX8647 upstream switches (per-mode register values)
+   -> pex8647_multi_host_mode_cfg()
+   -> 2 switches x 3 register writes = 6 I2C transactions
+
+4. Additional PEX8696 NT bridge setup
+   -> pex8696_multi_host_mode_reg_set()
+   -> 3 I2C transactions (to port 15 on each switch)
+
+5. General SerDes re-configuration (all ports, all switches)
+   -> pex8696_cfg()
+   -> 4 switches x 6 ports x 5 registers = 120 I2C transactions
+
+Total: ~153 I2C transactions per mode switch
+```
+
+### 9.3 PEX8696 Mode Configuration
+
+**Functions:** `pex8696_cfg_multi_host_2` at `0x36BEC`, `pex8696_cfg_multi_host_4` at `0x36CD4`
+
+Both write to station 0, port 0 (global port 0 = upstream/configuration port):
+
+#### 2:1 Mode Wire-Level Transactions
+
+```
+Write 1 - Register 0x384 (Lane Config upper):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [E1] [00] [11] [10] [00]
+  Register value: 0x00101100
+
+Write 2 - Register 0x380 (Lane Config lower):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [E0] [00] [00] [01] [11]
+  Register value: 0x11010000
+```
+
+#### 4:1 / 8:1 Mode Wire-Level Transactions
+
+```
+Write 1 - Register 0x384 (Lane Config upper):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [E1] [00] [00] [10] [00]
+  Register value: 0x00100000
+
+Write 2 - Register 0x380 (Lane Config lower):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [E0] [00] [11] [01] [11]
+  Register value: 0x11011100
+```
+
+**Key difference:** Bits 8 and 12 are complementary between the two registers
+and swap between 2:1 and 4:1/8:1 modes:
+
+| Register | Bit | 2:1 | 4:1/8:1 |
+|----------|-----|-----|---------|
+| 0x384 | 8 | 1 | 0 |
+| 0x384 | 12 | 1 | 0 |
+| 0x380 | 8 | 0 | 1 |
+| 0x380 | 12 | 0 | 1 |
+
+These writes are repeated for each of the 4 PEX8696 switches (I2C addresses
+0x30, 0x34, 0x32, 0x36).
+
+### 9.4 PEX8647 Mode Configuration
+
+**Functions:** `pex8647_cfg_multi_host_8` at `0x36DBC`, `pex8647_cfg_multi_host_2_4` at `0x36EF0`
+
+Each function writes 3 registers with 200ms delays between writes.
+
+#### 8:1 Mode Wire-Level Transactions
+
+```
+Step 1 - Register 0x234 on station 2, port 0 (global port 8):
+  I2C Write to <i2c_addr>: [03] [04] [3C] [8D] [00] [00] [04] [9C]
+  Register value: 0x9C040000
+
+Step 2 - Register 0x234 on station 0, port 0 (global port 0):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [8D] [00] [01] [04] [9C]
+  Register value: 0x9C040100
+  DELAY 200ms (20 ticks)
+
+Step 3 - Register 0x1DC on station 0, port 0 (global port 0):
+  I2C Write to <i2c_addr>: [03] [00] [3C] [77] [10] [20] [88] [0F]
+  Register value: 0x0F882010
+  DELAY 200ms (20 ticks)
+```
+
+#### 2:1 / 4:1 Mode Wire-Level Transactions
+
+```
+Step 1 - Register 0x234 on station 2, port 0:
+  I2C Write to <i2c_addr>: [03] [04] [3C] [8D] [00] [01] [04] [9C]
+  Register value: 0x9C040100
+
+Step 2 - Register 0x234 on station 0, port 0:
+  I2C Write to <i2c_addr>: [03] [00] [3C] [8D] [00] [00] [04] [9C]
+  Register value: 0x9C040000
+  DELAY 200ms (20 ticks)
+
+Step 3 - Register 0x1DC on station 0, port 0:
+  I2C Write to <i2c_addr>: [03] [00] [3C] [77] [10] [20] [80] [0F]
+  Register value: 0x0F802010
+  DELAY 200ms (20 ticks)
+```
+
+**Key differences:**
+
+| Switch | Register | Bit | 2:1/4:1 | 8:1 | Function |
+|--------|----------|-----|---------|-----|----------|
+| PEX8647 | 0x234 (stn 0, port 0) | 8 | 0 | 1 | Primary host port select |
+| PEX8647 | 0x234 (stn 2, port 0) | 8 | 1 | 0 | Secondary host port select |
+| PEX8647 | 0x1DC (stn 0, port 0) | 19 | 0 | 1 | Port merge / aggregation enable |
+
+These writes are repeated for both PEX8647 switches (0xD4 and 0xD0).
+
+### 9.5 Additional PEX8696 Setup (NT Bridge)
+
+**Function:** `pex8696_multi_host_mode_reg_set` at `0x37420`
+
+Three additional writes to station 3, port 3 (global port 15 = NT bridge port):
+
+```
+Write 1 - Register 0x3AC:
+  I2C Write: [03] [07] [BC] [EB] [00] [00] [00] [01]
+  Register value: 0x01000000
+
+Write 2 - Register 0x384:
+  I2C Write: [03] [07] [BC] [E1] [00] [00] [00] [00]
+  Register value: 0x00000000
+
+Write 3 - Register 0x380:
+  I2C Write: [03] [07] [BC] [E0] [00] [11] [01] [10]
+  Register value: 0x10011100
+```
+
+**Note:** Byte[2] = 0xBC includes port_lo = 1 (bit 7 set), confirming the
+target is an odd-numbered port (port 3 within station 3). The byte enables
+are 0xF (bits [5:2] = 1111).
+
+### 9.6 SerDes Re-Equalisation
+
+**Function:** `pex8696_cfg` at `0x372AC`
+
+After every mode switch, the firmware writes SerDes equalization parameters
+to all ports (stations 0-5) on all 4 PEX8696 switches:
+
+```
+For each I2C addr in {0x30, 0x32, 0x34, 0x36}:
+  For each station/port byte in {0x00, 0x02, 0x04, 0x06, 0x08, 0x0A}:
+    WRITE reg 0xB9C = 0x1C151515  (SerDes EQ coefficient 2)
+    WRITE reg 0xB90 = 0x130E0E0E  (SerDes EQ coefficient 1)
+    WRITE reg 0xBA4 = 0x88888888  (SerDes de-emphasis 1)
+    WRITE reg 0xBA8 = 0x88888888  (SerDes de-emphasis 2)
+    WRITE reg 0x204 = 0xFFFF0000  (Port control mask)
+```
+
+**Total: 120 write-only I2C transactions** (4 switches x 6 stations x 5 registers).
+
+### 9.7 Mode Differentiating Bits Summary
+
+| Switch | Register | Bit | 2:1 | 4:1 | 8:1 | Description |
+|--------|----------|-----|-----|-----|-----|-------------|
+| PEX8696 | 0x384 | 8 | 1 | 0 | 0 | Port partition control |
+| PEX8696 | 0x384 | 12 | 1 | 0 | 0 | Lane assignment control |
+| PEX8696 | 0x380 | 8 | 0 | 1 | 1 | Port partition (complement) |
+| PEX8696 | 0x380 | 12 | 0 | 1 | 1 | Lane assignment (complement) |
+| PEX8647 | 0x234 (stn 0) | 8 | 0 | 0 | 1 | Primary host port select |
+| PEX8647 | 0x234 (stn 2) | 8 | 1 | 1 | 0 | Secondary host port select |
+| PEX8647 | 0x1DC | 19 | 0 | 0 | 1 | Port merge / aggregation |
+
+**Key insight:** 4:1 and 8:1 share the same PEX8696 configuration. The
+difference between them is entirely in the PEX8647 upstream switches (bit 19
+of register 0x1DC enables port merging for 8:1 mode).
+
+### 9.8 Timing
+
+| Operation | Delay |
+|-----------|-------|
+| PEX8647 register writes (between loop iterations) | 200ms (20 ticks) |
+| PEX8696 mode register writes | None |
+| SerDes re-equalisation | None |
+| **Estimated total mode switch time** | **~1-2 seconds** |
+
+---
+
+## 10. PLX EEPROM Access
+
+The firmware provides EEPROM read/write functionality for PLX switches,
+used for configuration persistence and serial number management.
+
+### 10.1 EEPROM Functions
+
+| Function | Address | Size | Description |
+|----------|---------|------|-------------|
+| `read_plx_eeprom` | 0xDD6CC | 268 bytes | Queue-based EEPROM read |
+| `write_plx_eeprom` | 0xDD7F0 | 364 bytes | Queue-based EEPROM write |
+| `read_plx_eeprom_process` | 0xDD41C | 220 bytes | Actual EEPROM read I2C |
+| `write_plx_eeprom_process` | 0xDD4F8 | 272 bytes | Actual EEPROM write I2C |
+| `Get_Data_From_PLX_EEPROM` | 0xDD978 | 116 bytes | High-level EEPROM read API |
+| `Set_Data_To_PLX_EEPROM` | 0xDDA18 | 120 bytes | High-level EEPROM write API |
+| `get_plx_serial_number` | 0xDE7A4 | 244 bytes | Read serial number from EEPROM |
+| `set_plx_serial_number` | 0xDE898 | 584 bytes | Write serial number to EEPROM |
+| `CmdOEMPLXEEPROM` | 0xDFEE4 | 192 bytes | IPMI OEM command: EEPROM access |
+| `CmdOEMPLXEEPROMSerialNumber` | 0xDFFA4 | 192 bytes | IPMI OEM command: serial number |
+
+### 10.2 Asynchronous Queue Architecture
+
+Unlike register access (which calls `PI2CWriteRead` directly), EEPROM
+operations are dispatched asynchronously via message queues:
+
+```
+read_plx_eeprom(bus_info, addr_info, eeprom_offset)
+  |
+  +-- Builds queue message with:
+  |     - bus_mux = 0xF3
+  |     - slave_addr from find_slave_addr()
+  |     - operation type = 4 (read)
+  |     - 16-bit EEPROM offset
+  |
+  +-- _lx_QueueSend(queue, message, 0)
+        |
+        +-- read_plx_eeprom_process()     [called by queue handler]
+              |
+              +-- read_pex_register()     [generic PLX I2C register read]
+```
+
+### 10.3 EEPROM Protocol
+
+EEPROM access uses the same PLX 4-byte I2C command protocol as register
+access, but targets the PLX switch's internal EEPROM controller registers
+(at offsets 0x260 and 0x264, as documented in plxtools pex8696.yaml):
+
+- **EEPROM Control register (0x260):** Commands the PLX switch to read/write
+  its attached serial EEPROM
+- **EEPROM Data register (0x264):** Holds the 4-byte data for EEPROM operations
+
+The debug log format strings confirm the parameters:
+```
+LMD : read_plx_eeprom %02X %02X %04X      (bus, addr, 16-bit offset)
+LMD : write_plx_eeprom %02X %02X %04X %02X %02X %02X %02X  (bus, addr, offset, 4 data bytes)
+```
+
+### 10.4 Serial Number Access
+
+Serial numbers are 8 bytes, read/written via the EEPROM subsystem:
+```
+LMD : get_plx_serial_number %02X %02X              (bus, addr)
+LMD : set_plx_serial_number %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X
+                                                     (bus, addr, 8 data bytes)
+```
+
+---
+
+## 11. Firmware Function Reference
+
+### 11.1 I2C Transport Layer
+
+| Address | Symbol | Parameters | I2C Transactions |
+|---------|--------|------------|-----------------|
+| 0x253C4 | `PI2CWriteRead` | bus_mux, addr, wr_len, wr_buf, rd_len, rd_buf, flags | 1 (core ioctl) |
+| 0x256C4 | `PI2CMuxWriteRead` | Same as above, no mux/semaphore | 1 (direct ioctl) |
+
+### 11.2 PLX Register Access
+
+| Address | Symbol | Parameters | I2C Transactions |
+|---------|--------|------------|-----------------|
+| 0x2EAD4 | `write_pex8696_register` | bus_mux, i2c_addr, cmd(=3), buf | 1 write (8 bytes) |
+| 0x2EBF0 | `read_pex8696_register` | bus_mux, i2c_addr, cmd(=4), buf | 1 write+read (4+4 bytes) |
+| 0x36AD0 | `write_pex8647_register` | bus_mux, i2c_addr, cmd(=3), buf | 1 write (8 bytes) |
+| 0x36998 | `read_pex8647_register` | bus_mux, i2c_addr, cmd(=4), buf | 1 write+read (4+4 bytes) |
+| 0xDD0F8 | `read_pex_register` | bus_mux, i2c_addr, cmd(=4), buf | 1 write+read (generic) |
+| 0xDD230 | `write_pex_register` | bus_mux, i2c_addr, cmd(=3), buf | 1 write (generic) |
+
+All PEX register access functions are structurally identical -- they use the
+same PLX 4-byte I2C command protocol. Multiple copies exist because they were
+statically linked into different firmware subsystems.
+
+### 11.3 Slot Mapping
+
+| Address | Symbol | Parameters | Description |
+|---------|--------|------------|-------------|
+| 0x2E66C | `get_PEX8696_addr_port` | slot_idx, &addr, &port | Lookup slot -> I2C addr + port byte |
+| 0x317E4 | `get_PEX8696_addr_port` | (identical copy) | Same function, different subsystem |
+| 0x37F7C | `get_PEX8696_addr_port` | (identical copy) | Same function, different subsystem |
+
+### 11.4 Slot Power Control
+
+| Address | Symbol | I2C Transactions | Description |
+|---------|--------|-----------------|-------------|
+| 0x2FC74 | `pex8696_un_protect_reg` | 2/slot (R+W reg 0x07C) | Clear write-protect bit 18 |
+| 0x2FDF8 | `pex8696_un_protect` | (queue dispatch) | Dispatches un_protect_reg via queue |
+| 0x2F7C4 | `pex8696_slot_power_on_reg` | 7/slot (regs 0x080, 0x234, 0x228) | Power-on I2C sequence |
+| 0x2FA90 | `pex8696_slot_power_on` | (queue dispatch) | Dispatches power_on_reg via queue |
+| 0x332AC | `pex8696_slot_power_ctrl` | 1-8/slot | Runtime single-slot power on/off |
+| 0x2F188 | `all_slot_power_off_reg` | 32 (16 R + 16 W) | Read-modify-write all 16 slots |
+| 0x2F2FC | `all_slot_power_off` | (queue dispatch) | Dispatches all_slot_power_off_reg |
+| 0x375B8 | `pex8696_all_slot_off` | 16 (write-only) | Bulk write power-off to all ports |
+| 0x3836C | `pex8696_all_slot_power_off` | (queue dispatch) | Dispatches pex8696_all_slot_off |
+
+### 11.5 Hot-Plug GPIO Control
+
+| Address | Symbol | Description |
+|---------|--------|-------------|
+| 0x31184 | `pex8696_hp_on` | Enable hot-plug GPIO for slot (system() call) |
+| 0x312EC | `pex8696_hp_off` | Disable hot-plug GPIO for slot (system() call) |
+| 0x31454 | `pex8696_hp_ctrl` | Dispatch hp_on/hp_off per bitmask |
+
+These functions use `system()` calls to toggle AST2050 GPIO pins. They do NOT
+use I2C. Hot-plug attention signalling is a separate physical signal path.
+
+### 11.6 GPU Power Sequencing
+
+| Address | Symbol | Description |
+|---------|--------|-------------|
+| 0x33AE8 | `Start_GPU_Power_Sequence` | Top-level orchestrator (IRQ, PSU check, flag) |
+| 0x30300 | `gpu_power_on_4_8_12_16` | Phase 1: slots 4, 8, 12, 16 |
+| 0x30390 | `gpu_power_on_3_7_11_15` | Phase 2: slots 3, 7, 11, 15 |
+| 0x30420 | `gpu_power_on_2_6_10_14` | Phase 3: slots 2, 6, 10, 14 |
+| 0x304B0 | `gpu_power_on_1_5_9_13` | Phase 4: slots 1, 5, 9, 13 |
+| 0x30184 | `all_gpu_power_off` | Power off all GPUs |
+| 0x2EEC0 | `gpu_power_attention_pulse` | Attention indicator pulse |
+
+### 11.7 Multi-Host Configuration
+
+| Address | Symbol | I2C Transactions | Description |
+|---------|--------|-----------------|-------------|
+| 0x38230 | `multi_host_mode_set` | 0 | IPMI command entry point |
+| 0x38A98 | `OEM_Multi_Host_Mode_HEADER` | (orchestrator) | Complete mode switch |
+| 0x37768 | `pex8696_multi_host_mode_cfg` | 8 (4 switches x 2 writes) | PEX8696 lane config |
+| 0x37944 | `pex8647_multi_host_mode_cfg` | 6 (2 switches x 3 writes) | PEX8647 port config |
+| 0x36BEC | `pex8696_cfg_multi_host_2` | 2 writes/switch | 2:1 mode registers |
+| 0x36CD4 | `pex8696_cfg_multi_host_4` | 2 writes/switch | 4:1/8:1 mode registers |
+| 0x36DBC | `pex8647_cfg_multi_host_8` | 3 writes/switch | 8:1 mode PEX8647 regs |
+| 0x36EF0 | `pex8647_cfg_multi_host_2_4` | 3 writes/switch | 2:1/4:1 mode PEX8647 regs |
+| 0x37420 | `pex8696_multi_host_mode_reg_set` | 3 writes | NT bridge port 15 setup |
+| 0x372AC | `pex8696_cfg` | 120 writes | SerDes re-equalisation (all ports) |
+| 0x376E8 | `is_cfg_multi_host_8` | 0 | Check if 8:1 mode requested |
+
+### 11.8 EEPROM and Serial Number
+
+| Address | Symbol | Description |
+|---------|--------|-------------|
+| 0xDD6CC | `read_plx_eeprom` | Queue-based EEPROM read (16-bit offset) |
+| 0xDD7F0 | `write_plx_eeprom` | Queue-based EEPROM write (16-bit offset, 4 bytes) |
+| 0xDD41C | `read_plx_eeprom_process` | Actual EEPROM read via PLX I2C |
+| 0xDD4F8 | `write_plx_eeprom_process` | Actual EEPROM write via PLX I2C |
+| 0xDE7A4 | `get_plx_serial_number` | Read 8-byte serial number |
+| 0xDE898 | `set_plx_serial_number` | Write 8-byte serial number |
+| 0xDFEE4 | `CmdOEMPLXEEPROM` | IPMI OEM command for EEPROM access |
+| 0xDFFA4 | `CmdOEMPLXEEPROMSerialNumber` | IPMI OEM command for serial number |
+
+### 11.9 Diagnostic and Debug
+
+| Address | Symbol | Description |
+|---------|--------|-------------|
+| 0x371B8 | `pex8696_dump` | Dump PEX8696 registers (debug) |
+| 0x37A98 | `dump_PEX8696_reg` | Read and log a PEX8696 register |
+| 0x37B6C | `set_PEX8696_reg` | Write a PEX8696 register (debug) |
+| 0x319F8 | `is_gpu_power_on` | Check if GPU slot is powered |
+| 0x33E68 | `Count_GPU_Power_On` | Count powered-on GPU slots |
+| 0x34134 | `Slot_Pwr_Btn_Trigger` | Handle slot power button press |
+
+### 11.10 Key Global Variables
+
+| Address | Symbol | Type | Description |
+|---------|--------|------|-------------|
+| 0x10B52C | `S_u32I2CDrvFD` | BSS | File descriptor for /dev/aess_i2cdrv |
+| 0x112634 | `G_asI2CDrvBus` | BSS | I2C bus state array (7 buses x 52 bytes) |
+| 0x1143E0 | `G_PI2CCh0MsgQ` | BSS | I2C channel 0 message queue handle |
+| 0x10B84B | `PEX8696_Command` | BSS | PEX8696 I2C command buffer |
+| 0x10B853 | `PEX8696_Reg_Value` | BSS | PEX8696 register value buffer |
+| 0x10B8C7 | `Multi_Host_Cfg` | BSS | Multi-host mode configuration bytes |
+| 0x10A3D1 | `PEX8696_Slot_Power` | Data | Slot power state |
+
+---
+
+## Appendix A: Quick Reference for Replacement BMC Implementation
+
+To implement a replacement BMC firmware that controls the Dell C410X GPU
+slots, you need to:
+
+### A.1 Initialise I2C
+
+Open I2C bus 3 on the AST2050. No mux configuration is needed.
+
+### A.2 Power On a Single Slot
+
+Given a slot number (1-16), look up the I2C address and port byte from
+Section 5.2, then execute:
+
+```python
+# Pseudocode for powering on slot N
+
+i2c_addr, port_byte = SLOT_MAP[slot_index]
+
+# 1. Remove write protection (reg 0x07C)
+val = plx_read(i2c_addr, port_byte, 0x1F)
+val &= ~(1 << 18)  # clear bit 18
+plx_write(i2c_addr, port_byte, 0x1F, val)
+
+# 2. Set slot control indicators (reg 0x080)
+val = plx_read(i2c_addr, port_byte, 0x20)
+val = (val & ~0x0700) | 0x0100  # PIC=ON(01), PCC=0(power on)
+plx_write(i2c_addr, port_byte, 0x20, val)
+
+# 3. Pulse power controller (reg 0x234)
+val = plx_read(i2c_addr, port_byte, 0x8D)
+plx_write(i2c_addr, port_byte, 0x8D, val | 0x01)    # assert
+time.sleep(0.1)                                       # 100ms
+plx_write(i2c_addr, port_byte, 0x8D, val & ~0x01)   # de-assert
+
+# 4. Enable hot-plug LED (reg 0x228)
+val = plx_read(i2c_addr, port_byte, 0x8A)
+val |= (1 << 21)  # set bit 21
+plx_write(i2c_addr, port_byte, 0x8A, val)
+```
+
+### A.3 Power Off a Single Slot
+
+```python
+val = plx_read(i2c_addr, port_byte, 0x20)
+val |= 0x0700  # PIC=OFF(11), PCC=1(power off)
+plx_write(i2c_addr, port_byte, 0x20, val)
+```
+
+### A.4 PLX I2C Helper Functions
+
+```python
+def plx_write(i2c_addr, port_byte, dword_idx, value):
+    """Write a 32-bit value to a PLX register via I2C."""
+    cmd = bytes([
+        0x03,           # PLX_CMD_I2C_WRITE
+        port_byte,      # station/port encoding
+        0x3C,           # byte enables = all, reg_hi = 0
+        dword_idx,      # register DWORD index
+        value & 0xFF,
+        (value >> 8) & 0xFF,
+        (value >> 16) & 0xFF,
+        (value >> 24) & 0xFF,
+    ])
+    i2c_write(i2c_addr, cmd)
+
+def plx_read(i2c_addr, port_byte, dword_idx):
+    """Read a 32-bit value from a PLX register via I2C."""
+    cmd = bytes([
+        0x04,           # PLX_CMD_I2C_READ
+        port_byte,      # station/port encoding
+        0x3C,           # byte enables = all, reg_hi = 0
+        dword_idx,      # register DWORD index
+    ])
+    data = i2c_write_read(i2c_addr, cmd, read_len=4)
+    return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
+```
+
+### A.5 Slot Mapping Table
+
+```python
+# (i2c_8bit_addr, port_byte) for slot indices 0-15
+SLOT_MAP = [
+    (0x30, 0x04),  # Slot 1:  Switch #0, station 2, port 0
+    (0x30, 0x0A),  # Slot 2:  Switch #0, station 5, port 0
+    (0x34, 0x04),  # Slot 3:  Switch #1, station 2, port 0
+    (0x34, 0x0A),  # Slot 4:  Switch #1, station 5, port 0
+    (0x32, 0x04),  # Slot 5:  Switch #2, station 2, port 0
+    (0x32, 0x0A),  # Slot 6:  Switch #2, station 5, port 0
+    (0x36, 0x02),  # Slot 7:  Switch #3, station 1, port 0
+    (0x36, 0x08),  # Slot 8:  Switch #3, station 4, port 0
+    (0x36, 0x04),  # Slot 9:  Switch #3, station 2, port 0
+    (0x36, 0x0A),  # Slot 10: Switch #3, station 5, port 0
+    (0x32, 0x02),  # Slot 11: Switch #2, station 1, port 0
+    (0x32, 0x08),  # Slot 12: Switch #2, station 4, port 0
+    (0x34, 0x02),  # Slot 13: Switch #1, station 1, port 0
+    (0x34, 0x08),  # Slot 14: Switch #1, station 4, port 0
+    (0x30, 0x02),  # Slot 15: Switch #0, station 1, port 0
+    (0x30, 0x08),  # Slot 16: Switch #0, station 4, port 0
+]
+```
