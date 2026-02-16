@@ -525,3 +525,143 @@ switches, this register area controls extended link and hot-plug
 hardware features.
 
 ---
+
+## 5. Runtime Slot Power Control
+
+### 5.1 pex8696_slot_power_ctrl (at 0x000332ac, 676 bytes)
+
+This is the **runtime** slot power control function, called when an individual
+slot needs to be powered on or off during normal operation (as opposed to the
+bulk power-on during boot). It handles both power-on and power-off paths, and
+is notably the only function that calls `pex8696_hp_ctrl`.
+
+Unlike `pex8696_slot_power_on_reg` which iterates over a bitmask, this function
+operates on a **single pre-selected port** -- the caller has already resolved
+the slot to its I2C address and station/port encoding.
+
+```c
+undefined4 pex8696_slot_power_ctrl(
+    undefined param_1,  // bus_mux (0xF3)
+    undefined param_2,  // i2c_addr (pre-resolved)
+    undefined param_3,  // PLX command byte (3=write, 4=read)
+    undefined4 param_4  // pointer to PEX8696_Command buffer
+) {
+    // Setup: copy station/port and register address for reg 0x080
+    DAT_00033550[0] = *DAT_00033554;    // station/port byte (pre-set by caller)
+    DAT_00033550[1] = 0x3C;             // byte enables
+    DAT_00033550[2] = 0x20;             // DWORD index 0x20 = reg 0x080
+    memcpy(DAT_00033558, DAT_0003355c, 4);  // save current register value
+
+    if (*DAT_00033560 == 1) {
+        // ---- POWER OFF PATH ----
+        printf("power off...");
+        DAT_00033550[5] |= 0x03;        // Power Indicator = OFF (11b)
+        DAT_00033550[5] |= 0x04;        // Attention Indicator = ON
+    }
+    else {
+        // ---- POWER ON PATH ----
+        printf("power on...");
+
+        // Phase 1: Slot Control/Status (0x080) - set indicators
+        DAT_00033550[5] = (DAT_00033550[5] & 0xFC) | 0x01;  // Power Ind = ON (01b)
+        DAT_00033550[5] &= 0xFB;                             // Attention Ind = OFF
+        write_pex8696_register(0xF3, i2c_addr, 3, param_4);
+
+        // Phase 2: Hot-Plug Control (0x234) - pulse power controller
+        DAT_00033550[1] = 0x3C;
+        DAT_00033550[2] = 0x8D;
+        read_pex8696_register(0xF3, i2c_addr, 4, param_4);
+        memcpy(DAT_00033558, DAT_0003355c, 4);
+        DAT_00033550[4] |= 0x01;          // Assert Power Controller Control
+        write_pex8696_register(0xF3, i2c_addr, 3, param_4);
+        _lx_ThreadSleep(10);               // Wait ~100ms
+        DAT_00033550[4] &= 0xFE;          // De-assert Power Controller Control
+        write_pex8696_register(0xF3, i2c_addr, param_3, param_4);
+
+        // Phase 3: Link/MRL Control (0x228) - enable LED/MRL
+        DAT_00033550[1] = 0x3C;
+        DAT_00033550[2] = 0x8A;
+        read_pex8696_register(0xF3, i2c_addr, 4, param_4);
+        memcpy(DAT_00033558, DAT_0003355c, 4);
+        DAT_00033550[6] |= 0x20;          // Set MRL/LED bit
+
+        // Phase 4: Disable hot-plug attention GPIO
+        pex8696_hp_ctrl(1);                // param=1 -> call pex8696_hp_off for each slot
+    }
+
+    // Common: Write final register value (0x228 for power-on, 0x080 for power-off)
+    write_pex8696_register(0xF3, i2c_addr, param_3, param_4);
+
+    // Re-enable IRQ
+    memset(DAT_0003356c, 0, 2);
+    RawIOIdxTblGetIdx(0x800C, 0x18, &local_1a);
+    RawIRQEnable(local_1a);
+    *DAT_00033570 = 0;
+    return 0;
+}
+```
+
+### 5.2 Power-On Path I2C Transactions (Single Slot)
+
+The power-on path is nearly identical to `pex8696_slot_power_on_reg` but operates
+on a single pre-selected slot. The I2C transactions are:
+
+| # | Op    | Register | DWORD Idx | Modification                        |
+|---|-------|----------|-----------|-------------------------------------|
+| 1 | WRITE | 0x080    | 0x20      | Byte[5]: bits [1:0]=01, bit 2=0     |
+| 2 | READ  | 0x234    | 0x8D      | (read current value)                |
+| 3 | WRITE | 0x234    | 0x8D      | Byte[4]: bit 0=1 (assert PCC)       |
+| 4 | sleep | --       | --        | 10 ticks (~100ms)                   |
+| 5 | WRITE | 0x234    | 0x8D      | Byte[4]: bit 0=0 (de-assert PCC)    |
+| 6 | READ  | 0x228    | 0x8A      | (read current value)                |
+| 7 | GPIO  | --       | --        | pex8696_hp_ctrl(1) -> hp_off GPIOs  |
+| 8 | WRITE | 0x228    | 0x8A      | Byte[6]: bit 5=1 (MRL/LED)          |
+
+**Notable difference from pex8696_slot_power_on_reg:**
+- The initial register 0x080 read is skipped (value already read by caller)
+- `pex8696_hp_ctrl(1)` is called to disable hot-plug GPIOs after power-on
+- IRQ is re-enabled at the end via `RawIRQEnable`
+
+### 5.3 Power-Off Path I2C Transactions (Single Slot)
+
+The power-off path is much simpler -- only **one write** to register 0x080:
+
+| # | Op    | Register | DWORD Idx | Modification                        |
+|---|-------|----------|-----------|-------------------------------------|
+| 1 | WRITE | 0x080    | 0x20      | Byte[5]: bits [1:0]=11, bit 2=1     |
+
+**Bit modifications for power-off (byte offset 1, bits [15:8] of reg 0x080):**
+
+| Bits   | Value | Field (PCIe Slot Control)              |
+|--------|-------|----------------------------------------|
+| [9:8]  | 11    | Power Indicator Control = OFF (11b)    |
+| [10]   | 1     | Attention Indicator Control = ON (01b) |
+
+This sets the power indicator to OFF and turns the attention indicator ON,
+signalling that the slot has been powered down and may need operator attention.
+
+**The power-off path does NOT:**
+- Touch the hot-plug control register (0x234) -- no power controller pulse
+- Touch the link/MRL register (0x228)
+- Call any GPIO functions
+
+This suggests that the power-off is purely a "soft" indication change. The actual
+power removal may be handled by the GPU power supply subsystem reacting to these
+indicator changes, or by separate GPIO controls not visible in this function.
+
+### 5.4 IRQ and State Management
+
+After both paths, `pex8696_slot_power_ctrl` performs housekeeping:
+
+```c
+memset(DAT_0003356c, 0, 2);              // Clear 2-byte state buffer
+RawIOIdxTblGetIdx(0x800C, 0x18, &local_1a);  // Get IRQ index for device 0x800C
+RawIRQEnable(local_1a);                   // Re-enable hot-plug interrupt
+*DAT_00033570 = 0;                        // Clear busy flag
+```
+
+The IRQ at index `0x800C` with sub-index `0x18` appears to be the hot-plug
+event interrupt. It is disabled before the power sequence (by `Start_GPU_Power_Sequence`)
+and re-enabled here after the sequence completes.
+
+---
