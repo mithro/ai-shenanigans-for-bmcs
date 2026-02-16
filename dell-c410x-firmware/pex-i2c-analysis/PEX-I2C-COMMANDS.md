@@ -399,3 +399,218 @@ and NT bridge ports respectively.
 | #1 (0x1A) | 0x34 | 3, 4, 13, 14 | 1, 2, 4, 5 | 4, 8, 16, 20 |
 | #2 (0x19) | 0x32 | 5, 6, 11, 12 | 1, 2, 4, 5 | 4, 8, 16, 20 |
 | #3 (0x1B) | 0x36 | 7, 8, 9, 10 | 1, 2, 4, 5 | 4, 8, 16, 20 |
+
+---
+
+## 6. Slot Power-On Sequence
+
+This section documents the exact I2C transactions for powering on a single
+GPU slot. The firmware function `pex8696_slot_power_on_reg` (at `0x2F7C4`)
+implements this sequence.
+
+### 6.1 Prerequisites
+
+Before powering on any slot, the firmware must:
+
+1. **Check PSU Power Good** -- `PSU_PGOOD()` must return 1
+2. **Disable hot-plug IRQ** -- `RawIRQDisable()` for IRQ 0x800C/0x18
+3. **Remove write protection** -- Clear bit 18 of register 0x07C on the target port
+
+### 6.2 Write Protection Removal
+
+**Firmware function:** `pex8696_un_protect_reg` at `0x2FC74`
+
+For each slot to be powered on, first remove write protection:
+
+```
+Step 1: READ register 0x07C (Slot Capabilities / Write Protect)
+  I2C Write to <i2c_addr>: [04] [stn_port] [3C] [1F]
+  I2C Read from <i2c_addr>: [v0] [v1] [v2] [v3]
+
+Step 2: WRITE register 0x07C (clear write-protect bit 18)
+  I2C Write to <i2c_addr>: [03] [stn_port] [3C] [1F] [v0] [v1] [v2 & 0xFB] [v3]
+```
+
+**Modification:** Byte[2] (bits [23:16]), bit 2 cleared -> bit 18 of 32-bit
+register = 0 (unprotected).
+
+### 6.3 Power-On I2C Sequence (per slot)
+
+After write protection is removed, the power-on sequence consists of three
+phases touching three different registers:
+
+#### Phase 1: Set Slot Control Indicators (register 0x080)
+
+```
+Step 1a: READ register 0x080 (Slot Control / Status)
+  I2C Write: [04] [stn_port] [3C] [20]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 1b: WRITE register 0x080 (Power Indicator=ON, Attention=OFF)
+  I2C Write: [03] [stn_port] [3C] [20] [v0] [modified_v1] [v2] [v3]
+
+  Where modified_v1 = (v1 & 0xFC) | 0x01   (set PIC=01b=ON)
+                    then & 0xFB             (clear bit 2=PCC/AIC)
+  Result: bits [9:8]=01 (Power Indicator ON), bit [10]=0 (PCC=Power On)
+```
+
+#### Phase 2: Pulse Hardware Power Controller (register 0x234)
+
+```
+Step 2a: READ register 0x234 (Hot-Plug Power Controller)
+  I2C Write: [04] [stn_port] [3C] [8D]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 2b: WRITE register 0x234 (ASSERT Power Controller Control)
+  I2C Write: [03] [stn_port] [3C] [8D] [v0 | 0x01] [v1] [v2] [v3]
+  (bit 0 of byte[0] = bit 0 of 32-bit value = SET)
+
+Step 2c: SLEEP 100ms (10 RTOS ticks)
+
+Step 2d: WRITE register 0x234 (DE-ASSERT Power Controller Control)
+  I2C Write: [03] [stn_port] [3C] [8D] [v0 & 0xFE] [v1] [v2] [v3]
+  (bit 0 of byte[0] = bit 0 of 32-bit value = CLEARED)
+```
+
+The 100ms pulse triggers the PLX hardware power controller to sequence the
+slot power rails.
+
+#### Phase 3: Enable Hot-Plug LED (register 0x228)
+
+```
+Step 3a: READ register 0x228 (Hot-Plug LED / MRL Control)
+  I2C Write: [04] [stn_port] [3C] [8A]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 3b: WRITE register 0x228 (set MRL/LED enable bit 21)
+  I2C Write: [03] [stn_port] [3C] [8A] [v0] [v1] [v2 | 0x20] [v3]
+  (bit 5 of byte[2] = bit 21 of 32-bit value = SET)
+```
+
+### 6.4 Complete Wire-Level Example: Powering On Slot 4
+
+Slot 4 = slot index 3 -> PEX8696 #1, I2C addr 0x34, port byte 0x0A
+
+#### Write Protection Removal
+
+```
+Txn 1 - READ 0x07C:
+  I2C Write to 0x34: [04] [0A] [3C] [1F]
+  I2C Read from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 2 - WRITE 0x07C:
+  I2C Write to 0x34: [03] [0A] [3C] [1F] [v0] [v1] [v2 & 0xFB] [v3]
+```
+
+#### Power-On Sequence
+
+```
+Txn 3 - READ 0x080 (Slot Control/Status):
+  I2C Write to 0x34: [04] [0A] [3C] [20]
+  I2C Read from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 4 - WRITE 0x080 (PIC=ON, PCC=On):
+  I2C Write to 0x34: [03] [0A] [3C] [20] [v0] [(v1&0xFC|0x01)&0xFB] [v2] [v3]
+
+Txn 5 - READ 0x234 (Hot-Plug Power Control):
+  I2C Write to 0x34: [04] [0A] [3C] [8D]
+  I2C Read from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 6 - WRITE 0x234 (assert bit 0):
+  I2C Write to 0x34: [03] [0A] [3C] [8D] [v0|0x01] [v1] [v2] [v3]
+
+--- SLEEP 100ms ---
+
+Txn 7 - WRITE 0x234 (de-assert bit 0):
+  I2C Write to 0x34: [03] [0A] [3C] [8D] [v0&0xFE] [v1] [v2] [v3]
+
+Txn 8 - READ 0x228 (Hot-Plug LED/MRL):
+  I2C Write to 0x34: [04] [0A] [3C] [8A]
+  I2C Read from 0x34: [v0] [v1] [v2] [v3]
+
+Txn 9 - WRITE 0x228 (set bit 21):
+  I2C Write to 0x34: [03] [0A] [3C] [8A] [v0] [v1] [v2|0x20] [v3]
+```
+
+**Total per slot: 9 I2C transactions (4 reads + 5 writes) + 100ms delay**
+
+### 6.5 Transaction Count Summary
+
+| Operation | Reads | Writes | Delays | Total Txns |
+|-----------|-------|--------|--------|------------|
+| Write-protect removal (reg 0x07C) | 1 | 1 | 0 | 2 |
+| Phase 1: Slot Control (reg 0x080) | 1 | 1 | 0 | 2 |
+| Phase 2: Power Controller (reg 0x234) | 1 | 2 | 100ms | 3 |
+| Phase 3: Hot-Plug LED (reg 0x228) | 1 | 1 | 0 | 2 |
+| **Total per slot** | **4** | **5** | **100ms** | **9** |
+
+---
+
+## 7. Slot Power-Off Sequence
+
+The power-off sequence is significantly simpler than power-on. Two mechanisms
+exist: per-slot and all-slot.
+
+### 7.1 Per-Slot Power-Off
+
+**Firmware function:** `pex8696_slot_power_ctrl` at `0x332AC` (power-off path)
+
+Only one register write is needed:
+
+```
+Step 1: WRITE register 0x080 (Power Indicator=OFF, Attention=ON)
+  I2C Write: [03] [stn_port] [3C] [20] [v0] [v1 | 0x07] [v2] [v3]
+
+  Where v1 | 0x07 sets:
+    bits [9:8] = 11b (Power Indicator = OFF)
+    bit [10]   = 1   (PCC = Power Off / Attention ON)
+```
+
+**Note:** The per-slot power-off path in `pex8696_slot_power_ctrl` assumes the
+caller has already read register 0x080 and the current value is available.
+
+**Total: 1 I2C write transaction per slot (no reads, no delays).**
+
+The power-off path does NOT:
+- Touch register 0x234 (no power controller pulse)
+- Touch register 0x228 (no LED changes)
+- Require write-protection removal (0x080 is a standard PCIe register)
+- Perform any GPIO operations
+
+### 7.2 All-Slot Power-Off (Method 1: Read-Modify-Write)
+
+**Firmware function:** `all_slot_power_off_reg` at `0x2F188`
+
+Iterates over all 16 slots unconditionally (no bitmask check):
+
+```
+For each slot 0-15:
+  READ  reg 0x080: [04] [stn_port] [3C] [20]  -> [v0] [v1] [v2] [v3]
+  WRITE reg 0x080: [03] [stn_port] [3C] [20] [v0] [v1|0x07] [v2] [v3]
+```
+
+**Total: 32 I2C transactions (16 reads + 16 writes), no delays.**
+
+### 7.3 All-Slot Power-Off (Method 2: Bulk Pre-Built Write)
+
+**Firmware function:** `pex8696_all_slot_off` at `0x375B8`
+
+More efficient approach that writes pre-built register values directly:
+
+```
+For each I2C addr in {0x30, 0x32, 0x34, 0x36}:
+  For each station/port in {port0, port1, port2, port3}:
+    WRITE: [03] [stn_port] [enables] [reg] [pre-built value bytes]
+```
+
+**Total: 16 write-only I2C transactions (no reads needed).**
+
+### 7.4 Power-Off Comparison
+
+| Feature | Method 1 (read-modify-write) | Method 2 (bulk write) |
+|---------|------|------|
+| Total I2C transactions | 32 (16 R + 16 W) | 16 (write-only) |
+| Requires read first? | Yes | No (pre-built data) |
+| Uses slot mapping? | Yes (per-slot lookup) | No (direct addressing) |
+| Iteration method | Slot index 0-15 | I2C addr x port |
+| Used by | `all_slot_power_off` | `pex8696_all_slot_power_off` |
