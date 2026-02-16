@@ -836,3 +836,349 @@ This is more efficient than `all_slot_power_off_reg` because:
 3. It covers all ports on all switches without a bitmask check
 
 ---
+
+## 7. PEX8696 Register Map
+
+### 7.1 Registers Accessed by Hot-Plug Functions
+
+All registers are in the PEX8696 per-port configuration space, addressed via the
+PLX 4-byte I2C command format: `[cmd] [stn/port] [enables|reg_hi] [reg_lo]`.
+
+| Byte Addr | DWORD Idx | I2C byte[3] | Name                      | Access   | Functions                    |
+|-----------|-----------|-------------|---------------------------|----------|------------------------------|
+| 0x07C     | 0x1F      | 0x1F        | Write-Protect Control     | R/W      | pex8696_un_protect_reg       |
+| 0x080     | 0x20      | 0x20        | Slot Control / Status     | R/W      | pex8696_slot_power_on_reg, pex8696_slot_power_ctrl, all_slot_power_off_reg, pex8696_all_slot_off |
+| 0x228     | 0x8A      | 0x8A        | Link / MRL Control        | R/W      | pex8696_slot_power_on_reg, pex8696_slot_power_ctrl |
+| 0x234     | 0x8D      | 0x8D        | Hot-Plug Power Control    | R/W      | pex8696_slot_power_on_reg, pex8696_slot_power_ctrl |
+
+### 7.2 Register Bit-Field Details
+
+#### Register 0x07C -- Write-Protect Control
+
+```
+Bit  31                               16  15                                 0
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+     |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+                          ^
+                         bit 18: Write Protect (1=protected, 0=unprotected)
+```
+
+- **Bit 18** (byte 2, bit 2): Register write protection flag
+  - `1` = Port registers are write-protected (default after reset)
+  - `0` = Port registers are writable
+  - Must be cleared before modifying Slot Control or Hot-Plug registers
+
+#### Register 0x080 -- Slot Control / Status
+
+This register corresponds to the PCIe Slot Control register. In the PCIe Base
+Specification, Slot Control is at PCIe Capability + 0x18. For PLX switches with
+PCIe Capability at offset 0x68, this places Slot Control at 0x080.
+
+```
+Bit  31                               16  15     10  9   8  7              0
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+     |    |    |    |    |    |    |    |    | AI | PI Ctrl |              |
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+     byte[5] = bits [15:8] of the register:
+       bits [9:8]  (byte[5] bits [1:0]) = Power Indicator Control
+       bit  [10]   (byte[5] bit  [2])   = Attention Indicator Control
+
+     In the I2C data layout:
+       Wire: [cmd][stn/port][enables][reg_lo][val_byte0][val_byte1][val_byte2][val_byte3]
+       PEX8696_Command[4] = register bits [7:0]
+       PEX8696_Command[5] = register bits [15:8]  <-- modified by firmware
+       PEX8696_Command[6] = register bits [23:16]
+       PEX8696_Command[7] = register bits [31:24]
+```
+
+**Power Indicator Control (bits [9:8]):**
+
+| Value | Meaning | Firmware Usage                            |
+|-------|---------|-------------------------------------------|
+| 00b   | Reserved | Not used                                |
+| 01b   | ON      | Power-on: `(byte[5] & 0xFC) | 0x01`     |
+| 10b   | Blink   | Not used                                 |
+| 11b   | OFF     | Power-off: `byte[5] | 0x03`              |
+
+**Attention Indicator Control (bit [10]):**
+
+| Value | Meaning | Firmware Usage                            |
+|-------|---------|-------------------------------------------|
+| 0     | OFF     | Power-on: `byte[5] & 0xFB`               |
+| 1     | ON      | Power-off: `byte[5] | 0x04`              |
+
+**Note:** The PCIe specification defines Attention Indicator Control as a 2-bit field
+(bits [7:6]) in the standard layout. The firmware treating bit 10 as a single-bit
+attention control suggests the PLX PEX8696 may use a slightly different bit mapping
+in its port configuration space compared to the standard PCIe layout, or the register
+at 0x080 combines Slot Control and Slot Status fields differently.
+
+#### Register 0x234 -- Hot-Plug Power Control (PLX Proprietary)
+
+```
+Bit  31                               16  15                 8  7          0
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+     |    |    |    |    |    |    |    |    |    |    |    |    |    | PCC|
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+     byte[4] = bits [7:0]:
+       bit 0 (byte[4] bit 0) = Power Controller Control (PCC)
+```
+
+**Power Controller Control (bit 0):**
+
+| Value | Meaning                | Firmware Usage                          |
+|-------|------------------------|-----------------------------------------|
+| 0     | Idle                   | Normal state / de-assert after pulse    |
+| 1     | Activate               | Assert to trigger power-on              |
+
+The firmware uses this as a **pulsed control**:
+1. Read current value
+2. Set bit 0 (assert PCC)
+3. Write back
+4. Sleep 10 ticks (~100ms)
+5. Clear bit 0 (de-assert PCC)
+6. Write back
+
+This triggers the PLX switch's internal power controller to sequence the slot
+power rails via the hardware hot-plug controller. The 100ms delay allows the
+power controller to complete its sequence.
+
+#### Register 0x228 -- Link / MRL Control (PLX Proprietary)
+
+```
+Bit  31             24  23     21    16  15                                 0
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+     |    |    |    |    | MRL|    |    |    |    |    |    |    |    |    |
+     +----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+
+     byte[6] = bits [23:16]:
+       bit 21 (byte[6] bit 5) = MRL Sensor / Hot-Plug LED enable
+```
+
+**MRL/LED Enable (bit 21):**
+
+| Value | Meaning                                   | Firmware Usage              |
+|-------|-------------------------------------------|-----------------------------|
+| 0     | MRL sensor not present / LED disabled     | Default                     |
+| 1     | MRL sensor present / LED enabled          | Set during power-on         |
+
+This bit is only ever SET (never cleared in any analysed function), suggesting
+it enables a hardware feature that persists until the next switch reset.
+
+---
+
+## 8. Complete I2C Sequences
+
+### 8.1 Single Slot Power-On Sequence
+
+**Prerequisite:** Register unprotect must have been performed first.
+
+The complete sequence for powering on slot N (0-indexed):
+
+```
+Step 0: Resolve slot to I2C parameters
+  get_PEX8696_addr_port(N) -> i2c_addr, station_port_byte
+
+Step 1: READ register 0x07C (Write-Protect) -- if not already unprotected
+  I2C Write: [04] [stn/port] [3C] [1F]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 2: WRITE register 0x07C -- clear write-protect bit
+  I2C Write: [03] [stn/port] [3C] [1F] [v0] [v1] [v2 & 0xFB] [v3]
+
+Step 3: READ register 0x080 (Slot Control/Status)
+  I2C Write: [04] [stn/port] [3C] [20]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 4: WRITE register 0x080 -- power indicator ON, attention OFF
+  I2C Write: [03] [stn/port] [3C] [20] [v0] [(v1 & 0xFC)|0x01 & 0xFB] [v2] [v3]
+
+Step 5: READ register 0x234 (Hot-Plug Power Control)
+  I2C Write: [04] [stn/port] [3C] [8D]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 6: WRITE register 0x234 -- assert Power Controller Control
+  I2C Write: [03] [stn/port] [3C] [8D] [v0|0x01] [v1] [v2] [v3]
+
+Step 7: SLEEP 100ms
+
+Step 8: WRITE register 0x234 -- de-assert Power Controller Control
+  I2C Write: [03] [stn/port] [3C] [8D] [v0 & 0xFE] [v1] [v2] [v3]
+
+Step 9: READ register 0x228 (Link/MRL Control)
+  I2C Write: [04] [stn/port] [3C] [8A]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 10: WRITE register 0x228 -- enable MRL/LED
+  I2C Write: [03] [stn/port] [3C] [8A] [v0] [v1] [v2|0x20] [v3]
+```
+
+**Total: 10 I2C transactions per slot (5 reads + 5 writes), plus 100ms delay.**
+
+### 8.2 Single Slot Power-Off Sequence
+
+```
+Step 0: Resolve slot to I2C parameters
+
+Step 1: READ register 0x080 (Slot Control/Status)
+  I2C Write: [04] [stn/port] [3C] [20]
+  I2C Read:  [v0] [v1] [v2] [v3]
+
+Step 2: WRITE register 0x080 -- power indicator OFF, attention ON
+  I2C Write: [03] [stn/port] [3C] [20] [v0] [v1|0x07] [v2] [v3]
+```
+
+**Total: 2 I2C transactions per slot (1 read + 1 write).**
+
+Note: The value `v1|0x07` is the result of `v1 | 0x03 | 0x04` which sets
+bits [10:8] = 111b (Power Indicator=OFF, Attention=ON).
+
+### 8.3 All-Slot Power-Off Sequence
+
+**Method 1 (all_slot_power_off_reg):** Read-modify-write for each of 16 slots:
+```
+For each slot 0-15:
+  READ  reg 0x080: [04] [stn/port] [3C] [20]
+  WRITE reg 0x080: [03] [stn/port] [3C] [20] [v0] [v1|0x07] [v2] [v3]
+```
+Total: 32 transactions.
+
+**Method 2 (pex8696_all_slot_off):** Write pre-built values to all ports:
+```
+For each I2C addr in {0x30, 0x32, 0x34, 0x36}:
+  For each station/port in {port0, port1, port2, port3}:
+    WRITE: [03] [stn/port] [enables] [reg] [prebuilt value bytes]
+```
+Total: 16 write-only transactions (faster, no reads needed).
+
+### 8.4 Boot Power-On Sequence (All Slots)
+
+The firmware powers on all 16 slots in 4 groups of 4, with each group activating
+one slot per PEX8696 switch to distribute inrush current:
+
+```
+Phase 0: PSU Power Good check
+  Start_GPU_Power_Sequence -> PSU_PGOOD()
+  RawIRQDisable() -- disable hot-plug interrupt
+
+Phase 1: Group 1 -- Slots 4, 8, 12, 16 (one per switch)
+  gpu_un_protect(0xFF)
+  pex8696_un_protect(bitmask)        -> unprotect via I2C reg 0x07C
+  filter_on_gpu(bitmask)             -> filter by present GPUs
+  pex8696_slot_power_on(bitmask)     -> power on via I2C regs 0x080/0x234/0x228
+  gpu_power_attention_pulse(bitmask) -> attention indicator pulse
+
+Phase 2: Group 2 -- Slots 3, 7, 11, 15
+  (same sequence as Phase 1)
+
+Phase 3: Group 3 -- Slots 2, 6, 10, 14
+  (same sequence as Phase 1)
+
+Phase 4: Group 4 -- Slots 1, 5, 9, 13
+  (same sequence as Phase 1)
+
+Phase 5: Re-enable hot-plug interrupt
+  RawIRQEnable()
+```
+
+Each phase processes 4 slots, generating up to:
+- 4 x 2 = 8 I2C transactions for unprotect (4 read + 4 write)
+- 4 x 8 = 32 I2C transactions for power-on (16 read + 16 write + 4 x 100ms delays)
+- Total: ~40 I2C transactions per group, ~160 for all 16 slots
+
+---
+
+## 9. Cross-Reference with PCIe and PLX Specifications
+
+### 9.1 PCIe Base Specification Mapping
+
+The PEX8696 maps standard PCIe registers into its per-port configuration space.
+Based on the PLX convention of placing the PCIe Capability at offset 0x68:
+
+| PLX Port Offset | PCIe Cap Offset | PCIe Register             |
+|-----------------|-----------------|---------------------------|
+| 0x068           | +0x00           | PCIe Capability Header    |
+| 0x078           | +0x10           | Link Capabilities         |
+| 0x07C           | +0x14           | Link Control / Status     |
+| 0x080           | +0x18           | Slot Capabilities         |
+| 0x084           | +0x1C           | Slot Control / Status     |
+
+**Important note:** The firmware accesses register byte address 0x080, which in
+the standard PCIe layout would be Slot Capabilities (read-only). However:
+
+1. PLX switches may combine Slot Capabilities and Slot Control into a single
+   32-bit register at this address, or
+2. The PCIe Capability offset may not be exactly 0x68, or
+3. Register 0x080 may be a PLX-proprietary shadow/alias register
+
+The bit operations (Power Indicator Control, Attention Indicator Control) are
+consistent with PCIe Slot Control register fields, confirming that this register
+provides Slot Control functionality regardless of the exact capability offset.
+
+### 9.2 PLX Proprietary Registers
+
+| PLX Port Offset | Identity        | Purpose                             |
+|-----------------|-----------------|-------------------------------------|
+| 0x07C           | Port Control    | Write-protection management         |
+| 0x228           | VS1 Hot-Plug    | MRL sensor / hot-plug LED control   |
+| 0x234           | VS1 Power Ctrl  | Hardware power controller trigger   |
+
+Registers 0x228 and 0x234 are in the PLX Vendor-Specific (VS1) capability region
+(typically starting around offset 0x200 in PLX switches). These registers control
+PLX-specific hardware-assisted hot-plug features that go beyond the standard
+PCIe hot-plug specification.
+
+### 9.3 Comparison with plxtools
+
+The [plxtools](https://github.com/mithro/plxtools) project uses the simpler 2-byte
+I2C address protocol for smaller PLX switches. To access the PEX8696 registers
+documented here, plxtools would need to be extended to support the 4-byte protocol:
+
+| plxtools approach             | Dell firmware approach                |
+|-------------------------------|---------------------------------------|
+| 2-byte register address       | 4-byte command (cmd, stn/port, en, reg) |
+| Single address space           | Per-port address space via station/port |
+| Implicit 32-bit access        | Explicit byte enables in command      |
+| No port selection in I2C       | Port encoded in I2C command bytes     |
+
+---
+
+## 10. Summary of Key Findings
+
+1. **Three control mechanisms:** The firmware uses I2C register writes for PCIe
+   slot control indicators and power controller triggering, GPIO system commands
+   for hot-plug attention signalling, and message queues for asynchronous dispatch.
+
+2. **Four PEX8696 registers** are accessed for hot-plug/power control:
+   - `0x07C`: Write-protect (must clear bit 18 before other writes)
+   - `0x080`: Slot Control/Status (power/attention indicators)
+   - `0x228`: Link/MRL Control (MRL sensor / LED enable, bit 21)
+   - `0x234`: Hot-Plug Power Control (power controller pulse, bit 0)
+
+3. **Power-on requires a pulse:** The Power Controller Control bit at register
+   0x234, bit 0 must be asserted for ~100ms then de-asserted to trigger the
+   PLX hardware power controller.
+
+4. **Power-off is indicator-only:** The firmware only changes indicator bits
+   in register 0x080 (power=OFF, attention=ON). No power controller pulse
+   is sent. Actual power removal likely happens through separate GPU power
+   supply control.
+
+5. **Two power-off strategies exist:**
+   - Per-slot read-modify-write (32 I2C transactions for 16 slots)
+   - Bulk pre-built write to all ports (16 write-only transactions)
+
+6. **Boot sequencing staggers power-on** across 4 groups, activating one slot
+   per PEX8696 switch per group to manage inrush current. Total boot power-on
+   involves approximately 160 I2C transactions across 4 switches.
+
+7. **Hot-plug GPIO is separate from I2C:** The `pex8696_hp_on`/`pex8696_hp_off`
+   functions use `system()` calls to toggle AST2050 GPIO pins, not I2C register
+   writes. This provides a separate physical signal path for hot-plug events.
+
+8. **IRQ management:** The hot-plug interrupt (index 0x800C, sub-index 0x18) is
+   disabled during power sequences and re-enabled afterward, preventing spurious
+   hot-plug events during controlled power transitions.
