@@ -123,3 +123,129 @@ the same GPIO pins.
 **This function does NOT use I2C.**
 
 ---
+
+## 3. Register Write-Protection Removal
+
+Before modifying PEX8696 registers for slot power control, the firmware must remove
+the write-protection on the target port registers. This is a prerequisite step
+performed before any power-on sequence.
+
+### 3.1 pex8696_un_protect (at 0x0002fdf8, 248 bytes) -- Queue Dispatcher
+
+This function dispatches the unprotect operation via a message queue. It does not
+directly perform I2C transactions.
+
+```c
+void pex8696_un_protect(byte *param_1) {
+    printf("...", param_1[0], param_1[1]);   // log the slot bitmask
+
+    // Copy 2-byte slot bitmask to shared buffer
+    DAT_0002fef4[0] = param_1[0];
+    DAT_0002fef4[1] = param_1[1];
+
+    // Send queue message to trigger pex8696_un_protect_reg
+    local_20 = DAT_0002fef8;    // callback function pointer
+    local_24 = DAT_0002fefc;    // callback context
+    local_18 = 0x430F3;         // bus_mux=0xF3, i2c_addr=0x30(?), cmd=0x04(?)
+    _lx_QueueSend(DAT_0002ff00, &local_24, 0);
+}
+```
+
+The `local_18 = 0x430F3` value encodes I2C parameters:
+- `0xF3` = bus_mux (I2C bus 3, no mux)
+- `0x43` likely encodes: `0x04` (read command) + `0x03` (write command), or
+  serves as an operation type identifier for the queue handler
+
+### 3.2 pex8696_un_protect_reg (at 0x0002fc74, 372 bytes) -- I2C Implementation
+
+This is the actual register-level implementation. For each active slot in the
+16-bit bitmask, it performs a **read-modify-write** on the write-protect register.
+
+```c
+undefined4 pex8696_un_protect_reg(
+    undefined param_1,  // bus_mux (0xF3)
+    undefined param_2,  // i2c_addr (from queue)
+    undefined param_3,  // command byte (3 or 4)
+    undefined4 param_4  // pointer to PEX8696_Command buffer
+) {
+    for (local_19 = 0; local_19 < 2; local_19++) {       // 2 bitmask bytes
+        for (local_1a = 0; local_1a < 8; local_1a++) {   // 8 bits each
+            if ((DAT_0002fde8[local_19] >> local_1a) & 1) {
+                slot_index = local_19 * 8 + local_1a;
+                get_PEX8696_addr_port(slot_index, &local_1b, &local_1c);
+
+                // Step 1: READ register 0x07C (DWORD index 0x1F)
+                DAT_0002fdec[0] = local_1c;    // station/port byte
+                DAT_0002fdec[1] = 0x3C;        // byte enables (all 4 bytes)
+                DAT_0002fdec[2] = 0x1F;        // register DWORD index
+                read_pex8696_register(0xF3, local_1b, 4, param_4);
+                memcpy(DAT_0002fdf0, DAT_0002fdf4, 4);  // save read value
+
+                // Step 2: CLEAR write-protect bit and WRITE back
+                DAT_0002fdec[6] &= 0xFB;      // clear bit 2 of byte[6]
+                write_pex8696_register(0xF3, local_1b, 3, param_4);
+            }
+        }
+    }
+    return 0;
+}
+```
+
+### 3.3 Unprotect I2C Transaction Detail
+
+For each slot, the unprotect operation consists of exactly **2 I2C transactions**:
+
+#### Transaction 1: Read Write-Protect Register
+
+```
+I2C Bus:      0xF3 (bus 3, no mux)
+I2C Address:  varies per slot (0x30, 0x32, 0x34, or 0x36)
+Operation:    Write 4 bytes, then Read 4 bytes
+
+Write bytes (PLX command):
+  [0] = 0x04                    PLX_CMD_I2C_READ
+  [1] = <station/port byte>    from get_PEX8696_addr_port() lookup table
+  [2] = 0x3C                   byte enables = all 4 bytes, reg_hi = 0
+  [3] = 0x1F                   register DWORD index low byte
+
+Register decoded:
+  DWORD index = (0x3C & 0x03) << 8 | 0x1F = 0x001F
+  Byte address = 0x1F * 4 = 0x007C
+  This is a PLX proprietary register at offset 0x07C within the port's
+  configuration space.
+```
+
+#### Transaction 2: Write Modified Value Back
+
+```
+I2C Bus:      0xF3
+I2C Address:  same as read
+Operation:    Write 8 bytes (no read)
+
+Write bytes (PLX command + data):
+  [0] = 0x03                    PLX_CMD_I2C_WRITE
+  [1] = <station/port byte>    same as read
+  [2] = 0x3C                   byte enables = all 4 bytes
+  [3] = 0x1F                   same register
+  [4] = <value[0]>             original byte 0 (unchanged)
+  [5] = <value[1]>             original byte 1 (unchanged)
+  [6] = <value[2]> & 0xFB      byte 2 with bit 2 CLEARED
+  [7] = <value[3]>             original byte 3 (unchanged)
+
+Modification:
+  Register byte address 0x07C, byte offset 2 (i.e. bits [23:16] of the 32-bit reg)
+  Bit 2 of that byte = bit 18 of the 32-bit register value
+  Cleared to 0 = remove write protection
+```
+
+### 3.4 Register 0x07C Identification
+
+Register byte address `0x07C` in PLX PEX8696 per-port configuration space corresponds
+to the **Port Configuration** register area. In PLX datasheets, registers in the
+`0x070-0x07F` range are typically part of the PLX-proprietary port control registers.
+
+Bit 18 (byte 2, bit 2) being a write-protect bit is consistent with PLX switches
+having a "VS0 Write Protect" or similar mechanism that prevents modification of
+downstream port registers until explicitly cleared by the management controller.
+
+---
