@@ -665,3 +665,174 @@ event interrupt. It is disabled before the power sequence (by `Start_GPU_Power_S
 and re-enabled here after the sequence completes.
 
 ---
+
+## 6. All-Slot Power-Off Sequences
+
+There are **four** functions related to powering off all slots, operating at
+different levels of the firmware stack.
+
+### 6.1 all_slot_power_off (at 0x0002f2fc, 272 bytes) -- Queue Dispatcher
+
+Sends **two** queue messages to power off all slots:
+
+```c
+void all_slot_power_off(void) {
+    printf("all slot power off...");
+
+    // Message 1: PEX8696 register power-off
+    local_1c = DAT_0002f410;     // callback: all_slot_power_off_reg
+    local_20 = DAT_0002f414;     // context
+    local_14 = 0x430F3;          // bus 3, no mux
+    _lx_QueueSend(DAT_0002f418, &local_20, 0);
+
+    // Message 2: Secondary power-off (different bus)
+    local_1c = DAT_0002f420;     // callback
+    local_20 = DAT_0002f424;     // context
+    local_14 = 0x80F0;           // bus 0, mux channel 8
+    _lx_QueueSend(DAT_0002f418, &local_20, 0);
+}
+```
+
+**Compared to `pex8696_slot_power_on` which sends 3 messages, this only sends 2.**
+The third message (bus 4, mux 5) is absent -- likely because the device on that
+bus only needs to be configured during power-on, not power-off.
+
+### 6.2 all_slot_power_off_reg (at 0x0002f188, 360 bytes) -- I2C Implementation
+
+This iterates over **all 16 slots** (unconditionally, no bitmask check) and sets
+the power-off indicator bits on register 0x080.
+
+```c
+undefined4 all_slot_power_off_reg(
+    undefined param_1,  // bus_mux (0xF3)
+    undefined param_2,  // i2c_addr
+    undefined param_3,  // command byte
+    undefined4 param_4  // PEX8696_Command buffer
+) {
+    for (local_19 = 0; local_19 < 2; local_19++) {
+        for (local_1a = 0; local_1a < 8; local_1a++) {
+            // NOTE: No bitmask check -- operates on ALL 16 slots
+            slot_index = local_19 * 8 + local_1a;
+            get_PEX8696_addr_port(slot_index, &i2c_addr, &port_byte);
+
+            // READ register 0x080
+            DAT_0002f2f0[0] = port_byte;
+            DAT_0002f2f0[1] = 0x3C;
+            DAT_0002f2f0[2] = 0x20;     // DWORD index 0x20 = byte addr 0x080
+            read_pex8696_register(0xF3, i2c_addr, 4, param_4);
+            memcpy(DAT_0002f2f4, DAT_0002f2f8, 4);
+
+            // MODIFY: set power-off indicators
+            DAT_0002f2f0[5] |= 0x03;     // bits [1:0] = 11 (Power Indicator = OFF)
+            DAT_0002f2f0[5] |= 0x04;     // bit 2 = 1 (Attention Indicator = ON)
+
+            // WRITE back
+            write_pex8696_register(0xF3, i2c_addr, 3, param_4);
+        }
+    }
+    return 0;
+}
+```
+
+#### Per-Slot I2C Transactions (x16 slots)
+
+For each of the 16 slots:
+
+**Transaction 1: Read Slot Control/Status**
+```
+I2C Write (4 bytes):  [04] [stn/port] [3C] [20]
+I2C Read  (4 bytes):  [val0] [val1] [val2] [val3]
+```
+
+**Transaction 2: Write Modified Slot Control/Status**
+```
+I2C Write (8 bytes):  [03] [stn/port] [3C] [20] [val0] [modified_val1] [val2] [val3]
+```
+
+Where `modified_val1` has:
+- Bits [1:0] = 11 (Power Indicator = OFF)
+- Bit 2 = 1 (Attention Indicator = ON)
+
+**Total: 32 I2C transactions (16 reads + 16 writes) across 4 PEX8696 switches.**
+
+### 6.3 pex8696_all_slot_power_off (at 0x0003836c, 192 bytes) -- Alternate Queue Dispatcher
+
+A separate all-slot-off dispatcher used in a different code path (likely the
+multi-host configuration subsystem, given its address proximity to other
+0x38xxx functions).
+
+```c
+void pex8696_all_slot_power_off(void) {
+    printf("all slot power off...");
+    memset(DAT_00038430, 0, 8);      // zero out 8-byte shared buffer
+
+    // Single queue message
+    local_1c = DAT_00038434;          // callback: pex8696_all_slot_off
+    local_20 = DAT_00038430;          // context (zeroed buffer)
+    local_14 = 0x330F3;              // bus 3, no mux
+    _lx_QueueSend(DAT_00038438, &local_20, 0);
+}
+```
+
+**Note the different queue parameter:** `0x330F3` instead of `0x430F3`. The
+`0x33` prefix (vs `0x43`) may indicate a different operation type to the queue
+handler -- perhaps a "write-all-ports" operation vs "per-slot" operation.
+
+### 6.4 pex8696_all_slot_off (at 0x000375b8, 288 bytes) -- Bulk Port Write
+
+This function takes a **different approach** from the per-slot functions. Instead
+of iterating over a slot mapping table, it iterates over **all I2C addresses**
+(0x30 to 0x36 in steps of 2) and writes pre-built register data to multiple
+station/port targets on each switch.
+
+```c
+undefined4 pex8696_all_slot_off(
+    undefined param_1,  // bus_mux (0xF3)
+    byte param_2,       // starting I2C address (e.g. 0x30)
+    undefined param_3,  // command byte
+    undefined4 param_4  // PEX8696_Command buffer
+) {
+    // Load pre-built data from ROM
+    memcpy(auStack_20, DAT_000376d8, 4);    // 4 station/port bytes
+    memcpy(auStack_2c, DAT_000376dc, 6);    // 6 bytes of register data
+
+    // Iterate over all PEX8696 I2C addresses
+    for (local_19 = param_2; local_19 < 0x38; local_19 += 2) {
+        // Iterate over 4 station/port targets
+        for (local_21 = 0; local_21 < 4; local_21++) {
+            DAT_000376e0[0] = auStack_20[local_21];   // station/port byte
+            memcpy(DAT_000376e4, auStack_2c, 6);      // register data
+            write_pex8696_register(0xF3, local_19, param_3, param_4);
+        }
+    }
+    return 0;
+}
+```
+
+**Address iteration:** Starting from `param_2` (likely 0x30) up to 0x36 (exclusive < 0x38),
+stepping by 2. This covers all 4 PEX8696 I2C addresses:
+
+| Iteration | I2C Addr (8-bit) | I2C Addr (7-bit) | PEX8696 Switch |
+|-----------|------------------|-------------------|----------------|
+| 0         | 0x30             | 0x18              | #0             |
+| 1         | 0x32             | 0x19              | #2             |
+| 2         | 0x34             | 0x1A              | #1             |
+| 3         | 0x36             | 0x1B              | #3             |
+
+**Station/port iteration:** The 4 bytes from `DAT_000376d8` are likely the 4
+station/port bytes used for each switch's downstream ports. Based on the slot
+mapping from i2c-transport.md, each PEX8696 uses global ports 4, 8, 16, 20
+(station/port bytes 0x02, 0x04, 0x08, 0x0A).
+
+**Register data:** The 6 bytes from `DAT_000376dc` are pre-built and contain
+the byte-enable field, register DWORD index, and 4 bytes of register value.
+These likely set the power-off indicators for register 0x080.
+
+**Total: 16 write-only I2C transactions (4 addresses x 4 ports), no reads.**
+
+This is more efficient than `all_slot_power_off_reg` because:
+1. It skips the read phase (writes pre-built values directly)
+2. It does not need the slot mapping lookup table
+3. It covers all ports on all switches without a bitmask check
+
+---
