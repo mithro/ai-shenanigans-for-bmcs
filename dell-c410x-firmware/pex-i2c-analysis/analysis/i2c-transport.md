@@ -210,22 +210,59 @@ LMD : cmd %02X %02X %02X %02X %02X %02X %02X %02X %02X
 ```
 This prints: i2c_addr, then 8 bytes of the write buffer (total 9 values).
 
-**Interpreting the 8 bytes in context of the PLX I2C protocol:**
+**Interpreting the 8 bytes using the PLX I2C slave protocol:**
 
-Based on how callers construct the buffer (see Section 4 for examples):
-```
-    Byte [0]: Register address byte 0 (bits 7:0 of port-offset register)
-    Byte [1]: Register address byte 1 (bits 15:8, typically the register offset high byte)
-    Byte [2]: Register address byte 2 (port number or address extension)
-    Byte [3]: Register address byte 3 (typically 0x00)
-    Byte [4]: Data byte 0 (register value bits 7:0, little-endian)
-    Byte [5]: Data byte 1 (register value bits 15:8)
-    Byte [6]: Data byte 2 (register value bits 23:16)
-    Byte [7]: Data byte 3 (register value bits 31:24)
+The PLX PEX8xxx I2C slave protocol uses a 4-byte command followed by 4 data
+bytes. The command byte format is documented in Chapter 7 ("I2C/SMBus Slave
+Interface Operation") of PLX switch datasheets and confirmed by the
+[Linux kernel PEX8xxx I2C driver patch](https://patchwork.kernel.org/patch/5000551/):
+
+```c
+// From the kernel patch (Danielle Costantino's implementation):
+#define PLX_CMD_LEN             4
+#define PLX_CMD_I2C_READ        0x04
+#define PLX_CMD_I2C_WRITE       0x03
+#define PLX_CMD3_EN_ALL_BYTES   0x3c     // bits 5:2 = 0b1111
+#define PLX_REG_MASK            0xffc
+#define PLX_REGISTER_ADDR(a)    ((uint16_t)((a & PLX_REG_MASK) >> 2))
+#define PLX_PORT_SEL_B1(port)   (port >> 1)
+#define PLX_PORT_SEL_B0(port)   ((port & 1) << 7)
 ```
 
-This matches the PLX I2C protocol: **4-byte register address** (device-specific
-format) followed by **4-byte register value** (little-endian).
+**4-byte command structure:**
+```
+    Byte [0]: Command type
+              0x03 = PLX_CMD_I2C_WRITE (write 4 data bytes)
+              0x04 = PLX_CMD_I2C_READ  (read 4 data bytes)
+
+    Byte [1]: Station/Port selection (high bits)
+              [6:1] = station number (0-5 for PEX8696's 6 stations)
+              [0]   = port high bit (port >> 1)
+              Combined: (station << 1) | (port >> 1)
+
+    Byte [2]: Byte enables + register address high + port low
+              [7]   = port low bit ((port & 1) << 7)
+              [5:2] = byte enable mask (0xF = all 4 bytes)
+              [1:0] = register address bits [9:8]
+              For all-bytes access: 0x3C | (reg_hi & 3) | (port_low << 7)
+
+    Byte [3]: Register address low byte
+              [7:0] = register address bits [7:0]
+              The register DWORD index = (byte[2] & 3) << 8 | byte[3]
+              The register BYTE address = DWORD_index << 2
+```
+
+**Write transaction (8 bytes):**
+```
+    [cmd=0x03] [station/port_hi] [enables|reg_hi|port_lo] [reg_lo] [val0] [val1] [val2] [val3]
+    └────────── 4-byte command ──────────────────────────┘ └────── 4-byte value (LE) ──────┘
+```
+
+**Read transaction (4-byte write + 4-byte read):**
+```
+    Write: [cmd=0x04] [station/port_hi] [enables|reg_hi|port_lo] [reg_lo]
+    Read:  [val0] [val1] [val2] [val3]  (4 bytes, little-endian)
+```
 
 ### 2.3 Register Read Transaction
 
@@ -251,12 +288,12 @@ This performs a **combined write-then-read** I2C transaction:
     [REPEATED START] [slave_addr+R] [data0] [data1] [data2] [data3] [STOP]
 ```
 
-The 4-byte write buffer (register address):
+The 4-byte write buffer is the PLX I2C command (see Section 2.2):
 ```
-    Byte [0]: reg_start_byte (param_3)
-    Byte [1]: value_ptr[0]  (register offset high byte)
-    Byte [2]: value_ptr[1]  (port number)
-    Byte [3]: value_ptr[2]  (typically 0x00)
+    Byte [0]: reg_start_byte (param_3) = PLX command (0x04 = READ)
+    Byte [1]: value_ptr[0]  = station/port encoding
+    Byte [2]: value_ptr[1]  = byte enables | reg_hi | port_lo
+    Byte [3]: value_ptr[2]  = register DWORD index low byte
 ```
 
 The 4 bytes read back are the 32-bit register value (little-endian),
@@ -289,89 +326,58 @@ From `pex8696_slot_power_on_reg` at `0x2F7C4`:
 ```c
 get_PEX8696_addr_port(slot_index, &local_1b, &local_1c);
 // local_1b = I2C address (e.g. 0x30)
-// local_1c = port number (e.g. 4)
+// local_1c = PLX station/port encoding (e.g. 4)
 
-*DAT_0002fa84 = local_1c;       // byte[0] = port number
-DAT_0002fa84[1] = 0x3c;         // byte[1] = 0x3C
-DAT_0002fa84[2] = 0x20;         // byte[2] = 0x20
+*DAT_0002fa84 = local_1c;       // byte[0] = PLX station/port byte
+DAT_0002fa84[1] = 0x3c;         // byte[1] = byte enables (all bytes)
+DAT_0002fa84[2] = 0x20;         // byte[2] = register address low byte
 
 read_pex8696_register(bus_mux, local_1b, 4, param_4);
-//                     0xF3    addr      ^reg_start_byte=4
+//                     0xF3    addr      ^command=READ(4)
 ```
 
-So the actual 4-byte I2C address sent on the wire is:
-```
-    [0x04] [port_number] [0x3C] [0x20]
-     │       │             │      └── part of port/register selection
-     │       │             └── register offset bits 15:8
-     │       └── PLX port number
-     └── reg_start_byte (seems to indicate byte offset within register?)
-```
-
-**Wait --** looking more carefully at the `memcpy` in `read_pex8696_register`:
+Inside `read_pex8696_register`, on little-endian ARM:
 ```c
-local_1c = (uint)param_3;                          // byte 0 = 4
-memcpy((void *)((int)&local_1c + 1), param_4, 3);  // bytes 1-3 = from buffer
+local_1c = (uint)param_3;                          // byte 0 = 4 (command)
+memcpy((void *)((int)&local_1c + 1), param_4, 3);  // bytes 1-3 from buffer
 ```
 
-On a **little-endian ARM**, `local_1c` as a `uint32` has:
-- byte at `&local_1c + 0` = least significant byte = `param_3` = 4
-- byte at `&local_1c + 1` = `param_4[0]` = port_number
-- byte at `&local_1c + 2` = `param_4[1]` = 0x3C
-- byte at `&local_1c + 3` = `param_4[2]` = 0x20
-
-So the 4 bytes sent on I2C wire (from the write buffer `&local_1c`) are:
+So the 4 bytes sent on the I2C wire are:
 ```
-    Wire byte [0] = 0x04  (reg_start_byte)
-    Wire byte [1] = port_number
-    Wire byte [2] = 0x3C
-    Wire byte [3] = 0x20
+    Wire byte [0] = 0x04  (PLX_CMD_I2C_READ)
+    Wire byte [1] = station/port encoding (from lookup table)
+    Wire byte [2] = 0x3C  (PLX_CMD3_EN_ALL_BYTES, with reg_hi=0, port_lo=0)
+    Wire byte [3] = 0x20  (register DWORD index low byte)
 ```
 
-Examining typical PLX register access patterns from the caller code:
+**Decoding the register addresses used in the firmware:**
 
-| Operation                 | byte[0] | byte[1]      | byte[2] | byte[3] | PLX Register |
-|---------------------------|---------|--------------|----------|----------|--------------|
-| Read Slot Control         | 4       | port_num     | 0x3C     | 0x20    | 0x203C.4     |
-| Write Slot Control        | 3       | port_num     | 0x3C     | 0x20    | 0x203C       |
-| Read Hot-plug Command     | 4       | port_num     | 0x3C     | 0x8D    | 0x8D3C.4     |
-| Write Hot-plug Command    | 3       | port_num     | 0x3C     | 0x8D    | 0x8D3C       |
-| Read Link Status          | 4       | port_num     | 0x3C     | 0x8A    | 0x8A3C.4     |
-| Read Write-protect        | 4       | port_num     | 0x3C     | 0x1F    | 0x1F3C       |
+The register DWORD index = `(byte[2] & 0x03) << 8 | byte[3]`.
+The register byte address = DWORD_index * 4.
+Since byte[2] is always `0x3C` (bits [1:0] = 0), DWORD_index = byte[3].
 
-**Interpretation of the 4-byte register address (PEX8696 extended I2C protocol):**
-
-```
-    Byte [0]: Byte count / mode field
-              3 = full 32-bit register write (write all 4 data bytes)
-              4 = full 32-bit register read (read all 4 data bytes)
-              Other values may select partial register access (byte enables)
-    Byte [1]: Port number (0-23, selects which PCIe port's register space)
-    Byte [2]: Register offset low byte  (e.g. 0x3C)
-    Byte [3]: Register offset high byte (e.g. 0x20 for offset 0x203C)
-```
-
-The register offset is `(byte[3] << 8) | byte[2]` (little-endian within
-the address bytes). For example, `0x3C, 0x20` encodes offset `0x203C`.
-
-This is equivalent to accessing PCIe configuration space register `0x203C`
-of port N, which in the flat BAR space would be at `port * 0x1000 + 0x3C`
-(since `0x20xx` offsets map to the standard PCIe capability structures at
-offsets within each port's 0x1000-byte window).
+| Operation                 | byte[0] | byte[1]      | byte[2] | byte[3] | DWORD Idx | Byte Addr | PCIe Register |
+|---------------------------|---------|--------------|----------|----------|-----------|-----------|---------------|
+| Read Slot Control/Status  | 0x04    | stn/port     | 0x3C     | 0x20    | 0x020     | 0x080     | Per-port config 0x080 |
+| Write Slot Control/Status | 0x03    | stn/port     | 0x3C     | 0x20    | 0x020     | 0x080     | Per-port config 0x080 |
+| Read Hot-plug register    | 0x04    | stn/port     | 0x3C     | 0x8D    | 0x08D     | 0x234     | Per-port config 0x234 |
+| Write Hot-plug register   | 0x03    | stn/port     | 0x3C     | 0x8D    | 0x08D     | 0x234     | Per-port config 0x234 |
+| Read link/status register | 0x04    | stn/port     | 0x3C     | 0x8A    | 0x08A     | 0x228     | Per-port config 0x228 |
+| Read write-protect reg    | 0x04    | stn/port     | 0x3C     | 0x1F    | 0x01F     | 0x07C     | Per-port config 0x07C |
 
 **Comparison with plxtools 2-byte protocol:**
 
-| Feature            | plxtools (2-byte addr) | Dell firmware (4-byte addr) |
-|--------------------|------------------------|-----------------------------|
-| Address bytes      | 2 (big-endian)         | 4 (mode, port, offset LE)   |
-| Port selection     | Via BAR offset          | Via byte[1] in I2C address  |
-| Register offset    | 16-bit flat            | 16-bit per-port             |
-| Byte enables       | None (always 32-bit)   | byte[0] field               |
-| Target switches    | Smaller PLX parts      | PEX8696, PEX8647            |
+| Feature            | plxtools (2-byte addr) | Dell firmware (4-byte addr)            |
+|--------------------|------------------------|----------------------------------------|
+| Address format     | 2 bytes (big-endian)   | 4 bytes (cmd, stn/port, enables, reg)  |
+| Port selection     | Via BAR offset         | Via byte[1] (station + port encoding)  |
+| Register offset    | 16-bit flat            | 10-bit DWORD index, per-port           |
+| Byte enables       | Implicit (always 32b)  | Explicit in byte[2] bits[5:2]          |
+| Target switches    | Smaller PLX parts      | PEX8696, PEX8647, and similar          |
 
-The 4-byte protocol is necessary for the PEX8696 because it has 24 ports,
-each with their own register space that cannot all be addressed with a
-16-bit flat register offset.
+The 4-byte protocol is necessary for the PEX8696 because it has 24 ports
+organised into 6 stations of 4 ports each. The port selection is packed
+into bytes [1] and [2] of the I2C command.
 
 ---
 
@@ -415,37 +421,47 @@ Raw: 04 0A 04 0A 04 0A 02 08 04 0A 02 08 02 08 02 08
 
 ### 3.3 Complete Slot Mapping
 
-| Slot Index | I2C Addr (8-bit) | I2C Addr (7-bit) | PEX Switch | Port Number | Physical Slot |
-|------------|------------------|-------------------|------------|-------------|---------------|
-| 0          | 0x30             | 0x18              | PEX8696 #0 | 4           | Slot 1        |
-| 1          | 0x30             | 0x18              | PEX8696 #0 | 10          | Slot 2        |
-| 2          | 0x34             | 0x1A              | PEX8696 #1 | 4           | Slot 3        |
-| 3          | 0x34             | 0x1A              | PEX8696 #1 | 10          | Slot 4        |
-| 4          | 0x32             | 0x19              | PEX8696 #2 | 4           | Slot 5        |
-| 5          | 0x32             | 0x19              | PEX8696 #2 | 10          | Slot 6        |
-| 6          | 0x36             | 0x1B              | PEX8696 #3 | 2           | Slot 7        |
-| 7          | 0x36             | 0x1B              | PEX8696 #3 | 8           | Slot 8        |
-| 8          | 0x36             | 0x1B              | PEX8696 #3 | 4           | Slot 9        |
-| 9          | 0x36             | 0x1B              | PEX8696 #3 | 10          | Slot 10       |
-| 10         | 0x32             | 0x19              | PEX8696 #2 | 2           | Slot 11       |
-| 11         | 0x32             | 0x19              | PEX8696 #2 | 8           | Slot 12       |
-| 12         | 0x34             | 0x1A              | PEX8696 #1 | 2           | Slot 13       |
-| 13         | 0x34             | 0x1A              | PEX8696 #1 | 8           | Slot 14       |
-| 14         | 0x30             | 0x18              | PEX8696 #0 | 2           | Slot 15       |
-| 15         | 0x30             | 0x18              | PEX8696 #0 | 8           | Slot 16       |
+The "port number" in the lookup table is actually the pre-computed PLX I2C
+byte[1] value, which encodes both the station and port-within-station:
+`byte[1] = (station << 1) | (port >> 1)`.
+
+| Slot Idx | Phys Slot | I2C (8b) | I2C (7b) | Switch | Port Byte | Station | Port | Global Port |
+|----------|-----------|----------|----------|--------|-----------|---------|------|-------------|
+| 0        | Slot 1    | 0x30     | 0x18     | #0     | 4         | 2       | 0    | 8           |
+| 1        | Slot 2    | 0x30     | 0x18     | #0     | 10        | 5       | 0    | 20          |
+| 2        | Slot 3    | 0x34     | 0x1A     | #1     | 4         | 2       | 0    | 8           |
+| 3        | Slot 4    | 0x34     | 0x1A     | #1     | 10        | 5       | 0    | 20          |
+| 4        | Slot 5    | 0x32     | 0x19     | #2     | 4         | 2       | 0    | 8           |
+| 5        | Slot 6    | 0x32     | 0x19     | #2     | 10        | 5       | 0    | 20          |
+| 6        | Slot 7    | 0x36     | 0x1B     | #3     | 2         | 1       | 0    | 4           |
+| 7        | Slot 8    | 0x36     | 0x1B     | #3     | 8         | 4       | 0    | 16          |
+| 8        | Slot 9    | 0x36     | 0x1B     | #3     | 4         | 2       | 0    | 8           |
+| 9        | Slot 10   | 0x36     | 0x1B     | #3     | 10        | 5       | 0    | 20          |
+| 10       | Slot 11   | 0x32     | 0x19     | #2     | 2         | 1       | 0    | 4           |
+| 11       | Slot 12   | 0x32     | 0x19     | #2     | 8         | 4       | 0    | 16          |
+| 12       | Slot 13   | 0x34     | 0x1A     | #1     | 2         | 1       | 0    | 4           |
+| 13       | Slot 14   | 0x34     | 0x1A     | #1     | 8         | 4       | 0    | 16          |
+| 14       | Slot 15   | 0x30     | 0x18     | #0     | 2         | 1       | 0    | 4           |
+| 15       | Slot 16   | 0x30     | 0x18     | #0     | 8         | 4       | 0    | 16          |
+
+**Note:** The "Global Port" is the PEX8696 port number (station*4 + port).
+Since byte[2] bit 7 is always 0 (port_low=0), only even-numbered ports
+within each station are used. The PEX8696 uses stations 1, 2, 4, and 5
+for downstream GPU ports. Stations 0 and 3 are likely used for upstream
+(host-facing) ports.
 
 ### 3.4 Switch-to-Slot Summary
 
-| PEX8696 Switch | I2C Addr | Slots (index)      | Ports Used |
-|----------------|----------|---------------------|------------|
-| #0 (0x18)      | 0x30     | 0, 1, 14, 15       | 2, 4, 8, 10 |
-| #1 (0x1A)      | 0x34     | 2, 3, 12, 13       | 2, 4, 8, 10 |
-| #2 (0x19)      | 0x32     | 4, 5, 10, 11       | 2, 4, 8, 10 |
-| #3 (0x1B)      | 0x36     | 6, 7, 8, 9         | 2, 4, 8, 10 |
+| PEX8696 Switch | I2C Addr | Slots (index)      | PLX Stations Used  | Global Ports    |
+|----------------|----------|---------------------|--------------------|-----------------|
+| #0 (0x18)      | 0x30     | 0, 1, 14, 15       | 1, 2, 4, 5        | 4, 8, 16, 20   |
+| #1 (0x1A)      | 0x34     | 2, 3, 12, 13       | 1, 2, 4, 5        | 4, 8, 16, 20   |
+| #2 (0x19)      | 0x32     | 4, 5, 10, 11       | 1, 2, 4, 5        | 4, 8, 16, 20   |
+| #3 (0x1B)      | 0x36     | 6, 7, 8, 9         | 1, 2, 4, 5        | 4, 8, 16, 20   |
 
-Each PEX8696 manages exactly 4 GPU slots using downstream ports 2, 4, 8, and 10.
-The PEX8696 is a 96-lane switch with 24 ports; ports 2, 4, 8, and 10 are the
-downstream ports connected to GPU x16 slots.
+Each PEX8696 manages exactly 4 GPU slots using global ports 4, 8, 16, and 20
+(stations 1, 2, 4, and 5, port 0 within each station). These correspond to
+x16 downstream ports on the 96-lane, 24-port PEX8696 switch.
 
 ### 3.5 GPU Power Sequencing Groups
 
@@ -470,20 +486,20 @@ spreading the power load across the chassis.
 For each active slot (determined by a 16-bit bitmask):
 
 ```
-Step 1: Read Slot Control register (offset 0x203C)
-    PEX8696_Command[0] = port_number
-    PEX8696_Command[1] = 0x3C
-    PEX8696_Command[2] = 0x20
+Step 1: Read register at DWORD index 0x20 (byte address 0x080)
+    PEX8696_Command[0] = station_port_byte  // from lookup table
+    PEX8696_Command[1] = 0x3C               // byte enables (all)
+    PEX8696_Command[2] = 0x20               // register DWORD index
     read_pex8696_register(0xF3, i2c_addr, 4, &PEX8696_Command)
-    // I2C write: [04] [port] [3C] [20]  -> read: [val0] [val1] [val2] [val3]
+    // I2C: [04] [stn/port] [3C] [20]  -> read 4 bytes
 
-Step 2: Modify and write Slot Control (power indicator = ON, power controller = ON)
+Step 2: Modify and write (power indicator and attention bits)
     value[5] = (value[5] & 0xFC) | 0x01    // Set power indicator = ON
     value[5] = value[5] & 0xFB             // Clear attention indicator
     write_pex8696_register(0xF3, i2c_addr, 3, &PEX8696_Command)
-    // I2C write: [03] [port] [3C] [20] [val0] [val1] [val2] [val3]
+    // I2C: [03] [stn/port] [3C] [20] [val0] [val1] [val2] [val3]
 
-Step 3: Read Hot-Plug Command register (offset 0x8D3C)
+Step 3: Read register at DWORD index 0x8D (byte address 0x234)
     PEX8696_Command[1] = 0x3C
     PEX8696_Command[2] = 0x8D
     read_pex8696_register(0xF3, i2c_addr, 4, &PEX8696_Command)
@@ -497,11 +513,11 @@ Step 5: De-assert power controller control
     value[4] &= 0xFE
     write_pex8696_register(0xF3, i2c_addr, 3, &PEX8696_Command)
 
-Step 6: Read Link Status (offset 0x8A3C) and enable LED
+Step 6: Read register at DWORD index 0x8A (byte address 0x228) and set bit
     PEX8696_Command[1] = 0x3C
     PEX8696_Command[2] = 0x8A
     read_pex8696_register(0xF3, i2c_addr, 4, &PEX8696_Command)
-    value[6] |= 0x20                     // Enable MRL sensor present
+    value[6] |= 0x20                     // Set MRL sensor present or LED bit
     write_pex8696_register(0xF3, i2c_addr, 3, &PEX8696_Command)
 ```
 
@@ -509,11 +525,11 @@ Step 6: Read Link Status (offset 0x8A3C) and enable LED
 
 ```
 For each active slot:
-    PEX8696_Command[0] = port_number
+    PEX8696_Command[0] = station_port_byte
     PEX8696_Command[1] = 0x3C
-    PEX8696_Command[2] = 0x1F
+    PEX8696_Command[2] = 0x1F               // register DWORD index 0x1F (byte addr 0x07C)
     read_pex8696_register(0xF3, i2c_addr, 4, &PEX8696_Command)
-    value[6] &= 0xFB                     // Clear write-protect bit
+    value[6] &= 0xFB                        // Clear write-protect bit
     write_pex8696_register(0xF3, i2c_addr, 3, &PEX8696_Command)
 ```
 
@@ -677,16 +693,18 @@ For a **write-then-read** transaction: both `write_len > 0` and `read_len > 0`
    - **Write:** 8-byte I2C write = 4-byte address + 4-byte value
    - **Read:** 4-byte I2C write (address) + 4-byte I2C read (value)
 
-3. **Register addresses** are 4 bytes: `[byte_enable, port_number, reg_lo, reg_hi]`
-   where byte_enable is 3 for writes, 4 for reads.
+3. **Register addresses** use the PLX 4-byte I2C command format:
+   `[command, station/port_hi, byte_enables|reg_hi|port_lo, reg_lo]`
+   where command is 0x03 (write) or 0x04 (read), as confirmed by the
+   [Linux kernel PEX8xxx I2C driver](https://patchwork.kernel.org/patch/5000551/).
 
 4. **All PEX switch types** (PEX8696, PEX8647, generic) use the **identical
    I2C register protocol**. The firmware has multiple copies of the same
    read/write functions linked into different subsystems.
 
 5. **Slot mapping** uses a pair of 16-entry lookup tables mapping slot index
-   (0-15) to I2C address and port number. Each PEX8696 has 4 GPU slots on
-   ports 2, 4, 8, and 10.
+   (0-15) to I2C address and PLX station/port encoding. Each PEX8696 has
+   4 GPU slots on global ports 4, 8, 16, and 20 (stations 1, 2, 4, 5).
 
 6. **Concurrency** is handled by per-bus semaphores (20-tick timeout).
    `PI2CMuxWriteRead` bypasses this for direct, unprotected access.
