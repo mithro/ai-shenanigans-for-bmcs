@@ -547,9 +547,9 @@ their PEX8696 counterparts:
 | `write_pex8696_register`    | `write_pex8647_register`    | Only debug strings and result globals |
 | `read_pex8696_register`     | `read_pex8647_register`     | Only debug strings and result globals |
 
-Both use the exact same I2C protocol:
-- Write: 8 bytes (4 addr + 4 data), write-only
-- Read: 4 bytes write (address), then 4 bytes read (data)
+Both use the exact same PLX 4-byte I2C command protocol:
+- Write: 8 bytes (4-byte command + 4-byte value), write-only
+- Read: 4-byte write (command), then 4-byte read (value)
 
 The only difference: `read_pex8647_register` copies only 2 bytes of the
 result to its global (`memcpy(DAT, &local_1c, 2)` vs 4 bytes for PEX8696).
@@ -601,8 +601,8 @@ In `pex8696_multi_host_mode_cfg`, each PEX8696 switch is addressed directly:
 
 `read_pex_register` at `0xDD0F8` and `write_pex_register` at `0xDD230`
 are **structurally identical** to the PEX8696 versions. They use the same:
-- 4-byte write address, 4-byte read data for reads
-- 8-byte write (4 addr + 4 data) for writes
+- 4-byte PLX command + 4-byte read data for reads
+- 8-byte write (4-byte command + 4-byte value) for writes
 - Same `PI2CWriteRead` call conventions
 
 These generic versions are used by the EEPROM and serial number subsystems
@@ -689,9 +689,9 @@ For a **write-then-read** transaction: both `write_len > 0` and `read_len > 0`
 1. **The I2C transport** uses the Avocent `aess_i2cdrv` kernel driver via
    a 16-byte ioctl struct (`0xC010B702`).
 
-2. **PLX register access** uses the standard PLX I2C protocol:
-   - **Write:** 8-byte I2C write = 4-byte address + 4-byte value
-   - **Read:** 4-byte I2C write (address) + 4-byte I2C read (value)
+2. **PLX register access** uses the PLX PEX8xxx I2C slave protocol:
+   - **Write:** 8-byte I2C write = 4-byte command + 4-byte value
+   - **Read:** 4-byte I2C write (command) + 4-byte I2C read (value)
 
 3. **Register addresses** use the PLX 4-byte I2C command format:
    `[command, station/port_hi, byte_enables|reg_hi|port_lo, reg_lo]`
