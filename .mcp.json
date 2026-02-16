@@ -22,6 +22,17 @@
       "env": {
         "DISPLAY": ":99"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--browser", "chromium",
+        "--viewport-size", "1280x720"
+      ],
+      "env": {
+        "DISPLAY": ":99"
+      }
     }
   }
 }
