@@ -11,6 +11,17 @@
       "env": {
         "GHIDRA_INSTALL_DIR": "/home/tim/tools/ghidra"
       }
+    },
+    "ghidra-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--script",
+        "/home/tim/github/mithro/ai-shenanigans-for-bmcs/scripts/bridge_mcp_ghidra.py"
+      ],
+      "env": {
+        "DISPLAY": ":99"
+      }
     }
   }
 }
