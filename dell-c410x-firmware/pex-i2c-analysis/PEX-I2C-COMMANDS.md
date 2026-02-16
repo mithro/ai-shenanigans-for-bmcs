@@ -614,3 +614,160 @@ For each I2C addr in {0x30, 0x32, 0x34, 0x36}:
 | Uses slot mapping? | Yes (per-slot lookup) | No (direct addressing) |
 | Iteration method | Slot index 0-15 | I2C addr x port |
 | Used by | `all_slot_power_off` | `pex8696_all_slot_power_off` |
+
+---
+
+## 8. Full 16-Slot Power Sequencing
+
+The firmware powers on all 16 GPU slots in a staggered 4-phase sequence,
+activating one slot per PEX8696 switch per phase to distribute inrush current
+across the chassis power system.
+
+### 8.1 Phase Ordering
+
+**Orchestrator:** `Start_GPU_Power_Sequence` at `0x33AE8`
+
+| Phase | Function | Slots (1-based) | Slot Indices |
+|-------|----------|-----------------|-------------|
+| 1 | `gpu_power_on_4_8_12_16` | 4, 8, 12, 16 | 3, 7, 11, 15 |
+| 2 | `gpu_power_on_3_7_11_15` | 3, 7, 11, 15 | 2, 6, 10, 14 |
+| 3 | `gpu_power_on_2_6_10_14` | 2, 6, 10, 14 | 1, 5, 9, 13 |
+| 4 | `gpu_power_on_1_5_9_13` | 1, 5, 9, 13 | 0, 4, 8, 12 |
+
+The reverse ordering (4,8,12,16 first; 1,5,9,13 last) likely reflects
+physical slot arrangement or power rail grouping on the C410X chassis.
+
+### 8.2 Switch Load Distribution
+
+Each phase activates exactly one slot on each of the 4 PEX8696 switches:
+
+| Phase | Switch #0 (0x30) | Switch #1 (0x34) | Switch #2 (0x32) | Switch #3 (0x36) |
+|-------|------------------|------------------|------------------|------------------|
+| 1 | Slot 16 (stn 4) | Slot 4 (stn 5) | Slot 12 (stn 4) | Slot 8 (stn 4) |
+| 2 | Slot 15 (stn 1) | Slot 3 (stn 2) | Slot 11 (stn 1) | Slot 7 (stn 1) |
+| 3 | Slot 2 (stn 5) | Slot 14 (stn 4) | Slot 6 (stn 5) | Slot 10 (stn 5) |
+| 4 | Slot 1 (stn 2) | Slot 13 (stn 1) | Slot 5 (stn 2) | Slot 9 (stn 2) |
+
+### 8.3 Per-Phase Operations
+
+Each phase function executes 5 sequential operations:
+
+```
+gpu_power_on_X_Y_Z_W():
+    1. gpu_un_protect(mask)           -- GPU-side write protection removal
+    2. pex8696_un_protect(bitmask)    -- PEX reg 0x07C: clear bit 18 (via queue)
+    3. filter_on_gpu(bitmask, &out)   -- Filter bitmask by physically present GPUs
+    4. pex8696_slot_power_on(&out)    -- Power-on sequence: regs 0x080/0x234/0x228
+    5. gpu_power_attention_pulse()    -- Attention indicator pulse
+```
+
+Operations 2, 4, and 5 are dispatched via `_lx_QueueSend` to a background
+I2C worker task. The queue serialises I2C transactions.
+
+The `gpu_un_protect` bitmask decreases across phases because earlier phases
+have already unprotected some slots:
+
+| Phase | gpu_un_protect Mask | Binary |
+|-------|-------------------|--------|
+| 1 | 0xFF | 1111 1111 |
+| 2 | 0x77 | 0111 0111 |
+| 3 | 0x33 | 0011 0011 |
+| 4 | 0x11 | 0001 0001 |
+
+### 8.4 Startup Preconditions
+
+Before any phase executes:
+
+```
+T=0  Start_GPU_Power_Sequence()
+       |-- RawIRQDisable(hot_plug_irq)     Disable hot-plug interrupt
+       |-- RawIRQClear(hot_plug_irq)       Clear pending hot-plug events
+       |-- PSU_PGOOD() == 1                Verify PSU power is stable
+       |-- *flag = 1                       Trigger background power-on task
+```
+
+After all 4 phases complete, the hot-plug interrupt is re-enabled via
+`RawIRQEnable()`.
+
+### 8.5 I2C Transaction Counts
+
+#### Per Phase (4 slots)
+
+| Operation | Txns/Slot | Slots | Total Txns | Delays |
+|-----------|-----------|-------|------------|--------|
+| Unprotect (reg 0x07C) | 2 | 4 | 8 | None |
+| Power-on (regs 0x080, 0x234, 0x228) | 7 | 4 | 28 | 4 x 100ms |
+| **Phase subtotal** | **9** | **4** | **36** | **400ms** |
+
+#### Full 16-Slot Boot
+
+| Metric | Count |
+|--------|-------|
+| Phases | 4 |
+| Slots per phase | 4 |
+| Total slots | 16 |
+| PEX8696 I2C transactions per phase | 36 |
+| **Total PEX8696 I2C transactions** | **144** |
+| 100ms delays per phase | 4 |
+| **Total 100ms delays** | **16** |
+| Total I2C reads | 64 (16 unprotect + 48 power-on) |
+| Total I2C writes | 80 (16 unprotect + 64 power-on) |
+
+### 8.6 Estimated Timing
+
+| Component | Time |
+|-----------|------|
+| 144 I2C transactions at ~2ms each | ~288ms |
+| 16 x 100ms power controller pulse delays | ~1600ms |
+| Queue dispatch overhead | ~100ms |
+| **Estimated total** | **~2.0 seconds** |
+
+### 8.7 Complete Boot Timeline
+
+```
+T=0.0s    Start_GPU_Power_Sequence
+            Disable hot-plug IRQ, check PSU PGOOD
+
+          Phase 1: gpu_power_on_4_8_12_16
+            Unprotect + power on slots 4, 8, 12, 16
+            (one per switch: 0x34, 0x36, 0x32, 0x30)
+            36 I2C txns, 4 x 100ms delays
+
+T~0.7s    Phase 2: gpu_power_on_3_7_11_15
+            Unprotect + power on slots 3, 7, 11, 15
+            (one per switch: 0x34, 0x36, 0x32, 0x30)
+            36 I2C txns, 4 x 100ms delays
+
+T~1.2s    Phase 3: gpu_power_on_2_6_10_14
+            Unprotect + power on slots 2, 6, 10, 14
+            (one per switch: 0x30, 0x32, 0x36, 0x34)
+            36 I2C txns, 4 x 100ms delays
+
+T~1.7s    Phase 4: gpu_power_on_1_5_9_13
+            Unprotect + power on slots 1, 5, 9, 13
+            (one per switch: 0x30, 0x32, 0x36, 0x34)
+            36 I2C txns, 4 x 100ms delays
+
+T~2.0s    Re-enable hot-plug IRQ
+          All 16 GPU slots powered
+```
+
+### 8.8 Power-Off (Not Staggered)
+
+Power-off is NOT staggered. All 16 slots are powered off in a single pass:
+
+- **Method 1:** 32 I2C transactions (read-modify-write each slot)
+- **Method 2:** 16 I2C transactions (bulk write pre-built values)
+
+No delays between slots. No inrush current concern on power-off.
+
+### 8.9 Key Design Decisions
+
+1. **One slot per switch per phase** -- Distributes inrush current across
+   all 4 PEX8696 switches simultaneously
+2. **Sequential within phase** -- Slots within a phase are processed serially
+   via the shared I2C bus (per-bus semaphore protection)
+3. **GPU presence filtering** -- `filter_on_gpu()` skips empty slots, saving
+   I2C transaction time when fewer than 16 GPUs are installed
+4. **Asymmetric on/off** -- Power-on requires 9 I2C transactions per slot
+   plus 100ms delay; power-off requires only 1-2 transactions with no delay
