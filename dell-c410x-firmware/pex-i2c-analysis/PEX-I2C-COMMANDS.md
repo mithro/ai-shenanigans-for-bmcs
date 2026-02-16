@@ -177,3 +177,225 @@ The 4-byte protocol is necessary for the PEX8696 because it has 24 ports
 organised into 6 stations. The port selection is packed into the I2C command
 bytes. The plxtools I2C backend would need to be extended to support this
 protocol for per-port register access on the PEX8696.
+
+---
+
+## 4. Register Reference
+
+All registers are in the PEX8696/PEX8647 per-port configuration space,
+addressed via the PLX 4-byte I2C command. The PCIe Express Capability base
+is at offset **0x068** in PLX PEX8500/8600/8696 series switches (confirmed by
+the PLX SDK `RegDefs.c`).
+
+### 4.1 Complete Register Table
+
+| Byte Addr | DWORD Idx | I2C byte[3] | Classification | Register Name | Chip | Used By |
+|-----------|-----------|-------------|----------------|---------------|------|---------|
+| 0x07C | 0x1F | 0x1F | PCIe Std (PLX-modified) | Slot Capabilities / Write Protect | PEX8696 | `pex8696_un_protect_reg` |
+| 0x080 | 0x20 | 0x20 | PCIe Standard | Slot Control / Slot Status | PEX8696 | `pex8696_slot_power_on_reg`, `pex8696_slot_power_ctrl`, `all_slot_power_off_reg` |
+| 0x1DC | 0x77 | 0x77 | PLX Proprietary | Port Merging / Aggregation | PEX8647 | `pex8647_cfg_multi_host_8`, `pex8647_cfg_multi_host_2_4` |
+| 0x204 | 0x81 | 0x81 | PLX Proprietary | Port Control Mask | PEX8696 | `pex8696_cfg` |
+| 0x228 | 0x8A | 0x8A | PLX Proprietary | Hot-Plug LED / MRL Control | PEX8696 | `pex8696_slot_power_on_reg`, `pex8696_slot_power_ctrl` |
+| 0x234 | 0x8D | 0x8D | PLX Proprietary | Hot-Plug Power Controller | PEX8696/8647 | `pex8696_slot_power_on_reg`, `pex8647_cfg_multi_host_*` |
+| 0x380 | 0xE0 | 0xE0 | PLX Proprietary | Lane Config (lower) | PEX8696 | `pex8696_cfg_multi_host_2`, `pex8696_cfg_multi_host_4` |
+| 0x384 | 0xE1 | 0xE1 | PLX Proprietary | Lane Config (upper) | PEX8696 | `pex8696_cfg_multi_host_2`, `pex8696_cfg_multi_host_4` |
+| 0x3AC | 0xEB | 0xEB | PLX Proprietary | NT Bridge Setup | PEX8696 | `pex8696_multi_host_mode_reg_set` |
+| 0xB90 | 0x2E4 | 0xE4 | PLX Proprietary | SerDes EQ Coefficient 1 | PEX8696 | `pex8696_cfg` |
+| 0xB9C | 0x2E7 | 0xE7 | PLX Proprietary | SerDes EQ Coefficient 2 | PEX8696 | `pex8696_cfg` |
+| 0xBA4 | 0x2E9 | 0xE9 | PLX Proprietary | SerDes De-emphasis 1 | PEX8696 | `pex8696_cfg` |
+| 0xBA8 | 0x2EA | 0xEA | PLX Proprietary | SerDes De-emphasis 2 | PEX8696 | `pex8696_cfg` |
+
+**Note on SerDes registers:** For DWORD indices >= 0x100, byte[2] encodes
+the high bits: DWORD index = `(byte[2] & 0x03) << 8 | byte[3]`. For 0x2E4,
+byte[2] = `0x3E` (enables=0xF, reg_hi=2) and byte[3] = `0xE4`.
+
+### 4.2 PCIe Standard Registers
+
+#### Register 0x07C -- Slot Capabilities (PCIe Capability + 0x14)
+
+PLX SDK name: `"PCIe Cap: Slot Capabilities"`
+
+Standard PCIe bit fields (read-only from PCIe bus):
+
+| Bits | Field | Description |
+|------|-------|-------------|
+| 0 | ABP | Attention Button Present |
+| 1 | PCP | Power Controller Present |
+| 2 | MRLSP | MRL Sensor Present |
+| 3 | AIP | Attention Indicator Present |
+| 4 | PIP | Power Indicator Present |
+| 5 | HPS | Hot-Plug Surprise |
+| 6 | HPC | Hot-Plug Capable |
+| 14:7 | SPLV | Slot Power Limit Value |
+| 16:15 | SPLS | Slot Power Limit Scale |
+| 17 | EIP | Electromechanical Interlock Present |
+| **18** | **NCCS/WP** | **PLX: Write Protect Enable (writable via I2C)** |
+| 31:19 | PSN | Physical Slot Number |
+
+**PLX extension:** Bit 18 is repurposed as a writable write-protect control when
+accessed via I2C. When set (1), VS1 registers (0x200+) are write-protected.
+Must be cleared before modifying hot-plug or lane configuration registers.
+
+#### Register 0x080 -- Slot Control / Slot Status (PCIe Capability + 0x18)
+
+PLX SDK name: `"PCIe Cap: Slot Status | Slot Control"`
+
+Lower 16 bits = Slot Control (read-write):
+
+| Bits | Mask | Field | Description |
+|------|------|-------|-------------|
+| 0 | 0x0001 | ABPE | Attention Button Pressed Enable |
+| 1 | 0x0002 | PFDE | Power Fault Detected Enable |
+| 2 | 0x0004 | MRLSCE | MRL Sensor Changed Enable |
+| 3 | 0x0008 | PDCE | Presence Detect Changed Enable |
+| 4 | 0x0010 | CCIE | Command Completed Interrupt Enable |
+| 5 | 0x0020 | HPIE | Hot-Plug Interrupt Enable |
+| 7:6 | 0x00C0 | AIC | Attention Indicator Control |
+| **9:8** | **0x0300** | **PIC** | **Power Indicator Control** |
+| **10** | **0x0400** | **PCC** | **Power Controller Control** |
+| 11 | 0x0800 | EIC | Electromechanical Interlock Control |
+| 12 | 0x1000 | DLLSCE | Data Link Layer State Changed Enable |
+
+Upper 16 bits = Slot Status (read-only / RW1C):
+
+| Bits | Mask | Field | Description |
+|------|------|-------|-------------|
+| 16 | 0x0001 | ABP | Attention Button Pressed (RW1C) |
+| 17 | 0x0002 | PFD | Power Fault Detected (RW1C) |
+| 18 | 0x0004 | MRLSC | MRL Sensor Changed (RW1C) |
+| 19 | 0x0008 | PDC | Presence Detect Changed (RW1C) |
+| 20 | 0x0010 | CC | Command Completed (RW1C) |
+| 21 | 0x0020 | MRLSS | MRL Sensor State (RO) |
+| 22 | 0x0040 | PDS | Presence Detect State (RO) |
+
+**Indicator encoding (AIC and PIC):**
+
+| Value | Meaning |
+|-------|---------|
+| 00b | Reserved |
+| 01b | On |
+| 10b | Blink |
+| 11b | Off |
+
+**PCC semantics:** 0 = Power On (slot powered), 1 = Power Off (slot not powered).
+
+### 4.3 PLX Proprietary Registers
+
+#### Register 0x228 -- Hot-Plug LED / MRL Control
+
+| Bit | Firmware Use | Function |
+|-----|-------------|----------|
+| 21 | Set during power-on | Hot-Plug LED enable / MRL sensor override |
+
+Only ever set (never cleared). Enables hardware hot-plug LED for the port.
+
+#### Register 0x234 -- Hot-Plug Power Controller Control
+
+| Bit | Firmware Use | Function |
+|-----|-------------|----------|
+| 0 | Pulsed (assert, wait 100ms, de-assert) | Hardware power sequence trigger |
+| 8 | Mode-dependent (PEX8647) | Primary/secondary host port select |
+
+**PEX8696 usage:** Bit 0 is pulsed to trigger the PLX hardware power controller.
+The firmware asserts bit 0, waits ~100ms, then clears it. This initiates the
+hardware-managed power-on sequence with inrush current control.
+
+**PEX8647 usage:** During multi-host mode switching, bit 8 selects which upstream
+port is the primary host port. Values differ between 8:1 and 2:1/4:1 modes.
+
+#### Register 0x380/0x384 -- Port/Lane Configuration
+
+Written to station 0, port 0 (the upstream/configuration port) during multi-host
+mode switching. These registers control the PEX8696's internal crossbar routing
+between upstream and downstream ports.
+
+| Mode | Reg 0x384 | Reg 0x380 | Key Difference |
+|------|-----------|-----------|----------------|
+| 2:1 | 0x00101100 | 0x11010000 | Bits 8,12 set in 0x384 |
+| 4:1 | 0x00100000 | 0x11011100 | Bits 8,12 set in 0x380 |
+| 8:1 | 0x00100000 | 0x11011100 | Same as 4:1 (PEX8647 differs) |
+
+#### Register 0x3AC -- NT Bridge Setup
+
+Written to station 3, port 3 (global port 15) during multi-host configuration.
+Value 0x01000000 configures the Non-Transparent Bridge port for inter-switch
+communication.
+
+#### Registers 0xB90-0xBA8 -- SerDes PHY Configuration
+
+Written to all ports on all switches during mode switching. These control PCIe
+Gen2 signal integrity parameters tuned for the C410X backplane:
+
+| Register | DWORD | Value | Purpose |
+|----------|-------|-------|---------|
+| 0xB90 | 0x2E4 | 0x130E0E0E | Equalization coefficient 1 |
+| 0xB9C | 0x2E7 | 0x1C151515 | Equalization coefficient 2 |
+| 0xBA4 | 0x2E9 | 0x88888888 | De-emphasis 1 |
+| 0xBA8 | 0x2EA | 0x88888888 | De-emphasis 2 |
+
+#### Register 0x1DC (PEX8647) -- Port Merging / Aggregation
+
+| Bit | 8:1 Mode | 2:1/4:1 Mode | Function |
+|-----|----------|--------------|----------|
+| 19 | 1 | 0 | Port merge enable (aggregates upstream ports) |
+
+In 8:1 mode, setting bit 19 merges the PEX8647's two upstream ports to create
+a wider aggregated link, allowing a single host to access 8 GPU slots.
+
+---
+
+## 5. Slot-to-Switch Mapping
+
+### 5.1 Lookup Tables
+
+The firmware uses two 16-entry lookup tables at ROM addresses `0xF7B06` and
+`0xF7B16` to map slot index (0-15) to I2C address and PLX station/port
+encoding. Three copies of the `get_PEX8696_addr_port` function (at `0x2E66C`,
+`0x317E4`, `0x37F7C`) all reference identical table data.
+
+**I2C Address Table (16 bytes):**
+```
+Raw hex: 30 30 34 34 32 32 36 36 36 36 32 32 34 34 30 30
+```
+
+**Port Number Table (16 bytes):**
+```
+Raw hex: 04 0A 04 0A 04 0A 02 08 04 0A 02 08 02 08 02 08
+```
+
+The "port number" is the pre-computed PLX I2C command byte[1] value, encoding
+both station and port: `byte[1] = (station << 1) | (port >> 1)`.
+
+### 5.2 Complete Slot Mapping
+
+| Slot Idx | Phys Slot | I2C (8b) | I2C (7b) | Switch | Port Byte | Station | Port | Global Port |
+|----------|-----------|----------|----------|--------|-----------|---------|------|-------------|
+| 0 | Slot 1 | 0x30 | 0x18 | #0 | 0x04 | 2 | 0 | 8 |
+| 1 | Slot 2 | 0x30 | 0x18 | #0 | 0x0A | 5 | 0 | 20 |
+| 2 | Slot 3 | 0x34 | 0x1A | #1 | 0x04 | 2 | 0 | 8 |
+| 3 | Slot 4 | 0x34 | 0x1A | #1 | 0x0A | 5 | 0 | 20 |
+| 4 | Slot 5 | 0x32 | 0x19 | #2 | 0x04 | 2 | 0 | 8 |
+| 5 | Slot 6 | 0x32 | 0x19 | #2 | 0x0A | 5 | 0 | 20 |
+| 6 | Slot 7 | 0x36 | 0x1B | #3 | 0x02 | 1 | 0 | 4 |
+| 7 | Slot 8 | 0x36 | 0x1B | #3 | 0x08 | 4 | 0 | 16 |
+| 8 | Slot 9 | 0x36 | 0x1B | #3 | 0x04 | 2 | 0 | 8 |
+| 9 | Slot 10 | 0x36 | 0x1B | #3 | 0x0A | 5 | 0 | 20 |
+| 10 | Slot 11 | 0x32 | 0x19 | #2 | 0x02 | 1 | 0 | 4 |
+| 11 | Slot 12 | 0x32 | 0x19 | #2 | 0x08 | 4 | 0 | 16 |
+| 12 | Slot 13 | 0x34 | 0x1A | #1 | 0x02 | 1 | 0 | 4 |
+| 13 | Slot 14 | 0x34 | 0x1A | #1 | 0x08 | 4 | 0 | 16 |
+| 14 | Slot 15 | 0x30 | 0x18 | #0 | 0x02 | 1 | 0 | 4 |
+| 15 | Slot 16 | 0x30 | 0x18 | #0 | 0x08 | 4 | 0 | 16 |
+
+### 5.3 Switch-to-Slot Summary
+
+Each PEX8696 manages exactly 4 GPU slots using stations 1, 2, 4, and 5
+(global ports 4, 8, 16, and 20). Stations 0 and 3 are used for upstream
+and NT bridge ports respectively.
+
+| PEX8696 Switch | I2C Addr (8b) | Slots (1-based) | PLX Stations | Global Ports |
+|----------------|---------------|-----------------|--------------|-------------|
+| #0 (0x18) | 0x30 | 1, 2, 15, 16 | 1, 2, 4, 5 | 4, 8, 16, 20 |
+| #1 (0x1A) | 0x34 | 3, 4, 13, 14 | 1, 2, 4, 5 | 4, 8, 16, 20 |
+| #2 (0x19) | 0x32 | 5, 6, 11, 12 | 1, 2, 4, 5 | 4, 8, 16, 20 |
+| #3 (0x1B) | 0x36 | 7, 8, 9, 10 | 1, 2, 4, 5 | 4, 8, 16, 20 |
