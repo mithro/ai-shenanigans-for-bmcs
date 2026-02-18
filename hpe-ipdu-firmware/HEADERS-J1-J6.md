@@ -132,34 +132,78 @@ target is powered and at what voltage level.
 
 ### Compatible JTAG Debuggers
 
+The NS9360 ARM926EJ-S uses the **EmbeddedICE-RT** debug architecture, accessed via
+raw JTAG scan chains. This is fundamentally different from the **CoreSight DAP**
+(ADIv5) used by modern Cortex-M/A/R processors. Any debugger must support legacy
+ARM9 JTAG -- adapters that only speak CoreSight DAP (such as CMSIS-DAP probes)
+**will not work**.
+
 The 20-pin ARM JTAG header accepts any standard ARM Multi-ICE compatible debugger.
 These connect via a 20-pin IDC ribbon cable.
 
 **Dedicated ARM JTAG debuggers:**
 
-| Debugger | Interface | Notes |
-|----------|-----------|-------|
-| SEGGER J-Link | USB | Most widely used; excellent OpenOCD and GDB integration |
-| Lauterbach TRACE32 | USB/Ethernet | High-end professional tool |
-| Ronetix PEEDI | Ethernet | Network-attached JTAG; good for remote/headless setups |
-| Amontec JTAGkey | USB | Confirmed working with NS9360 ([OpenOCD mailing list](https://sourceforge.net/p/openocd/mailman/message/28340950/)) |
+| Debugger | Interface | ARM926EJ-S | RTCK | Software | Notes |
+|----------|-----------|------------|------|----------|-------|
+| SEGGER J-Link | USB | Yes | Yes (adaptive clocking) | J-Link GDB Server (best), OpenOCD, J-Link Commander | Best option; handles ARM9 caches natively via JTAG without target code |
+| Lauterbach TRACE32 | USB/Ethernet | Yes | Yes | TRACE32 IDE | High-end professional tool |
+| Ronetix PEEDI | Ethernet | Yes | Yes | GDB, Telnet | Network-attached JTAG; good for remote/headless setups |
+| Amontec JTAGkey | USB (FT2232) | Yes | Yes | OpenOCD | Confirmed working with NS9360 ([OpenOCD mailing list](https://sourceforge.net/p/openocd/mailman/message/28340950/)) |
 
-**FTDI-based generic adapters ($5-30):**
+**FTDI-based generic adapters:**
 
-| Adapter | Chip | Notes |
-|---------|------|-------|
-| Dangerous Prototypes Bus Blaster | FT2232H | Open hardware |
-| Olimex ARM-USB-OCD | FT2232 | Widely available |
-| Generic FT2232H breakout | FT2232H | Cheapest option; requires OpenOCD config |
-| Generic FT232H breakout | FT232H | Single-channel variant |
+| Adapter | Chip | ARM926EJ-S | RTCK | Notes |
+|---------|------|------------|------|-------|
+| TIAO TUMPA (TIMO1499) | FT2232H | Yes | Yes | Ships with 20-pin ARM JTAG header; [OpenOCD config](https://github.com/arduino/OpenOCD/blob/master/tcl/interface/ftdi/tumpa.cfg) included |
+| Dangerous Prototypes Bus Blaster | FT2232H | Yes | Yes | Open hardware |
+| Olimex ARM-USB-OCD | FT2232 | Yes | Yes | Widely available |
+| Generic FT2232H breakout | FT2232H | Yes | Yes | Cheapest option; requires OpenOCD config |
+| Generic FT232H breakout | FT232H | Yes | No | Single-channel variant; no RTCK |
 
 All FTDI-based adapters use OpenOCD's `ftdi` interface driver and connect to the
-20-pin header via ribbon cable.
+20-pin header via ribbon cable. The FT2232**H** (high-speed) variants support
+adaptive clocking (RTCK) via the MPSSE engine; older FT2232C/D do not.
 
 **SBC-based GPIO bitbang adapters:**
 
 Any single-board computer with GPIO and OpenOCD support can bitbang the JTAG
 protocol. See the Raspberry Pi Zero W section below.
+
+### Incompatible Debugger Types
+
+The following adapter types **cannot** debug the NS9360 ARM926EJ-S:
+
+| Adapter Type | Example | Why It Fails |
+|-------------|---------|--------------|
+| **CMSIS-DAP** | IDAP-Link, DAPLink, any "CMSIS-DAP" probe | CMSIS-DAP protocol only speaks CoreSight DAP (ADIv5 DP/AP registers). ARM926EJ-S has no CoreSight DAP -- it uses EmbeddedICE-RT accessed via raw JTAG scan chains. The protocol has no mechanism for arbitrary IR/DR scans. |
+| **SWD-only probes** | ST-Link (SWD mode), Black Magic Probe (SWD mode) | SWD (Serial Wire Debug) is a CoreSight-era 2-wire protocol. ARM926EJ-S only supports JTAG. Some probes (like ST-Link V2) have a JTAG mode, but it is limited to Cortex targets via CoreSight DAP. |
+| **Keil ULINK2** (limited) | ULINK2, ULINK-ME | Technically supports ARM9 JTAG, but **locked to Keil uVision/MDK IDE** -- no OpenOCD driver, no GDB server, no open-source toolchain support. Requires Keil MDK license. RTCK support is unclear. Only useful if you already have a Keil MDK setup with NS9360 device support. |
+
+The distinction is architectural: EmbeddedICE-RT (ARM7/ARM9) debug requires the
+host to perform raw JTAG scan chain operations (IR scan, DR scan) to access
+EmbeddedICE registers. CoreSight DAP (Cortex) debug works at a higher abstraction
+level through DAP register reads/writes (CSW, TAR, DRW). A CoreSight-only adapter
+literally cannot form the JTAG commands needed to talk to an ARM926EJ-S.
+
+### Recommended Adapter for This Project
+
+For the NS9360 iPDU board, the recommended adapters in order of preference:
+
+1. **SEGGER J-Link** -- Use with J-Link GDB Server for best performance. Supports
+   RTCK adaptive clocking, handles ARM9 I-Cache/D-Cache coherency natively via
+   JTAG (no target-side code needed), and works with standard `arm-none-eabi-gdb`.
+   The J-Link EDU (~$60) is sufficient for non-commercial use.
+
+2. **TIAO TUMPA** -- Use with OpenOCD. Same FT2232H chip family as the Amontec
+   JTAGkey confirmed working with the NS9360. Ships with the 20-pin ARM JTAG
+   header and has an OpenOCD config file (`interface/ftdi/tumpa.cfg`) included in
+   the OpenOCD distribution. Requires writing an NS9360 target config (see the
+   [OpenOCD configuration section](#openocd-configuration-for-ns9360-via-rpi-zero-w)
+   for the target definition).
+
+3. **Raspberry Pi Zero W** -- Use with OpenOCD `bcm2835gpio` driver. See the
+   [dedicated section below](#using-a-raspberry-pi-zero-w-as-a-remote-jtag-adapter)
+   for wiring and configuration. Best for persistent remote debug access.
 
 ## Using a Raspberry Pi Zero W as a Remote JTAG Adapter
 
