@@ -112,6 +112,24 @@ reference design), its pinout would be:
 The NS9360 reference design includes series resistors (e.g., 33 ohm on TDO and
 RTCK) and a MAX811 reset monitor for clean reset generation on pin 15 (nSRST).
 
+### Power Pins on the 20-Pin Header
+
+The JTAG header **cannot** power the target board. The two power-related pins
+serve reference and adapter purposes only:
+
+| Pin | Signal | Purpose |
+|-----|--------|---------|
+| 1 | VTref | **Voltage reference input** -- driven by the *target board* to tell the debugger what logic level to use (3.3V on the iPDU). This is not a power input to the target. |
+| 19 | 5V-Supply | **Debugger adapter power** -- optional 5V from the debugger, intended to power small adapter circuits (e.g., level shifters on a debug adapter board). Current capacity is minimal (typically <100 mA). Not for powering the target. |
+
+The NS9360, its 32 MB SDRAM, 16 MB NOR flash, and support circuitry draw far more
+power than any JTAG debugger or RPi GPIO header could supply. The iPDU board
+**must** be powered from its own mains AC power supply for JTAG debugging to work.
+
+In practice: plug in and power up the iPDU first, then connect the JTAG debugger.
+The VTref pin on J1 lets the debugger (or OpenOCD on the RPi) detect that the
+target is powered and at what voltage level.
+
 ### Compatible JTAG Debuggers
 
 The 20-pin ARM JTAG header accepts any standard ARM Multi-ICE compatible debugger.
