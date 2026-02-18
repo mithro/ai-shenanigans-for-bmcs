@@ -39,6 +39,7 @@
 | ANALYSIS.md | Complete | Board component inventory, NS9360 I/O architecture |
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
+| HEADERS-J1-J6.md | Partial | J1/J6 extension bar bus connector documentation |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -74,7 +75,9 @@
 - PLL bootstrap pin configuration not measured (determines CPU speed)
 - J11 "Mox SPI" connection target unknown (MAXQ3180? SPI flash? external?)
 - J10 "PLC DIAG" Power Line Communication circuit not traced
-- Extension bar bus protocol (J1, J6 connectors) not documented
+- Extension bar bus protocol (J1, J6 connectors) partially documented in
+  [HEADERS-J1-J6.md](HEADERS-J1-J6.md) -- architecture and function described,
+  exact pinout and protocol details require physical board access
 
 ### Firmware Analysis (Blocked on Firmware Acquisition)
 - Firmware binary not yet obtained for analysis
