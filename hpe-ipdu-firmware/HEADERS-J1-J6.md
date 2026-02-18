@@ -114,13 +114,179 @@ RTCK) and a MAX811 reset monitor for clean reset generation on pin 15 (nSRST).
 
 ### Compatible JTAG Debuggers
 
-The NS9360 ARM926EJ-S can be debugged with standard ARM JTAG tools:
+The 20-pin ARM JTAG header accepts any standard ARM Multi-ICE compatible debugger.
+These connect via a 20-pin IDC ribbon cable.
 
-- SEGGER J-Link
-- Ronetix PEEDI
-- Lauterbach TRACE32
-- OpenOCD with FTDI-based adapter
-- Any ARM Multi-ICE compatible 20-pin debugger
+**Dedicated ARM JTAG debuggers:**
+
+| Debugger | Interface | Notes |
+|----------|-----------|-------|
+| SEGGER J-Link | USB | Most widely used; excellent OpenOCD and GDB integration |
+| Lauterbach TRACE32 | USB/Ethernet | High-end professional tool |
+| Ronetix PEEDI | Ethernet | Network-attached JTAG; good for remote/headless setups |
+| Amontec JTAGkey | USB | Confirmed working with NS9360 ([OpenOCD mailing list](https://sourceforge.net/p/openocd/mailman/message/28340950/)) |
+
+**FTDI-based generic adapters ($5-30):**
+
+| Adapter | Chip | Notes |
+|---------|------|-------|
+| Dangerous Prototypes Bus Blaster | FT2232H | Open hardware |
+| Olimex ARM-USB-OCD | FT2232 | Widely available |
+| Generic FT2232H breakout | FT2232H | Cheapest option; requires OpenOCD config |
+| Generic FT232H breakout | FT232H | Single-channel variant |
+
+All FTDI-based adapters use OpenOCD's `ftdi` interface driver and connect to the
+20-pin header via ribbon cable.
+
+**SBC-based GPIO bitbang adapters:**
+
+Any single-board computer with GPIO and OpenOCD support can bitbang the JTAG
+protocol. See the Raspberry Pi Zero W section below.
+
+## Using a Raspberry Pi Zero W as a Remote JTAG Adapter
+
+A Raspberry Pi Zero W can serve as a wireless, network-accessible JTAG debug
+adapter for the NS9360 by bitbanging the JTAG protocol through its GPIO pins
+using OpenOCD. This is a practical approach for this project since the Pi can be
+mounted near or inside the iPDU chassis for persistent remote debug access.
+
+### Why the RPi Zero W is a Good Fit
+
+- **3.3V GPIO** -- the RPi Zero W GPIO runs at 3.3V, directly level-compatible
+  with the NS9360's 3.3V JTAG signals; no level shifter needed
+- **Built-in WiFi** -- provides wireless access without extra hardware
+- **OpenOCD runs natively** -- the Pi acts as both the JTAG adapter and the
+  OpenOCD host; no USB link to a separate computer
+- **Network GDB** -- OpenOCD exposes a GDB server over TCP, allowing any
+  workstation on the network to connect for debugging
+- **Small form factor** -- the Pi Zero W can fit inside or next to the PDU chassis
+
+### OpenOCD GPIO Driver Options
+
+| Driver | Method | Speed | RPi Zero W |
+|--------|--------|-------|------------|
+| `bcm2835gpio` | Direct BCM2835 peripheral register access | Fastest | Best choice (native BCM2835) |
+| `sysfsgpio` | Linux sysfs `/sys/class/gpio` | Slower | Works, portable |
+| `linuxgpiod` | Linux libgpiod | Medium | Works on newer kernels |
+
+The `bcm2835gpio` driver directly accesses the BCM2835 GPIO peripheral registers
+for maximum bitbang speed and is the recommended choice for the Pi Zero W.
+
+### Wiring: RPi Zero W GPIO to J1 (20-Pin ARM JTAG)
+
+Using the pin assignments from OpenOCD's `raspberrypi-native.cfg`:
+
+| JTAG Signal | J1 Pin | RPi GPIO | RPi Header Pin | Direction (from Pi) |
+|-------------|--------|----------|----------------|---------------------|
+| TCK | 9 | GPIO 11 (SPI0_SCLK) | 23 | Output |
+| TMS | 7 | GPIO 25 | 22 | Output |
+| TDI | 5 | GPIO 10 (SPI0_MOSI) | 19 | Output |
+| TDO | 13 | GPIO 9 (SPI0_MISO) | 21 | Input |
+| nTRST | 3 | GPIO 7 (SPI0_CE1) | 26 | Output |
+| nSRST | 15 | GPIO 24 | 18 | Output |
+| GND | 4,6,8,10,12,14,16,18,20 | GND | 6,9,14,20,25 | -- |
+| VTref | 1 | 3.3V | 1 | Input (reference only) |
+
+Note: VTref on J1 pin 1 is a voltage reference input to the debugger, not a power
+supply. Connect it to the Pi's 3.3V pin so OpenOCD can detect the target voltage.
+Do **not** attempt to power the iPDU board from the Pi.
+
+### Building OpenOCD on the RPi Zero W
+
+```bash
+# Install dependencies
+sudo apt-get install git autoconf libtool make pkg-config libusb-1.0-0-dev
+
+# Clone and build OpenOCD with BCM2835 GPIO support
+git clone https://git.code.sf.net/p/openocd/code openocd
+cd openocd
+./bootstrap
+./configure --enable-bcm2835gpio --enable-sysfsgpio
+make -j1    # Pi Zero W is single-core
+sudo make install
+```
+
+### OpenOCD Configuration for NS9360 via RPi Zero W
+
+Create a file `ns9360-rpi.cfg`:
+
+```tcl
+# Interface: Raspberry Pi Zero W GPIO bitbang
+adapter driver bcm2835gpio
+bcm2835gpio_peripheral_base 0x20000000    # BCM2835 (Pi Zero/1) base
+bcm2835gpio_speed_coeffs 113714 28        # Calibrated for Pi Zero W clock
+
+# JTAG pin assignments (BCM GPIO numbers)
+bcm2835gpio_jtag_nums 11 25 10 9          # TCK TMS TDI TDO
+bcm2835gpio_trst_num 7                    # nTRST
+bcm2835gpio_srst_num 24                   # nSRST
+
+# Transport and speed
+transport select jtag
+adapter speed 1000                        # 1 MHz, start conservative
+
+# NS9360 JTAG TAP
+set _CHIPNAME ns9360
+jtag newtap $_CHIPNAME cpu -irlen 4 \
+    -ircapture 0x9 -irmask 0x0f \
+    -expected-id 0x09105031
+
+# ARM926EJ-S target
+set _TARGETNAME $_CHIPNAME.cpu
+target create $_TARGETNAME arm926ejs \
+    -endian little -chain-position $_TARGETNAME
+
+# Reset configuration
+reset_config trst_and_srst
+```
+
+Source for NS9360 JTAG TAP parameters: [OpenOCD mailing list](https://sourceforge.net/p/openocd/mailman/message/28340950/)
+(IRLen=4, IDCODE=0x09105031, confirmed with Amontec JTAGkey).
+
+### Running OpenOCD and Connecting Remotely
+
+```bash
+# On the Raspberry Pi Zero W:
+sudo openocd -f ns9360-rpi.cfg -c "bindto 0.0.0.0"
+
+# From any workstation on the network:
+arm-none-eabi-gdb
+(gdb) target remote <pi-zero-ip>:3333
+(gdb) monitor reset halt
+(gdb) monitor mdw 0x00000000 16          # Read first 64 bytes of flash
+```
+
+OpenOCD listens on three ports by default:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 3333 | GDB Remote Serial Protocol | GDB debugging |
+| 4444 | OpenOCD Telnet | Interactive OpenOCD commands |
+| 6666 | OpenOCD TCL | Scripted access |
+
+By default OpenOCD only listens on localhost. The `-c "bindto 0.0.0.0"` flag is
+required to accept remote connections over WiFi.
+
+### Known NS9360 OpenOCD Issue
+
+An [OpenOCD mailing list thread](https://sourceforge.net/p/openocd/mailman/message/28340950/)
+reported an error with the NS9360:
+
+> unknown EmbeddedICE version (comms ctrl: 0x00000000)
+
+This likely indicates that ARM debug mode is disabled in hardware. On the iPDU
+board, check the **"BIST EN"** test point -- if `bist_en_n` is pulled low (normal
+operation mode), the EmbeddedICE registers will be inaccessible and read as all
+zeros. The fix is to change the `bist_en_n` pull-down to a pull-up (see the
+[Debug Mode Enable](#debug-mode-enable) section above).
+
+### Alternative: Raspberry Pi as USB Gadget Serial + UART
+
+If JTAG debug is not feasible (e.g., `bist_en_n` cannot be changed), the RPi
+Zero W can alternatively be used as a WiFi-to-serial bridge for the J25 "Digi UART"
+debug console. The Pi Zero W's UART (GPIO 14 TX / GPIO 15 RX) can be wired directly
+to J25 at 115200/8/N/1 and accessed remotely via `ser2net`, `socat`, or an SSH
+session running `minicom`.
 
 ## Relationship to Other Debug Headers
 

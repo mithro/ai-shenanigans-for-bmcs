@@ -41,7 +41,7 @@
 | ANALYSIS.md | Complete | Board component inventory, NS9360 I/O architecture |
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
-| HEADERS-J1-J6.md | Partial | J1/J6 extension bar bus connector documentation |
+| HEADERS-J1-J6.md | Partial | J1/J6 debug header documentation, JTAG interface, RPi Zero W adapter guide |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
