@@ -1,0 +1,6 @@
+[submodule "hpe-ipdu-firmware/uboot-port/reference/ns9750dev-uboot/u-boot-v2012.10"]
+	path = hpe-ipdu-firmware/uboot-port/reference/ns9750dev-uboot/u-boot-v2012.10
+	url = https://github.com/u-boot/u-boot.git
+[submodule "hpe-ipdu-firmware/uboot-port/reference/linux-mach-ns9xxx/linux-v2.6.39"]
+	path = hpe-ipdu-firmware/uboot-port/reference/linux-mach-ns9xxx/linux-v2.6.39
+	url = https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
