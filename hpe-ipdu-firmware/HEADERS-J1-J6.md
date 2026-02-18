@@ -1,210 +1,186 @@
-# HPE Intelligent Modular PDU -- J6 and J1 Extension Bar Bus Headers
+# HPE Intelligent Modular PDU -- J1 and J6 Debug Headers
 
 ## Summary
 
-J6 and J1 are white multi-pin connectors on the HP iPDU Core Unit controller board.
-They serve as the **extension bar bus connectors**, providing the internal interface
-between the NS9360 controller board and the power distribution / outlet section of
-the Core Unit chassis. Through these connectors, the controller board communicates
-with and controls the Extension Bars that plug into the Core Unit's IEC C19 outlets.
+J1 and J6 are debug/programming headers on the HP iPDU Core Unit controller board,
+likely providing JTAG and/or serial debug access to the Digi NS9360 ARM926EJ-S
+processor. They are **not** extension bar bus connectors (the extension bar bus
+uses the white connector pairs J2/J29, J3/J30, and J4/J31).
 
 ## Physical Description
 
-| Property | Value |
-|----------|-------|
-| Ref Des | J1, J6 |
-| Connector Colour | White |
-| Connector Type | Multi-pin PCB header (exact part number unknown) |
-| Location | HP iPDU Core Unit controller board |
-| Visible In | Google Photos album "HP PDU AF520A Core Parts" |
-
-The exact pin count, pitch, and connector manufacturer/part number have not yet
-been determined from board photos alone. Physical measurement of the board is
-required.
-
-## Function
-
-J1 and J6 are the internal bus connectors that link the main controller board (with
-the NS9360 CPU, MAXQ3180 power measurement AFE, and associated circuitry) to the
-power distribution section of the Core Unit. The power distribution section contains:
-
-- 6x IEC C19 outlets (load segments 1-6)
-- 6x circuit breakers (one per load segment)
-- Current transformers and voltage sensing circuitry
-- PLC (Power Line Communication) coupling circuitry
-
-### Extension Bar Architecture
-
-The HP iPDU uses a **core and stick architecture**:
-
-```
-                     Core Unit Controller Board
-                      (NS9360, MAXQ3180, etc.)
-                            |      |
-                           J6      J1
-                            |      |
-                    Power Distribution Section
-                     /    /    |    \    \    \
-                   CB1  CB2  CB3  CB4  CB5  CB6    (Circuit Breakers)
-                    |    |    |    |    |    |
-                   C19  C19  C19  C19  C19  C19    (IEC C19 Outlets)
-                    |    |    |    |    |    |
-                   Ext  Ext  Ext  Ext  Ext  Ext    (Extension Bars,
-                   Bar  Bar  Bar  Bar  Bar  Bar     up to 6 total)
-                    |    |    |    |    |    |
-                  5xC13 each = up to 30 outlets
-```
-
-Each Extension Bar plugs into one of the Core Unit's IEC C19 outlets via an IEC C20
-input connector. Up to **6 Extension Bars** can be connected to a single Core Unit,
-providing up to **30 IEC C13 outlets** total.
-
-### PLC (Power Line Communication)
-
-Communication between the Core Unit and Extension Bars uses **Power Line
-Communication (PLC)** -- data signals are modulated onto the AC power lines. This
-means no separate data cable is needed between the Core Unit and Extension Bars;
-the IEC C19/C20 power connection carries both AC power and the PLC data signal.
-
-The PLC system enables:
-
-- **Per-outlet switching** -- individual C13 outlets on Extension Bars can be
-  remotely switched on/off
-- **Per-outlet monitoring** -- voltage, current, power (W/VA), power factor, and
-  energy (kWh) per outlet
-- **Extension Bar identification** -- the Core Unit discovers which Extension Bars
-  are connected and their positions
-- **Status indication** -- UID LED activation and power status indication on
-  Extension Bars
-- **Intelligent Power Discovery (IPD)** -- when used with PLC power cables (blue
-  connectors) and HP Common Slot Platinum Power Supplies, the system can
-  automatically map server-to-outlet power topology
-
-Evidence for PLC use on this board:
-- The **J10 "PLC DIAG"** header on the controller board is explicitly labelled for
-  Power Line Communication diagnostics
-- Extension Bars have **bright blue PLC IEC C20 input connectors** distinguishing
-  them from standard power connectors
-- The HP Intelligent Extension Bar (part 627749-001) is described as having a
-  "power line communication connector (PLC)"
-- PLC power cables with blue connectors are required for Intelligent Power
-  Discovery
-
-### Relationship to Other Board Connectors
-
-| Ref Des | Label | Relationship to J1/J6 |
-|---------|-------|-----------------------|
-| J10 | "PLC DIAG" | PLC diagnostic header -- likely provides test access to the PLC bus signals that pass through J1/J6 |
-| J11 | "Mox SPI" | SPI header -- possibly connects to MAXQ3180 power measurement AFE, which processes current/voltage measurements from sensing circuitry connected via J1/J6 |
-| J25 | "Digi UART" | Debug UART -- independent of extension bar bus |
-| J28 | Pin header | Unknown function |
-| J5 | Connector | Unknown function |
-
-## Signal Architecture (Inferred)
-
-The exact pinout of J1 and J6 has not been determined. Based on the board
-architecture and iPDU functionality, the connectors likely carry some combination
-of the following signal types:
-
-### Power Measurement Signals
-
-The MAXQ3180 3-phase power measurement AFE (U15) measures voltage, current, active
-power, reactive power, apparent power, power factor, and frequency. It requires
-analog inputs from:
-
-- **Current transformers** (e.g., PT1 KSZT770 2mA:2mA CT) on each load segment
-- **Voltage sensing** from the AC mains
-
-These analog sensing signals from the power distribution section likely route
-through J1/J6 to reach the MAXQ3180 on the controller board.
-
-### PLC Bus Signals
-
-The PLC modulator/demodulator circuitry on the controller board needs to couple
-its data signal onto the AC power lines that feed the IEC C19 outlets. The PLC
-coupling path runs through J1/J6 to reach the outlet section.
-
-### Possible Control Signals
-
-Depending on the architecture, J1/J6 may also carry:
-
-- Relay/contactor drive signals for outlet switching on the Core Unit itself
-- Circuit breaker status signals
-- Ground/neutral/earth connections
-- DC power for PLC coupling circuits in the outlet section
-
-## Why Two Connectors (J1 and J6)?
-
-The Core Unit has 6 load segments. The use of two separate bus connectors (J1 and
-J6) may reflect:
-
-1. **Split bus architecture** -- J1 may serve load segments 1-3 and J6 may serve
-   load segments 4-6 (or vice versa), matching the 3-phase power distribution on
-   3-phase models
-2. **Input vs output** -- one connector may carry signals from the power input side
-   (mains, voltage sensing) while the other carries signals to/from the outlet side
-   (current sensing, PLC, relay control)
-3. **Redundancy or separate functions** -- one may carry power measurement analog
-   signals while the other carries PLC digital/modulated signals
-
-The actual split of functionality between J1 and J6 requires board tracing to
-determine.
-
-## Extension Bar Types
-
-Two generations of Extension Bars have been used with the HP iPDU:
-
-### Standard Extension Bar
+### J1 -- Large Ribbon-Style Connector
 
 | Property | Value |
 |----------|-------|
-| Outlets | 5x IEC C13 |
-| Monitoring | Per-bar power indicator (green LED) |
-| Switching | Not individually switchable |
-| PLC | Not required |
-| Connection | IEC C20 input to Core Unit C19 outlet |
+| Ref Des | J1 |
+| Form Factor | Large ribbon-style connector |
+| Likely Type | 2x10 (20-pin) 0.100" pitch IDC box header |
+| Likely Function | NS9360 ARM JTAG debug header |
+| Visible In | [Board photos](https://photos.google.com/share/AF1QipOlajnfRlw4bCdkUFzp4Ti6VZBmPwLn1eyXQCJaOMjkgSEMFuxiXs21xtg1u3QJMA?key=TjdOQno3d2FLbzJYSFhBM3RoZ2RfU2xxclJaT05n) |
 
-### Intelligent Extension Bar (G2)
+J1's large ribbon-style form factor is consistent with the standard 20-pin ARM JTAG
+connector used in the NS9360 reference design (labelled "JTAG 20 PIN HEADER" in the
+datasheet schematic, specified as `HEADER 10X2.1SP`). The ConnectCore 9P 9360
+development board uses an identical 20-pin header (X13) for ARM JTAG debug.
+
+### J6 -- Black 2x5 Pin Header
 
 | Property | Value |
 |----------|-------|
-| Example Part | AF547A (kit), 627749-001 (individual) |
-| Outlets | 5x IEC C13 with PLC connectors (blue) |
-| Monitoring | Per-outlet V, A, W, VA, PF, kWh |
-| Switching | Per-outlet remote on/off |
-| Height | 5U |
-| PLC | Required -- bright blue PLC IEC C20 input |
-| Features | Status indicator and UID LED per outlet |
-| Connection | PLC IEC C20 input to Core Unit C19 outlet |
+| Ref Des | J6 |
+| Form Factor | Black 2x5 (10-pin) standard pin header |
+| Pitch | Likely 0.100" (2.54 mm) |
+| Likely Function | Secondary debug or serial header (see analysis below) |
+| Visible In | [Board photos](https://photos.google.com/share/AF1QipOlajnfRlw4bCdkUFzp4Ti6VZBmPwLn1eyXQCJaOMjkgSEMFuxiXs21xtg1u3QJMA?key=TjdOQno3d2FLbzJYSFhBM3RoZ2RfU2xxclJaT05n) |
+
+J6 is a black 2x5 standard pin header. Possible functions include:
+
+- **Reduced JTAG header** -- carrying the 5 essential JTAG signals (TCK, TDI, TDO,
+  TMS, TRST_n) plus ground pins, without RTCK/nSRST/DBGRQ/5V
+- **Secondary JTAG** -- for programming another device on the board (similar to the
+  ConnectCore 9P 9360's X12 "JTAG Booster" header for its CPLD)
+- **Serial debug header** -- providing access to one of the NS9360's four serial
+  ports with handshaking signals
+
+Board tracing is required to confirm which signals are present on J6.
+
+## NS9360 JTAG Interface
+
+The NS9360 ARM926EJ-S processor has a standard IEEE 1149.1 JTAG interface with ARM
+adaptive clocking support (RTCK). The JTAG signals on the NS9360 BGA272 are:
+
+| BGA Pin | Signal | Direction | Pull | Drive | Description |
+|---------|--------|-----------|------|-------|-------------|
+| G18 | `tck` | Input | None | -- | Test Clock |
+| D20 | `tdi` | Input | Internal pull-up | -- | Test Data In |
+| G19 | `tdo` | Output | None | 2 mA | Test Data Out |
+| F19 | `tms` | Input | Internal pull-up | -- | Test Mode Select |
+| F20 | `trst_n` | Input | Internal pull-up | -- | Test Reset (active low) |
+| Y4 | `rtck` | I/O | Internal pull-up | 2 mA | Return Test Clock |
+
+Source: NS9360 Datasheet Rev D (91001326_D.pdf), Table 17.
+
+### Debug Mode Enable
+
+ARM debug mode on the NS9360 is controlled by the `bist_en_n` pin (BGA ball V5):
+
+| Mode | `bist_en_n` (V5) | `scan_en_n` (Y3) | `pll_test_n` (U6) |
+|------|-------------------|-------------------|--------------------|
+| Normal operation | Pull-down (2.4K) | Pull-down (2.4K) | Pull-up |
+| ARM debug mode | Pull-up (10K) | Pull-down (2.4K) | Pull-up |
+
+The NS9360 reference design uses a resistor option (R6/R9) to switch between debug
+enabled and disabled. The datasheet notes: *"Debug mode must be disabled on customer
+units in production."*
+
+The HPE iPDU board has a **"BIST EN"** test point, which corresponds to the
+`bist_en_n` signal. On the production board, this is likely pulled low (debug
+disabled). To enable JTAG debug, the pull-down would need to be changed to a
+pull-up.
+
+### Debug Capabilities
+
+The NS9360's ARM926EJ-S core provides:
+
+- **EmbeddedICE-RT** -- halt-mode debug (hardware breakpoints, watchpoints,
+  single-step, register read/write via JTAG)
+- **JTAG boundary scan** -- IEEE 1149.1 compliant, with BSDL file available
+
+The NS9360 does **not** have an ETM (Embedded Trace Macrocell) -- no trace port
+pins are present in the BGA272 package. Debug is limited to halt-mode JTAG and
+UART serial console.
+
+### Standard 20-Pin ARM JTAG Pinout
+
+If J1 follows the standard ARM Multi-ICE 20-pin connector (as used in the NS9360
+reference design), its pinout would be:
+
+| Pin | Signal | Pin | Signal |
+|-----|--------|-----|--------|
+| 1 | VTref (3.3V) | 2 | VCC or NC |
+| 3 | nTRST | 4 | GND |
+| 5 | TDI | 6 | GND |
+| 7 | TMS | 8 | GND |
+| 9 | TCK | 10 | GND |
+| 11 | RTCK | 12 | GND |
+| 13 | TDO | 14 | GND |
+| 15 | nSRST | 16 | GND |
+| 17 | DBGRQ | 18 | GND |
+| 19 | 5V-Supply | 20 | GND |
+
+The NS9360 reference design includes series resistors (e.g., 33 ohm on TDO and
+RTCK) and a MAX811 reset monitor for clean reset generation on pin 15 (nSRST).
+
+### Compatible JTAG Debuggers
+
+The NS9360 ARM926EJ-S can be debugged with standard ARM JTAG tools:
+
+- SEGGER J-Link
+- Ronetix PEEDI
+- Lauterbach TRACE32
+- OpenOCD with FTDI-based adapter
+- Any ARM Multi-ICE compatible 20-pin debugger
+
+## Relationship to Other Debug Headers
+
+The iPDU controller board has several debug and programming headers. J1 and J6 sit
+alongside these other interfaces:
+
+| Ref Des | Label | Function | Processor |
+|---------|-------|----------|-----------|
+| **J1** | -- | ARM JTAG debug (20-pin ribbon, likely) | NS9360 |
+| **J6** | -- | Secondary debug (2x5 black header) | NS9360 or sub-MCU |
+| J25 | "Digi UART" | Debug serial console (115200/8/N/1) | NS9360 Serial Port A |
+| J11 | "Mox SPI" | SPI bus access | MAXQ3180 or SPI flash |
+| J10 | "PIC JTAG" | Sub-MCU JTAG/programming | TMP89FM42LUG or other |
+| J27 | "I2C" | I2C bus header | NS9360 I2C bus |
+| -- | "BIST EN" | Debug mode enable test point | NS9360 `bist_en_n` (V5) |
+
+### Extension Bar Bus Connectors (Not J1/J6)
+
+The extension bar bus uses **white connector pairs** on the board:
+
+| Connector Pair | Function |
+|----------------|----------|
+| J2 / J29 | Extension bar bus connector pair |
+| J3 / J30 | Extension bar bus connector pair |
+| J4 / J31 | Extension bar bus connector pair |
+
+These white connector pairs are separate from J1 and J6 and carry signals between
+the controller board and the power distribution / outlet section of the Core Unit.
 
 ## Open Investigation Items
 
-The following require physical access to the board to determine:
+The following require physical board access to confirm:
 
-- [ ] Exact connector type, pin count, and pitch for J1 and J6
-- [ ] Complete pinout (signal-to-pin mapping) for both connectors
-- [ ] Whether J1 and J6 carry the same signals or different ones
-- [ ] The PLC modulation scheme (FSK, OFDM, spread spectrum, etc.)
-- [ ] The data-link protocol used over PLC (framing, addressing, error detection)
-- [ ] The application protocol used to command outlet switching and read measurements
-- [ ] Which NS9360 serial port(s) drive the PLC modem
-- [ ] Whether there is a dedicated PLC modem IC on the board (not yet identified)
-  or if PLC modulation is done in software via a serial port
-- [ ] The relationship between J1 and J6 (same bus duplicated, or split functions)
-- [ ] Whether any AC power lines pass through these connectors or only low-voltage
-  signals
-- [ ] Circuit breaker status signal routing (if any)
-- [ ] Board trace analysis from J1/J6 to NS9360 GPIO pins and MAXQ3180 inputs
+- [ ] Verify J1 pinout matches standard 20-pin ARM JTAG (probe against NS9360 BGA
+  pins G18/D20/G19/F19/F20/Y4)
+- [ ] Determine J6 function -- trace pins to identify connected signals (JTAG,
+  serial, or other)
+- [ ] Check if J6 connects to the NS9360 or to another device (TMP89FM42LUG
+  sub-MCU, MAXQ3180, etc.)
+- [ ] Determine if J1 is populated or just an unpopulated footprint on production
+  boards
+- [ ] Check the `bist_en_n` resistor configuration -- is debug mode enabled or
+  disabled on this board?
+- [ ] Determine the exact connector part numbers for J1 and J6
+- [ ] Attempt JTAG connection via J1 to confirm functionality and read NS9360
+  device ID via boundary scan
+- [ ] Check if the NS9360 TRST_n line is properly pulsed at boot (required when
+  debugger is not attached)
 
 ## References
 
+- [NS9360 Datasheet Rev D](https://ftp1.digi.com/support/documentation/91001326_D.pdf)
+  -- Table 17 (JTAG pinout), Figure 6 (reference design JTAG schematic)
+- [NS9360 Hardware Reference Manual Rev J](https://ftp1.digi.com/support/documentation/90000675_J.pdf)
+  -- JTAG interface section, test/debug registers
+- [ConnectCore 9P 9360 Hardware Reference](https://ftp1.digi.com/support/documentation/90000769_C.pdf)
+  -- X13 (standard ARM JTAG) and X12 (JTAG Booster) headers
 - [ANALYSIS.md](ANALYSIS.md) -- Full board component inventory and NS9360 I/O
   architecture
 - [RESOURCES.md](RESOURCES.md) -- Datasheets and documentation links
 - [STATUS.md](STATUS.md) -- Project status and open items
-- [HP Intelligent PDU User Manual (ManualsLib)](https://www.manualslib.com/manual/1252706/Hp-Intelligent-Pdu.html)
-  -- 104-page official user guide
-- [HP iPDU QuickSpecs (ManualsLib)](https://www.manualslib.com/manual/693626/Hp-Ipdu-Intelligent.html)
-  -- 17-page product QuickSpecs
-- [Google Photos: HP PDU AF520A Core Parts](https://photos.google.com/share/AF1QipOlajnfRlw4bCdkUFzp4Ti6VZBmPwLn1eyXQCJaOMjkgSEMFuxiXs21xtg1u3QJMA?key=TjdOQno3d2FLbzJYSFhBM3RoZ2RfU2xxclJaT05n)
-  -- Physical board teardown photos showing J1 and J6 connectors
+- [Board Photos](https://photos.google.com/share/AF1QipOlajnfRlw4bCdkUFzp4Ti6VZBmPwLn1eyXQCJaOMjkgSEMFuxiXs21xtg1u3QJMA?key=TjdOQno3d2FLbzJYSFhBM3RoZ2RfU2xxclJaT05n)
+  -- Google Photos album "HP PDU AF520A Core Parts"

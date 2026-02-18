@@ -124,14 +124,18 @@ that pairs with the NS9360's on-chip Ethernet MAC.
 
 | Ref Des | Label | Function |
 |---------|-------|----------|
+| J1 | -- | ARM JTAG debug header (large ribbon-style, likely 20-pin) |
+| J6 | -- | Secondary debug header (black 2x5 pin header) |
 | J25 | "Digi UART" | Debug UART header (serial console) |
 | J11 | "Mox SPI" | SPI header (possibly for MAXQ3180 or SPI flash) |
-| J10 | "PLC DIAG" | Power Line Communication diagnostics |
-| J1, J6 | White connectors | Extension bar bus connectors |
+| J10 | "PIC JTAG" | Sub-MCU JTAG/programming header |
+| J27 | "I2C" | I2C bus header |
+| J2, J29 | White connector pair | Extension bar bus connector |
+| J3, J30 | White connector pair | Extension bar bus connector |
+| J4, J31 | White connector pair | Extension bar bus connector |
 | J28 | Pin header | Unknown |
 | J5 | Connector | Unknown |
-| -- | "BIST EN" | Built-In Self Test enable test point |
-| -- | "I2C" | I2C bus test point |
+| -- | "BIST EN" | Built-In Self Test / debug mode enable test point |
 | -- | RJ-45 | Ethernet management port |
 
 ### Board Markings
