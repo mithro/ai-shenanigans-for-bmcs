@@ -205,6 +205,50 @@ For the NS9360 iPDU board, the recommended adapters in order of preference:
    [dedicated section below](#using-a-raspberry-pi-zero-w-as-a-remote-jtag-adapter)
    for wiring and configuration. Best for persistent remote debug access.
 
+### Adapter Comparison
+
+| Feature | J-Link | TUMPA (FT2232H) | RPi Zero W | Keil ULINK2 |
+|---------|--------|-----------------|------------|-------------|
+| **JTAG clock speed** | ~10 MHz | ~6-10 MHz | ~1-4 MHz (bitbang) | ~10 MHz |
+| **Adaptive clocking (RTCK)** | Yes (hardware) | Yes (MPSSE) | No | Unclear |
+| **Remote/wireless access** | No (USB) | No (USB) | **Yes (WiFi)** | No (USB) |
+| **ARM926EJ-S support** | Yes | Yes | Yes | Yes |
+| **Software** | J-Link GDB Server, OpenOCD | OpenOCD | OpenOCD | Keil MDK only |
+| **Approximate cost** | ~$60 (EDU) | ~$35-50 | ~$10-15 | ~$300+ |
+| **Setup effort** | Low (plug-and-play) | Medium (OpenOCD config) | High (build OpenOCD, wiring, network) | Low (if Keil licensed) |
+
+**Key trade-offs:**
+
+- **Speed** -- GPIO bitbanging on the Pi Zero W is the slowest option. The
+  `bcm2835gpio` driver tops out around 1-4 MHz effective JTAG clock, compared to
+  6-10 MHz for the hardware MPSSE in the TUMPA and ~10 MHz for the J-Link.
+  This matters most for bulk memory reads, flash programming, and frequent
+  halt/resume cycles.
+
+- **Adaptive clocking** -- The Pi **cannot** do RTCK-based adaptive clocking
+  because there is no hardware to monitor the RTCK return signal and synchronize
+  the bitbang loop. The J-Link and FT2232H adapters handle RTCK natively. This
+  means the Pi must use a conservative fixed clock rate, especially during
+  reset and low-speed states when the NS9360 may not be running at full speed.
+
+- **Remote access** -- This is where the Pi wins. It can be mounted inside or
+  next to the iPDU chassis and accessed over WiFi. The J-Link and TUMPA require
+  a USB cable to whatever machine runs the debugger. For persistent, always-on
+  debug access to a rack-mounted PDU, the Pi is the best choice.
+
+- **Timing reliability** -- Hardware JTAG adapters (J-Link, TUMPA) generate
+  timing from dedicated silicon. GPIO bitbanging on a non-real-time Linux kernel
+  can occasionally glitch under CPU load (cron jobs, WiFi interrupts, kernel
+  housekeeping), though in practice the `bcm2835gpio` driver (which accesses
+  peripheral registers directly, bypassing the kernel) is quite stable.
+
+**In practice**, the J-Link or TUMPA is better for interactive debugging sessions
+at the bench where speed matters (stepping through code, reading large memory
+regions, flash programming). The RPi Zero W is best for **persistent remote
+access** -- leave it wired up inside the chassis and SSH in whenever debugging is
+needed. They are complementary rather than competing; a typical setup might use a
+J-Link at the workbench and the Pi for remote access.
+
 ## Using a Raspberry Pi Zero W as a Remote JTAG Adapter
 
 A Raspberry Pi Zero W can serve as a wireless, network-accessible JTAG debug
