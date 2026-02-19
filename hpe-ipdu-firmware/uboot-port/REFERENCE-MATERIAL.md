@@ -5,7 +5,7 @@
 | Property | Value |
 |----------|-------|
 | SoC | Digi NS9360B-0-C177 |
-| CPU | ARM926EJ-S, 177 MHz, big-endian |
+| CPU | ARM926EJ-S, 177 MHz, boots big-endian (gpio[44]=0), runs little-endian |
 | SDRAM | 32 MB ISSI IS42S32800D-7BLI @ 0x00000000 |
 | NOR Flash | 16 MB (2x 8MB Macronix MX29LV640EBXEI, bottom boot) |
 | Flash CS0 | 0x40000000 (8 MB) |
@@ -187,7 +187,7 @@ important differences to account for in the U-Boot port:
 | Debug UART | Port A, 38400 baud | Port A, 115200 baud |
 | Ethernet PHY | Unknown model | ICS1893AFLF (MII, 25 MHz crystal) |
 | Boot source | Flash at CS1 | Flash at CS0 (0x40000000) |
-| Endianness | Big-endian (default) | Big-endian (confirmed by gpio[44]=0) |
+| Endianness | Big-endian (default), switched to LE | Big-endian boot (gpio[44]=0), switched to LE by stub |
 | I2C EEPROM | M24LC64 at 0x50 | Unknown (test point on I2C bus) |
 | NAND Flash | Optional | Not present |
 | USB | OHCI host | OHCI host (unused in stock firmware) |
