@@ -34,22 +34,30 @@ Crystal (Y1): 29.4912 MHz
     │   PLL   │  ND=11 (multiply by 12), FS=1 (divide by 2)
     └────┬────┘
          │
-    Raw PLL Output: 29.4912 MHz × 12 = 353.8944 MHz
-    (This is CONFIG_SYS_CLK_FREQ)
+    System Clock: 29.4912 MHz × 12 / 2 = 176.9472 MHz
+    (This is CONFIG_SYS_CLK_FREQ per the reference code convention)
          │
     ┌────┼──────────────────────────┐
     │    │                          │
-  ÷2   ÷4                         ÷8
+   ÷2   ÷4                        ÷8
     │    │                          │
-  CPU  AHB Bus                   BBus
-176.9  88.5 MHz                 44.2 MHz
- MHz
+  CPU*  AHB Bus                  BBus
+ 88.5   44.2 MHz                22.1 MHz
+  MHz
 ```
+
+*Note: The ARM926EJ-S core itself runs at the full system clock (176.9 MHz)
+per the NS9360 product brief. The Digi reference code convention defines
+CONFIG_SYS_CLK_FREQ as the post-FS PLL output (176.9 MHz), with CPU_CLK_FREQ,
+AHB_CLK_FREQ, and BBUS_CLK_FREQ derived via /2, /4, /8 respectively. The serial
+driver formula `CONFIG_SYS_CLK_FREQ / 8` relies on this convention. Using the raw
+PLL output (353.89 MHz) would produce incorrect baud rates.
 
 **PLL Register (SYS_PLL @ 0xA0900188):**
 - ND (bits [20:16]) = 11 (multiply by ND+1 = 12)
 - FS (bits [24:23]) = 1 (divide by 2^FS = 2)
 - Result: 29.4912 × 12 / 2 = 176.9472 MHz
+- Raw PLL (before FS): 29.4912 × 12 = 353.8944 MHz
 
 ### Memory Map
 
@@ -57,7 +65,7 @@ Crystal (Y1): 29.4912 MHz
 0x00000000 - 0x01FFFFFF  SDRAM (32 MB, CS4/CS5)
 0x40000000 - 0x407FFFFF  NOR Flash CS0 (8 MB, boot device)
 0x50000000 - 0x507FFFFF  NOR Flash CS1 (8 MB, secondary)
-0x90200000 - 0x902FFFFF  Serial Interface Module (BBus)
+0x90200000 - 0x903FFFFF  Serial Interface Module (BBus) [channels 0-1 @ 0x902xxxxx, 2-3 @ 0x903xxxxx]
 0x90600000 - 0x906FFFFF  BBus Utility Module (GPIO, DMA, etc.)
 0xA0600000 - 0xA06FFFFF  Ethernet MAC Module (AHB)
 0xA0700000 - 0xA07FFFFF  Memory Controller Module (AHB)
@@ -106,8 +114,8 @@ Crystal (Y1): 29.4912 MHz
 | Bus width | 16-bit per chip |
 | CS0 base | 0x40000000 (primary, boot device) |
 | CS1 base | 0x50000000 (secondary) |
-| Sector layout | 8× 8KB + 63× 64KB (bottom boot) |
-| Total sectors | 71 per chip (142 total) |
+| Sector layout | 8× 8KB + 127× 64KB (bottom boot) per chip |
+| Total sectors | 135 per chip (270 total) |
 | Erase timeout | Configurable (typically 30s per sector) |
 | Write timeout | Configurable (typically 1s per word) |
 
@@ -153,19 +161,25 @@ Crystal (Y1): 29.4912 MHz
 
 **Baud Rate Calculation for 115200:**
 ```
-Clock source: BCLK (BBus clock) = CONFIG_SYS_CLK_FREQ / 8 = 44,236,800 Hz
+Clock source: BCLK (BBus clock) = CONFIG_SYS_CLK_FREQ / 8 = 22,118,400 Hz
+  (Reference: ns9750_serial.c calcBitrateRegister(), comment "BBUS clock,[1] Fig. 38")
 Prescaler: TCDR_16 = ÷16, RCDR_16 = ÷16
-Divisor N: (44,236,800 / (115,200 × 16)) - 1 = 24 - 1 = 23
+Divisor N: (22,118,400 / (115,200 × 16)) - 1 = 12 - 1 = 11
+  (Note: divides exactly, no rounding error)
 
 BITRATE register value:
-  EBIT (bit 31)      = 1  (enable)
-  CLKMUX (bits 25:24)= 01 (BCLK)
-  TMODE (bit 30)     = 1  (transmit mode)
-  TCDR (bits 20:19)  = 10 (÷16)
-  RCDR (bits 18:16)  = 010 (÷16)
-  N (bits 14:0)      = 23
+  EBIT (bit 31)      = 1  (enable)             = 0x80000000
+  TMODE (bit 30)     = 1  (transmit mode)      = 0x40000000
+  CLKMUX (bits 25:24)= 01 (BCLK)              = 0x01000000
+  TCDR (bits 20:19)  = 10 (÷16)               = 0x00100000
+  RCDR (bits 18:16)  = 010 (÷16)              = 0x00040000
+  N (bits 14:0)      = 11                      = 0x0000000B
 
-Value: 0xE1100017
+Value: 0xC114000B
+
+Cross-check with reference: CC9C uses CONFIG_BAUDRATE=38400 with same CONFIG_SYS_CLK_FREQ.
+  N_38400 = (22,118,400 / (38,400 × 16)) - 1 = 36 - 1 = 35 (0x23)
+  BITRATE_38400 = 0xC1140023 (same flags, different N)
 ```
 
 **CTRL_A register value for 8N1:**
@@ -327,12 +341,22 @@ The NS9360 is an ARM926EJ-S (ARMv5TEJ) running in **big-endian** mode.
 
 ### Install ARM Big-Endian Toolchain
 
-```bash
-# Option 1: Debian/Ubuntu cross-compiler package
-sudo apt install gcc-arm-linux-gnueabi
+The NS9360 runs in **big-endian** mode. The standard `arm-linux-gnueabi` package
+is a little-endian toolchain, but it supports big-endian output via the
+`-mbig-endian` flag. The Digi reference toolchain used this same approach.
 
-# Option 2: Download Linaro/ARM toolchain for ARMv5 big-endian
-# The Digi toolchain was arm-linux-gnueabi with -mbig-endian flag
+```bash
+# Option 1: Debian/Ubuntu cross-compiler with -mbig-endian
+sudo apt install gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
+# U-Boot's build system will add -mbig-endian automatically when
+# CONFIG_SYS_BIG_ENDIAN=y is set (via Kconfig select SYS_BIG_ENDIAN).
+# However, the linker must also support big-endian. Verify:
+arm-linux-gnueabi-ld --help | grep -i endian
+# Should show "-EB" (big-endian) option
+
+# Option 2: Dedicated big-endian toolchain (armeb prefix)
+# Some distributions provide armeb-linux-gnueabi-gcc which defaults to BE.
+# This avoids relying on -mbig-endian flag support.
 
 # Verify:
 arm-linux-gnueabi-gcc -v
@@ -341,16 +365,21 @@ arm-linux-gnueabi-gcc -v
 ### U-Boot Build Configuration
 
 ```bash
-# For the incremental port, we'll create a new defconfig
 # The cross-compiler prefix:
 export CROSS_COMPILE=arm-linux-gnueabi-
 
-# Build with big-endian:
-# U-Boot's ARM926EJS support handles this via board config
-# CONFIG_SYS_BIG_ENDIAN=y in the board header
+# Build:
+make hpe_ipdu_defconfig
+make CROSS_COMPILE=arm-linux-gnueabi- -j$(nproc)
+
+# The Kconfig 'select SYS_BIG_ENDIAN' in the NS9360 Kconfig ensures
+# -mbig-endian is passed to both compiler and linker automatically.
+# If the build fails with endianness errors, verify the toolchain
+# supports -mbig-endian by checking:
+#   arm-linux-gnueabi-gcc -mbig-endian -march=armv5te -c -x c /dev/null -o /dev/null
 ```
 
-### Key Compiler Flags
+### Key Compiler Flags (set automatically by U-Boot build system)
 
 ```
 -march=armv5te -mbig-endian -mabi=aapcs-linux
@@ -495,10 +524,15 @@ Adapt from `reference/.../board/cc9c/platform.S`. This must:
     Write 0x00000003 to (MEM_BASE + 0x0020)  ; DYN_CTRL = I_NORMAL | BIT1 | CE
     ```
 
-12. **Enable buffer DMA control**:
+12. **Enable buffer DMA control** for CS4:
     ```
-    Write (BDMC | AM | addr_config) to (MEM_BASE + 0x0100)  ; DYN_CFG(0)
+    Read current value from (MEM_BASE + 0x0100)        ; DYN_CFG(0)
+    OR in 0x00080000                                    ; BDMC bit (buffer DMA)
+    Write back to (MEM_BASE + 0x0100)                   ; DYN_CFG(0)
     ```
+    Note: The reference code initialises CS4-CS7 (DYN_CFG(0)-DYN_CFG(3)). For the
+    HPE iPDU with only one SDRAM chip, only CS4 (index 0) needs configuration.
+    CS5-CS7 can be left at reset defaults.
 
 13. **Set up AHB monitor** (prevents bus lockup):
     ```
@@ -506,9 +540,43 @@ Adapt from `reference/.../board/cc9c/platform.S`. This must:
     Write (BMTC_GEN_IRQ | BATC_GEN_IRQ) to (SYS_BASE + AHB_MON offset)
     ```
 
-**Critical note:** The code initially runs from flash at 0x40000000 but may be
-mirrored to 0x00000000 at reset. The lowlevel_init must handle this address
-remapping correctly. See the CC9C platform.S for the mirror-aware branch pattern.
+14. **Relocate LR and IP registers** (CRITICAL):
+    ```
+    ; After lowlevel_init, execution has jumped from the mirror address (0x0)
+    ; to the real flash address (0x40000000). The lr and ip registers still
+    ; contain return addresses relative to 0x0. They must be adjusted by
+    ; adding the flash base offset before returning, or the return will
+    ; jump to the (now-invalid) mirror address.
+    ;
+    ; See CC9C platform.S _relocate_lr section:
+    add  ip, ip, r6    ; r6 = flash base offset (0x40000000)
+    add  lr, lr, r6
+    mov  pc, lr
+    ```
+
+**Critical notes:**
+
+1. **Address mirroring:** At reset, flash at CS0 (0x40000000) is mirrored to
+   0x00000000. The lowlevel_init must handle this address remapping correctly.
+   The code must jump to the real flash address early in the sequence, then
+   relocate lr/ip before returning. See the CC9C platform.S for the
+   mirror-aware branch pattern.
+
+2. **Init sequence ordering** (match reference `platform.S`):
+   The reference code has TWO distinct phases:
+   - **Config phase** (`_MEM_CONFIG_START`): Steps 1-6 above (memory controller
+     enable, timing registers, PALL command, minimum refresh, settle wait)
+   - **Mode phase** (`_MEM_MODE_START`): Steps 7-12 above (increase refresh,
+     CS4 config + RAS_CAS, mode register set, CAS read, normal mode, BDMC enable)
+   Ensure all timing registers are written BEFORE the PALL command (step 5).
+   The CS4 config and RAS_CAS values are written in the mode phase AFTER the
+   settle wait, not before PALL.
+
+3. **Pre-SDRAM stack:** Before lowlevel_init runs, there is no SDRAM. The ARM
+   startup code in `start.S` must set up a temporary stack in internal SRAM
+   or use register-only code until SDRAM is available. The NS9360 has internal
+   SRAM accessible via SYS_MISC IRAM0 bit — verify its base address and size
+   in the hardware reference manual.
 
 #### 1.2 Create Minimal Serial Driver
 
@@ -523,11 +591,20 @@ Adapt from `reference/.../drivers/ns9750_serial.c`:
 // GPIO 8 = TxD (function 0, output): config at BBUS + 0x10 + (8/8)*4
 // GPIO 9 = RxD (function 0, input):  config at BBUS + 0x10 + (9/8)*4
 
+// Prerequisites:
+// - BBUS Master Reset must be deasserted (write 0 to 0x90600000)
+//   The serial engine is held in reset until this is done.
+//   At power-on, BBUS reset is typically deasserted by default, but
+//   this should be verified/ensured before serial init.
+
 // Init sequence:
-// 1. Configure GPIO 8 as function 0, output (TxD)
-// 2. Configure GPIO 9 as function 0, input (RxD)
-// 3. Set CTRL_A = 0x83000000 (CE | WLS_8)
-// 4. Set BITRATE = 0xE1100017 (EBIT | CLKMUX_BCLK | TMODE | TCDR_16 | RCDR_16 | N=23)
+// 1. Configure GPIO 8 as function 0, output (TxD) — READ-MODIFY-WRITE
+// 2. Configure GPIO 9 as function 0, input (RxD) — READ-MODIFY-WRITE
+// 3. Set CTRL_A = 0x87000000 (CE | STOP | WLS_8) — matches reference code
+//    Note: Reference sets STOP=1. Per NS9360 datasheet, STOP=1 means 2 stop bits.
+//    For strict 8N1 use 0x83000000 (STOP=0). The reference uses STOP=1 (8N2).
+//    Either works for most terminal connections.
+// 4. Set BITRATE = 0xC114000B (EBIT | TMODE | CLKMUX_BCLK | TCDR_16 | RCDR_16 | N=11)
 // 5. Set RX_CHAR_TIMER = 0x80000000 (TRUN, value=0)
 // 6. Set CTRL_B = 0x04000000 (RCGT enable)
 
@@ -539,15 +616,21 @@ Adapt from `reference/.../drivers/ns9750_serial.c`:
 **GPIO Configuration Details:**
 
 Each GPIO uses 4 bits in a config register. GPIO 8 is in the config register at
-BBUS + 0x10 + (8/8)*4 = 0x90600014, bits [3:0]:
+BBUS + 0x10 + (8>>3)*4 = 0x90600014, bits [3:0]:
 - Bits [1:0] = 0x00 (function 0)
 - Bit [3] = 1 (output direction)
 - Value for GPIO 8: 0x08 (function 0, output)
 
-GPIO 9 is at BBUS + 0x10 + (9/8)*4 = 0x90600014, bits [7:4]:
+GPIO 9 is at BBUS + 0x10 + (9>>3)*4 = 0x90600014, bits [7:4]:
 - Bits [5:4] = 0x00 (function 0)
 - Bit [7] = 0 (input direction)
 - Value for GPIO 9: 0x00 (function 0, input)
+
+**IMPORTANT: GPIO config registers must be READ-MODIFY-WRITE.** Each 32-bit
+register controls 8 GPIOs (4 bits each). A plain write would clobber the
+configuration of adjacent GPIOs. The reference code uses the `set_gpio_cfg_reg_val`
+macro which reads the register, clears the 4-bit field, ORs in the new value, and
+writes back.
 
 #### 1.3 Board Config Header
 
@@ -555,13 +638,24 @@ Create `include/configs/hpe_ipdu.h` with minimal settings:
 
 ```c
 #define CONFIG_SYS_TEXT_BASE        0x40000000  /* Boot from CS0 flash */
-#define CONFIG_SYS_CLK_FREQ        353894400   /* PLL output: 29.4912 MHz × 12 */
+#define CONFIG_SYS_CLK_FREQ        176947200   /* System clock: 29.4912 MHz × 12 / 2 */
+#define CPU_CLK_FREQ                (CONFIG_SYS_CLK_FREQ / 2)   /* 88.5 MHz */
+#define AHB_CLK_FREQ                (CONFIG_SYS_CLK_FREQ / 4)   /* 44.2 MHz */
+#define BBUS_CLK_FREQ               (CONFIG_SYS_CLK_FREQ / 8)   /* 22.1 MHz */
 #define CONFIG_SYS_SDRAM_BASE      0x00000000
 #define CONFIG_SYS_SDRAM_SIZE      0x02000000  /* 32 MB */
 #define CONFIG_SYS_INIT_SP_ADDR    (CONFIG_SYS_SDRAM_BASE + CONFIG_SYS_SDRAM_SIZE - 4)
 #define CONFIG_BAUDRATE             115200
-#define CONFIG_CONS_INDEX           2  /* Serial channel 1 = Port A */
+#define CONFIG_CONS_INDEX           1  /* 0=Port B, 1=Port A, 2=Port C, 3=Port D */
 ```
+
+**Note on CONFIG_SYS_INIT_SP_ADDR:** This stack address is in SDRAM, which is only
+available AFTER lowlevel_init completes. Before SDRAM init, U-Boot's early startup
+code (`arch/arm/cpu/arm926ejs/start.S`) needs a temporary stack. The NS9360 has
+16 KB of internal SRAM that can be enabled via the SYS_MISC register (IRAM0 bit).
+If internal SRAM is not available at reset, the early ARM code may use a
+register-only calling convention or a small on-chip buffer. Verify the NS9360
+hardware reference for internal SRAM availability at reset and its base address.
 
 ### Verification Steps (Phase 1)
 
@@ -602,9 +696,11 @@ The lowlevel_init.S from Phase 1 should already initialise SDRAM. In this phase:
 
 1. **Verify SDRAM is accessible:** Write/read patterns to several addresses
 2. **Detect SDRAM size** (adapt from cc9c.c `dram_init()`):
-   - Read CS4 base from SYS_CS_DYN_BASE(0) @ SYS_BASE + 0x1D0
    - Read CS4 mask from SYS_CS_DYN_MASK(0) @ SYS_BASE + 0x1D4
-   - Size = (mask & ~1) + 2
+   - Size = ~(mask & 0xFFFFF000) + 1
+     (Reference formula from cc9c.c: `size = ~(*get_sys_reg_addr(NS9750_SYS_CS_DYN_MASK(0)) & 0xFFFFF000) + 1`)
+   - For the HPE iPDU, since SDRAM size is known (32 MB), it's simpler to
+     just hardcode: `gd->ram_size = CONFIG_SYS_SDRAM_SIZE`
 
 3. **Enable U-Boot relocation to SDRAM:**
    - Set `CONFIG_SYS_INIT_RAM_ADDR` and relocation address
@@ -616,8 +712,9 @@ In `board/hpe/ipdu/ipdu.c`:
 
 ```c
 int board_init(void) {
-    // Reset BBUS modules
+    // Activate all BBUS modules (deassert reset by writing 0)
     // (BBUS_MASTER_RESET @ 0x90600000) = 0
+    // This must be done before accessing any BBus peripheral (serial, GPIO, etc.)
     writel(0, 0x90600000);
 
     // Set boot params location
@@ -646,9 +743,11 @@ int dram_init(void) {
 
 2. **Run memory test:**
    ```
-   mtest 0x00000000 0x01FFFFFF
+   mtest 0x00100000 0x01800000
    ```
-   Should pass with no errors.
+   Should pass with no errors. Note: avoid testing the full range (0x00000000-
+   0x01FFFFFF) because U-Boot relocates itself to the top of SDRAM. Testing
+   that region would corrupt U-Boot's own code and data.
 
 3. **Check relocation:**
    ```
@@ -668,17 +767,26 @@ int dram_init(void) {
 
 #### 3.1 Static Memory Controller Setup for Flash
 
-For CS0 (boot device, already configured by hardware at reset):
+For CS0 (boot device, static memory controller index 0):
 ```c
-// CS0 should already be configured since we boot from it
-// But verify/reinforce the settings:
-// SYS_CS_STATIC_BASE(0) = 0x40000000
-// SYS_CS_STATIC_MASK(0) = 0xFF000001
+// CS0 should already be configured by hardware at reset since we boot from it.
+// But verify/reinforce the settings in board_init or flash__init:
+// SYS_CS_STATIC_BASE(0) @ SYS_BASE + 0x01F0 = 0x40000000
+// SYS_CS_STATIC_MASK(0) @ SYS_BASE + 0x01F4 = 0xFF000001  (8 MB, enable)
+//
+// Note: The CC9C reference code only configures CS1 (its boot flash) in
+// flash__init() because CS1 is not auto-configured at reset. For the HPE iPDU,
+// CS0 is the boot flash and IS configured by hardware. CS0's reset-default
+// timing may be conservative; verify it's adequate for reliable flash operation.
 ```
 
-For CS1 (secondary flash, needs software setup):
+For CS1 (secondary flash, static memory controller index 1):
 ```c
 // Adapt from cc9c.c flash__init():
+// Note: CC9C uses SYS_CS_STATIC_BASE(1) / MASK(1) for its flash.
+// The index (0 or 1) maps to the static memory controller CS register set,
+// NOT directly to the physical chip select pin. Index 0 = CS0 registers,
+// index 1 = CS1 registers.
 writel(0x50000000, SYS_BASE + CS_STATIC_BASE(1));  // Base address
 writel(0xFF000001, SYS_BASE + CS_STATIC_MASK(1));   // 8 MB mask, enable
 writel(MW_16 | PB,  MEM_BASE + STAT_CFG(1));        // 16-bit, page burst
@@ -699,13 +807,19 @@ Use U-Boot's built-in CFI flash driver (`drivers/mtd/cfi_flash.c`):
 #define CONFIG_SYS_FLASH_BASE       0x40000000
 #define CONFIG_SYS_FLASH_BANKS_LIST { 0x40000000, 0x50000000 }
 #define CONFIG_SYS_MAX_FLASH_BANKS  2
-#define CONFIG_SYS_MAX_FLASH_SECT   142  /* 71 sectors × 2 chips */
+#define CONFIG_SYS_MAX_FLASH_SECT   135  /* max sectors per chip (8×8KB + 127×64KB for 8MB) */
+                                         /* Verify against MX29LV640EBXEI datasheet */
 #define CONFIG_SYS_FLASH_USE_BUFFER_WRITE  /* if supported by Macronix chip */
 #define CONFIG_SYS_FLASH_PROTECTION
 
 // Flash is 16-bit wide:
 #define CONFIG_SYS_FLASH_CFI_WIDTH  FLASH_CFI_16BIT
 ```
+
+**Note on flash sector protection:** The existing NET+OS firmware on CS0 may have
+hardware sector protection enabled on the Macronix flash. Before erasing, you may
+need to issue `protect off all` in U-Boot, and some JTAG tools (e.g. OpenOCD) may
+not automatically clear hardware protection bits.
 
 The Macronix MX29LV640EBXEI is CFI-compatible, so the standard CFI driver should
 detect it automatically. The CFI driver will:
@@ -811,10 +925,18 @@ for (int gpio = 50; gpio <= 64; gpio++) {
 
 Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 
-1. **MAC Hard Reset:**
+1. **Set SUPP register** (required for MII mode after reset):
    ```c
-   // Set MAC_HRST | ERX | ETX in EGCR1
-   writel(0x00800200 | 0x80000000 | 0x00800000, ETH_BASE + 0x0000);
+   // ETH_SUPP @ ETH_BASE + 0x0418: set RPERMII bit
+   writel(0x00000100, ETH_BASE + 0x0418);
+   ```
+
+2. **MAC Hard Reset** (use read-modify-write as reference does):
+   ```c
+   // Set MAC_HRST(0x200) | ERX(0x80000000) | ETX(0x00800000) in EGCR1
+   val = readl(ETH_BASE + 0x0000);
+   val |= 0x80000000 | 0x00800000 | 0x00000200;  // ERX | ETX | MAC_HRST
+   writel(val, ETH_BASE + 0x0000);
    udelay(5);
    // Clear MAC_HRST
    val = readl(ETH_BASE + 0x0000);
@@ -822,24 +944,32 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
    writel(val, ETH_BASE + 0x0000);
    ```
 
-2. **Configure MAC:**
+3. **Reset MAC1 sub-modules:**
    ```c
-   // MAC2: CRC enable | Pad enable | Full duplex
-   writel(0x00000011 | 0x00000020, ETH_BASE + 0x0404);
+   // MAC1 @ ETH_BASE + 0x0400: assert MII sub-resets
+   writel(0x0000CF00, ETH_BASE + 0x0400);  // RPEMCSR|RPERFUN|RPEMCST|RPETFUN
+   udelay(1);
+   writel(0x00000000, ETH_BASE + 0x0400);  // Clear resets
+   ```
+
+4. **Configure MAC:**
+   ```c
+   // MAC2: CRC enable(0x10) | Pad enable(0x20) | Full duplex(0x01)
+   writel(0x00000031, ETH_BASE + 0x0404);
    // SAFR: Promiscuous (for initial bring-up)
    writel(0x00000008, ETH_BASE + 0x0500);
    ```
 
-3. **Set MAC address** (from environment variable `ethaddr`)
+5. **Set MAC address** (from environment variable `ethaddr`)
 
-4. **Configure MII management** for PHY access:
+6. **Configure MII management** for PHY access:
    ```c
    // MCFG: Set clock divider for MDIO (AHB_CLK / divisor < 2.5 MHz)
    // AHB = 88.5 MHz, need divisor ≥ 36, use /40
    writel(0x0000001C, ETH_BASE + 0x0420);  // CLKS_40
    ```
 
-5. **Reset and identify PHY:**
+7. **Reset and identify PHY:**
    ```c
    // Write PHY_CTRL register 0 via MDIO: bit 15 = reset
    ns9360_mii_write(0x0001, 0x00, 0x8000);
@@ -852,7 +982,7 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
    uint16_t id2 = ns9360_mii_read(0x0001, 0x03);
    ```
 
-6. **Auto-negotiate link:**
+8. **Auto-negotiate link:**
    ```c
    // Set advertise: 10/100 half/full
    ns9360_mii_write(0x0001, 0x04, 0x01E1);  // All capabilities + 802.3
@@ -861,7 +991,40 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
    // Wait for completion (up to 5 seconds)
    ```
 
-7. **Enable DMA and RX/TX**
+9. **Set up RX/TX buffer descriptors** (CRITICAL — omitting this will hang the MAC):
+   ```c
+   // The NS9360 Ethernet MAC uses linked-list buffer descriptors in SDRAM.
+   // Reference: ns9750_eth.c initialises RXAPTR, RXBPTR, RXCPTR, RXDPTR
+   // (4 receive descriptor chains) and TXPTR (1 transmit descriptor chain).
+   // Each descriptor contains: buffer address, buffer size, status/control word.
+   // See ns9750_eth.h for descriptor structure definitions.
+   ```
+
+10. **Initialise RX FIFO** (ERXINIT handshake):
+    ```c
+    // Set ERXINIT bit in EGCR1
+    val = readl(ETH_BASE + 0x0000);
+    val |= 0x00010000;  // ERXINIT
+    writel(val, ETH_BASE + 0x0000);
+    // Wait for EGSR.RXINIT bit to become set
+    while (!(readl(ETH_BASE + 0x0008) & 0x00100000)) ;
+    // Clear EGSR.RXINIT status
+    writel(0x00100000, ETH_BASE + 0x0008);
+    // Clear ERXINIT in EGCR1
+    val = readl(ETH_BASE + 0x0000);
+    val &= ~0x00010000;
+    writel(val, ETH_BASE + 0x0000);
+    ```
+
+11. **Enable MAC1 RX and DMA:**
+    ```c
+    // MAC1: enable RX
+    writel(0x00000001, ETH_BASE + 0x0400);  // RXEN
+    // EGCR1: enable RX DMA and TX DMA
+    val = readl(ETH_BASE + 0x0000);
+    val |= 0x40000000 | 0x00400000;  // ERXDMA | ETXDMA
+    writel(val, ETH_BASE + 0x0000);
+    ```
 
 #### 5.3 MII Read/Write Functions
 
@@ -940,7 +1103,9 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 2. **Set up boot commands:**
    ```c
    #define CONFIG_BOOTCOMMAND  "tftp 0x00200000 uImage; bootm 0x00200000"
-   #define CONFIG_BOOTARGS     "console=ttyS1,115200 root=/dev/mtdblock2 rootfstype=jffs2"
+   #define CONFIG_BOOTARGS     "console=ttyNS1,115200 root=/dev/mtdblock2 rootfstype=jffs2"
+   /* Note: The console device name (ttyNS1 vs ttyS1) depends on the Linux kernel
+      serial driver. Verify against the target kernel's NS9360 serial driver. */
    ```
 
 3. **Add I2C driver** (optional, for EEPROM access):
@@ -996,7 +1161,7 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 
 | Offset | Name | Description |
 |--------|------|-------------|
-| 0x0004+x | SYS_BRC(x) | Bus Request Control |
+| 0x0004+n*4 | SYS_BRC(n) | Bus Request Control |
 | 0x0044+x | SYS_TRC(x) | Timer Reload Count |
 | 0x0084+x | SYS_TR(x) | Timer Read |
 | 0x0170 | SYS_TIS | Timer Interrupt Status |
@@ -1025,6 +1190,8 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 | 0x0044 | MEM_DYN_TWR | Write Recovery |
 | 0x0048 | MEM_DYN_TRC | Active to Active |
 | 0x004C | MEM_DYN_TRFC | Refresh to Active |
+| 0x0038 | MEM_DYN_TSREX | Self-Refresh Exit Time |
+| 0x0050 | MEM_DYN_TXSR | Exit Self-Refresh to Active |
 | 0x0054 | MEM_DYN_TRRD | Bank A to Bank B |
 | 0x0058 | MEM_DYN_TMRD | Mode Register Delay |
 | 0x0100+n*0x20 | MEM_DYN_CFG(n) | Dynamic CS Config |
@@ -1066,6 +1233,7 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 | 0x08 | STAT_A | TX/RX ready, errors |
 | 0x0C | BITRATE | Baud rate divisor, clock source |
 | 0x10 | FIFO | TX/RX data |
+| 0x14 | RX_BUF_TIMER | RX buffer gap timer |
 | 0x18 | RX_CHAR_TIMER | Character gap timer |
 
 ### Ethernet Module (ETH_BASE = 0xA0600000)

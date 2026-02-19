@@ -35,22 +35,30 @@ Crystal (Y1): 29.4912 MHz
     │   PLL   │  ND=11 (multiply by 12), FS=1 (divide by 2)
     └────┬────┘
          │
-    Raw PLL Output: 29.4912 MHz × 12 = 353.8944 MHz
-    (This is CONFIG_SYS_CLK_FREQ)
+    System Clock: 29.4912 MHz × 12 / 2 = 176.9472 MHz
+    (This is CONFIG_SYS_CLK_FREQ per the reference code convention)
          │
     ┌────┼──────────────────────────┐
     │    │                          │
-  ÷2   ÷4                         ÷8
+   ÷2   ÷4                        ÷8
     │    │                          │
-  CPU  AHB Bus                   BBus
-176.9  88.5 MHz                 44.2 MHz
- MHz
+  CPU*  AHB Bus                  BBus
+ 88.5   44.2 MHz                22.1 MHz
+  MHz
 ```
+
+*Note: The ARM926EJ-S core itself runs at the full system clock (176.9 MHz)
+per the NS9360 product brief. The Digi reference code convention defines
+CONFIG_SYS_CLK_FREQ as the post-FS PLL output (176.9 MHz), with CPU_CLK_FREQ,
+AHB_CLK_FREQ, and BBUS_CLK_FREQ derived via /2, /4, /8 respectively. The serial
+driver formula `CONFIG_SYS_CLK_FREQ / 8` relies on this convention. Using the raw
+PLL output (353.89 MHz) would produce incorrect baud rates.
 
 **PLL Register (SYS_PLL @ 0xA0900188):**
 - ND (bits [20:16]) = 11 (multiply by ND+1 = 12)
 - FS (bits [24:23]) = 1 (divide by 2^FS = 2)
 - Result: 29.4912 × 12 / 2 = 176.9472 MHz
+- Raw PLL (before FS): 29.4912 × 12 = 353.8944 MHz
 
 ### Memory Map
 
@@ -58,7 +66,7 @@ Crystal (Y1): 29.4912 MHz
 0x00000000 - 0x01FFFFFF  SDRAM (32 MB, CS4/CS5)
 0x40000000 - 0x407FFFFF  NOR Flash CS0 (8 MB, boot device)
 0x50000000 - 0x507FFFFF  NOR Flash CS1 (8 MB, secondary)
-0x90200000 - 0x902FFFFF  Serial Interface Module (BBus)
+0x90200000 - 0x903FFFFF  Serial Interface Module (BBus) [channels 0-1 @ 0x902xxxxx, 2-3 @ 0x903xxxxx]
 0x90600000 - 0x906FFFFF  BBus Utility Module (GPIO, DMA, etc.)
 0xA0600000 - 0xA06FFFFF  Ethernet MAC Module (AHB)
 0xA0700000 - 0xA07FFFFF  Memory Controller Module (AHB)
@@ -104,8 +112,8 @@ Crystal (Y1): 29.4912 MHz
 | Bus width | 16-bit per chip |
 | CS0 base | 0x40000000 (primary, boot device) |
 | CS1 base | 0x50000000 (secondary) |
-| Sector layout | 8× 8KB + 63× 64KB (bottom boot) |
-| Total sectors | 71 per chip (142 total) |
+| Sector layout | 8× 8KB + 127× 64KB (bottom boot) per chip |
+| Total sectors | 135 per chip (270 total) |
 
 **Static Memory Controller Settings (per chip select):**
 
@@ -142,15 +150,20 @@ Crystal (Y1): 29.4912 MHz
 
 **Baud Rate Calculation for 115200:**
 ```
-Clock source: BCLK (BBus clock) = CONFIG_SYS_CLK_FREQ / 8 = 44,236,800 Hz
+Clock source: BCLK (BBus clock) = CONFIG_SYS_CLK_FREQ / 8 = 22,118,400 Hz
+  (Reference: ns9750_serial.c calcBitrateRegister(), comment "BBUS clock,[1] Fig. 38")
 Prescaler: TCDR_16 = ÷16, RCDR_16 = ÷16
-Divisor N: (44,236,800 / (115,200 × 16)) - 1 = 24 - 1 = 23
+Divisor N: (22,118,400 / (115,200 × 16)) - 1 = 12 - 1 = 11
+  (Note: divides exactly, no rounding error)
 
-BITRATE register value: 0xE1100017
-  EBIT=1, CLKMUX=BCLK, TMODE=1, TCDR=÷16, RCDR=÷16, N=23
+BITRATE register value: 0xC114000B
+  EBIT(0x80000000) | TMODE(0x40000000) | CLKMUX_BCLK(0x01000000) |
+  TCDR_16(0x00100000) | RCDR_16(0x00040000) | N=11(0x0B)
 
 CTRL_A register value: 0x83000000
   CE=1 (enable), WLS=8bit, no parity, 1 stop bit
+  (Note: Reference code uses 0x87000000 which sets STOP=1 for 8N2.
+   0x83000000 is correct for strict 8N1.)
 ```
 
 ### Ethernet
@@ -283,6 +296,8 @@ accurate register addresses and allows testing the actual driver code.
 **Build and run:**
 ```bash
 # Build QEMU with NS9360 support
+# Note: arm-softmmu supports both little-endian and big-endian ARM at runtime.
+# The CPU endianness is determined by the machine/CPU model, not the build target.
 cd qemu
 mkdir build && cd build
 ../configure --target-list=arm-softmmu
@@ -343,6 +358,24 @@ uart: UART.NS16550 @ sysbus 0x90200040
 Start with **Option A** (custom QEMU machine) for the most accurate testing.
 The UART model is the critical component - if serial works in QEMU, the rest
 of the bring-up can proceed with confidence.
+
+**Important feasibility caveat:** Building a custom QEMU machine type is a
+substantial effort requiring familiarity with QEMU's C codebase, device model
+framework, and memory-mapped I/O infrastructure. This section provides a
+specification but not the full implementation. Key challenges:
+
+1. **Big-endian ARM in QEMU:** `qemu-system-arm` supports both endiannesses at
+   runtime via the CPSR E bit, but big-endian pflash (NOR flash) emulation
+   requires careful byte-swapping configuration. The `-drive` pflash interface
+   may need explicit endianness options.
+2. **No existing NS9360 support:** Every peripheral (UART, Ethernet, GPIO, memory
+   controller, system registers) must be written from scratch as QEMU device models.
+3. **Option B (versatilepb)** is useful for testing generic U-Boot framework code
+   (command parsing, environment, shell) but cannot test any NS9360-specific driver
+   code since the register addresses and behaviour are completely different.
+4. **Practical recommendation:** Consider a hybrid approach — use Option B for early
+   framework testing, then implement the custom machine incrementally, starting with
+   just the UART model (which enables serial console testing).
 
 ---
 
@@ -429,14 +462,14 @@ endif
 CONFIG_ARM=y
 CONFIG_ARCH_NS9360=y
 CONFIG_TARGET_HPE_IPDU=y
-CONFIG_SYS_TEXT_BASE=0x40000000
 CONFIG_DEFAULT_DEVICE_TREE="ns9360-hpe-ipdu"
 CONFIG_BAUDRATE=115200
-CONFIG_SYS_CLK_FREQ=353894400
+CONFIG_SYS_CLK_FREQ=176947200
+CONFIG_SYS_TEXT_BASE=0x40000000
 
 # Serial
 CONFIG_NS9360_SERIAL=y
-CONFIG_CONS_INDEX=2
+CONFIG_CONS_INDEX=1
 
 # Flash
 CONFIG_SYS_FLASH_CFI=y
@@ -511,6 +544,7 @@ CONFIG_CMD_GO=y
             #clock-cells = <0>;
             clocks = <&crystal>;
             /* ND=11, FS=1: 29.4912 MHz × 12 / 2 = 176.9 MHz */
+            /* This outputs CONFIG_SYS_CLK_FREQ (system clock) */
             clock-mult = <12>;
             clock-div = <2>;
         };
@@ -519,7 +553,9 @@ CONFIG_CMD_GO=y
             compatible = "fixed-factor-clock";
             #clock-cells = <0>;
             clocks = <&pll>;
-            clock-div = <1>;
+            /* CPU_CLK_FREQ = CONFIG_SYS_CLK_FREQ / 2 = 88.5 MHz */
+            /* (Per Digi reference convention; ARM core runs at 176.9 MHz) */
+            clock-div = <2>;
             clock-mult = <1>;
         };
 
@@ -527,7 +563,8 @@ CONFIG_CMD_GO=y
             compatible = "fixed-factor-clock";
             #clock-cells = <0>;
             clocks = <&pll>;
-            clock-div = <2>;
+            /* AHB_CLK_FREQ = CONFIG_SYS_CLK_FREQ / 4 = 44.2 MHz */
+            clock-div = <4>;
             clock-mult = <1>;
         };
 
@@ -535,7 +572,9 @@ CONFIG_CMD_GO=y
             compatible = "fixed-factor-clock";
             #clock-cells = <0>;
             clocks = <&pll>;
-            clock-div = <4>;
+            /* BBUS_CLK_FREQ = CONFIG_SYS_CLK_FREQ / 8 = 22.1 MHz */
+            /* This is the clock used by the serial baud rate generator */
+            clock-div = <8>;
             clock-mult = <1>;
         };
     };
@@ -633,6 +672,9 @@ CONFIG_CMD_GO=y
             #address-cells = <1>;
             #size-cells = <0>;
             /* GPIO 34 = SDA, GPIO 35 = SCL */
+            /* WARNING: I2C base address 0x90400000 is not verified against any
+               reference header file. Verify against NS9360 hardware reference
+               manual before use. */
             status = "okay";
         };
     };
@@ -725,13 +767,17 @@ struct ns9360_serial_priv {
 #define BITRATE_EBIT       BIT(31)    // Enable
 #define BITRATE_CLKMUX_BCLK (1 << 24) // Use BBus clock
 #define BITRATE_TMODE      BIT(30)    // Transmitter mode
-#define BITRATE_TCDR_16    (2 << 19)  // TX clock ÷16
-#define BITRATE_RCDR_16    (2 << 16)  // RX clock ÷16
+#define BITRATE_TCDR_16    (2 << 19)  // TX clock ÷16  = 0x00100000
+#define BITRATE_RCDR_16    (4 << 16)  // RX clock ÷16  = 0x00040000
 #define BITRATE_N_MASK     0x7FFF     // Divisor mask
 
 // Driver operations:
-// probe():  Read clock rate from DT, configure GPIO, set CTRL_A
+// probe():  Read clock rate from DT, configure GPIO (READ-MODIFY-WRITE!), set CTRL_A
+//           IMPORTANT: BBUS master reset must be deasserted before serial init.
+//           The serial engine is held in reset until BBUS_MASTER_RESET @ 0x90600000 = 0.
 // setbrg(): Calculate N = (bbus_clk / (baud * 16)) - 1, write BITRATE
+//           bbus_clk = CONFIG_SYS_CLK_FREQ / 8 = 22,118,400 Hz
+//           For 115200 baud: N = (22118400 / (115200 * 16)) - 1 = 11
 // putc():   Poll STAT_A for TRDY, write char to FIFO
 // getc():   Read from FIFO (check RRDY first)
 // pending(): Check STAT_A RRDY bit
@@ -769,17 +815,23 @@ struct ns9360_serial_priv {
 Adapt from `reference/.../drivers/ns9750_eth.c` using U-Boot's DM_ETH:
 
 ```c
-// Init sequence:
-// 1. Configure GPIOs 50-64 for MII (function 0)
-// 2. MAC hard reset (EGCR1 bit 9)
-// 3. Configure MAC2 (CRC, pad, full-duplex)
-// 4. Set SAFR (promiscuous for bring-up, then unicast+broadcast)
-// 5. Load MAC address from DT/environment
-// 6. Configure MDIO clock (MCFG: AHB/40 < 2.5 MHz)
-// 7. Reset PHY via MDIO register 0 bit 15
-// 8. Auto-negotiate link
-// 9. Set up RX/TX buffer descriptors
-// 10. Enable DMA (EGCR1: ERXDMA | ETXDMA)
+// Init sequence (cross-referenced with ns9750_eth.c):
+// 1. Set SUPP register (0x0418) for MII mode (RPERMII bit)
+// 2. Configure GPIOs 50-64 for MII (function 0) — READ-MODIFY-WRITE
+// 3. MAC hard reset: read-modify-write EGCR1 |= (ERX|ETX|MAC_HRST), delay, clear MAC_HRST
+// 4. Reset MAC1 sub-modules (RPEMCSR|RPERFUN|RPEMCST|RPETFUN), then clear
+// 5. Configure MAC2 (CRC enable | pad enable | full-duplex) = 0x31
+// 6. Set SAFR (promiscuous for bring-up: 0x08, then unicast+broadcast for production)
+// 7. Load MAC address from DT/environment into SA1/SA2/SA3 registers
+// 8. Configure MDIO clock (MCFG: AHB/40 < 2.5 MHz)
+// 9. Reset PHY via MDIO register 0 bit 15, wait 3000 us
+// 10. Auto-negotiate link
+// 11. Set up RX/TX buffer descriptors in SDRAM
+//     (RXAPTR, RXBPTR, RXCPTR, RXDPTR for 4 receive chains; TXPTR for transmit)
+// 12. ERXINIT handshake: set ERXINIT in EGCR1, wait for EGSR.RXINIT,
+//     clear EGSR.RXINIT, clear ERXINIT in EGCR1
+// 13. Enable MAC1 RXEN
+// 14. Enable DMA (EGCR1: ERXDMA | ETXDMA)
 
 // MII access functions:
 // ns9360_mii_write(phy_addr, reg, value):
@@ -805,13 +857,14 @@ Adapt from `reference/.../drivers/ns9750_eth.c` using U-Boot's DM_ETH:
 //   FS = (pll_reg >> 23) & 0x3   (divide by 2^FS)
 //   sys_clk = crystal_freq * (ND + 1) / (1 << FS)
 //
-// Derived clocks:
-//   cpu_clk  = sys_clk      (÷1)
-//   ahb_clk  = sys_clk / 2  (÷2)
-//   bbus_clk = sys_clk / 4  (÷4)
+// Derived clocks (per Digi reference code convention):
+//   cpu_clk  = sys_clk / 2  (÷2) = 88.5 MHz
+//   ahb_clk  = sys_clk / 4  (÷4) = 44.2 MHz
+//   bbus_clk = sys_clk / 8  (÷8) = 22.1 MHz (serial baud generator input)
 //
-// Note: CONFIG_SYS_CLK_FREQ = crystal * (ND+1) = raw PLL before FS divider
-//       This is 353.89 MHz for the HPE iPDU (29.4912 * 12)
+// Note: CONFIG_SYS_CLK_FREQ = crystal * (ND+1) / (1 << FS) = post-FS PLL output
+//       This is 176.9 MHz for the HPE iPDU (29.4912 * 12 / 2)
+//       The raw PLL before FS is 353.89 MHz, but that is NOT CONFIG_SYS_CLK_FREQ.
 ```
 
 ---
@@ -832,9 +885,17 @@ Adapt from `reference/.../drivers/ns9750_eth.c` using U-Boot's DM_ETH:
 
 1. **Write lowlevel_init.S** - SDRAM controller init (from CC9C platform.S)
    - Memory controller enable
-   - SDRAM timing parameters
-   - Precharge-all → mode register set → normal operation
+   - SDRAM timing parameters (two distinct phases from reference):
+     - **Config phase**: timing registers, PALL command, minimum refresh, settle wait
+     - **Mode phase**: increase refresh, CS4 config + RAS_CAS, mode register set, normal mode, BDMC enable
    - AHB monitor setup
+   - **LR/IP register relocation** (CRITICAL): After jumping from the flash mirror
+     address (0x0) to the real flash address (0x40000000), lr and ip registers
+     must be adjusted by adding the flash base offset before returning. See CC9C
+     `platform.S` `_relocate_lr` section.
+   - **Pre-SDRAM stack**: Before lowlevel_init, no SDRAM is available. The NS9360
+     has 16 KB internal SRAM (enabled via SYS_MISC IRAM0 bit). Verify its base
+     address in the hardware reference manual and use it for the initial stack.
 2. **Write dram_init()** - Report SDRAM size
 3. **Verify in QEMU** - U-Boot starts and reports RAM
 
@@ -849,6 +910,11 @@ Adapt from `reference/.../drivers/ns9750_eth.c` using U-Boot's DM_ETH:
 
 1. **Configure CFI flash driver** (use U-Boot built-in)
 2. **Static memory controller init** for CS0 and CS1
+   - Note: The CC9C reference uses `SYS_CS_STATIC_BASE(1)` / `MASK(1)` for its
+     boot flash on CS1. The HPE iPDU boots from CS0, so CS0 is auto-configured
+     by hardware at reset. CS1 (secondary flash) needs explicit software setup
+     using `SYS_CS_STATIC_BASE(1)` / `MASK(1)` — same register indices as CC9C
+     but for a different purpose (secondary not boot).
 3. **Flash partition table** via device tree
 4. **Environment in flash** (`CONFIG_ENV_IS_IN_FLASH`)
 5. **Test in QEMU** - `flinfo`, `erase`, `cp.b` commands
@@ -993,13 +1059,13 @@ def test_ping(u_boot_console):
 
 ```bash
 # Run all HPE iPDU tests
-./test/py/test.py --bd-type hpe_ipdu --build-dir build
+./test/py/test.py --board hpe_ipdu --build-dir build
 
 # Run specific test
-./test/py/test.py --bd-type hpe_ipdu -k test_serial_output
+./test/py/test.py --board hpe_ipdu -k test_serial_output
 
 # Run with verbose output
-./test/py/test.py --bd-type hpe_ipdu -v
+./test/py/test.py --board hpe_ipdu -v
 ```
 
 ---
@@ -1031,7 +1097,10 @@ jobs:
       - name: Install cross-compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabi
+          sudo apt-get install -y gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
+          # Note: arm-linux-gnueabi is a little-endian toolchain but supports
+          # big-endian output via -mbig-endian. U-Boot's build system adds this
+          # flag automatically when CONFIG_SYS_BIG_ENDIAN=y (set via Kconfig).
 
       - name: Build U-Boot
         run: |
@@ -1062,8 +1131,8 @@ jobs:
 
       - name: Run tests
         run: |
-          pip install pytest
-          ./test/py/test.py --bd-type hpe_ipdu --build-dir .
+          pip install pytest pexpect filelock
+          ./test/py/test.py --board hpe_ipdu --build-dir .
 ```
 
 ---
@@ -1076,42 +1145,44 @@ jobs:
 #ifndef __HPE_IPDU_H
 #define __HPE_IPDU_H
 
-/* CPU and SoC */
-#define CONFIG_ARM926EJS
-#define CONFIG_NS9360
-#define CONFIG_SYS_BIG_ENDIAN
+/*
+ * Note: CONFIG_ARM926EJS, CONFIG_NS9360, CONFIG_SYS_BIG_ENDIAN are set
+ * via Kconfig 'select' statements in arch/arm/mach-ns9360/Kconfig.
+ * Do NOT define them here to avoid duplication.
+ */
 
-/* Clock frequencies */
+/* Clock frequencies
+ * CONFIG_SYS_CLK_FREQ = crystal * (ND+1) / (1 << FS) per reference cc9c.h
+ * This is the post-FS PLL output (system clock), NOT the raw PLL.
+ */
 #define CRYSTAL_FREQ            29491200    /* 29.4912 MHz */
-#define CONFIG_SYS_CLK_FREQ     353894400   /* PLL output: 29.4912 × 12 */
-#define CPU_CLK_FREQ            176947200   /* PLL / 2 */
-#define AHB_CLK_FREQ            88473600    /* PLL / 4 */
-#define BBUS_CLK_FREQ           44236800    /* PLL / 8 */
+#define CONFIG_SYS_CLK_FREQ     176947200   /* System clock: 29.4912 × 12 / 2 */
+#define CPU_CLK_FREQ            (CONFIG_SYS_CLK_FREQ / 2)   /* 88.5 MHz */
+#define AHB_CLK_FREQ            (CONFIG_SYS_CLK_FREQ / 4)   /* 44.2 MHz */
+#define BBUS_CLK_FREQ           (CONFIG_SYS_CLK_FREQ / 8)   /* 22.1 MHz */
 
 /* Memory layout */
 #define CONFIG_SYS_SDRAM_BASE   0x00000000
 #define CONFIG_SYS_SDRAM_SIZE   0x02000000  /* 32 MB */
-#define CONFIG_SYS_TEXT_BASE    0x40000000  /* Boot from CS0 */
+/* Note: CONFIG_SYS_TEXT_BASE is set in defconfig, not here */
 #define CONFIG_SYS_INIT_SP_ADDR (CONFIG_SYS_SDRAM_BASE + CONFIG_SYS_SDRAM_SIZE - 4)
 #define CONFIG_SYS_LOAD_ADDR    0x00200000  /* Default load address */
 #define CONFIG_SYS_MALLOC_LEN   (256 * 1024)
 
 /* Serial console */
 #define CONFIG_BAUDRATE          115200
-#define CONFIG_CONS_INDEX        2           /* Channel 1 = Port A */
+#define CONFIG_CONS_INDEX        1           /* 0=Port B, 1=Port A, 2=Port C, 3=Port D */
 
 /* NOR Flash */
-#define CONFIG_SYS_FLASH_CFI
-#define CONFIG_FLASH_CFI_DRIVER
 #define CONFIG_SYS_FLASH_BASE           0x40000000
 #define CONFIG_SYS_FLASH_BANKS_LIST     { 0x40000000, 0x50000000 }
 #define CONFIG_SYS_MAX_FLASH_BANKS      2
-#define CONFIG_SYS_MAX_FLASH_SECT       142     /* 71 × 2 chips */
+#define CONFIG_SYS_MAX_FLASH_SECT       135     /* max per chip: 8×8KB + 127×64KB for 8MB */
+                                                /* Verify against MX29LV640EBXEI datasheet */
 #define CONFIG_SYS_FLASH_CFI_WIDTH      FLASH_CFI_16BIT
 #define CONFIG_SYS_FLASH_PROTECTION
 
 /* Environment in flash (last 64KB sector of CS1) */
-#define CONFIG_ENV_IS_IN_FLASH
 #define CONFIG_ENV_ADDR                 0x507F0000
 #define CONFIG_ENV_SECT_SIZE            0x10000     /* 64 KB */
 #define CONFIG_ENV_SIZE                 0x10000
@@ -1126,6 +1197,8 @@ jobs:
     "bootcmd_flash=bootm 0x40050000\0" \
     "bootcmd_tftp=tftp 0x200000 uImage; bootm 0x200000\0" \
     "bootargs=console=ttyNS1,115200 root=/dev/mtdblock3 rootfstype=jffs2\0"
+    /* Note: console device name (ttyNS1 vs ttyS1) depends on the Linux kernel
+       serial driver for NS9360. Verify against the target kernel. */
 
 #endif /* __HPE_IPDU_H */
 ```
@@ -1158,7 +1231,17 @@ jobs:
 | 0x0020 | MEM_DYN_CTRL | Dynamic Control (PALL, MODE, NOP, NORMAL) |
 | 0x0024 | MEM_DYN_REFRESH | Refresh Timer |
 | 0x0028 | MEM_DYN_READ_CFG | Read Config |
-| 0x0030-0x0058 | MEM_DYN_T* | SDRAM timing registers |
+| 0x0030 | MEM_DYN_TRP | Precharge Period |
+| 0x0034 | MEM_DYN_TRAS | Active to Precharge |
+| 0x0038 | MEM_DYN_TSREX | Self-Refresh Exit Time |
+| 0x003C | MEM_DYN_TAPR | Last Data to Active |
+| 0x0040 | MEM_DYN_TDAL | Data-in to Active |
+| 0x0044 | MEM_DYN_TWR | Write Recovery |
+| 0x0048 | MEM_DYN_TRC | Active to Active |
+| 0x004C | MEM_DYN_TRFC | Refresh to Active |
+| 0x0050 | MEM_DYN_TXSR | Exit Self-Refresh to Active |
+| 0x0054 | MEM_DYN_TRRD | Bank A to Bank B |
+| 0x0058 | MEM_DYN_TMRD | Mode Register Delay |
 | 0x0100+n*0x20 | MEM_DYN_CFG(n) | Dynamic CS Config |
 | 0x0104+n*0x20 | MEM_DYN_RAS_CAS(n) | RAS/CAS Latency |
 | 0x0200+n*0x20 | MEM_STAT_CFG(n) | Static CS Config |
