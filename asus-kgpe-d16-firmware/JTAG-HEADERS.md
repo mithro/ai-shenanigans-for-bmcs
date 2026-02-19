@@ -132,6 +132,37 @@ Pin 1 orientation marker (top-left)
 
 **Compatible receptacle:** Samtec ASP-137098-05
 
+### Older 25-pin HDT Connector (for reference)
+
+The older 25-pin HDT connector was used on pre-2010 AMD platforms
+(K5 through Phenom/Opteron 2000/8000 series). While the KGPE-D16
+most likely uses the newer 20-pin HDT+, the 25-pin format is included
+here for reference as some G34 boards from the early production era
+may use it.
+
+The 25-pin HDT is a single-row inline connector at 2.54 mm (0.1")
+pitch with alternating signal and ground pins:
+
+| Pin | Signal | Pin | Signal |
+|-----|--------|-----|--------|
+| 1 | GND | 14 | GND |
+| 2 | GND | 15 | CPU_TDI |
+| 3 | NC | 16 | GND |
+| 4 | GND | 17 | CPU_TRST# |
+| 5 | NC | 18 | GND |
+| 6 | GND | 19 | CPU_TDO |
+| 7 | CPU_DBREQ# | 20 | GND |
+| 8 | GND | 21 | CPU_VDDIO_SUS |
+| 9 | CPU_DBRDY | 22 | GND |
+| 10 | GND | 23 | CPU_VDDIO_SUS |
+| 11 | CPU_TCK | 24 | CPU_LDT_RST# |
+| 12 | GND | 25 | KEY (may be absent) |
+| 13 | CPU_TMS | 26 | GND |
+
+Note: The 25-pin HDT has a single DBRDY signal (vs. DBRDY0-3 on
+HDT+) and includes CPU_LDT_RST# (LDT/HyperTransport reset) which
+is absent on HDT+.
+
 ### HDT Signal Descriptions
 
 **Standard JTAG signals (IEEE 1149.1):**
