@@ -23,7 +23,7 @@ hardware-specific timing.
 | SoC | Digi NS9360B-0-C177 |
 | CPU Core | ARM926EJ-S |
 | CPU Clock | 176.9 MHz |
-| Endianness | Big-endian (default, confirmed by gpio[44]=0) |
+| Endianness | Big-endian at boot (gpio[44]=0), switched to little-endian by software |
 | Architecture | ARMv5TEJ |
 
 ### Clock Tree
@@ -257,7 +257,7 @@ All paths are relative to the `uboot-port/` directory.
 | SDRAM | Variable (16-64 MB) | Fixed 32 MB IS42S32800D | Hardcode or auto-detect |
 | Ethernet PHY | Various | ICS1893AFLF | Add PHY ID, verify MII init |
 | NAND flash | Optional | Not present | Disable |
-| Endianness | Big-endian | Big-endian | No change needed |
+| Endianness | Big-endian (boot) → LE (runtime) | Big-endian (boot) → **Little-endian** (runtime) | Reuse Digi BE→LE switching stub (`switch_to_le.S`) |
 
 ---
 
@@ -275,7 +275,7 @@ accurate register addresses and allows testing the actual driver code.
 **Files to create in QEMU source tree:**
 
 1. `hw/arm/ns9360.c` - Machine definition with:
-   - ARM926EJS CPU (big-endian)
+   - ARM926EJS CPU (little-endian; real hardware boots BE and switches to LE)
    - 32 MB SDRAM at 0x00000000
    - 8 MB pflash at 0x40000000 (CS0)
    - 8 MB pflash at 0x50000000 (CS1)
@@ -296,8 +296,9 @@ accurate register addresses and allows testing the actual driver code.
 **Build and run:**
 ```bash
 # Build QEMU with NS9360 support
-# Note: arm-softmmu supports both little-endian and big-endian ARM at runtime.
-# The CPU endianness is determined by the machine/CPU model, not the build target.
+# Note: arm-softmmu supports both endiannesses at runtime via the CPSR E bit.
+# Since U-Boot runs in little-endian mode (after the BE→LE switch stub), the
+# QEMU model should start in little-endian mode for simplicity.
 cd qemu
 mkdir build && cd build
 ../configure --target-list=arm-softmmu
@@ -364,10 +365,10 @@ substantial effort requiring familiarity with QEMU's C codebase, device model
 framework, and memory-mapped I/O infrastructure. This section provides a
 specification but not the full implementation. Key challenges:
 
-1. **Big-endian ARM in QEMU:** `qemu-system-arm` supports both endiannesses at
-   runtime via the CPSR E bit, but big-endian pflash (NOR flash) emulation
-   requires careful byte-swapping configuration. The `-drive` pflash interface
-   may need explicit endianness options.
+1. **Endianness in QEMU:** Since U-Boot runs in little-endian mode (after the
+   BE→LE switch), the QEMU machine model should use little-endian CPU mode.
+   The BE→LE switch stub itself is NOT tested in QEMU (it's hardware-specific).
+   This avoids pflash byte-swapping complications entirely.
 2. **No existing NS9360 support:** Every peripheral (UART, Ethernet, GPIO, memory
    controller, system registers) must be written from scratch as QEMU device models.
 3. **Option B (versatilepb)** is useful for testing generic U-Boot framework code
@@ -392,6 +393,8 @@ u-boot/
 │   │   ├── Kconfig
 │   │   ├── Makefile
 │   │   ├── lowlevel_init.S              # SDRAM, memory controller init
+│   │   ├── switch_to_le.S              # BE→LE endian switching stub
+│   │   ├── u-boot_big.lds             # Linker script for BE stub
 │   │   ├── clock.c                      # Clock tree management
 │   │   └── soc.c                        # SoC-level init (GPIO mux, resets)
 │   └── Kconfig                          # Add NS9360 to ARM SoC list
@@ -442,9 +445,10 @@ config SYS_SOC
 config NS9360
     bool
     select ARM926EJS
-    select SYS_BIG_ENDIAN
     help
       Support for the Digi NS9360 SoC (ARM926EJ-S core).
+      The NS9360 boots big-endian but U-Boot runs little-endian
+      via the BE→LE switching stub (switch_to_le.S).
 
 config TARGET_HPE_IPDU
     bool "HPE Intelligent Modular PDU (AF531A)"
@@ -1098,9 +1102,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
-          # Note: arm-linux-gnueabi is a little-endian toolchain but supports
-          # big-endian output via -mbig-endian. U-Boot's build system adds this
-          # flag automatically when CONFIG_SYS_BIG_ENDIAN=y (set via Kconfig).
+          # Note: arm-linux-gnueabi is a little-endian toolchain (matching the
+          # main U-Boot binary). It also supports -mbig-endian for building
+          # the BE→LE switching stub. The build system handles both automatically.
 
       - name: Build U-Boot
         run: |
@@ -1146,9 +1150,9 @@ jobs:
 #define __HPE_IPDU_H
 
 /*
- * Note: CONFIG_ARM926EJS, CONFIG_NS9360, CONFIG_SYS_BIG_ENDIAN are set
- * via Kconfig 'select' statements in arch/arm/mach-ns9360/Kconfig.
- * Do NOT define them here to avoid duplication.
+ * Note: CONFIG_ARM926EJS and CONFIG_NS9360 are set via Kconfig 'select'
+ * statements in arch/arm/mach-ns9360/Kconfig. Do NOT define them here.
+ * The main binary is little-endian; the BE→LE stub is built separately.
  */
 
 /* Clock frequencies
@@ -1305,7 +1309,7 @@ jobs:
 
 The QEMU machine needs to model these components:
 
-1. **CPU**: ARM926EJ-S, big-endian mode
+1. **CPU**: ARM926EJ-S, little-endian mode (BE→LE switch is not modelled in QEMU)
 2. **RAM**: 32 MB at 0x00000000
 3. **Flash**: Two 8 MB pflash devices at 0x40000000 and 0x50000000
 4. **UART**: Custom NS9360 UART at 0x90200040 (Port A)
@@ -1348,6 +1352,10 @@ For TFTP/ping testing:
 5. **PHY reset timing:** Wait at least 300 us (use 3000 us) after MDIO PHY reset
    before accessing PHY registers.
 
-6. **Endian switching:** If needed, must be done from LCD palette RAM (0xA0800200)
-   since the endian change affects instruction fetching. The HPE iPDU runs
-   big-endian natively, so this is not needed unless switching to little-endian.
+6. **Endian switching (REQUIRED):** The HPE iPDU boots big-endian (gpio[44]=0)
+   but U-Boot runs little-endian. The BE→LE switch code must be copied to LCD
+   palette RAM (0xA0800200) and executed from there, because changing endianness
+   affects instruction fetching from flash. Four registers must be cleared:
+   MEM_CFG bit 0, SYS_MISC bit 3 (ENDM), BBus ENDIAN_CFG bits 0x1201, and
+   CP15 R1 bit 7. See `board/cc9c/switch_to_le.S` for the reference implementation.
+   The BE→LE stub is built as a separate `u-boot_big_switch.bin` binary.

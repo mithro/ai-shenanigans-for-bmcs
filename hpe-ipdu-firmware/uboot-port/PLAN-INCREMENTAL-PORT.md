@@ -22,7 +22,7 @@ something breaks, you know exactly which change caused it.
 | SoC | Digi NS9360B-0-C177 |
 | CPU Core | ARM926EJ-S |
 | CPU Clock | 176.9 MHz |
-| Endianness | Big-endian (default, confirmed by gpio[44]=0) |
+| Endianness | Big-endian at boot (gpio[44]=0), switched to little-endian by software |
 | Architecture | ARMv5TEJ |
 
 ### Clock Tree
@@ -330,33 +330,55 @@ These are the critical adaptations needed when porting from the CC9C reference:
 | Ethernet PHY | Various (LXT971A, etc.) | ICS1893AFLF | Add PHY ID, verify MII init |
 | PHY Address | 0x0001 | 0x0001 (verify) | Confirm via MDIO scan |
 | NAND flash | Optional | Not present | Disable CONFIG_CC9C_NAND |
-| Endianness | Big-endian (default) | Big-endian | Keep default (no endian switch needed) |
+| Endianness | Big-endian (default) | Big-endian (boot) → **Little-endian** (runtime) | Use BE→LE switching stub (see `switch_to_le.S`) |
 | I2C EEPROM | M24LC64 @ 0x50 | Unknown | Probe I2C bus to discover |
 
 ---
 
 ## 4. Cross-Compiler Setup
 
-The NS9360 is an ARM926EJ-S (ARMv5TEJ) running in **big-endian** mode.
+The NS9360 is an ARM926EJ-S (ARMv5TEJ). The HPE iPDU hardware boots in
+**big-endian** mode (gpio[44]=0), but the main U-Boot binary runs in
+**little-endian** mode, matching the Digi reference implementation. A small
+big-endian switching stub runs first to switch the CPU and bus to little-endian.
 
-### Install ARM Big-Endian Toolchain
+**Why little-endian?** The Digi reference U-Boot, Linux kernel mach-ns9xxx, and
+all NS9360 driver code were written for little-endian operation. Targeting LE
+allows direct reuse of this tested codebase. The NS9360 Hardware Reference
+Manual (Table 49) confirms the chip supports both modes via gpio[44]:
+gpio[44]=0 → big-endian, gpio[44]=1 → little-endian.
 
-The NS9360 runs in **big-endian** mode. The standard `arm-linux-gnueabi` package
-is a little-endian toolchain, but it supports big-endian output via the
-`-mbig-endian` flag. The Digi reference toolchain used this same approach.
+### Endianness Architecture
+
+The build produces **two binaries**:
+
+1. **`u-boot_big_switch.bin`** — Small (~0x1A0 bytes) big-endian stub. Compiled
+   with `-mbig-endian` and `SWITCH_BE_TO_LE` defined. Its only job is to switch
+   the CPU from BE to LE by clearing four endianness control registers:
+   - Memory Controller Config (0xA0700008) bit 0
+   - System Misc Config (0xA0900184) bit 3 (ENDM)
+   - BBus Endian Config (0x90600080) bits 0x1201 (AHB master, USB, DMA)
+   - ARM CP15 R1 bit 7 (CPU endianness)
+   The switch code must execute from LCD Palette RAM (0xA0800200) because
+   changing endianness affects instruction fetching from flash.
+
+2. **`u-boot.bin`** — The main U-Boot binary, compiled as `elf32-littlearm`.
+   This is standard little-endian ARM code, matching the Digi reference.
+
+**Reference:** `board/cc9c/switch_to_le.S`, `board/cc9c/u-boot_big.lds`,
+`board/cc9c/u-boot.lds`, and `board/cc9c/Makefile` in the Digi U-Boot 1.1.4 source.
+
+### Install ARM Cross-Compiler
 
 ```bash
-# Option 1: Debian/Ubuntu cross-compiler with -mbig-endian
+# Standard little-endian ARM cross-compiler (the main U-Boot binary is LE)
 sudo apt install gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi
-# U-Boot's build system will add -mbig-endian automatically when
-# CONFIG_SYS_BIG_ENDIAN=y is set (via Kconfig select SYS_BIG_ENDIAN).
-# However, the linker must also support big-endian. Verify:
+
+# The toolchain must ALSO support -mbig-endian for the switching stub.
+# Verify big-endian support:
+arm-linux-gnueabi-gcc -mbig-endian -march=armv5te -c -x c /dev/null -o /dev/null
 arm-linux-gnueabi-ld --help | grep -i endian
 # Should show "-EB" (big-endian) option
-
-# Option 2: Dedicated big-endian toolchain (armeb prefix)
-# Some distributions provide armeb-linux-gnueabi-gcc which defaults to BE.
-# This avoids relying on -mbig-endian flag support.
 
 # Verify:
 arm-linux-gnueabi-gcc -v
@@ -368,21 +390,25 @@ arm-linux-gnueabi-gcc -v
 # The cross-compiler prefix:
 export CROSS_COMPILE=arm-linux-gnueabi-
 
-# Build:
+# Build (produces both u-boot.bin and u-boot_big_switch.bin):
 make hpe_ipdu_defconfig
 make CROSS_COMPILE=arm-linux-gnueabi- -j$(nproc)
 
-# The Kconfig 'select SYS_BIG_ENDIAN' in the NS9360 Kconfig ensures
-# -mbig-endian is passed to both compiler and linker automatically.
-# If the build fails with endianness errors, verify the toolchain
-# supports -mbig-endian by checking:
-#   arm-linux-gnueabi-gcc -mbig-endian -march=armv5te -c -x c /dev/null -o /dev/null
+# The main binary (u-boot.bin) is little-endian.
+# The switching stub (u-boot_big_switch.bin) is big-endian.
+# The build system handles both automatically via separate AFLAGS_BIG/LDFLAGS_BIG.
 ```
 
 ### Key Compiler Flags (set automatically by U-Boot build system)
 
 ```
--march=armv5te -mbig-endian -mabi=aapcs-linux
+# Main U-Boot binary (little-endian):
+-march=armv5te -mabi=aapcs-linux
+# Linker: OUTPUT_FORMAT("elf32-littlearm")
+
+# BE→LE switching stub only:
+-march=armv5te -mbig-endian -D SWITCH_BE_TO_LE
+# Linker: OUTPUT_FORMAT("elf32-bigarm") -EB
 ```
 
 ---
@@ -429,7 +455,8 @@ cp.b 0x00200000 0x40000000 ${filesize}
 **Goal:** Get the CPU running, memory controller initialised, and print "Hello from U-Boot"
 to the serial console.
 
-**Produces:** A binary that, when flashed to CS0 (0x40000000), outputs text on UART Port A.
+**Produces:** Two binaries: `u-boot_big_switch.bin` (BE→LE stub, flashed first in
+CS0) and `u-boot.bin` (LE main binary). Together they output text on UART Port A.
 
 ### Files to Create/Modify
 
@@ -439,6 +466,8 @@ Based on modern U-Boot structure (use the latest mainline as the base tree):
    - `Kconfig` - SoC Kconfig entries
    - `Makefile`
    - `lowlevel_init.S` - Minimal memory controller init (adapted from CC9C platform.S)
+   - `switch_to_le.S` - BE→LE endian switching stub (adapted from CC9C switch_to_le.S)
+   - `u-boot_big.lds` - Linker script for the big-endian switching stub
 
 2. **`board/hpe/ipdu/`** - New board directory
    - `Kconfig`
@@ -453,6 +482,27 @@ Based on modern U-Boot structure (use the latest mainline as the base tree):
 5. **`drivers/serial/serial_ns9360.c`** - Minimal serial driver
 
 ### Step-by-Step Implementation
+
+#### 1.0 Create switch_to_le.S (BE→LE Switching Stub)
+
+Adapt from `reference/.../board/cc9c/switch_to_le.S`. This runs FIRST, before
+any other code, when the CPU boots in big-endian mode (gpio[44]=0).
+
+The stub must:
+1. Copy the `SwitchEndian` routine to LCD Palette RAM (0xA0800200)
+2. Jump to palette RAM and execute the endian switch:
+   - Clear bit 0 of Memory Controller Config (0xA0700008)
+   - Clear bit 3 (ENDM) of System Misc Config (0xA0900184)
+   - Clear bits 0x1201 of BBus Endian Config (0x90600080)
+   - Clear bit 7 of ARM CP15 R1 (CPU endianness)
+3. Return from palette RAM — CPU is now in little-endian mode
+4. Fall through to the main U-Boot `_start` code (now executing in LE)
+
+**Build separately** as `elf32-bigarm` using `AFLAGS_BIG` (`-mbig-endian`).
+The linker script (`u-boot_big.lds`) should contain only `switch_to_le_big.o`.
+
+**Verification:** A debug LED toggle (like the reference code does with GPIO67)
+can confirm the switch completed before any serial output is available.
 
 #### 1.1 Create lowlevel_init.S
 
@@ -1280,9 +1330,12 @@ Adapt from `reference/.../drivers/ns9750_eth.c`. The init sequence:
 4. **SDRAM mode register set:** Requires a dummy read from an address that encodes
    the desired mode. For CAS=2: read from base + 0x22000.
 
-5. **Endianness switching:** If switching from big to little endian, the switch code
-   must be copied to LCD palette RAM (0xA0800200) and executed from there, as the
-   endian change affects instruction fetching from flash.
+5. **Endianness switching (REQUIRED):** The HPE iPDU boots big-endian (gpio[44]=0)
+   but U-Boot runs little-endian. The BE→LE switch code must be copied to LCD
+   palette RAM (0xA0800200) and executed from there, because changing endianness
+   affects instruction fetching from flash. Four registers must be cleared:
+   MEM_CFG bit 0, SYS_MISC bit 3 (ENDM), BBus ENDIAN_CFG bits 0x1201, and
+   CP15 R1 bit 7. See `board/cc9c/switch_to_le.S` for the reference implementation.
 
 6. **PHY reset timing:** After asserting PHY reset via MDIO, wait at least 300 us
    (the reference code uses 3000 us for safety) before accessing PHY registers.
