@@ -317,6 +317,28 @@ support both single and multi-socket configurations natively.
 
 ## Additional Notes
 
+### JTAG Scan Chain Topology
+
+On AMD server platforms, the JTAG scan chain typically includes
+multiple devices daisy-chained together. On the KGPE-D16, the chain
+likely includes:
+
+```
+Debug Probe
+    │
+    ▼
+┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
+│  CPU 1  │───▶│  CPU 2  │───▶│ SR5690  │───▶│ SP5100  │
+│ Opteron │    │ Opteron │    │ (NB)    │    │ (SB)    │
+│ (G34)   │    │ (G34)   │    │         │    │         │
+└─────────┘    └─────────┘    └─────────┘    └─────────┘
+   TDI ──────────────────────────────────────────▶ TDO
+```
+
+The exact chain order has not been confirmed for the KGPE-D16.
+In single-socket configurations (only CPU1 populated), CPU2's
+position in the chain would be bypassed.
+
 ### SR5690 Northbridge Microcontroller
 
 The AMD SR5690 (RD890S) northbridge on the KGPE-D16 contains an
@@ -326,20 +348,79 @@ embedded microcontroller that the
 JTAG in order to start execution." This microcontroller handles
 IOMMU functionality and possibly other northbridge management tasks.
 
-It is unclear whether the SR5690's JTAG interface is exposed via one
-of the board's unpopulated headers or only accessible through the main
-JTAG chain. The AMD HDT connector may carry the SR5690 on the same
-JTAG chain as the CPU(s), as AMD chipsets are often daisy-chained
-with the processors on the JTAG scan chain.
+The SR5690 is architecturally a HyperTransport-to-PCIe bridge and
+switch, providing 46 PCIe lanes (42 for external devices, 4 for the
+A-Link Express II interface to the SP5100 southbridge). Its embedded
+microcontroller is critical for IOMMU initialisation, which the
+[Vikings wiki](https://wiki.vikings.net/hardware:kgpe-d16) notes
+must be "in the correct location to properly shield the main CPU
+from all unauthorized traffic."
+
+The SR5690 is likely accessible via the HDT JTAG chain, either as a
+separate TAP in the daisy chain or through the CPU's internal JTAG
+routing.
 
 ### SP5100 Southbridge
 
-The AMD SP5100 southbridge also has an embedded 8051 microcontroller
-core (for SMBus controller functionality). Like the SR5690, this may
-be accessible via the JTAG chain, but this has not been confirmed for
-the KGPE-D16.
+The AMD SP5100 southbridge contains an embedded **8051
+microcontroller** core that handles SMBus controller functionality and
+other low-level southbridge management. Like the SR5690, this
+microcontroller "requires a firmware upload from the main platform
+firmware or via JTAG in order to start execution"
+([Vikings wiki](https://wiki.vikings.net/hardware:kgpe-d16)).
+
+The SP5100 provides:
+- 6x SATA II ports (3 Gb/s)
+- USB 2.0 host controllers
+- LPC bus interface (connecting to the Super I/O and TPM)
+- SMBus controller (via the 8051 core)
+- General purpose I/O
+
+The SP5100's 8051 core may also be accessible through the JTAG chain.
+
+### Security Considerations
+
+Modern AMD processors (EPYC and later) have a
+[debug unlock mechanism](https://ieeexplore.ieee.org/document/10468135/)
+controlled by the Platform Security Processor (PSP/ASP). On the
+Opteron 6000 series used in the KGPE-D16, this mechanism is simpler
+-- the HDT interface is generally accessible without unlock procedures,
+making these older processors more amenable to open-source firmware
+debugging.
+
+This is one reason why the KGPE-D16 has been popular for coreboot
+and Libreboot development: the HDT debug interface is usable without
+AMD NDA restrictions on the debug unlock process.
 
 ---
 
-**Document Version:** 1.0
+## Open Questions
+
+1. **Exact header location(s):** The precise PCB location(s) of the
+   AMD HDT footprint(s) on the KGPE-D16 need to be confirmed by
+   physical inspection of the board. They are likely near the CPU
+   socket(s).
+
+2. **One or two HDT headers?** Raptor Engineering says "AMD HDT
+   Attachment Ports" (plural) -- are there separate headers for each
+   CPU socket, or is it a single header with both CPUs on the chain?
+
+3. **Scan chain order:** The order of devices on the JTAG scan chain
+   (CPU1 → CPU2 → SR5690 → SP5100, or a different arrangement) has
+   not been confirmed.
+
+4. **SR5690 JTAG access:** Is the SR5690's embedded microcontroller
+   accessible via the HDT JTAG chain, or does it have a separate JTAG
+   interface?
+
+5. **HDT connector variant:** While the 20-pin HDT+ is the most likely
+   connector (based on the era and processor family), the older 25-pin
+   HDT connector is also possible. Physical inspection is needed.
+
+6. **Jumper requirements:** Like the Tyan S2885, the KGPE-D16 may
+   have undocumented jumpers that must be set to enable HDT debugging.
+
+---
+
+**Document Version:** 1.1
 **Last Updated:** 2026-02-19
