@@ -200,6 +200,55 @@ AMD HDT requires proprietary debug probes and software. The HDT
 protocol is not publicly documented by AMD, though it has been
 [partially reverse-engineered](https://ieeexplore.ieee.org/document/10468135/).
 
+### Dual-Socket Considerations
+
+The KGPE-D16 is a **dual-socket** board (CPU1 and CPU2). The Raptor
+Engineering page refers to "AMD HDT Attachment **Ports**" (plural),
+suggesting there may be **one HDT header per CPU socket**, or a single
+header with both CPUs daisy-chained on the JTAG scan chain.
+
+Historical precedent from other AMD dual-socket boards supports both
+configurations:
+
+- **Tyan S2885** (dual Opteron): Had **two separate HDT headers** (one
+  per CPU), plus jumpers (J94, J95) to configure the multiprocessor
+  debug chain. A multiprocessor adapter was needed to connect both
+  CPUs to a single debug probe.
+  ([Source: coreboot mailing list](https://coreboot.coreboot.narkive.com/jIjhQTvx/problem-with-amd-hdt-setup-for-tyan-s2885-linuxbios-debugging))
+
+- **Dell PowerEdge C6105** (Opteron 4100-4300): Documented as having
+  a 20-pin HDT+ connector, likely a single connector per single-socket
+  sled.
+
+If the KGPE-D16 has two HDT headers, they would likely be located near
+each CPU socket (CPU1 near the top-left, CPU2 near the top-right of
+the board, based on the board layout in the ASUS manual section 2.2.3).
+
+**Practical note:** When using HDT on a dual-socket board, only one CPU
+needs to be populated for initial bring-up. Single-socket operation
+simplifies the debug chain and avoids multi-processor adapter
+requirements.
+
+### Historical Use of HDT in Coreboot Development
+
+HDT has been used for coreboot (formerly LinuxBIOS) development on
+AMD platforms since the early 2000s. Early coreboot developers used
+the Macraigor Systems OCDemon (Raven) debug device with AMD HDT to
+debug LinuxBIOS on boards like the Tyan S2885.
+
+Key challenges encountered historically:
+- **Jumper configuration:** Some boards require specific jumper settings
+  to enable HDT (not documented in user manuals)
+- **Multi-processor adapters:** Dual-socket boards may need adapters to
+  connect both CPUs to a single debug probe
+- **EPP parallel port:** Older HDT probes required EPP-mode parallel
+  ports on the host computer
+- **Power sequencing:** HDT probes must be connected before the target
+  powers on, or the TAP controller may not initialise correctly
+
+Modern HDT probes (ASSET InterTech, Sage) use USB connections and
+support both single and multi-socket configurations natively.
+
 ---
 
 ## Comparison: The Two JTAG Headers
@@ -257,6 +306,12 @@ protocol is not publicly documented by AMD, though it has been
   Catalogue of systems with HDT connectors
 - [ASSET InterTech: JTAG-based Debug of AMD Servers](https://www.asset-intertech.com/resources/blog/2021/08/jtag-based-debug-of-amd-servers/) --
   Overview of JTAG debugging on AMD server platforms
+
+### Historical Coreboot HDT Usage
+- [Coreboot ML: AMD HDT on Tyan S2885](https://coreboot.coreboot.narkive.com/jIjhQTvx/problem-with-amd-hdt-setup-for-tyan-s2885-linuxbios-debugging) --
+  Practical HDT debugging discussion for dual-socket Opteron board
+- [Slashdot: Hidden Debug Mode Found In AMD Processors](https://hardware.slashdot.org/story/10/11/12/047243/hidden-debug-mode-found-in-amd-processors) --
+  Public disclosure of AMD HDT capabilities (2010)
 
 ---
 
