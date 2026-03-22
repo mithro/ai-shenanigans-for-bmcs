@@ -8,27 +8,57 @@
 Command-line interface for controlling GPU slot power and multi-host
 mode on the Dell C410X expansion chassis via I2C to PLX PEX switches.
 
-Usage:
-    # Show slot status
+This tool implements the operations documented in PEX-I2C-COMMANDS.md,
+using the c410x_pex library for the PLX 4-byte I2C command protocol.
+All I2C sequences were reverse engineered from the Dell C410X Avocent
+MergePoint firmware v1.35 (/sbin/fullfw ARM ELF binary).
+
+==========================================================================
+ Usage
+==========================================================================
+
+    # Show slot power status (reads register 0x080 per slot)
     uv run c410x_control.py status
 
-    # Power on a single slot
+    # Power on a single slot (9 I2C txns + 100ms delay per slot)
     uv run c410x_control.py power-on 4
 
-    # Power off a single slot
+    # Power off a single slot (2 I2C txns per slot, no delay)
     uv run c410x_control.py power-off 4
 
-    # Full 16-slot startup sequence (staggered)
+    # Full 16-slot staggered startup (144 I2C txns, ~2s total)
+    # Phases: slots 4,8,12,16 -> 3,7,11,15 -> 2,6,10,14 -> 1,5,9,13
+    # Source: PEX-I2C-COMMANDS.md section 8
     uv run c410x_control.py startup
 
-    # Shutdown all 16 slots
+    # Shutdown all 16 slots (32 I2C txns, not staggered)
     uv run c410x_control.py shutdown
 
-    # Switch multi-host mode
+    # Switch multi-host fan-out mode
+    # Reconfigures PEX8696 lane partitioning + PEX8647 port merging
+    # Source: PEX-I2C-COMMANDS.md section 9
     uv run c410x_control.py multihost 4:1
 
-    # Dry-run mode (log transactions without touching hardware)
-    uv run c410x_control.py --dry-run startup
+    # Show slot-to-switch mapping (no I2C, just prints the lookup table)
+    uv run c410x_control.py topology
+
+    # Dry-run mode: log all I2C transactions without touching hardware
+    # Shows exact wire-level bytes that would be sent
+    uv run c410x_control.py --dry-run -vv startup
+
+    # Verbose output: -v for INFO, -vv for DEBUG (shows wire bytes)
+    uv run c410x_control.py -vv power-on 4
+
+==========================================================================
+ References
+==========================================================================
+
+    PEX-I2C-COMMANDS.md       - Master I2C command reference
+    c410x_pex.py              - Library implementing the PLX I2C protocol
+    analysis/i2c-transport.md - I2C bus and protocol details
+    analysis/pex8696-hotplug.md - Slot power register analysis
+    analysis/pex-multihost.md - Multi-host mode register analysis
+    analysis/power-sequencing.md - 16-slot startup sequence analysis
 """
 
 from __future__ import annotations
@@ -142,8 +172,8 @@ def cmd_multihost(chassis: C410X, args: argparse.Namespace) -> None:
         sys.exit(1)
 
     print(f"Switching to {mode_str} multi-host mode")
-    print(f"  PEX8696 switches: {[f'0x{a:02X}' for a in PEX8696_ADDRS]}")
-    print(f"  PEX8647 switches: {[f'0x{a:02X}' for a in PEX8647_ADDRS]}")
+    print(f"  PEX8696 switches (7-bit): {[f'0x{a:02X}' for a in PEX8696_ADDRS]}")
+    print(f"  PEX8647 switches (7-bit): {[f'0x{a:02X}' for a in PEX8647_ADDRS]}")
 
     mode_descriptions = {
         "2:1": "8 hosts, 2 GPU slots each",
@@ -164,32 +194,45 @@ def cmd_multihost(chassis: C410X, args: argparse.Namespace) -> None:
 
 
 def cmd_topology(chassis: C410X, args: argparse.Namespace) -> None:
-    """Display the slot-to-switch mapping topology."""
+    """Display the slot-to-switch mapping topology.
+
+    Shows the firmware lookup tables extracted from ROM addresses 0xF7B06
+    and 0xF7B16, with both 7-bit (smbus2) and 8-bit GBT (firmware) I2C
+    address formats.
+
+    Source: PEX-I2C-COMMANDS.md section 5 (Slot-to-Switch Mapping)
+    Source: analysis/i2c-transport.md "Slot-to-I2C-Address Mapping"
+    """
     print("Dell C410X Slot-to-Switch Mapping")
-    print("=" * 65)
-    print(f"{'Slot':>4}  {'I2C Addr':>9}  {'7-bit':>5}  {'Switch':>8}  {'Station':>7}  {'Port Byte':>9}")
-    print("-" * 65)
+    print("(Source: firmware ROM at 0xF7B06/0xF7B16, see PEX-I2C-COMMANDS.md section 5)")
+    print("=" * 72)
+    # i2c_addr is stored as 7-bit for smbus2; GBT 8-bit = 7-bit << 1
+    print(f"{'Slot':>4}  {'7-bit':>6}  {'8-bit GBT':>9}  {'Switch':>8}  {'Station':>7}  {'Port Byte':>9}")
+    print("-" * 72)
 
     for slot in SLOT_MAP:
+        gbt_addr = slot.i2c_addr << 1  # 8-bit GBT format (as in firmware)
         print(
             f"{slot.slot_num:>4}  "
-            f"0x{slot.i2c_addr:02X}       "
-            f"0x{slot.i2c_addr >> 1:02X}   "
+            f"0x{slot.i2c_addr:02X}    "
+            f"0x{gbt_addr:02X}        "
             f"#{slot.switch_index:<7d} "
             f"{slot.station:>7}  "
             f"0x{slot.port_byte:02X}"
         )
 
     print()
-    print("PEX8696 downstream switches:")
+    print("PEX8696 downstream switches (4 slots each):")
     for i, addr in enumerate(PEX8696_ADDRS):
+        gbt = addr << 1
         slots = [s.slot_num for s in SLOT_MAP if s.i2c_addr == addr]
-        print(f"  #{i}: 0x{addr:02X} (7-bit 0x{addr >> 1:02X}) -> slots {slots}")
+        print(f"  #{i}: 7-bit 0x{addr:02X} / GBT 0x{gbt:02X} -> slots {slots}")
 
     print()
-    print("PEX8647 upstream switches:")
+    print("PEX8647 upstream switches (host-side):")
     for i, addr in enumerate(PEX8647_ADDRS):
-        print(f"  #{i}: 0x{addr:02X} (7-bit 0x{addr >> 1:02X})")
+        gbt = addr << 1
+        print(f"  #{i}: 7-bit 0x{addr:02X} / GBT 0x{gbt:02X}")
 
 
 def main() -> None:
