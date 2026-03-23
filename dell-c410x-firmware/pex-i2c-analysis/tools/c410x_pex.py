@@ -576,7 +576,14 @@ class SlotInfo:
         """PLX station number decoded from port_byte.
 
         The PEX8696 has 6 stations of 4 ports each (24 ports total).
-        The station number is encoded in port_byte bits [7:1].
+        port_byte = (station << 1) | (port >> 1).
+
+        All GPU slot entries use even port numbers (port=0), so
+        port>>1 = 0 and port_byte>>1 = station exactly. For odd
+        ports (e.g. NT bridge at station 3, port 3, port_byte=0x07):
+        0x07>>1 = 3, which is also correct because the port's high
+        bit (port>>1 = 1) contributes at most 1, and station is
+        in the higher bits.
         """
         return self.port_byte >> 1
 
@@ -1146,7 +1153,7 @@ _PEX8647_STN2_PORT0 = 0x04  # Station 2, port 0
 # Station 3, port 3 (global port 15) is the NT bridge port.
 # Source: PEX-I2C-COMMANDS.md section 9.5
 _PEX8696_CFG_PORT = 0x00    # Station 0, port 0 (upstream/config)
-_PEX8696_NT_BRIDGE = 0x07   # Station 3, port 1 (port_byte encoding)
+_PEX8696_NT_BRIDGE = 0x07   # Station 3, port 3 — port_byte = (3<<1)|(3>>1) = 7
 
 # For the NT bridge port (global port 15 = station 3, port 3), the
 # port number is odd (3), so bit 7 of byte[2] must be set:
@@ -1346,16 +1353,33 @@ class MultiHostController:
     def set_mode(self, mode: MultiHostMode | int | str) -> None:
         """Switch the chassis to a new multi-host mode.
 
-        Order of operations (from firmware multi_host_mode_set at 0x380BC):
-          1. Configure PEX8696 downstream lane partitioning (all 4 switches)
-          2. Configure PEX8696 NT bridge ports (station 3, port 3)
+        WARNING: All GPU slots MUST be powered off before calling this
+        method. The firmware orchestrator (multi_host_mode_set at 0x380BC)
+        calls pex8696_all_slot_power_off before changing lane config.
+        Changing registers 0x380/0x384 while PCIe links are active can
+        cause hard link faults or PCIe bus errors on attached GPUs.
+        Use C410X.shutdown_all() before C410X.set_multihost_mode().
+
+        The firmware's full mode-switch sequence (section 9.2) has 5 steps:
+          1. Power off all GPU slots (pex8696_all_slot_power_off)
+          2. Configure PEX8696 downstream lane partitioning (all 4 switches)
           3. Configure PEX8647 upstream switches (both switches)
+          4. NT bridge setup (station 3, port 3 on all PEX8696)
+          5. SerDes re-equalisation (120 write-only transactions)
+
+        This implementation covers steps 2-4. Step 1 must be done by the
+        caller. Step 5 (SerDes re-equalisation of registers 0xB90-0xBA8)
+        is NOT YET IMPLEMENTED — Gen2 links may require manual re-training
+        after mode switch without it. See PEX-I2C-COMMANDS.md section 9.6.
 
         Source: PEX-I2C-COMMANDS.md section 9.2
 
         Args:
             mode: Target mode — MultiHostMode enum, int (2/4/8),
                   or string ("2:1", "4:1", "8:1").
+
+        Raises:
+            ValueError: If mode is not 2, 4, or 8.
         """
         if isinstance(mode, str):
             ratio = int(mode.split(":")[0])
@@ -1442,7 +1466,12 @@ class C410X:
         self.slots.shutdown_all()
 
     def set_multihost_mode(self, mode: MultiHostMode | int | str) -> None:
-        """Switch multi-host fan-out mode. See MultiHostController.set_mode."""
+        """Switch multi-host fan-out mode.
+
+        WARNING: Call shutdown_all() first! Changing lane configuration
+        while GPU slots are powered causes PCIe bus errors.
+        See MultiHostController.set_mode for full details.
+        """
         self.multihost.set_mode(mode)
 
     def read_slot_status(self, slot_num: int) -> dict[str, object]:

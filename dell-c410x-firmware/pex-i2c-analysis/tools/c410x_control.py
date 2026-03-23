@@ -163,7 +163,16 @@ def cmd_shutdown(chassis: C410X, args: argparse.Namespace) -> None:
 
 
 def cmd_multihost(chassis: C410X, args: argparse.Namespace) -> None:
-    """Switch multi-host fan-out mode."""
+    """Switch multi-host fan-out mode.
+
+    WARNING: All GPU slots must be powered off before switching modes.
+    The firmware orchestrator (multi_host_mode_set at 0x380BC) powers off
+    all slots first. Changing lane registers while PCIe links are active
+    causes bus errors. See PEX-I2C-COMMANDS.md section 9.2.
+
+    Note: SerDes re-equalisation (section 9.6) is not yet implemented.
+    Gen2 links may require manual re-training after mode switch.
+    """
     mode_str = args.mode
     valid_modes = {"2:1": 2, "4:1": 4, "8:1": 8}
 
@@ -172,6 +181,11 @@ def cmd_multihost(chassis: C410X, args: argparse.Namespace) -> None:
         sys.exit(1)
 
     print(f"Switching to {mode_str} multi-host mode")
+    print()
+    print("  WARNING: All GPU slots must be powered off before mode switching!")
+    print("  Run 'c410x_control.py shutdown' first if slots are powered.")
+    print("  (Firmware does this automatically — see PEX-I2C-COMMANDS.md section 9.2)")
+    print()
     print(f"  PEX8696 switches (7-bit): {[f'0x{a:02X}' for a in PEX8696_ADDRS]}")
     print(f"  PEX8647 switches (7-bit): {[f'0x{a:02X}' for a in PEX8647_ADDRS]}")
 
