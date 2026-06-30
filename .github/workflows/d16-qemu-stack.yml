@@ -1,0 +1,50 @@
+name: D16 QEMU firmware stack
+
+# Builds the custom kgpe-d16-bmc (AST2050) QEMU from source and smoke-tests the
+# machine. Later phases (P2+) add kernel/initramfs build and boot jobs.
+on:
+  push:
+    paths:
+      - 'asus-kgpe-d16-firmware/**'
+      - '.github/workflows/d16-qemu-stack.yml'
+  pull_request:
+    paths:
+      - 'asus-kgpe-d16-firmware/**'
+      - '.github/workflows/d16-qemu-stack.yml'
+  workflow_dispatch:
+
+jobs:
+  build-qemu:
+    name: Build custom QEMU (kgpe-d16-bmc / AST2050)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with QEMU submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install QEMU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential ninja-build pkg-config python3 python3-venv \
+            libglib2.0-dev libpixman-1-dev flex bison
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build qemu-system-arm with the kgpe-d16-bmc machine
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+
+      - name: Smoke-test the machine instantiates
+        run: |
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/run-qemu.py smoke \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --timeout 15
+
+      - name: Upload qemu-system-arm
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-system-arm-kgpe-d16
+          path: asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm
+          if-no-files-found: error
