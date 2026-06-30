@@ -36,6 +36,22 @@ build with a modern toolchain. Progress and the concrete obstacle chain:
 - **U-Boot host tools.** The 2013 host `libfdt` clashes with the modern system
   one; build with U-Boot's bundled libfdt or skip the host dtc.
 
+- **Cascading G4-driver references.** Deriving from `ast2300_defconfig` and
+  switching to `ARCH_AST2100` then fails in driver files that assume G4 symbols
+  (e.g. `plat-aspeed/dev-nand.c` uses `AST_FMC_BASE`, defined only for
+  AST2300/2400). A correct AST2050 build needs the **proper AST2050/G3 defconfig
+  from Raptor's Yocto/OpenBMC layer** (which disables the G4-only drivers), not a
+  hand-switched G4 defconfig — building it up by disabling drivers one-by-one is
+  the whack-a-mole that makes this multi-day.
+
+### Boot path that sidesteps device tree
+The kernel need not boot via Raptor's (hard-to-build) U-Boot: the **already-built
+OpenBMC U-Boot can boot the Raptor kernel via ATAGS** — `setenv machid <id>;
+bootm <kernel> <initrd>` with **no dtb** makes U-Boot pass an ATAG list + machine
+id instead of a device tree. The Raptor machine id is `MACH_TYPE_ASPEED`
+(`MACHINE_START(ASPEED, ...)`), so once the kernel builds this is the route to a
+boot — leaving only the G3-vs-G4 register-modelling gap below.
+
 ### The real crux: G3 vs G4 machine modelling
 The Raptor kernel targets the **AST2050/AST2100 (G3)** register semantics, but
 the `kgpe-d16-bmc` QEMU machine currently reuses the **AST2400 (G4)** peripheral
