@@ -8,3 +8,7 @@
 	path = hpe-ipdu-firmware/uboot-port/u-boot
 	url = https://github.com/mithro/u-boot.git
 	branch = hpe-ipdu-port
+[submodule "hpe-ipdu-firmware/uboot-port/qemu/qemu-10.0.7"]
+	path = hpe-ipdu-firmware/uboot-port/qemu/qemu-10.0.7
+	url = https://github.com/mithro/qemu.git
+	branch = ns9360-machine
