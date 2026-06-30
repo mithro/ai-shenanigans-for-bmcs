@@ -4,3 +4,11 @@
 [submodule "hpe-ipdu-firmware/uboot-port/reference/linux-mach-ns9xxx/linux-v2.6.39"]
 	path = hpe-ipdu-firmware/uboot-port/reference/linux-mach-ns9xxx/linux-v2.6.39
 	url = https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+[submodule "hpe-ipdu-firmware/uboot-port/u-boot"]
+	path = hpe-ipdu-firmware/uboot-port/u-boot
+	url = https://github.com/mithro/u-boot.git
+	branch = hpe-ipdu-port
+[submodule "hpe-ipdu-firmware/uboot-port/qemu/qemu-10.0.7"]
+	path = hpe-ipdu-firmware/uboot-port/qemu/qemu-10.0.7
+	url = https://github.com/mithro/qemu.git
+	branch = ns9360-machine

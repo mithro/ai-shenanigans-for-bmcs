@@ -1,0 +1,3 @@
+# Built U-Boot NOR flash image (8 MB), generated from the u-boot submodule build.
+# Reproducible artifact — not tracked.
+/flash0.img
