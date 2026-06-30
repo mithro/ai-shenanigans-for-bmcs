@@ -32,6 +32,9 @@ Key files:
 - **`RAPTOR-PORTING-GUIDE.md`** -- Every change from Raptor's kernel
   mapped to the corresponding mainline subsystem, with specific porting
   actions for each of 26 components.
+- **`JTAG-HEADERS.md`** -- Documentation of both unpopulated JTAG debug
+  headers: the BMC JTAG (AST_JTAG1) and the AMD HDT CPU debug connector,
+  including pinouts, signal descriptions, and compatible debug probes.
 - `RAPTOR_ENGINEERING_AST2050_ANALYSIS.md` -- Detailed analysis of
   Raptor's repositories (kernel, U-Boot, Yocto/OpenBMC).
 - `RAPTOR_AST2050_SUMMARY.md` -- Quick reference summary.
