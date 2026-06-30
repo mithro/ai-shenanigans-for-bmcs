@@ -50,6 +50,11 @@ be soldered onto the AST_JTAG1 footprint. This follows the standard
 ARM JTAG 20-pin connector pinout (active-low active signals, active-low
 active signals).
 
+> **Wiring it to a Raspberry Pi 4B:** for the GPIO-to-pin mapping, the
+> Raptor-verified OpenOCD configs (`openocd/`), and aligned pinout diagrams,
+> see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md) and
+> [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md).
+
 ---
 
 ## Header 2: AMD HDT -- CPU Debug (The "Second" JTAG Header)

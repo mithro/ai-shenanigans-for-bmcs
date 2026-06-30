@@ -47,6 +47,13 @@ Key files:
   Documentation of both unpopulated JTAG debug headers: the BMC JTAG
   (AST_JTAG1) and the AMD HDT CPU debug connector, including pinouts,
   signal descriptions, and compatible debug probes.
+- [`RPI4-OPENOCD-JTAG-WIRING.md`](asus-kgpe-d16-firmware/RPI4-OPENOCD-JTAG-WIRING.md) --
+  How to wire a Raspberry Pi 4B as an OpenOCD JTAG adapter (plus UART console
+  and SPI flashing) to the AST2050 BMC debug headers, with Raptor-verified
+  OpenOCD configs in `openocd/`.
+- [`HEADER-PINOUTS.md`](asus-kgpe-d16-firmware/HEADER-PINOUTS.md) --
+  Per-header pinout diagrams (AST_JTAG1, AST_UART1, BMC_FW1, ...) with
+  verification status and an unknown-header probing procedure.
 - [`ast2050.h`](asus-kgpe-d16-firmware/ast2050.h),
   [`hwreg.h`](asus-kgpe-d16-firmware/hwreg.h),
   [`platform.S`](asus-kgpe-d16-firmware/platform.S), and

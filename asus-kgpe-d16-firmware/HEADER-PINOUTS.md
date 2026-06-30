@@ -1,7 +1,9 @@
 # KGPE-D16 debug header pinout diagrams
 
 Physical-layout diagrams for the populated debug/dev headers, for wiring to an
-RPi4B (see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md)).
+RPi4B (see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md)). For the
+**CPU-side** AMD HDT header and the JTAG scan chain, see
+[`JTAG-HEADERS.md`](JTAG-HEADERS.md).
 
 > **Read this first — confidence levels.** A wrong pin-1 assumption on a live
 > board backfeeds the AST2050. Every diagram below is tagged:
@@ -17,8 +19,8 @@ RPi4B (see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md)).
 | `AST_JTAG1` | ✅ "Standard 20-pin ARM JTAG" | Raptor page + annotated photo | full pinout |
 | `AST_UART1` | ✅ "4-pin 3.3V ARM UART" (1×4) | Raptor annotated photo | full pinout |
 | `BMC_FW1`   | 🔶 location + pin 1 only | ASUS manual §2.7.2 p2-38 | outline; signals proprietary (ASMB4) |
-| `NB_JTAG_HEADER` | ⚠️ none | — (AMD HDT, undocumented) | template + probe |
-| `NB_DEBUG_HEADER` | ⚠️ none | — | template + probe |
+| `NB_JTAG_HEADER` | 🔶 AMD HDT (CPU debug) | [`JTAG-HEADERS.md`](JTAG-HEADERS.md) | HDT+ pinout there |
+| `NB_DEBUG_HEADER` | ⚠️ 2nd HDT? / LPC? | [`JTAG-HEADERS.md`](JTAG-HEADERS.md) | see HDT notes |
 | `TEST_CON1` / `TEST_CON2` | ⚠️ none | — (factory ICT) | template + probe |
 
 > Both `AST_*` headers are **unpopulated footprints** sitting just above the
@@ -124,15 +126,20 @@ console = **3.3 V TTL, 115200 8N1** (Raptor).
 
 ---
 
-## NB_JTAG_HEADER / NB_DEBUG_HEADER / TEST_CON1 / TEST_CON2 — ⚠️ unknown
+## NB_JTAG_HEADER / NB_DEBUG_HEADER / TEST_CON1 / TEST_CON2
 
-No public layout for any of these. Reality check before you spend effort:
+The CPU-side debug is now documented in [`JTAG-HEADERS.md`](JTAG-HEADERS.md) —
+read that for the full picture:
 
-- **`NB_JTAG_HEADER`** — SR5690 / AMD CPU debug is **AMD HDT** (proprietary JTAG),
-  **not OpenOCD**. Boundary-scan only with open tools. Likely a defined AMD HDT
-  connector, but pin count/order unverified here.
-- **`NB_DEBUG_HEADER`** — purpose unconfirmed (POST/Port-80 or LPC debug are the
-  usual suspects). Identify before connecting anything driven.
+- **`NB_JTAG_HEADER`** — almost certainly the **AMD HDT** attachment port (CPU /
+  northbridge debug). `JTAG-HEADERS.md` has the **20-pin HDT+ pinout (1.27 mm
+  pitch)**, the older 25-pin HDT variant, and the `CPU1→CPU2→SR5690→SP5100` scan
+  chain. ⚠️ **Not OpenOCD / not RPi-drivable** — HDT needs a proprietary probe
+  (ASSET InterTech / AMD HDT kit), and the 1.27 mm pitch rules out dupont wires.
+  This is the x86 side, outside this guide.
+- **`NB_DEBUG_HEADER`** — unconfirmed: possibly the *second* HDT port (KGPE-D16 is
+  dual-socket; Raptor says "HDT Attachment Port**s**"), or an LPC / Port-80 debug
+  header. Identify before connecting anything driven.
 - **`TEST_CON1` / `TEST_CON2`** — factory in-circuit-test pads. Treat as unknown;
   generally leave alone.
 

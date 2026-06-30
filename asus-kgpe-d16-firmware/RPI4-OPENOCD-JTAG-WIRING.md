@@ -9,19 +9,29 @@ KGPE-D16, for developing replacement firmware on the ASPEED **AST2050** BMC.
 > *your* board before you trust it. Nothing here is a substitute for buzzing out
 > pin 1 and continuity before applying power.
 
+> **See also (repo docs):** [`JTAG-HEADERS.md`](JTAG-HEADERS.md) — both KGPE-D16
+> JTAG headers (BMC + AMD HDT) with the HDT+ pinout & scan chain ·
+> [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md) — per-header diagrams ·
+> [`RAPTOR-UBOOT-ANALYSIS.md`](RAPTOR-UBOOT-ANALYSIS.md) — AST2050 U-Boot ·
+> [`../hpe-ipdu-firmware/HEADERS-J1-J6.md`](../hpe-ipdu-firmware/HEADERS-J1-J6.md)
+> — JTAG adapter comparison (same ARM926EJ-S debug architecture).
+
 ---
 
 ## 0. Scope — what this rig actually gives you
 
-Three caveats decide what is and isn't worth wiring:
+Four caveats decide what is and isn't worth wiring:
 
 1. **OpenOCD debugs the BMC (ARM), not the x86 CPU.** The AST2050 is an
    ARM926EJ-S (ARMv5TE) — a first-class OpenOCD target. The AMD Opteron CPUs
    and the **SR5690** northbridge / **SP5100** southbridge ✅ are x86, and their
    on-die debug is **AMD HDT** (Hardware Debug Tool) — a proprietary JTAG
-   dialect OpenOCD does **not** support. So `NB_JTAG_HEADER` / `NB_DEBUG_HEADER`
-   give you boundary-scan visibility at best, **not** x86 single-stepping or
-   "CPU bring-up" the way JTAG does on the ARM BMC. This is a *BMC* dev rig.
+   dialect OpenOCD does **not** support. HDT *can* do full CPU run-control
+   (halt/step/registers), but only with a proprietary probe (ASSET InterTech /
+   AMD HDT kit), never with OpenOCD or a Pi. So `NB_JTAG_HEADER` /
+   `NB_DEBUG_HEADER` are **not** your route to x86 "CPU bring-up" here — see
+   [`JTAG-HEADERS.md`](JTAG-HEADERS.md) for the HDT+ pinout & scan chain. This is
+   a *BMC* dev rig.
 
 2. **Both sides are 3.3 V; the RPi4 is NOT 5 V tolerant.** AST2050 JTAG I/O is
    3.3 V and so is the Pi, so direct wiring is electrically compatible — *after*
@@ -32,6 +42,15 @@ Three caveats decide what is and isn't worth wiring:
    describes it as the slot for the ASMB4/ASMB5 management module / BMC firmware
    carrier. That's a **flashrom (SPI)** concern, reached with the Pi's *hardware
    SPI*, not the bit-bang JTAG. Probe it before assuming anything (see §4).
+
+4. **The AST2050 is EmbeddedICE-RT, not CoreSight — use a raw-JTAG adapter.**
+   ARM926EJ-S debugs via **EmbeddedICE-RT over raw JTAG scan chains**, not the
+   CoreSight DAP that Cortex cores use. So **CMSIS-DAP and SWD-only probes
+   (ST-Link, Black Magic) cannot drive it** — they only speak CoreSight/ADIv5.
+   The RPi4 GPIO bitbang does raw IR/DR scans, so it works; so do FTDI adapters
+   (Olimex ARM-USB-TINY, TUMPA) and J-Link. Adapter trade-offs for this exact
+   ARM926EJ-S debug architecture are tabulated in
+   [`../hpe-ipdu-firmware/HEADERS-J1-J6.md`](../hpe-ipdu-firmware/HEADERS-J1-J6.md).
 
 ---
 
@@ -197,6 +216,10 @@ screen /dev/ttyAMA0 115200      # or /dev/serial0
 A standalone USB-3.3V-TTL adapter is cleaner (frees the Pi UART and isolates a
 ground loop), but the Pi's UART0 works.
 
+> This header is the AST2050's **UART1**, an NS16550 at `0x1e783000` (UART2 is
+> `0x1e784000`) per Raptor's U-Boot `ast2050.h` — handy if you later poke the
+> UART registers over JTAG.
+
 ---
 
 ## 4. BMC_FW1 / BMC SPI flash — flashrom, not OpenOCD
@@ -231,13 +254,15 @@ These pins are **disjoint** from the JTAG pins (GPIO22–25) and the UART pins
 
 ## 5. NB_JTAG_HEADER / NB_DEBUG_HEADER / TEST_CON1-2 — manage expectations
 
-- **NB_JTAG_HEADER** — SR5690 TAP. OpenOCD can *scan* it (boundary-scan,
-  IDCODE), useful for chain sanity / bring-up bus checks, but the AMD CPU debug
-  you'd want for "CPU bring-up" runs over **AMD HDT**, which needs AMD's tooling
-  (HDT / SimNow), not OpenOCD. Don't wire this expecting x86 halt/step.
-- **NB_DEBUG_HEADER** — likely a POST/Port-80 or LPC debug header (or an
-  AMD-internal connector). **Identify the signals before connecting** anything
-  driven; a debug-card header is input-tolerant, an AMD-internal one may not be.
+- **NB_JTAG_HEADER** — almost certainly the **AMD HDT** attachment port (CPU /
+  northbridge debug chain). [`JTAG-HEADERS.md`](JTAG-HEADERS.md) documents the
+  full **20-pin HDT+ pinout (1.27 mm pitch)** — or the older 25-pin HDT — and the
+  `CPU1→CPU2→SR5690→SP5100` scan chain. ⚠️ HDT is **not OpenOCD / not
+  RPi-drivable**, the 1.27 mm fine pitch won't take dupont wires, and full x86
+  run-control needs a proprietary probe. Out of scope for this guide.
+- **NB_DEBUG_HEADER** — unconfirmed: possibly the *second* HDT port (KGPE-D16 is
+  dual-socket; Raptor says "HDT Attachment Port**s**"), or a POST/Port-80 / LPC
+  debug header. **Identify the signals before connecting** anything driven.
 - **TEST_CON1 / TEST_CON2** — factory/ICT test pads. Treat as unknown; probe
   before use. Not part of the OpenOCD path.
 
