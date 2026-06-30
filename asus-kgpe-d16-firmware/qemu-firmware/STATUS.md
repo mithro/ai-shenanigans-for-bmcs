@@ -12,8 +12,12 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
       SSH key login succeeds (`SSH_OK / kgpe-d16-bmc`). `ssh-test --flash` passes
       locally; the `boot-uboot-ssh` CI job runs the identical chain. (The simpler
       direct-`-kernel` `boot-ssh` job is already green on CI.)
-- [ ] **C3** Raptor U-Boot/Linux boots in QEMU on CI — open (vintage toolchain;
-      see [raptor/README.md](raptor/README.md)).
+- [x] **C3** Raptor U-Boot/Linux boots in QEMU on CI — **DONE**: Raptor's 2.6.28.9
+      AST2050 kernel (vintage gcc-4.9.4) + a musl BusyBox/dropbear userspace build
+      from source and boot on `kgpe-d16-bmc` via the OpenBMC U-Boot ATAGS path
+      (`machid=0x22b8`); SSH login succeeds (`SSH_OK / kgpe-d16-bmc /
+      Linux armv5tejl`). Local pass + new `boot-raptor` CI job. The G4-modelled
+      machine runs the G3 kernel unchanged — see [raptor/README.md](raptor/README.md).
 - [ ] **C4** Proprietary firmware boots in QEMU to a running BMC web service on CI
       — open / research-grade (no public D16 image; Dell C410X AST2050 as proxy).
 
@@ -25,7 +29,8 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
 - [x] P4 — **SSH login PASSES locally** on `kgpe-d16-bmc` (ed25519 key auth):
       `SSH_OK / kgpe-d16-bmc / Linux armv5tejl` → **C2** linux/SSH part proven.
       Remaining for C2: wire kernel+initramfs+ssh-test into CI, add the U-Boot chain.
-- [ ] P5 — Raptor stack boots → **C3**
+- [x] P5 — Raptor stack boots → **C3** ✅ (2.6.28.9 kernel + musl userspace,
+      SSH login on `kgpe-d16-bmc`; `boot-raptor` CI job)
 - [ ] P6 — proprietary firmware → web service → **C4**
 
 ## Blockers / risks (honest assessment)
@@ -57,12 +62,17 @@ jobs are running. Effectively in hand.
 exercises the identical path. Remaining: a U-Boot stage in front of the kernel
 (the criterion names "u-boot/linux"; today QEMU loads the kernel directly).
 
-**C3 — Raptor stack: substantial open work.** Raptor's U-Boot 2013.07 and Linux
-2.6.28.9 do **not** build with the modern gcc-14 cross-toolchain: U-Boot cascades
-(needs `compiler-gccN.h` shims, hits host `libfdt` header conflicts) and the 2008
-kernel realistically needs a **vintage gcc-4.x** (e.g. kernel.org crosstool
-prebuilts). The board target exists (`asus`/`ast2050` in Raptor's `boards.cfg`),
-so the path is known — but it is hours of toolchain + patch work, not yet done.
+**C3 — Raptor stack: DONE.** Raptor's Linux 2.6.28.9 AST2050 kernel builds with a
+vintage gcc-4.9.4 (kernel.org crosstool, auto-fetched) and boots on
+`kgpe-d16-bmc` via the existing OpenBMC U-Boot using an ATAGS hand-off
+(`setenv machid 22b8; bootm <kernel> <initrd>`, no dtb). A **musl** BusyBox +
+dropbear userspace (the C2 glibc one can't run on a 2.6.28 kernel) reaches a
+shell and an SSH login (`SSH_OK / kgpe-d16-bmc / Linux armv5tejl`). The earlier
+"needs a G3 SoC model in QEMU" worry was wrong — the AST2400/G4 peripheral models
+run the G3 kernel unchanged. Reproducible `build-raptor-kernel.sh` /
+`build-raptor-userspace.sh` + a `boot-raptor` CI job; full diagnostic chain in
+[raptor/README.md](raptor/README.md). (Raptor's *own* U-Boot 2013.07 is not on
+the boot path and remains an optional extra.)
 
 **C4 — proprietary firmware → web service: blocked / research-grade.** No public
 KGPE-D16 BMC image exists; the only AST2050 proprietary image in-repo is the Dell
@@ -71,7 +81,9 @@ image to a *running web service* in QEMU needs near-complete AST2050 peripheral
 emulation (every I2C sensor / GPIO it probes, or it hangs/panics) — realistically
 a multi-day effort that may not be fully achievable. Highest-risk criterion.
 
-**Bottom line:** C1+C2 are essentially achieved (CI confirming). C3 is a known
-but heavy toolchain task; C4 is a research problem gated on firmware availability
-and emulation completeness. Scope for C3/C4 is worth agreeing before committing
-days of effort, especially to C4.
+**Bottom line:** C1, C2, and **C3 are achieved** (all three with CI jobs;
+C1/C2 already green, the C3 `boot-raptor` job mirrors the validated local pass).
+**C4 remains the only open criterion** — a research problem gated on firmware
+availability and AST2050 emulation completeness: no public KGPE-D16 BMC image
+exists, so it needs either a firmware source or agreement to use the in-repo Dell
+C410X AST2050 image as the emulation-proof proxy.

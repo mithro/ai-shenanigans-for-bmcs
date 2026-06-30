@@ -1,8 +1,9 @@
 name: D16 QEMU firmware stack
 
 # Builds the custom kgpe-d16-bmc (AST2050) QEMU + the new firmware stack from
-# source (C1) and boots it to an SSH login (C2). Raptor (C3) / proprietary (C4)
-# jobs land in later phases.
+# source (C1) and boots it to an SSH login (C2). Also builds Raptor
+# Engineering's 2.6.28 AST2050 kernel + a musl userspace from source and boots
+# it on the same machine via ATAGS (C3). Proprietary (C4) lands later.
 on:
   push:
     paths:
@@ -166,4 +167,82 @@ jobs:
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --flash flash.img \
             --key initramfs-out/id_kgpe_d16_test \
+            --boot-timeout 240
+
+  # ---- C3: Raptor Engineering AST2050 stack (2.6.28 kernel + musl userspace) ----
+
+  build-raptor-kernel:
+    name: Build Raptor 2.6.28 kernel (C3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc git wget xz-utils u-boot-tools make libmpfr6
+      - uses: astral-sh/setup-uv@v5
+      - name: Build Raptor kernel (vintage gcc-4.9.4, fetched by the script)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/raptor/scripts/build-raptor-kernel.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raptor-kernel
+          path: asus-kgpe-d16-firmware/qemu-firmware/raptor/out/uImage-raptor
+          if-no-files-found: error
+
+  build-raptor-userspace:
+    name: Build Raptor userspace (musl BusyBox + dropbear) (C3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            wget xz-utils bzip2 cpio u-boot-tools openssh-client make
+      - uses: astral-sh/setup-uv@v5
+      - name: Build musl userspace (musl toolchain fetched by the script)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/raptor/scripts/build-raptor-userspace.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raptor-userspace
+          path: |
+            asus-kgpe-d16-firmware/qemu-firmware/raptor/out/uInitrd-raptor
+            asus-kgpe-d16-firmware/qemu-firmware/raptor/out/id_kgpe_d16_test
+          if-no-files-found: error
+
+  boot-raptor:
+    name: Boot Raptor U-Boot -> 2.6.28 Linux + SSH (C3)
+    runs-on: ubuntu-latest
+    needs: [build-uboot, build-raptor-kernel, build-raptor-userspace]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client u-boot-tools
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: uboot, path: uboot-out }
+      - uses: actions/download-artifact@v4
+        with: { name: raptor-kernel, path: raptor-kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: raptor-userspace, path: raptor-userspace-out }
+      - name: Assemble flash + boot Raptor U-Boot -> Linux 2.6.28 + SSH
+        run: |
+          chmod 600 raptor-userspace-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/qemu-firmware/raptor/scripts/mkflash-raptor.py \
+            --uboot uboot-out/u-boot.bin \
+            --kernel raptor-kernel-out/uImage-raptor \
+            --initrd raptor-userspace-out/uInitrd-raptor \
+            --out flash-raptor.img
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/ssh-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --flash flash-raptor.img \
+            --key raptor-userspace-out/id_kgpe_d16_test \
             --boot-timeout 240

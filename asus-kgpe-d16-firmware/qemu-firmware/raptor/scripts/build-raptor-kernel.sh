@@ -13,12 +13,38 @@
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
-: "${KDIR:?set KDIR to the ast2050-linux-kernel checkout}"
-: "${XGCC:?set XGCC to the gcc-4.9.4 arm-linux-gnueabi- prefix}"
-: "${OUT:=$here/../out}"
-mkdir -p "$OUT"
+qf="$here/../.."                       # qemu-firmware/
+: "${TOOLS:=$qf/raptor/tools}"
+: "${OUT:=$qf/raptor/out}"
+: "${KDIR:=$TOOLS/ast2050-linux-kernel}"
+: "${KERNEL_URL:=https://github.com/raptor-engineering/ast2050-linux-kernel}"
+: "${GCC_URL:=https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/4.9.4/x86_64-gcc-4.9.4-nolibc-arm-linux-gnueabi.tar.xz}"
+mkdir -p "$TOOLS" "$OUT"
 
-[ -n "$XLIBS" ] && export LD_LIBRARY_PATH="$XLIBS:$LD_LIBRARY_PATH"
+# Vintage gcc-4.9.4 (modern gcc-14 can't build this 2008 kernel).
+xgcc_dir="$TOOLS/gcc-4.9.4-nolibc/arm-linux-gnueabi/bin"
+if [ ! -x "$xgcc_dir/arm-linux-gnueabi-gcc" ]; then
+    echo "fetching vintage gcc-4.9.4: $GCC_URL"
+    wget -q -O "$TOOLS/gcc494.tar.xz" "$GCC_URL"
+    tar xf "$TOOLS/gcc494.tar.xz" -C "$TOOLS"
+    rm -f "$TOOLS/gcc494.tar.xz"
+fi
+: "${XGCC:=$xgcc_dir/arm-linux-gnueabi-}"
+
+# That gcc's cc1 needs libmpfr.so.4; modern distros ship .so.6 — symlink it.
+: "${XLIBS:=$TOOLS/xlibs}"
+mkdir -p "$XLIBS"
+if [ ! -e "$XLIBS/libmpfr.so.4" ]; then
+    mpfr6=$(find /usr/lib /lib -name 'libmpfr.so.6*' -type f | head -1)
+    [ -n "$mpfr6" ] && ln -sf "$mpfr6" "$XLIBS/libmpfr.so.4"
+fi
+export LD_LIBRARY_PATH="$XLIBS:$LD_LIBRARY_PATH"
+
+# Raptor kernel source.
+if [ ! -d "$KDIR" ]; then
+    echo "cloning Raptor kernel: $KERNEL_URL"
+    git clone --depth 1 "$KERNEL_URL" "$KDIR"
+fi
 
 # 1. AST2050 == G3 platform == CONFIG_ARCH_AST2100 (mach/platform.h has no
 #    AST1100 branch; ARCH_AST2100 is the G3 generation that covers AST2050).
