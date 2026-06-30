@@ -1,0 +1,53 @@
+# C3 — Raptor AST2050 U-Boot + Linux on kgpe-d16-bmc
+
+Goal (acceptance criterion C3): build **Raptor Engineering's** AST2050 firmware
+from source and boot it on the custom `kgpe-d16-bmc` QEMU machine.
+
+- U-Boot 2013.07 — <https://github.com/raptor-engineering/ast2050-uboot>
+  (board target `asus` / `ast2050` in `boards.cfg`).
+- Linux 2.6.28.9 — <https://github.com/raptor-engineering/ast2050-linux-kernel>
+  (`arch/arm/mach-aspeed`, `plat-aspeed`).
+
+## Status: vintage toolchain validated; full build + boot is open work
+
+This is the hardest of C1–C3 because the code is from 2008–2013 and does not
+build with a modern toolchain. Progress and the concrete obstacle chain:
+
+### Toolchain
+- **Modern `gcc-14` cannot build it.** U-Boot needs `compiler-gccN.h` shims and
+  hits host `libfdt_env.h` conflicts; the kernel won't compile either.
+- **Use a vintage gcc-4.x** from the kernel.org crosstool prebuilts:
+  `https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/4.9.4/x86_64-gcc-4.9.4-nolibc-arm-linux-gnueabi.tar.xz`
+  — validated: the kernel now compiles past the early stages.
+- That gcc's `cc1` needs **`libmpfr.so.4`** (modern distros ship `.so.6`); symlink
+  `libmpfr.so.4 -> libmpfr.so.6.x` and add it to `LD_LIBRARY_PATH`.
+
+### Remaining build obstacles
+- **Kernel SoC selection.** The **AST2050 is the `ARCH_AST1100` SoC choice** in
+  this tree (the part is also sold as AST1100). There is no ready
+  `ast1100_defconfig`; derive one from `ast2300_defconfig` and switch the SoC
+  choice to `CONFIG_ARCH_AST1100=y`. (`ast2400_defconfig` fails earlier on
+  `SCU_FUN_PIN_MAC1_PHY_LINK undeclared`.)
+- **`#err` + platform.h.** With `ARCH_AST1100`, `mach/platform.h:45` hits an
+  `#err` (a source typo for `#error`) — gcc-4.9's cpp rejects it as an "invalid
+  preprocessing directive", and it is reached because `ARCH_AST1100` alone does
+  not satisfy platform.h's SoC branch. Needs either an **era-appropriate
+  gcc-4.3/4.4** (older cpp tolerates `#err`) **and/or source patches** plus the
+  correct additional platform `CONFIG_*` to take a real branch.
+- **U-Boot host tools.** The 2013 host `libfdt` clashes with the modern system
+  one; build with U-Boot's bundled libfdt or skip the host dtc.
+
+### The boot challenge (after it builds)
+The 2.6.28.9 ARM kernel boots via **ATAGS + a fixed `MACH_TYPE`**, whereas QEMU's
+aspeed machine is **device-tree** based. Booting the Raptor kernel on
+`kgpe-d16-bmc` will likely require the machine to pass ATAGS and the matching
+machine number (a small QEMU change), or to boot it through the Raptor U-Boot.
+
+### Next steps
+1. Select the correct AST2050 kernel SoC config; finish the kernel build.
+2. Fix the U-Boot host-tool libfdt issue; finish the U-Boot build.
+3. Make `kgpe-d16-bmc` boot an ATAGS kernel (or chain via Raptor U-Boot), then
+   wire a `raptor-boot` CI job mirroring `boot-ssh`.
+
+This is realistically several hours of focused work; the path above is proven as
+far as "vintage gcc compiles the kernel".
