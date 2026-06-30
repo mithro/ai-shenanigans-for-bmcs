@@ -1,0 +1,23 @@
+To build a custom U-Boot image copy the complete directory U-Boot to
+your host.  Then extract the archive upstream/toolchain-uboot.tar.gz
+in the copied directory.
+The next step is to run build.sh with your platform as first and only
+parameter.
+
+E.g. to build an U-Boot image for cc9p9360dev use the following
+shell commands (assuming that $BUILDDIR doesn't exist yet):
+
+	# Maybe you have/want to adapt these:
+	CDROM="/media/cdrom";
+	BUILDDIR="${HOME}/U-Boot";
+	PLATFORM="cc9p9360dev";
+	
+	cp -R "${CDROM}/U-Boot" "${BUILDDIR}";
+
+	cd "${BUILDDIR}";
+
+	tar xzf "${CDROM}/upstream/toolchain-uboot.tar.gz";
+
+	./build.sh "${PLATFORM}";
+
+The resulting image is named "u-boot-${PLATFORM}.bin" (located in ${BUILDDIR}).
