@@ -102,8 +102,9 @@ Unlike the other boards this uses a Digi NS9360 SoC (ARM926EJ-S) rather
 than an Aspeed part, and its stock firmware is **NET+OS** (a ThreadX-based
 RTOS), not Linux. Three firmware versions were obtained and
 reverse-engineered (Digi `bootHdr` format, LZSS2 decompression, NET+OS /
-RomPager internals, web UI, and security posture); a U-Boot port is being
-planned as the first step toward open firmware.
+RomPager internals, web UI, and security posture). An open U-Boot port for
+the NS9360 -- the path to open firmware for this board -- now boots under
+QEMU and passes a basic smoke test.
 
 Key files:
 - [`ANALYSIS.md`](hpe-ipdu-firmware/ANALYSIS.md) -- Board component inventory,
@@ -113,11 +114,22 @@ Key files:
   datasheets, and documentation links.
 - [`HEADERS-J1-J6.md`](hpe-ipdu-firmware/HEADERS-J1-J6.md) -- Debug/JTAG
   header documentation.
-- [`uboot-port/`](hpe-ipdu-firmware/uboot-port/) -- U-Boot port planning: an
-  [incremental, hardware-tested approach](hpe-ipdu-firmware/uboot-port/PLAN-INCREMENTAL-PORT.md)
-  and a [QEMU-based full-featured approach](hpe-ipdu-firmware/uboot-port/PLAN-FULL-FEATURED-PORT.md),
-  with [reference material](hpe-ipdu-firmware/uboot-port/REFERENCE-MATERIAL.md)
-  including Digi's NS9360 U-Boot source.
+- [`uboot-port/`](hpe-ipdu-firmware/uboot-port/) -- An open U-Boot port for the
+  NS9360 that boots under QEMU:
+  - `u-boot/` submodule ([`mithro/u-boot@hpe-ipdu-port`](https://github.com/mithro/u-boot/tree/hpe-ipdu-port)) --
+    NS9360 SoC + AF531A board support (serial, GPIO, clock, I2C, Ethernet, CFI
+    NOR flash).
+  - `qemu/qemu-10.0.7/` submodule ([`mithro/qemu@ns9360-machine`](https://github.com/mithro/qemu/tree/ns9360-machine)) --
+    a QEMU `ns9360` machine model (ARM926EJ-S, SDRAM, dual CFI flash) for running
+    the port without hardware.
+  - [`test/`](hpe-ipdu-firmware/uboot-port/test/) -- `mkflash.py` assembles the
+    8 MiB NOR flash image; `qemu_smoke_test.py` boots U-Boot under
+    `qemu-system-arm -M ns9360` and checks the prompt, `bdinfo`, SDRAM/flash
+    access, GPIO and I2C.
+  - Porting plans ([incremental](hpe-ipdu-firmware/uboot-port/PLAN-INCREMENTAL-PORT.md),
+    [QEMU-first](hpe-ipdu-firmware/uboot-port/PLAN-FULL-FEATURED-PORT.md)) and
+    [reference material](hpe-ipdu-firmware/uboot-port/REFERENCE-MATERIAL.md),
+    including Digi's NS9360 U-Boot source.
 - Firmware tooling: ~20 Python analysis scripts, including
   [`extract_firmware.py`](hpe-ipdu-firmware/extract_firmware.py) and
   [`decompress_firmware.py`](hpe-ipdu-firmware/decompress_firmware.py)
