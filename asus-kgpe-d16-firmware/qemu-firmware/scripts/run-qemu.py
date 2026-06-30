@@ -31,9 +31,9 @@ def base_cmd(args):
     cmd = [args.qemu, "-M", MACHINE, "-m", str(args.mem), "-nographic",
            "-monitor", "none", "-serial", "stdio"]
     if args.netdev:
-        # user-net NIC with an SSH host-forward for the C2 ssh-login test
-        cmd += ["-netdev", f"user,id=net0,hostfwd=tcp::{args.ssh_port}-:22",
-                "-device", "ftgmac100,netdev=net0"]
+        # user-net backend bound to the onboard FTGMAC100 NIC, with an SSH
+        # host-forward for the C2 ssh-login test
+        cmd += ["-nic", f"user,model=ftgmac100,hostfwd=tcp::{args.ssh_port}-:22"]
     return cmd
 
 

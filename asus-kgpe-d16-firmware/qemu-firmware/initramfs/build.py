@@ -86,7 +86,7 @@ def build_busybox(version, build: Path) -> Path:
     # symbols take their defaults non-interactively.
     run(["make", "oldconfig"], cwd=src, env=env, stdin=subprocess.DEVNULL)
     run(["make", f"-j{os.cpu_count()}"], cwd=src, env=env)
-    return src / "busybox"
+    return src
 
 
 def build_dropbear(version, build: Path) -> Path:
@@ -100,13 +100,21 @@ def build_dropbear(version, build: Path) -> Path:
     (src / "localoptions.h").write_text(
         "#define DROPBEAR_SVR_PASSWORD_AUTH 0\n"
         "#define DROPBEAR_SVR_PUBKEY_AUTH 1\n"
-        "#define DROPBEAR_SVR_MULTIUSER 1\n")
+        "#define DROPBEAR_SVR_MULTIUSER 1\n"
+        "/* ed25519-only: avoid slow RSA/ECDSA keygen on the emulated ARM926. */\n"
+        "#define DROPBEAR_RSA 0\n"
+        "#define DROPBEAR_ECDSA 0\n"
+        "#define DROPBEAR_ED25519 1\n")
     run(["./configure", f"--host={CROSS.rstrip('-')}", f"CC={CC}",
          "--disable-zlib", "--disable-lastlog", "--disable-utmp",
          "--disable-wtmp", "--disable-pututline", "--disable-pututxline"],
         cwd=src)
+    # Force a fully static binary — the initramfs has no dynamic loader/libc,
+    # so a dynamically-linked dropbear would fail with "not found". (STATIC=1
+    # alone left it dynamic, so also set LDFLAGS=-static; clean to force relink.)
+    run(["make", "clean"], cwd=src)
     run(["make", f"-j{os.cpu_count()}", "PROGRAMS=dropbear dropbearkey",
-         "MULTI=1", "STATIC=1"], cwd=src)
+         "MULTI=1", "STATIC=1", "LDFLAGS=-static"], cwd=src)
     return src / "dropbearmulti"
 
 
@@ -121,20 +129,16 @@ def gen_test_key(out: Path) -> str:
     return (out / "id_kgpe_d16_test.pub").read_text().strip()
 
 
-def build_rootfs(rootfs: Path, busybox: Path, dropbearmulti: Path, init: Path,
+def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
                  pubkey: str):
     for d in ("bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys",
               "etc/dropbear", "tmp", "run", "var/log", "root/.ssh"):
         (rootfs / d).mkdir(parents=True, exist_ok=True)
-    shutil.copy2(busybox, rootfs / "bin/busybox")
-    os.chmod(rootfs / "bin/busybox", 0o755)
-    # BusyBox applet symlinks.
-    applets = subprocess.run([str(busybox), "--list"], capture_output=True,
-                             text=True, check=True).stdout.split()
-    for a in applets:
-        link = rootfs / "bin" / a
-        if not link.exists():
-            link.symlink_to("busybox")
+    # Install BusyBox + applet symlinks via 'make install' — a host-side script
+    # (busybox.mkll) that generates busybox.links and the symlink tree without
+    # executing the cross-compiled ARM binary.
+    run(["make", "-C", str(bb_src), f"CONFIG_PREFIX={rootfs}", "install"],
+        env={**os.environ, "ARCH": "arm", "CROSS_COMPILE": CROSS})
     shutil.copy2(dropbearmulti, rootfs / "sbin/dropbearmulti")
     os.chmod(rootfs / "sbin/dropbearmulti", 0o755)
     for tool in ("dropbear", "dropbearkey"):
@@ -146,6 +150,9 @@ def build_rootfs(rootfs: Path, busybox: Path, dropbearmulti: Path, init: Path,
     (rootfs / "etc/group").write_text("root:x:0:\n")
     (rootfs / "etc/shadow").write_text("root::0:0:99999:7:::\n")
     (rootfs / "root/.ssh/authorized_keys").write_text(pubkey + "\n")
+    # dropbear refuses a home dir / .ssh / authorized_keys writable by group or
+    # other. mkdir leaves /root at 0775 (umask 002), so tighten it.
+    os.chmod(rootfs / "root", 0o755)
     os.chmod(rootfs / "root/.ssh", 0o700)
     os.chmod(rootfs / "root/.ssh/authorized_keys", 0o600)
 
@@ -155,8 +162,10 @@ def pack(rootfs: Path, out: Path):
     names = subprocess.run(["find", "."], cwd=rootfs, capture_output=True,
                            text=True, check=True).stdout
     with open(cpio, "wb") as f:
-        subprocess.run(["cpio", "--null", "-o", "--format=newc"], cwd=rootfs,
-                       input=names.replace("\n", "\0").encode(),
+        # --owner=0:0 makes every file root-owned; dropbear refuses an
+        # authorized_keys (or ~/.ssh, or home) not owned by the target user.
+        subprocess.run(["cpio", "--null", "-o", "--format=newc", "--owner=0:0"],
+                       cwd=rootfs, input=names.replace("\n", "\0").encode(),
                        stdout=f, check=True)
     with open(cpio, "rb") as fi, open(out / "initramfs.cpio.gz", "wb") as fo:
         subprocess.run(["gzip", "-9", "-c"], stdin=fi, stdout=fo, check=True)

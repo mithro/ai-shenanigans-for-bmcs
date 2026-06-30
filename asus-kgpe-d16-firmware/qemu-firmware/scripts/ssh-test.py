@@ -54,8 +54,9 @@ def main():
            "-monitor", "none", "-serial", "stdio",
            "-kernel", args.kernel, "-initrd", args.initrd, "-dtb", args.dtb,
            "-append", args.append,
-           "-netdev", f"user,id=net0,hostfwd=tcp::{args.port}-:22",
-           "-device", "ftgmac100,netdev=net0"]
+           # FTGMAC100 is an onboard SoC NIC, so bind a user-net backend to it
+           # with -nic (not -device); hostfwd exposes guest :22 for the test.
+           "-nic", f"user,model=ftgmac100,hostfwd=tcp::{args.port}-:22"]
     print("boot:", " ".join(cmd))
     qemu = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, bufsize=0)
@@ -65,20 +66,28 @@ def main():
             print("\nFAIL: dropbear did not come up within "
                   f"{args.boot_timeout}s")
             return 1
-        # Give dropbear a moment to bind.
-        time.sleep(3)
         ssh = ["ssh", "-i", args.key, "-p", str(args.port),
                "-o", "StrictHostKeyChecking=no",
                "-o", "UserKnownHostsFile=/dev/null",
-               "-o", "ConnectTimeout=10",
+               "-o", "HostKeyAlgorithms=ssh-ed25519",
+               "-o", "IdentitiesOnly=yes",
+               "-o", "ConnectTimeout=30",
                "root@127.0.0.1", "echo SSH_OK; hostname; uname -sm"]
         print("\nssh:", " ".join(ssh))
-        r = subprocess.run(ssh, capture_output=True, text=True, timeout=60)
-        print("--- ssh stdout ---\n" + r.stdout)
-        if r.stderr.strip():
-            print("--- ssh stderr ---\n" + r.stderr)
-        ok = r.returncode == 0 and "SSH_OK" in r.stdout and \
-            "kgpe-d16-bmc" in r.stdout
+        ok = False
+        # The emulated ARM926 is slow right after boot; retry a few times.
+        for attempt in range(1, 7):
+            time.sleep(8)
+            print(f"--- ssh attempt {attempt} ---")
+            r = subprocess.run(ssh, capture_output=True, text=True, timeout=90)
+            if r.stdout:
+                print(r.stdout)
+            if r.stderr.strip():
+                print(r.stderr.strip())
+            if (r.returncode == 0 and "SSH_OK" in r.stdout
+                    and "kgpe-d16-bmc" in r.stdout):
+                ok = True
+                break
         print("\nC2 RESULT:", "PASS" if ok else "FAIL")
         return 0 if ok else 1
     finally:
