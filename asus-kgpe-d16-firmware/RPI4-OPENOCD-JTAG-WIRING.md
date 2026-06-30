@@ -62,17 +62,23 @@ Standard ARM 20-pin JTAG, 0.1″ (2.54 mm) 2×10. **Odd column = signals, even
 column = GND**, except pins 1–2:
 
 ```
-        AST_JTAG1 (target, top view, pin 1 = square pad)
-         1  VTref    o o  2  Vsupply (NC)
-         3  nTRST    o o  4  GND
-         5  TDI      o o  6  GND
-         7  TMS      o o  8  GND
-         9  TCK      o o 10  GND
-        11  RTCK     o o 12  GND
-        13  TDO      o o 14  GND
-        15  nSRST    o o 16  GND
-        17  DBGRQ(NC)o o 18  GND
-        19  Vsup(NC) o o 20  GND
+        AST_JTAG1  -  20-pin ARM JTAG (2x10, 0.1")
+        component side - pin 1 = square pad (top-left)
+        left column = signal, right column = GND
+
+          +---------+
+ VTref  1 | @     o |  2  Vsupply (NC)
+ nTRST  3 | o     o |  4  GND
+   TDI  5 | o     o |  6  GND
+   TMS  7 | o     o |  8  GND
+   TCK  9 | o     o | 10  GND
+  RTCK 11 | o     o | 12  GND
+   TDO 13 | o     o | 14  GND
+ nSRST 15 | o     o | 16  GND
+ DBGRQ 17 | o     o | 18  GND
+  (NC) 19 | o     o | 20  GND
+          +---------+
+        (@ = pin 1 / square pad)
 ```
 
 ### Wiring table (direct 3.3 V — your chosen scheme)
@@ -89,16 +95,57 @@ column = GND**, except pins 1–2:
 | VTref | 1 | — | **measure only, do not connect** |
 
 ```
-   RPi4 40-pin header                         AST_JTAG1 (ARM 20-pin)
-   ┌───────────────────┐
-   │ pin15 GPIO22 TDO  │────────────────────▶ pin13 TDO
-   │ pin16 GPIO23 TDI  │────────────────────▶ pin5  TDI
-   │ pin18 GPIO24 TMS  │────────────────────▶ pin7  TMS
-   │ pin22 GPIO25 TCK  │────────────────────▶ pin9  TCK
-   │ pin11 GPIO17 TRST │────────────────────▶ pin3  nTRST
-   │ pin12 GPIO18 SRST │────────────────────▶ pin15 nSRST
-   │ pin6  GND         │────────────────────▶ pin4  GND   (mandatory)
-   └───────────────────┘        (meter)─────▶ pin1  VTref ≈ 3.3 V
+   RPi4B 40-pin                         AST_JTAG1 (ARM 20-pin)
+   ------------------------------      ----------------------
+   GPIO25  pin22  TCK   -->  pin 9  TCK
+   GPIO24  pin18  TMS   -->  pin 7  TMS
+   GPIO23  pin16  TDI   -->  pin 5  TDI
+   GPIO22  pin15  TDO   <--  pin13  TDO
+   GPIO17  pin11  nTRST -->  pin 3  nTRST
+   GPIO18  pin12  nSRST -->  pin15  nSRST
+   GND     pin 6  GND   ---  pin 4  GND
+   (meter)        VTref ...  pin 1  VTref (~3.3V, do NOT drive)
+
+   Direct 3.3V wiring - keep leads <10cm, start at adapter speed 100 kHz.
+```
+
+### Which RPi4B header pins — the 40-pin GPIO header (J8)
+
+The JTAG and UART wires above land on these physical pins. JTAG bit-bang
+(GPIO22-25, plus GPIO17/18 for reset) and UART0 (GPIO14/15) sit on disjoint
+pins, so both harnesses coexist on one Pi:
+
+```
+   Raspberry Pi 4B - 40-pin GPIO header (J8)
+   pin 1 = square pad (nearest the SD-card/board corner)
+   * = wire used by this guide
+
+       use    name pin | pin name    use
+   ------- ------- --- | --- ------- -------
+               3V3  1  |  2  5V
+             GPIO2  3  |  4  5V
+             GPIO3  5  |  6  GND
+             GPIO4  7  | *8  GPIO14  UART-TX
+               GND  9  | *10 GPIO15  UART-RX
+     nTRST  GPIO17 11* | *12 GPIO18  nSRST
+            GPIO27 13  | *14 GND     GND*
+       TDO  GPIO22 15* | *16 GPIO23  TDI
+               3V3 17  | *18 GPIO24  TMS
+            GPIO10 19  |  20 GND
+             GPIO9 21  | *22 GPIO25  TCK
+            GPIO11 23  |  24 GPIO8
+               GND 25  |  26 GPIO7
+             GPIO0 27  |  28 GPIO1
+             GPIO5 29  |  30 GND
+             GPIO6 31  |  32 GPIO12
+            GPIO13 33  |  34 GND
+            GPIO19 35  |  36 GPIO16
+            GPIO26 37  |  38 GPIO20
+               GND 39  |  40 GPIO21
+
+   JTAG : TCK GPIO25/p22  TMS GPIO24/p18  TDI GPIO23/p16  TDO GPIO22/p15
+          nTRST GPIO17/p11  nSRST GPIO18/p12  GND* p14 (>=1 GND, mandatory)
+   UART : TX GPIO14/p8 -> BMC RXD   RX GPIO15/p10 <- BMC TXD   GND p6
 ```
 
 ### Rules that keep both boards alive (direct-wire edition)

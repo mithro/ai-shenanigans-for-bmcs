@@ -39,26 +39,27 @@ numbering goes down each column (1,2 top → 19,20 bottom). Odd column = signals
 even column = GND (except pins 1–2).
 
 ```
-                 AST_JTAG1  (component side, pin 1 = ■)
-                ┌─────────────────────┐
-     VTref    1 │ ■               ○ │ 2   Vsupply (NC)
-     nTRST    3 │ ○               ○ │ 4   GND
-     TDI      5 │ ○               ○ │ 6   GND
-     TMS      7 │ ○               ○ │ 8   GND
-     TCK      9 │ ○               ○ │ 10  GND
-     RTCK    11 │ ○               ○ │ 12  GND
-     TDO     13 │ ○               ○ │ 14  GND
-     nSRST   15 │ ○               ○ │ 16  GND
-     DBGRQ   17 │ ○               ○ │ 18  GND  (DBGRQ = NC)
-     (Vsup)  19 │ ○               ○ │ 20  GND  (pin 19 = NC)
-                └─────────────────────┘
-   ───────────────────────────────────────────────────────────
-   Pin  Signal   ->  RPi4 BCM / phys     |  Pin  Signal  -> RPi4
-     5  TDI       ->  GPIO23 / pin 16     |    9  TCK     -> GPIO25 / pin 22
-     7  TMS       ->  GPIO24 / pin 18     |   13  TDO     -> GPIO22 / pin 15
-     3  nTRST     ->  GPIO17 / pin 11     |   15  nSRST   -> GPIO18 / pin 12
-     1  VTref     ->  meter only (~3.3 V, do NOT drive)
-   4/6/8/10/12/14/16/18/20  GND -> any RPi4 GND (≥1, mandatory)
+        AST_JTAG1  -  20-pin ARM JTAG (2x10, 0.1")
+        component side - pin 1 = square pad (top-left)
+        left column = signal, right column = GND
+
+          +---------+
+ VTref  1 | @     o |  2  Vsupply (NC)
+ nTRST  3 | o     o |  4  GND
+   TDI  5 | o     o |  6  GND
+   TMS  7 | o     o |  8  GND
+   TCK  9 | o     o | 10  GND
+  RTCK 11 | o     o | 12  GND
+   TDO 13 | o     o | 14  GND
+ nSRST 15 | o     o | 16  GND
+ DBGRQ 17 | o     o | 18  GND
+  (NC) 19 | o     o | 20  GND
+          +---------+
+        (@ = pin 1 / square pad)
+
+   RPi4 map: TDI->GPIO23/p16   TMS->GPIO24/p18    TCK->GPIO25/p22
+             TDO->GPIO22/p15   nTRST->GPIO17/p11  nSRST->GPIO18/p12
+             VTref-> meter only (~3.3V)   GND (even pins)-> any RPi GND (>=1)
 ```
 
 > ⚠️ Even though this is the ARM standard, **confirm pin 1 visually** (square
@@ -75,11 +76,12 @@ per-pin signal names are published — it is the **ASMB4‑iKVM module** edge
 connector (dedicated management NIC + KVM), a 2-row header.
 
 ```
-        BMC_FW1   (2-row header; pin count NOT verified — count it on the board)
-        ┌───────────────────────────────┐
-   Pin1 ■ ○ ○ ○ ○ ○ ○ ○ ○ ○ ...         │   signals = PROPRIETARY (ASMB4)
-        │ ○ ○ ○ ○ ○ ○ ○ ○ ○ ○ ...       │   not published; do not probe-drive
-        └───────────────────────────────┘
+        BMC_FW1  -  2-row header (ASMB4-iKVM); pin count = count on board
+        +-----------------------------+
+        |  o  o  o  o  o  o  o  o  ... |   signals = PROPRIETARY (ASMB4)
+        |  @  o  o  o  o  o  o  o  ... |   not published; do NOT probe-drive
+        +-----------------------------+
+           ^ pin 1 (lower-left, per ASUS manual)
 ```
 
 **Relevance to firmware dev:** low/uncertain. The AST2050 itself is **onboard**
@@ -98,19 +100,20 @@ and **GND** at the other. So it's a 1×4 header just above the AST2050. BMC
 console = **3.3 V TTL, 115200 8N1** (Raptor).
 
 ```
-   AST_UART1   (1×4, immediately above the ASPEED AST2050)
-   ┌─────────────────────────────────────┐
-   │   [1]       [2]       [3]      [4]   │
-   │  +3.3V    TXD/RXD   RXD/TXD    GND   │   ends = +3.3V & GND (Raptor top-view)
-   └─────────────────────────────────────┘
-       │          │         │        │
-   leave NC   ─── the two middle pins are TX & RX ───   GND
-   (BMC rail)     (confirm order by probing)            -> RPi4 GND (pin 6)
+      AST_UART1  -  4-pin 3.3V ARM UART (1x4)
+      pin 1 = square pad (left) - ends are +3.3V and GND (Raptor photo)
 
-   Wire (after confirming TX vs RX):
-     BMC TXD (out) -> RPi4 GPIO15 / RXD  (phys pin 10)
-     BMC RXD (in)  -> RPi4 GPIO14 / TXD  (phys pin  8)
-     BMC GND       -> RPi4 GND           (phys pin  6)
+        +3.3V    TX/RX    RX/TX     GND
+        +---+    +---+    +---+    +---+
+        |@/o|    | o |    | o |    | o |
+        +---+    +---+    +---+    +---+
+        pin1     pin2     pin3     pin4
+
+   Wire (after confirming TX vs RX by probing):
+     BMC TX  -> RPi4 GPIO15 / RXD  (pin 10)   [middle pin 2 or 3]
+     BMC RX  -> RPi4 GPIO14 / TXD  (pin  8)   [the other middle pin]
+     BMC GND -> RPi4 GND           (pin  6)
+     +3.3V   -> leave unconnected (BMC rail, like VTref on JTAG)
 ```
 
 > The two **end** pins (+3.3 V, GND) are fixed by Raptor's photo. The two
@@ -134,16 +137,17 @@ No public layout for any of these. Reality check before you spend effort:
   generally leave alone.
 
 ```
-     <ANY UNKNOWN HEADER>   template — fill from probing
-     ┌───────────────────────────┐
-   ■ │ p1   p3   p5   p7  ...     │   ■ = locate pin 1 (square pad / dot / "1")
-     │ p2   p4   p6   p8  ...     │
-     └───────────────────────────┘
-   pin │ continuity-to-GND? │ V (5VSB on) │ activity @ boot │ guess
-   ────┼────────────────────┼─────────────┼─────────────────┼───────
-    1  │                    │             │                 │
-    2  │                    │             │                 │
-   ... │                    │             │                 │
+   <ANY UNKNOWN HEADER>  -  fill in from probing (board OFF first)
+   +-----------------------------+
+   | p1  p3  p5  p7  ...         |   @ = pin 1 (square pad / dot / "1")
+   | p2  p4  p6  p8  ...         |   (2-row shown; 1-row = p1 p2 p3 ...)
+   +-----------------------------+
+
+   For each pin, record:
+     - GND?      continuity beep to chassis ground
+     - V @5VSB?  DC volts, 5VSB present, system NOT booted (= power rail)
+     - activity? at boot: UART TX bursts at 115200; JTAG TCK/TMS idle quiet
+     - signal:   your conclusion (only drive proven 3.3 V inputs)
 ```
 
 ---
