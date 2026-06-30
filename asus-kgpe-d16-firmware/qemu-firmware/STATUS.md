@@ -4,10 +4,15 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
 
 ## Acceptance criteria (the goal)
 
-- [ ] **C1** Everything builds from source on CI (QEMU, U-Boot, Linux, initramfs)
-- [ ] **C2** New U-Boot/Linux boots in QEMU and is logged into via SSH on CI
-- [ ] **C3** Raptor U-Boot/Linux boots in QEMU on CI
+- [~] **C1** Builds from source on CI — **QEMU ✅, Linux kernel ✅, initramfs ✅
+      green on CI** (run #28472752429); the new U-Boot build is the only piece left.
+- [~] **C2** New stack boots + SSH on CI — **the new Linux boots on `kgpe-d16-bmc`
+      and an SSH key login succeeds, green on CI** (`boot-ssh` job ✅); adding a
+      U-Boot stage in front of the kernel is the remaining refinement.
+- [ ] **C3** Raptor U-Boot/Linux boots in QEMU on CI — open (vintage toolchain;
+      see [raptor/README.md](raptor/README.md)).
 - [ ] **C4** Proprietary firmware boots in QEMU to a running BMC web service on CI
+      — open / research-grade (no public D16 image; Dell C410X AST2050 as proxy).
 
 ## Phase progress
 
