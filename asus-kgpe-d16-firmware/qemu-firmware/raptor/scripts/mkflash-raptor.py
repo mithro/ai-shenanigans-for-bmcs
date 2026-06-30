@@ -19,12 +19,15 @@ import subprocess
 
 ENV = (
     "bootdelay=0\n"
-    "machid=8888\n"
-    # Raptor kernel UART2 == 0x1e784000 (the UART QEMU's -serial is wired to);
-    # offer every plausible ttyS index since the G3 kernel's numbering differs
-    # from the modern aspeed-g4 kernel's ttyS4.
-    "bootargs=console=ttyS0,115200n8 console=ttyS1,115200n8 "
-    "console=ttyS2,115200n8 console=ttyS4,115200n8 earlyprintk\n"
+    # MACH_TYPE_ASPEED = 8888 *decimal* = 0x22b8.  U-Boot parses the machid env
+    # var as HEX, so it must be written 22b8 (not 8888, which u-boot reads as
+    # 0x8888 = 34952 -> kernel "unrecognized machine ID").
+    "machid=22b8\n"
+    # In the Raptor (G3) kernel the UART QEMU displays — 0x1e784000 — registers
+    # as ttyS1 (ttyS0 is 0x1e783000, which QEMU does NOT expose). Bind the
+    # console to ttyS1 ONLY: a bare console=ttyS0 would make the kernel hand off
+    # to the invisible UART after "turn off boot console earlycon0".
+    "bootargs=console=ttyS1,115200n8 earlyprintk\n"
     "bootcmd=cp.b 0x20100000 0x41000000 0x200000; "
     "cp.b 0x20500000 0x45000000 0x200000; bootm 0x41000000 0x45000000\n"
 )

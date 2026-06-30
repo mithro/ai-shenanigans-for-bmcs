@@ -6,7 +6,11 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 mount -t proc     proc     /proc
 mount -t sysfs    sysfs    /sys
-mount -t devtmpfs devtmpfs /dev
+# Modern kernels (C2) auto-create /dev via devtmpfs. The Raptor 2.6.28 kernel
+# (C3) predates devtmpfs (added in 2.6.32), so this mount fails there and we
+# fall back to the static /dev nodes baked into the cpio (console, null, zero,
+# urandom, ptmx, ttyS0/1) — keep going either way.
+mount -t devtmpfs devtmpfs /dev 2>&1 || echo "no devtmpfs: using static /dev nodes"
 mkdir -p /dev/pts /run /var/run /var/log /etc/dropbear /root/.ssh
 mount -t devpts devpts /dev/pts
 

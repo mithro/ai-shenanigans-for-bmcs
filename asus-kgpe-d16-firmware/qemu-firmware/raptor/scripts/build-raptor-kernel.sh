@@ -25,12 +25,29 @@ mkdir -p "$OUT"
 make -C "$KDIR" ARCH=arm CROSS_COMPILE="$XGCC" ast2300_defconfig
 sed -i 's/^CONFIG_ARCH_AST2300=y/# CONFIG_ARCH_AST2300 is not set\nCONFIG_ARCH_AST2100=y/' \
     "$KDIR/.config"
+# Board + ABI config for the kgpe-d16-bmc QEMU boot:
+#   ASUSPLATFORM  -> console UART 0x1e784000 (the one QEMU exposes) + ASUS SCU
+#   AEABI/OABI_COMPAT -> run our modern EABI userspace
+#   DEBUG_LL/EARLY_PRINTK -> early-boot diagnostics on the visible UART
+{
+  echo "CONFIG_ASUSPLATFORM=y"
+  echo "CONFIG_AEABI=y"
+  echo "CONFIG_OABI_COMPAT=y"
+  echo "CONFIG_DEBUG_KERNEL=y"
+  echo "CONFIG_DEBUG_LL=y"
+  echo "CONFIG_EARLY_PRINTK=y"
+} >> "$KDIR/.config"
 yes "" | make -C "$KDIR" ARCH=arm CROSS_COMPILE="$XGCC" oldconfig
 
-# 2. Fill in the G4-only symbols the unconditionally-built dev-*.c files need.
+# 2. Fill in the G4-only symbols the unconditionally-built dev-*.c files need,
+#    and trim the device table to peripherals the QEMU machine models (NAND/PWM/
+#    PECI/… abort on probe otherwise).
 uv run "$here/port-g4-symbols.py" --kdir "$KDIR"
+uv run "$here/qemu-safe-devices.py" --kdir "$KDIR"
 
-# 3. Build.
+# 3. Build. AEABI changes the syscall ABI, so build from clean to avoid stale
+#    OABI objects.
+make -C "$KDIR" ARCH=arm CROSS_COMPILE="$XGCC" clean
 make -C "$KDIR" ARCH=arm CROSS_COMPILE="$XGCC" -j"$(nproc)" zImage
 
 # 4. Wrap as a U-Boot legacy uImage. ATAGS boot from OpenBMC U-Boot:
