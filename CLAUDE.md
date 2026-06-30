@@ -142,11 +142,29 @@ scripts/ghidra-vnc.sh [project-file]    # then enable GhidraMCPPlugin in the GUI
 The C410X binary decompiles as `ARM:LE:32:v5t` (ARM926EJ-S), Ghidra 11.3.1.
 `GHIDRA_INSTALL_DIR` is `/home/tim/tools/ghidra`.
 
+## Working in this repo
+
+- **Never work directly on `main`.** Before touching anything, create your own
+  branch and an isolated git worktree to work in; `main` only ever advances
+  through merges, never through commits made on it directly.
+- **Commit small, logical units — frequently.** Each self-contained change
+  (a script added, a function decoded, an analysis result) is its own commit.
+  Don't batch unrelated work together or defer committing to the end; a steady
+  stream of focused commits keeps history reviewable and easy to revert or
+  cherry-pick.
+- **Always merge with a real merge commit** (`git merge --no-ff`), never a
+  fast-forward. Every branch's integration should remain a distinct, traceable
+  point in the history.
+- **Fail loud and fast.** Surface errors the moment they happen rather than
+  swallowing them, catching-and-ignoring, or silently falling back to a
+  default. No bare `except:`, no `2>/dev/null`, no pressing on past a failed
+  command — a wrong or incomplete result must be visible, never hidden.
+
 ## Conventions specific to this repo
 
 - **Dates**: ISO 8601 (`YYYY-MM-DD`) or day-first only — never month-first.
   Planning docs in `docs/plans/` are named `YYYY-MM-DD-<slug>.md`.
-- **Commits**: small and frequent, one logical unit each.
 - **Temp files**: use the project-local `tmp/` (gitignored), never `/tmp/`.
-- **stderr**: never redirect to `/dev/null`; diagnostic output must stay visible.
+- **stderr**: never redirect to `/dev/null`; diagnostic output must stay visible
+  (a specific case of *fail loud and fast*, above).
 - License is Apache 2.0.
