@@ -40,7 +40,7 @@ Three caveats decide what is and isn't worth wiring:
 | Header | What it is | Tool | Confidence |
 |---|---|---|---|
 | **AST_JTAG1** | AST2050 ARM926 JTAG, 20-pin ARM pinout | OpenOCD bit-bang (this guide) | ✅ Raptor |
-| **AST_UART1** | BMC serial console, `ttyS1` internal, 115200 8N1 | USB-serial or Pi UART0 | ✅ Raptor |
+| **AST_UART1** | BMC console, 4-pin 3.3 V (+3.3V/TX/RX/GND), 115200 8N1 | USB-serial or Pi UART0 | ✅ Raptor |
 | **BMC_FW1** | ASMB4/5 management-module / BMC firmware slot | flashrom (SPI) — verify | 🔶 / ⚠️ |
 | **NB_JTAG_HEADER** | SR5690 northbridge TAP (boundary-scan) | OpenOCD scan only | ⚠️ no x86 debug |
 | **NB_DEBUG_HEADER** | NB debug (likely POST/LPC or AMD-internal) | identify first | ⚠️ |
@@ -49,8 +49,10 @@ Three caveats decide what is and isn't worth wiring:
 Ground truth: Raptor Engineering soldered `AST_JTAG1` (an unpopulated **20-pin
 ARM debug footprint**) and drove it with an **Olimex ARM-USB-TINY** + OpenOCD,
 configs `ast2050.cfg` + `kgpe-d16-bmc.cfg`, "sufficient functionality to bring
-up U-Boot." ✅ That an Olimex ARM-USB-TINY plugs straight in is why we treat
-`AST_JTAG1` as the **standard ARM 20-pin JTAG pinout** below. 🔶
+up U-Boot." Raptor's annotated board photos label the footprints verbatim —
+`AST_JTAG1` = **"Standard 20-pin ARM JTAG"** and `AST_UART1` = **"4-pin 3.3V ARM
+UART"** — so both pinouts below are ✅ verified, not inferred. See
+[`HEADER-PINOUTS.md`](HEADER-PINOUTS.md) for the per-header diagrams.
 
 ---
 
@@ -126,11 +128,15 @@ discipline — these are not optional:
 ## 3. AST_UART1 → console — wire this FIRST
 
 UART proves the BMC is alive before you risk JTAG, and gives you the U-Boot
-prompt. ✅ 3.3 V TTL, **115200 8N1**; press **Delete** within 3 s of U-Boot
-start to drop to the bootloader. Cross TX↔RX:
+prompt. `AST_UART1` is a **4-pin 3.3 V header** (Raptor) just above the AST2050,
+ordered **+3.3 V / TX / RX / GND** (ends fixed by Raptor's photo; confirm the two
+middle TX/RX pins by probing — see [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md)). ✅
+3.3 V TTL, **115200 8N1**; press **Delete** within 3 s of U-Boot start to drop
+to the bootloader. **Leave the +3.3 V pin unconnected**; cross TX↔RX:
 
 | AST_UART1 | RPi4 |
 |---|---|
+| +3.3 V | — (do NOT connect) |
 | TXD | GPIO15 / RXD — phys pin 10 |
 | RXD | GPIO14 / TXD — phys pin 8 |
 | GND | GND — phys pin 6 |

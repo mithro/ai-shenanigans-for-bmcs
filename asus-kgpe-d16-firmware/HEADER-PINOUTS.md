@@ -14,12 +14,17 @@ RPi4B (see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md)).
 
 | Header | Layout known? | Source | What I can draw |
 |---|---|---|---|
-| `AST_JTAG1` | ✅ ARM 20-pin | Raptor (Olimex ARM-USB-TINY fits) | full pinout |
+| `AST_JTAG1` | ✅ "Standard 20-pin ARM JTAG" | Raptor page + annotated photo | full pinout |
+| `AST_UART1` | ✅ "4-pin 3.3V ARM UART" (1×4) | Raptor annotated photo | full pinout |
 | `BMC_FW1`   | 🔶 location + pin 1 only | ASUS manual §2.7.2 p2-38 | outline; signals proprietary (ASMB4) |
-| `AST_UART1` | ⚠️ signal set only | Raptor (BMC console, 3.3 V, 115200) | template + probe |
 | `NB_JTAG_HEADER` | ⚠️ none | — (AMD HDT, undocumented) | template + probe |
 | `NB_DEBUG_HEADER` | ⚠️ none | — | template + probe |
 | `TEST_CON1` / `TEST_CON2` | ⚠️ none | — (factory ICT) | template + probe |
+
+> Both `AST_*` headers are **unpopulated footprints** sitting just above the
+> ASPEED AST2050 (Raptor's photos `top_view_bmc_debug_headers.png` and
+> `3_4_view_bmc_debug_headers.png`); you solder headers into them. Raptor's
+> top-view marks **+3.3 V at one end, GND at the other** of the UART header.
 
 Reference (documented, but **not** a BMC header): the ASUS manual also gives a
 `Serial port connector (10-1 pin COM2)` at p2-37 — that's the **host Super-I/O**
@@ -85,23 +90,34 @@ proves SPI signals reach the AST2050 boot flash (see probing procedure below).
 
 ---
 
-## AST_UART1 — ⚠️ signal set known, layout to be probed
+## AST_UART1 — ✅ 4-pin 3.3 V ARM UART (1×4)
 
-Raptor confirms the BMC console is **3.3 V TTL, 115200 8N1** (✅). The AST2050
-exposes a standard 16550-style UART, so the header carries at minimum:
+Raptor's photo labels this footprint verbatim: *"4-pin 3.3V ARM UART —
+Unpopulated. PCB ID 'AST_UART1'"*, and the top-view marks **+3.3 V** at one end
+and **GND** at the other. So it's a 1×4 header just above the AST2050. BMC
+console = **3.3 V TTL, 115200 8N1** (Raptor).
 
 ```
-     AST_UART1   (layout NOT verified — 1×3 / 1×4 / 2×5 are all common)
-     ┌──────────────────────────────┐
-     │  ?    ?    ?    ?    ...      │   known signals present:
-     └──────────────────────────────┘     TXD (out, idles high ~3.3 V)
-   pin 1 = ?  (probe to assign)            RXD (in)
-                                           GND (continuity to chassis)
-                                           [maybe VCC 3.3 V, RTS/CTS]
+   AST_UART1   (1×4, immediately above the ASPEED AST2050)
+   ┌─────────────────────────────────────┐
+   │   [1]       [2]       [3]      [4]   │
+   │  +3.3V    TXD/RXD   RXD/TXD    GND   │   ends = +3.3V & GND (Raptor top-view)
+   └─────────────────────────────────────┘
+       │          │         │        │
+   leave NC   ─── the two middle pins are TX & RX ───   GND
+   (BMC rail)     (confirm order by probing)            -> RPi4 GND (pin 6)
+
+   Wire (after confirming TX vs RX):
+     BMC TXD (out) -> RPi4 GPIO15 / RXD  (phys pin 10)
+     BMC RXD (in)  -> RPi4 GPIO14 / TXD  (phys pin  8)
+     BMC GND       -> RPi4 GND           (phys pin  6)
 ```
 
-Fill it in with the probing procedure below, then wire per the UART section of
-the wiring guide (target TXD → RPi GPIO15/pin10, RXD → GPIO14/pin8, GND → pin6).
+> The two **end** pins (+3.3 V, GND) are fixed by Raptor's photo. The two
+> **middle** pins are TXD/RXD — confirm which is which by probing: the BMC's
+> **TXD idles high (~3.3 V) and bursts at boot**; RXD floats/low. Find pin 1 by
+> the square pad. **Do not wire the +3.3 V pin to the Pi** (it's the BMC rail,
+> like VTref on the JTAG header).
 
 ---
 
@@ -160,9 +176,14 @@ render exact `matches-the-board` diagrams for `AST_UART1` and the `NB_*` /
 
 ## Sources
 
-- Raptor Engineering — KGPE-D16 BMC Port Status (AST_JTAG1 = ARM 20-pin via
-  Olimex ARM-USB-TINY; BMC console 3.3 V / 115200):
+- Raptor Engineering — KGPE-D16 BMC Port Status (AST_JTAG1 = "Standard 20-pin
+  ARM JTAG"; AST_UART1 = "4-pin 3.3V ARM UART"; BMC console 3.3 V / 115200):
   <https://www.raptorengineering.com/coreboot/kgpe-d16-bmc-port-status.php>
+- Raptor annotated board photos (header type + location + 3.3 V / GND ends):
+  `.../kgpe-d16-bmc-port-files/top_view_bmc_debug_headers.png` and
+  `.../3_4_view_bmc_debug_headers.png`
+- Raptor OpenOCD configs (IDCODE 0x07926f0f, reset topology — GPLv3, cited not
+  copied): `.../kgpe-d16-bmc-port-files/openocd/{ast2050,kgpe-d16-bmc,olimex-jtag-tiny}.cfg`
 - ASUS KGPE-D16 User Manual E8847 — §2.2.4 Layout contents, §2.7.2 Internal
   connectors (BMC_FW1 p2-38, COM2 p2-37):
   <https://dlcdnets.asus.com/pub/ASUS/mb/SocketG34(1944)/KGPE-D16/Menual_QVL/E8847_KGPE-D16.pdf>
