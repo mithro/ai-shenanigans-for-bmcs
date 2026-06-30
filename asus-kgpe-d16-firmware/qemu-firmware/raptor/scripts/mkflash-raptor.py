@@ -39,7 +39,7 @@ def main():
     ap.add_argument("--kernel", required=True, help="uImage-raptor")
     ap.add_argument("--initrd", required=True, help="uInitrd (BusyBox+dropbear)")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--size", default="0x800000")
+    ap.add_argument("--size", default="0x1000000")  # 16 MB (matches FMC chip)
     args = ap.parse_args()
 
     env_txt, env_img = args.out + ".env.txt", args.out + ".env.img"

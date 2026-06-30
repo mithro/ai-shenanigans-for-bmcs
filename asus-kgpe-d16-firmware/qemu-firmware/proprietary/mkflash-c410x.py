@@ -14,10 +14,6 @@ With --no-rootfs (kernel-only probe) an 8 MB image suffices.
 import argparse
 import subprocess
 
-# mtdparts so the kernel's /dev/mtdblock3 == the rootfs region we place below.
-MTDPARTS = ("mtdparts=spi0.0:0x100000(uboot),0x10000(env),"
-            "0x200000(kernel),-(rootfs)")
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -26,22 +22,30 @@ def main():
     ap.add_argument("--rootfs", help="rootfs-c410x.squashfs (omit for probe)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--size", default="0x1000000")  # 16 MB
-    ap.add_argument("--machid", default="22b8")
+    ap.add_argument("--machid", default="232b")      # ASPEED-AST2050 = 9003
     ap.add_argument("--no-rootfs", action="store_true")
     args = ap.parse_args()
 
-    root = "root=/dev/mtdblock3 rootfstype=squashfs ro" if not args.no_rootfs \
-        else "root=/dev/ram0"
-    bootcmd = "cp.b 0x20100000 0x41400000 0x200000; "
-    if not args.no_rootfs:
-        # rootfs stays in (memory-mapped) flash; the kernel's MTD driver reads it.
-        bootcmd += "bootm 0x41400000"
+    have_rootfs = bool(args.rootfs) and not args.no_rootfs
+
+    # Boot the SquashFS as a RAMDISK, not from flash: the vendor kernel reads
+    # flash via the legacy AST2050 SMC controller (0x16000000) which this
+    # AST2400-based machine doesn't model (its reads return 0 under
+    # ignore_memory_transaction_failures), so it can't actually read mtdblock3.
+    # Instead U-Boot copies the rootfs from flash (via the *modelled* FMC) into
+    # RAM and the kernel mounts /dev/ram0 — no SMC needed.
+    if have_rootfs:
+        root = "root=/dev/ram0 rootfstype=squashfs ramdisk_size=32768 ro init=/linuxrc"
+        bootcmd = ("cp.b 0x20100000 0x41400000 0x200000; "
+                   "cp.b 0x20300000 0x42600000 0x900000; "
+                   "bootm 0x41400000 0x42600000")
     else:
-        bootcmd += "bootm 0x41400000"
+        root = "root=/dev/ram0"
+        bootcmd = "cp.b 0x20100000 0x41400000 0x200000; bootm 0x41400000"
     env = (
         "bootdelay=0\n"
         f"machid={args.machid}\n"
-        f"bootargs=console=ttyS0,115200n8 mem=96M {root} {MTDPARTS} earlyprintk\n"
+        f"bootargs=console=ttyS0,115200n8 mem=96M {root} earlyprintk\n"
         f"bootcmd={bootcmd}\n"
     )
     env_txt, env_img = args.out + ".env.txt", args.out + ".env.img"
@@ -59,8 +63,15 @@ def main():
     place(args.uboot, 0x000000)
     place(env_img, 0x0F0000)   # OpenBMC U-Boot reads its env here (not the Dell 0x20000)
     place(args.kernel, 0x100000)
-    if not args.no_rootfs and args.rootfs:
-        place(args.rootfs, 0x300000)
+    if have_rootfs:
+        # Wrap the raw SquashFS as a legacy U-Boot ramdisk image so bootm can
+        # copy it into RAM and hand it to the kernel as /dev/ram0.
+        uramdisk = args.out + ".uramdisk"
+        subprocess.run(
+            ["mkimage", "-A", "arm", "-O", "linux", "-T", "ramdisk", "-C", "none",
+             "-n", "c410x squashfs rootfs", "-d", args.rootfs, uramdisk],
+            check=True)
+        place(uramdisk, 0x300000)
     open(args.out, "wb").write(flash)
     print(f"wrote {args.out} ({len(flash)} bytes)")
 

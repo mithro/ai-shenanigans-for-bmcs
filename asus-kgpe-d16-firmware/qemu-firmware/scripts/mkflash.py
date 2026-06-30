@@ -30,7 +30,7 @@ ENV_TEXT = (
 )
 LAYOUT = [("uboot", 0x000000), ("dtb", 0x080000), ("env", 0x0F0000),
           ("kernel", 0x100000), ("initrd", 0x500000)]
-SIZE = 0x800000  # 8 MB
+SIZE = 0x1000000  # 16 MB (matches the kgpe-d16-bmc FMC chip, mx25l12805d)
 
 
 def main():
