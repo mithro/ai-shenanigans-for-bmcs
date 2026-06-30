@@ -1,0 +1,201 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Ansell <me@mith.ro>
+Date: Sat, 15 Feb 2026 00:00:00 +0000
+Subject: [PATCH] clk: aspeed: Add AST2050/AST1100 clock support
+
+The Aspeed AST2050 (also sold as AST1100) is an older BMC SoC that
+shares the same ARM926EJ-S core and many peripherals with the AST2400,
+but has incompatible clock strap register layouts in SCU70 and an
+additional post-divider field in the H-PLL parameter register (SCU24).
+
+Key differences from AST2400:
+  - H-PLL default frequency strap: SCU70 bits [11:9] (not [9:8])
+    Values: 010=200MHz, 011=166MHz, 100=133MHz, 101=100MHz, 111=24MHz
+  - CPU:AHB clock ratio: SCU70 bits [13:12] (not [11:10])
+  - Input clock: always 24MHz (no 25MHz/48MHz options)
+  - H-PLL post-divider: SCU24 bits [14:12] (not present on AST2400)
+    Values: 0xx=div1, 100=div2, 101=div4, 110=div8, 111=div16
+
+The H-PLL base PLL formula is identical to AST2400:
+  F = 24MHz * (2-OD) * [(N+2) / (D+1)]
+but with an additional post-divider applied after.
+
+This patch adds:
+  - aspeed_ast2050_calc_pll() with post-divider support
+  - aspeed_ast2050_cc() with correct SCU70 bit positions
+  - "aspeed,ast2050-scu" compatible string in both the platform driver
+    match table and CLK_OF_DECLARE_DRIVER early init
+
+Tested on Dell PowerEdge C410X (AST2050 BMC, ARM926EJ-S @ 200MHz).
+
+Signed-off-by: Tim Ansell <me@mith.ro>
+---
+ drivers/clk/clk-aspeed.c | 120 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 120 insertions(+)
+
+diff --git a/drivers/clk/clk-aspeed.c b/drivers/clk/clk-aspeed.c
+index ff84191..9148011 100644
+--- a/drivers/clk/clk-aspeed.c
++++ b/drivers/clk/clk-aspeed.c
+@@ -146,6 +146,43 @@ static struct clk_hw *aspeed_ast2400_calc_pll(const char *name, u32 val)
+ 			mult, div);
+ };
+ 
++static struct clk_hw *aspeed_ast2050_calc_pll(const char *name, u32 val)
++{
++	unsigned int mult, div;
++
++	if (val & AST2400_HPLL_BYPASS_EN) {
++		/* Pass through mode */
++		mult = div = 1;
++	} else {
++		/*
++		 * AST2050 H-PLL formula (same base as AST2400):
++		 *   F = 24MHz * (2-OD) * [(N+2) / (D+1)] / post_div
++		 *
++		 * OD      = bit [4]
++		 * N       = bits [10:5]
++		 * D       = bits [3:0]
++		 * PostDiv = bits [14:12]:
++		 *   0xx = /1, 100 = /2, 101 = /4, 110 = /8, 111 = /16
++		 */
++		u32 n = (val >> 5) & 0x3f;
++		u32 od = (val >> 4) & 0x1;
++		u32 d = val & 0xf;
++		u32 post = (val >> 12) & 0x7;
++		u32 post_div;
++
++		if (post < 4)
++			post_div = 1;
++		else
++			post_div = 1 << (post - 3); /* 4->2, 5->4, 6->8, 7->16 */
++
++		mult = (2 - od) * (n + 2);
++		div = (d + 1) * post_div;
++	}
++
++	return clk_hw_register_fixed_factor(NULL, name, "clkin", 0,
++			mult, div);
++};
++
+ static struct clk_hw *aspeed_ast2500_calc_pll(const char *name, u32 val)
+ {
+ 	unsigned int mult, div;
+@@ -174,6 +211,13 @@ static const struct aspeed_clk_soc_data ast2500_data = {
+ 	.calc_pll = aspeed_ast2500_calc_pll,
+ };
+ 
++static const struct aspeed_clk_soc_data ast2050_data = {
++	.div_table = ast2400_div_table,
++	.eclk_div_table = ast2400_div_table,
++	.mac_div_table = ast2400_div_table,
++	.calc_pll = aspeed_ast2050_calc_pll,
++};
++
+ static const struct aspeed_clk_soc_data ast2400_data = {
+ 	.div_table = ast2400_div_table,
+ 	.eclk_div_table = ast2400_div_table,
+@@ -567,6 +611,7 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+ static const struct of_device_id aspeed_clk_dt_ids[] = {
+ 	{ .compatible = "aspeed,ast2400-scu", .data = &ast2400_data },
+ 	{ .compatible = "aspeed,ast2500-scu", .data = &ast2500_data },
++	{ .compatible = "aspeed,ast2050-scu", .data = &ast2050_data },
+ 	{ }
+ };
+ 
+@@ -648,6 +693,78 @@ static void __init aspeed_ast2400_cc(struct regmap *map)
+ 	aspeed_clk_data->hws[ASPEED_CLK_APB] = hw;
+ }
+ 
++static void __init aspeed_ast2050_cc(struct regmap *map)
++{
++	struct clk_hw *hw;
++	u32 val, div, hpll;
++
++	/*
++	 * AST2050 H-PLL default frequency table.
++	 * Indexed by SCU70 bits [11:9]:
++	 *   010 = 200 MHz
++	 *   011 = 166 MHz
++	 *   100 = 133 MHz
++	 *   101 = 100 MHz
++	 *   111 = 24 MHz (bypass)
++	 * Indices 0, 1, 6 are reserved/unused.
++	 */
++	static const u16 ast2050_hpll_rates[] = {
++		0, 0, 200, 166, 133, 100, 0, 24
++	};
++
++	/*
++	 * CLKIN is always 24 MHz on AST2050 - no 25MHz or 48MHz options.
++	 * (SCU70 bit 23 is LPC reset pin on AST2050, not crystal select
++	 * as on AST2400; bit 18 is reserved and reads as 0)
++	 */
++	hw = clk_hw_register_fixed_rate(NULL, "clkin", NULL, 0, 24000000);
++	pr_debug("clkin @24 MHz (AST2050 fixed)\n");
++
++	/*
++	 * High-speed PLL clock derived from the 24MHz crystal.
++	 * This is the CPU clock, and we assume that it is enabled.
++	 * It can be configured through the HPLL_PARAM register (SCU24),
++	 * or set to a default frequency by hardware strapping.
++	 */
++	regmap_read(map, ASPEED_HPLL_PARAM, &val);
++	if (val & AST2400_HPLL_PROGRAMMED) {
++		hw = aspeed_ast2050_calc_pll("hpll", val);
++	} else {
++		/* Read H-PLL strap from SCU70 bits [11:9] */
++		regmap_read(map, ASPEED_STRAP, &val);
++		hpll = ast2050_hpll_rates[(val >> 9) & 0x7];
++		if (!hpll) {
++			pr_warn("unknown H-PLL strap value %d, assuming 200MHz\n",
++				(val >> 9) & 0x7);
++			hpll = 200;
++		}
++		hw = clk_hw_register_fixed_rate(NULL, "hpll", "clkin", 0,
++				hpll * 1000000);
++	}
++	aspeed_clk_data->hws[ASPEED_CLK_HPLL] = hw;
++
++	/*
++	 * AST2050 CPU:AHB ratio is in SCU70 bits [13:12] (not [11:10]).
++	 * Lookup table maps register encoding directly to divisor:
++	 *   00 -> 1:1, 01 -> 2:1, 10 -> 4:1, 11 -> 3:1
++	 */
++	{
++		static const u8 ast2050_ahb_div[] = { 1, 2, 4, 3 };
++
++		regmap_read(map, ASPEED_STRAP, &val);
++		div = ast2050_ahb_div[(val >> 12) & 0x3];
++	}
++	hw = clk_hw_register_fixed_factor(NULL, "ahb", "hpll", 0, 1, div);
++	aspeed_clk_data->hws[ASPEED_CLK_AHB] = hw;
++
++	/* APB clock selection register SCU08 (aka PCLK) */
++	hw = clk_hw_register_divider_table(NULL, "apb", "hpll", 0,
++			scu_base + ASPEED_CLK_SELECTION, 23, 3, 0,
++			ast2400_div_table,
++			&aspeed_clk_lock);
++	aspeed_clk_data->hws[ASPEED_CLK_APB] = hw;
++}
++
+ static void __init aspeed_ast2500_cc(struct regmap *map)
+ {
+ 	struct clk_hw *hw;
+@@ -729,6 +846,8 @@ static void __init aspeed_cc_init(struct device_node *np)
+ 
+ 	if (of_device_is_compatible(np, "aspeed,ast2400-scu"))
+ 		aspeed_ast2400_cc(map);
++	else if (of_device_is_compatible(np, "aspeed,ast2050-scu"))
++		aspeed_ast2050_cc(map);
+ 	else if (of_device_is_compatible(np, "aspeed,ast2500-scu"))
+ 		aspeed_ast2500_cc(map);
+ 	else
+@@ -739,3 +858,4 @@ static void __init aspeed_cc_init(struct device_node *np)
+ };
+ CLK_OF_DECLARE_DRIVER(aspeed_cc_g5, "aspeed,ast2500-scu", aspeed_cc_init);
+ CLK_OF_DECLARE_DRIVER(aspeed_cc_g4, "aspeed,ast2400-scu", aspeed_cc_init);
++CLK_OF_DECLARE_DRIVER(aspeed_cc_g2, "aspeed,ast2050-scu", aspeed_cc_init);
+-- 
+2.43.0
+

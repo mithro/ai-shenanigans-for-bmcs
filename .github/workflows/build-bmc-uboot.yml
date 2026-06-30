@@ -1,0 +1,74 @@
+# Build U-Boot for Dell C410X BMC (AST2050)
+#
+# Manual dispatch only -- the stock U-Boot 1.2.0 can TFTP boot kernels,
+# so a new U-Boot is only needed for advanced features (e.g. FIT images,
+# devicetree passing, network boot improvements).
+#
+# Uses the OpenBMC U-Boot fork which has AST2400 (evb-ast2400) board
+# support that is compatible with the AST2050.
+
+name: Build C410X U-Boot
+
+on:
+  workflow_dispatch:
+    inputs:
+      uboot_branch:
+        description: 'U-Boot branch to build'
+        required: false
+        default: 'v2019.04-aspeed-openbmc'
+
+env:
+  CROSS_COMPILE: arm-linux-gnueabi-
+  ARCH: arm
+
+jobs:
+  build-uboot:
+    name: Build U-Boot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compiler and tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-arm-linux-gnueabi \
+            bc flex bison libssl-dev device-tree-compiler
+
+      - name: Clone OpenBMC U-Boot
+        run: |
+          git clone --depth=1 \
+            --branch "${{ github.event.inputs.uboot_branch || 'v2019.04-aspeed-openbmc' }}" \
+            https://github.com/openbmc/u-boot.git \
+            "${{ runner.temp }}/u-boot"
+
+      - name: Configure U-Boot
+        run: |
+          cd "${{ runner.temp }}/u-boot"
+          make evb-ast2400_defconfig
+
+          # Apply C410X-specific settings
+          scripts/config --set-str CONFIG_BOOTARGS \
+            "console=ttyS0,115200n8 mem=96M"
+          scripts/config --set-str CONFIG_SYS_PROMPT \
+            "c410x-bmc=> "
+
+          make olddefconfig
+
+      - name: Build U-Boot
+        run: |
+          cd "${{ runner.temp }}/u-boot"
+          make -j$(nproc)
+
+      - name: Verify build
+        run: |
+          ls -lh "${{ runner.temp }}/u-boot/u-boot.bin"
+          file "${{ runner.temp }}/u-boot/u-boot.bin"
+
+      - name: Upload U-Boot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: u-boot
+          path: |
+            ${{ runner.temp }}/u-boot/u-boot.bin

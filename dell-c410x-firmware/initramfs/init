@@ -1,0 +1,41 @@
+#!/bin/sh
+# /init -- Minimal initramfs init for Dell C410X BMC (AST2050)
+#
+# This is the first userspace program run by the kernel. It sets up
+# essential filesystems, configures basic networking, and drops to
+# an interactive BusyBox ash shell for hardware bring-up and debugging.
+
+# Mount essential virtual filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+mkdir -p /run
+
+# Set hostname
+hostname c410x-bmc
+
+# Bring up loopback network interface
+ip link set lo up
+
+# Print system info
+echo ""
+echo "=============================================="
+echo "  Dell PowerEdge C410X BMC"
+echo "  Aspeed AST2050 (ARM926EJ-S)"
+echo "=============================================="
+echo ""
+echo "Kernel: $(uname -s -r -v)"
+echo "CPU:    $(grep -m1 'model name' /proc/cpuinfo || echo 'ARM926EJ-S')"
+echo "Memory: $(grep MemTotal /proc/meminfo)"
+echo ""
+echo "Useful commands:"
+echo "  i2cdetect -l          # List I2C buses"
+echo "  devmem 0x1E6E207C     # Read AST2050 silicon revision"
+echo "  dmesg | grep -i hpll  # Check H-PLL frequency"
+echo "  cat /proc/cpuinfo     # CPU info"
+echo ""
+
+# Drop to interactive shell
+exec /bin/sh

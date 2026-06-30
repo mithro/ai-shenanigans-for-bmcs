@@ -1,0 +1,172 @@
+# Build Linux kernel + BusyBox initramfs for Dell C410X BMC (AST2050)
+#
+# Produces artifacts that can be TFTP-booted onto the C410X via:
+#   uv run dell-c410x-firmware/tftp_boot.py --kernel uImage-c410x --initrd uInitrd-c410x
+#
+# The stock U-Boot 1.2.0 only understands legacy uImage format.
+# Kernel loaded at 0x41400000, initrd at 0x42600000, boot via bootm.
+
+name: Build C410X BMC Firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dell-c410x-firmware/**'
+      - '.github/workflows/build-bmc-firmware.yml'
+  pull_request:
+    paths:
+      - 'dell-c410x-firmware/**'
+      - '.github/workflows/build-bmc-firmware.yml'
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: 'Linux kernel version tag (e.g. v6.6.70)'
+        required: false
+        default: 'v6.6.70'
+      busybox_version:
+        description: 'BusyBox version (e.g. 1.37.0)'
+        required: false
+        default: '1.37.0'
+
+env:
+  CROSS_COMPILE: arm-linux-gnueabi-
+  ARCH: arm
+  KERNEL_VERSION: ${{ github.event.inputs.kernel_version || 'v6.6.70' }}
+  BUSYBOX_VERSION: ${{ github.event.inputs.busybox_version || '1.37.0' }}
+
+jobs:
+  build-initramfs:
+    name: Build BusyBox Initramfs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compiler and tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabi u-boot-tools cpio
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Build initramfs
+        run: |
+          uv run dell-c410x-firmware/initramfs/build.py \
+            --busybox-version "$BUSYBOX_VERSION" \
+            --output-dir "${{ runner.temp }}/initramfs-out" \
+            --build-dir "${{ runner.temp }}/initramfs-build"
+
+      - name: Verify uImage ramdisk
+        run: mkimage -l "${{ runner.temp }}/initramfs-out/uInitrd-c410x"
+
+      - name: Upload initramfs artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: initramfs
+          path: |
+            ${{ runner.temp }}/initramfs-out/uInitrd-c410x
+            ${{ runner.temp }}/initramfs-out/initramfs.cpio.gz
+
+  build-kernel:
+    name: Build Linux Kernel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cross-compiler and build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-arm-linux-gnueabi \
+            bc flex bison libssl-dev libelf-dev \
+            u-boot-tools device-tree-compiler
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: kernel-${{ env.KERNEL_VERSION }}
+
+      - name: Clone kernel source
+        run: |
+          git clone --depth=1 --branch "$KERNEL_VERSION" \
+            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git \
+            "${{ runner.temp }}/linux"
+
+      - name: Apply AST2050 clock driver patch
+        run: |
+          cd "${{ runner.temp }}/linux"
+          git config user.email "ci@github.actions"
+          git config user.name "CI"
+          git am --3way "$GITHUB_WORKSPACE/dell-c410x-firmware/kernel/patches/"*.patch
+
+      - name: Copy device tree source into kernel tree
+        run: |
+          cp dell-c410x-firmware/aspeed-bmc-dell-c410x.dts \
+            "${{ runner.temp }}/linux/arch/arm/boot/dts/aspeed/"
+
+          # Add DTB target to the Aspeed Makefile
+          MAKEFILE="${{ runner.temp }}/linux/arch/arm/boot/dts/aspeed/Makefile"
+          if ! grep -q "aspeed-bmc-dell-c410x" "$MAKEFILE"; then
+            echo 'dtb-$(CONFIG_ARCH_ASPEED) += aspeed-bmc-dell-c410x.dtb' >> "$MAKEFILE"
+          fi
+
+      - name: Configure kernel
+        run: |
+          cd "${{ runner.temp }}/linux"
+          make aspeed_g4_defconfig
+          scripts/kconfig/merge_config.sh -m .config \
+            "$GITHUB_WORKSPACE/dell-c410x-firmware/kernel/c410x.config"
+          make olddefconfig
+
+      - name: Build kernel and DTB
+        run: |
+          cd "${{ runner.temp }}/linux"
+          # Use ccache
+          export PATH="/usr/lib/ccache:$PATH"
+          make -j$(nproc) zImage dtbs
+
+      - name: Create uImage for U-Boot
+        run: |
+          cd "${{ runner.temp }}/linux"
+          make LOADADDR=0x40008000 uImage
+
+      - name: Verify build artifacts
+        run: |
+          echo "=== Kernel uImage ==="
+          mkimage -l "${{ runner.temp }}/linux/arch/arm/boot/uImage"
+          echo ""
+          echo "=== Device Tree ==="
+          dtc -I dtb -O dts \
+            "${{ runner.temp }}/linux/arch/arm/boot/dts/aspeed/aspeed-bmc-dell-c410x.dtb" \
+            | head -20
+          echo "..."
+          echo ""
+          echo "=== Kernel config (C410X-relevant) ==="
+          grep -E '(INA2XX|ADT7462|PCA953X|PCA954|LM75|INITRD|OPTIMIZE_FOR_SIZE)' \
+            "${{ runner.temp }}/linux/.config" || true
+
+      - name: Prepare artifacts for upload
+        run: |
+          OUTDIR="${{ runner.temp }}/kernel-out"
+          mkdir -p "$OUTDIR"
+          cp "${{ runner.temp }}/linux/arch/arm/boot/uImage" \
+            "$OUTDIR/uImage-c410x"
+          cp "${{ runner.temp }}/linux/arch/arm/boot/dts/aspeed/aspeed-bmc-dell-c410x.dtb" \
+            "$OUTDIR/"
+          cp "${{ runner.temp }}/linux/arch/arm/boot/zImage" \
+            "$OUTDIR/"
+          cp "${{ runner.temp }}/linux/.config" \
+            "$OUTDIR/kernel.config"
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel
+          path: |
+            ${{ runner.temp }}/kernel-out/uImage-c410x
+            ${{ runner.temp }}/kernel-out/aspeed-bmc-dell-c410x.dtb
+            ${{ runner.temp }}/kernel-out/zImage
+            ${{ runner.temp }}/kernel-out/kernel.config
