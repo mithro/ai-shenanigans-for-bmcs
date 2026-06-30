@@ -37,8 +37,14 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
 
 ## Now
 
-Building P1: the custom `kgpe-d16-bmc` AST2050 QEMU machine — a new `ast2050`
-SoC type derived from the AST2400 aspeed model with SCU/SDRAM adjusted per
-`../ast2050.h` and `../platform.S`, developed on the `mithro/qemu`
-`d16-ast2050-machine` branch and added as a submodule at `qemu/qemu`, plus the
-CI job that builds `qemu-system-arm` from source and smoke-starts `-M kgpe-d16-bmc`.
+**Done — P1 machine exists.** A custom `kgpe-d16-bmc` AST2050 machine:
+`ast2050-a1` SoC (reuses the register-compatible AST2400 peripheral models via a
+new `qom_socname` override; provisional AST2050 SCU7C rev `0x01000303`) + the
+`kgpe-d16-bmc` machine (128 MB DDR2, FTGMAC100 NIC, 8 MB SPI NOR, 24 MHz clock).
+Developed on `mithro/qemu` branch `d16-ast2050-machine` (off QEMU v10.0.7),
+vendored as a submodule at `qemu/qemu`. `qemu-system-arm` builds from it and
+`-M kgpe-d16-bmc` instantiates the SoC cleanly — smoke test green via
+`scripts/run-qemu.py smoke`.
+
+**Next:** P1 CI job (build `qemu-system-arm` from the submodule + smoke-start on
+CI), then P2 (kernel `uImage` + initramfs with dropbear) → boot on the machine.
