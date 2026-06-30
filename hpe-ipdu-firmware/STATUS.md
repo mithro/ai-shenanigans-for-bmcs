@@ -10,7 +10,9 @@
 - Sub-MCU: Toshiba TMP89FM42LUG for display/LED management
 - 3-4x TI MAX3243EI RS-232 level shifters
 - All crystals identified (29.4912, 25.000, 8.000, 3.6864 MHz)
-- Debug headers identified: J25 "Digi UART", J11 "Mox SPI", J10 "PLC DIAG"
+- Debug headers identified: J25 "Digi UART", J11 "Mox SPI", J10 "PIC JTAG", J27 "I2C"
+- Debug/JTAG headers identified: J1 (large ribbon connector), J6 (black 2x5 header)
+- Extension bar bus connector pairs identified: J2/J29, J3/J30, J4/J31
 
 ### NS9360 Datasheet Analysis
 - Downloaded NS9360 datasheet (Rev D, 91001326_D.pdf)
@@ -39,6 +41,7 @@
 | ANALYSIS.md | Complete | Board component inventory, NS9360 I/O architecture |
 | RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
 | STATUS.md | Complete | This file |
+| HEADERS-J1-J6.md | Partial | J1/J6 debug header documentation, JTAG interface, RPi Zero W adapter guide |
 | datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
 | datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
 | datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
@@ -73,8 +76,10 @@
 - NOR flash contents not dumped
 - PLL bootstrap pin configuration not measured (determines CPU speed)
 - J11 "Mox SPI" connection target unknown (MAXQ3180? SPI flash? external?)
-- J10 "PLC DIAG" Power Line Communication circuit not traced
-- Extension bar bus protocol (J1, J6 connectors) not documented
+- J10 "PIC JTAG" sub-MCU programming interface not traced
+- J1 and J6 debug headers documented in [HEADERS-J1-J6.md](HEADERS-J1-J6.md) --
+  physical form factors identified, exact pinouts require board tracing
+- Extension bar bus protocol (J2/J29, J3/J30, J4/J31 connector pairs) not documented
 
 ### Firmware Analysis (Blocked on Firmware Acquisition)
 - Firmware binary not yet obtained for analysis
