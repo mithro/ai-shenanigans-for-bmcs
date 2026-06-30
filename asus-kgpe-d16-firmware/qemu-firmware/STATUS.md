@@ -18,8 +18,15 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
       (`machid=0x22b8`); SSH login succeeds (`SSH_OK / kgpe-d16-bmc /
       Linux armv5tejl`). Local pass + new `boot-raptor` CI job. The G4-modelled
       machine runs the G3 kernel unchanged — see [raptor/README.md](raptor/README.md).
-- [ ] **C4** Proprietary firmware boots in QEMU to a running BMC web service on CI
-      — open / research-grade (no public D16 image; Dell C410X AST2050 as proxy).
+- [~] **C4** Proprietary firmware boots in QEMU to a running BMC web service —
+      **vendor firmware fully boots** the Dell C410X image (Avocent, Linux
+      2.6.23.1-ASPEED) on `kgpe-d16-bmc`: vendor U-Boot path → vendor kernel
+      (machid 0x232b) → vendor SquashFS root → BusyBox → `fullfw` BMC app → IPMI
+      Gateway APIs → GUIProcessMonitor → console, with `appweb` launched.
+      Remaining: `eth0` doesn't register (vendor driver gets its MAC over **NCSI**,
+      which QEMU's ftgmac100 doesn't answer), so the running web server isn't
+      host-reachable to `curl`. Needs a minimal QEMU NCSI responder. See
+      [proprietary/README.md](proprietary/README.md).
 
 ## Phase progress
 
