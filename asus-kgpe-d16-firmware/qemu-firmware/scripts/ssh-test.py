@@ -39,9 +39,11 @@ def wait_for(proc, marker, timeout):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--qemu", required=True)
-    ap.add_argument("--kernel", required=True)
-    ap.add_argument("--initrd", required=True)
-    ap.add_argument("--dtb", required=True)
+    ap.add_argument("--kernel")
+    ap.add_argument("--initrd")
+    ap.add_argument("--dtb")
+    ap.add_argument("--flash", help="boot from a flash image (u-boot chain) "
+                    "instead of -kernel")
     ap.add_argument("--key", required=True, help="SSH private key for root")
     ap.add_argument("--port", type=int, default=2222)
     ap.add_argument("--mem", type=int, default=128)
@@ -52,11 +54,16 @@ def main():
 
     cmd = [args.qemu, "-M", "kgpe-d16-bmc", "-m", str(args.mem), "-nographic",
            "-monitor", "none", "-serial", "stdio",
-           "-kernel", args.kernel, "-initrd", args.initrd, "-dtb", args.dtb,
-           "-append", args.append,
            # FTGMAC100 is an onboard SoC NIC, so bind a user-net backend to it
            # with -nic (not -device); hostfwd exposes guest :22 for the test.
            "-nic", f"user,model=ftgmac100,hostfwd=tcp::{args.port}-:22"]
+    if args.flash:
+        # Full u-boot -> linux chain: QEMU boots the flash, u-boot boots the
+        # kernel+initramfs embedded in it.
+        cmd += ["-drive", f"file={args.flash},format=raw,if=mtd"]
+    else:
+        cmd += ["-kernel", args.kernel, "-initrd", args.initrd,
+                "-dtb", args.dtb, "-append", args.append]
     print("boot:", " ".join(cmd))
     qemu = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, bufsize=0)
