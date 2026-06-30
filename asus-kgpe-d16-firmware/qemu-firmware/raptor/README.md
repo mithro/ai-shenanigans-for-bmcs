@@ -36,13 +36,21 @@ build with a modern toolchain. Progress and the concrete obstacle chain:
 - **U-Boot host tools.** The 2013 host `libfdt` clashes with the modern system
   one; build with U-Boot's bundled libfdt or skip the host dtc.
 
-- **Cascading G4-driver references.** Deriving from `ast2300_defconfig` and
-  switching to `ARCH_AST2100` then fails in driver files that assume G4 symbols
-  (e.g. `plat-aspeed/dev-nand.c` uses `AST_FMC_BASE`, defined only for
-  AST2300/2400). A correct AST2050 build needs the **proper AST2050/G3 defconfig
-  from Raptor's Yocto/OpenBMC layer** (which disables the G4-only drivers), not a
-  hand-switched G4 defconfig — building it up by disabling drivers one-by-one is
-  the whack-a-mole that makes this multi-day.
+- **Cascading G4-driver references.** `plat-aspeed/Makefile` builds the `dev-*.o`
+  device files **unconditionally** (`obj-y`), and several reference G4-only
+  symbols missing from `mach/ast2100_platform.h`:
+  `dev-nand.c`→`AST_FMC_BASE`, `dev-uhci.c`→`AST_UHCI_BASE`/`IRQ_UHCI`, … (the
+  cascade continues per device file). Two resumable fixes:
+  (a) add the missing `AST_*_BASE`/`IRQ_*` defines to `ast2100_platform.h`
+  (copy from `ast2300_platform.h`; they only need to *compile*, the devices
+  aren't probed during an initramfs boot) — this converges after a handful of
+  symbols; or (b) obtain the **proper AST2050/G3 defconfig from Raptor's
+  Yocto/OpenBMC layer**, which disables these drivers. Started (a):
+  `AST_FMC_BASE`/`AST_SPI_BASE` added; `AST_UHCI_BASE` is next.
+- **Machine id for the ATAGS boot:** `MACH_TYPE_ASPEED = 8888`
+  (`arch/arm/tools/mach-types`). With OpenBMC U-Boot: `setenv machid 8888;
+  bootm <raptor-uImage> <uInitrd>` (no dtb) → ATAG boot. Reuse the existing
+  BusyBox+dropbear `uInitrd` (same ARM926EJ-S, static binaries).
 
 ### Boot path that sidesteps device tree
 The kernel need not boot via Raptor's (hard-to-build) U-Boot: the **already-built
