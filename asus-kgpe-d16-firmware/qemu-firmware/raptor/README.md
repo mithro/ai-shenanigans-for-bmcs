@@ -8,79 +8,99 @@ from source and boot it on the custom `kgpe-d16-bmc` QEMU machine.
 - Linux 2.6.28.9 — <https://github.com/raptor-engineering/ast2050-linux-kernel>
   (`arch/arm/mach-aspeed`, `plat-aspeed`).
 
-## Status: vintage toolchain validated; full build + boot is open work
+## Status: kernel BUILDS ✅ and ATAGS-launches ✅; early-boot hang is the G3/G4 crux ⏳
 
-This is the hardest of C1–C3 because the code is from 2008–2013 and does not
-build with a modern toolchain. Progress and the concrete obstacle chain:
+Reproducible scripts (this directory):
 
-### Toolchain
-- **Modern `gcc-14` cannot build it.** U-Boot needs `compiler-gccN.h` shims and
-  hits host `libfdt_env.h` conflicts; the kernel won't compile either.
-- **Use a vintage gcc-4.x** from the kernel.org crosstool prebuilts:
-  `https://mirrors.edge.kernel.org/pub/tools/crosstool/files/bin/x86_64/4.9.4/x86_64-gcc-4.9.4-nolibc-arm-linux-gnueabi.tar.xz`
-  — validated: the kernel now compiles past the early stages.
-- That gcc's `cc1` needs **`libmpfr.so.4`** (modern distros ship `.so.6`); symlink
-  `libmpfr.so.4 -> libmpfr.so.6.x` and add it to `LD_LIBRARY_PATH`.
+| Script | What it does | State |
+|--------|--------------|-------|
+| `scripts/build-raptor-kernel.sh` | vintage gcc-4.9.4 + G3 (`ARCH_AST2100`) config + G4 symbol port → `zImage` → `uImage-raptor` | **works** |
+| `scripts/port-g4-symbols.py` | fills the G4-only `AST_*`/`IRQ_*` symbols the unconditionally-built `dev-*.c` files need (guarded `#ifndef`) | **works** |
+| `scripts/mkflash-raptor.py` | assembles an 8 MB flash: OpenBMC U-Boot + ATAGS env + `uImage-raptor` + BusyBox `uInitrd` | **works** |
 
-### Remaining build obstacles
-- **Kernel SoC selection.** `mach/platform.h` has **no `AST1100` branch** — its
-  `#if` chain is AST2000/2100/2200/2300/2400/2500/3200. The **AST2050's G3
-  platform is `CONFIG_ARCH_AST2100`** (G3 generation), *not* `ARCH_AST1100`
-  (which falls through to the `#else #err`). Derive a config from
-  `ast2300_defconfig` and set `CONFIG_ARCH_AST2100=y`. (`ast2400_defconfig`
-  fails earlier on `SCU_FUN_PIN_MAC1_PHY_LINK undeclared`; `ARCH_AST1100` hits
-  the `#err`.)
-- **`#err` typo.** `platform.h`'s else-branch uses `#err` (not `#error`); gcc-4.9
-  rejects it as an invalid directive. With the correct `ARCH_AST2100` it is not
-  reached; otherwise an era gcc-4.3/4.4 or a one-line patch is needed.
-- **U-Boot host tools.** The 2013 host `libfdt` clashes with the modern system
-  one; build with U-Boot's bundled libfdt or skip the host dtc.
+### ✅ Solved: the build (the historically hard part)
+- **Modern `gcc-14` cannot build it** (needs `compiler-gccN.h` shims; host
+  `libfdt_env.h` conflicts). Use the kernel.org crosstool prebuilt
+  **gcc-4.9.4** (`x86_64-gcc-4.9.4-nolibc-arm-linux-gnueabi`); its `cc1` needs
+  **`libmpfr.so.4`** (modern distros ship `.so.6`) → symlink it.
+- **SoC selection:** the AST2050's G3 platform is **`CONFIG_ARCH_AST2100`**
+  (the `#if` chain in `mach/platform.h` has *no* `AST1100` branch — `ARCH_AST1100`
+  falls through to `#else #err`; `ARCH_AST2400` fails earlier on
+  `SCU_FUN_PIN_MAC1_PHY_LINK`). Derive from `ast2300_defconfig`, set
+  `CONFIG_ARCH_AST2100=y`.
+- **Cascading G4-driver references:** `plat-aspeed/Makefile` builds every
+  `dev-*.c` as `obj-y`; several reference G4-only symbols absent from the G3
+  headers (`AST_FMC_BASE`, `AST_UHCI_BASE`, `IRQ_UART3`, …). `port-g4-symbols.py`
+  back-fills all of them, each `#ifndef`-guarded so real G3 defines win and the
+  devices (not probed during an initramfs boot) merely link. **Kernel now builds
+  a 1.8 MB `zImage`.**
 
-- **Cascading G4-driver references.** `plat-aspeed/Makefile` builds the `dev-*.o`
-  device files **unconditionally** (`obj-y`), and several reference G4-only
-  symbols missing from `mach/ast2100_platform.h`:
-  `dev-nand.c`→`AST_FMC_BASE`, `dev-uhci.c`→`AST_UHCI_BASE`/`IRQ_UHCI`, … (the
-  cascade continues per device file). Two resumable fixes:
-  (a) add the missing `AST_*_BASE`/`IRQ_*` defines to `ast2100_platform.h`
-  (copy from `ast2300_platform.h`; they only need to *compile*, the devices
-  aren't probed during an initramfs boot) — this converges after a handful of
-  symbols; or (b) obtain the **proper AST2050/G3 defconfig from Raptor's
-  Yocto/OpenBMC layer**, which disables these drivers. Started (a):
-  `AST_FMC_BASE`/`AST_SPI_BASE` added; `AST_UHCI_BASE` is next.
-- **Machine id for the ATAGS boot:** `MACH_TYPE_ASPEED = 8888`
-  (`arch/arm/tools/mach-types`). With OpenBMC U-Boot: `setenv machid 8888;
-  bootm <raptor-uImage> <uInitrd>` (no dtb) → ATAG boot. Reuse the existing
-  BusyBox+dropbear `uInitrd` (same ARM926EJ-S, static binaries).
+### ✅ Solved: the boot path (ATAGS, no device tree)
+The kernel need not boot via Raptor's (hard-to-build) U-Boot. The
+**already-built OpenBMC U-Boot boots the Raptor kernel via ATAGS**:
 
-### Boot path that sidesteps device tree
-The kernel need not boot via Raptor's (hard-to-build) U-Boot: the **already-built
-OpenBMC U-Boot can boot the Raptor kernel via ATAGS** — `setenv machid <id>;
-bootm <kernel> <initrd>` with **no dtb** makes U-Boot pass an ATAG list + machine
-id instead of a device tree. The Raptor machine id is `MACH_TYPE_ASPEED`
-(`MACHINE_START(ASPEED, ...)`), so once the kernel builds this is the route to a
-boot — leaving only the G3-vs-G4 register-modelling gap below.
+```
+setenv machid 8888          # MACH_TYPE_ASPEED (arch/arm/tools/mach-types)
+bootm <kernel> <initrd>      # only 2 args, NO dtb  -> U-Boot passes ATAGs + machid
+```
 
-### The real crux: G3 vs G4 machine modelling
-The Raptor kernel targets the **AST2050/AST2100 (G3)** register semantics, but
-the `kgpe-d16-bmc` QEMU machine currently reuses the **AST2400 (G4)** peripheral
-models (that is exactly why the *modern* aspeed-g4 kernel boots on it). The G3
-and G4 SCU/clock/SDMC layouts differ in places, so booting the Raptor G3 kernel
-will likely need the machine to model AST2050/G3 faithfully (a `qom_socname`
-of its own + G3 device variants), not just borrow AST2400. **This — plus the
-ATAGS-vs-DT boot path — is the bulk of C3's remaining work, and is what makes it
-a multi-day task rather than a defconfig tweak.**
+Verified on `qemu-system-arm -M kgpe-d16-bmc`:
 
-### The boot challenge (after it builds)
-The 2.6.28.9 ARM kernel boots via **ATAGS + a fixed `MACH_TYPE`**, whereas QEMU's
-aspeed machine is **device-tree** based. Booting the Raptor kernel on
-`kgpe-d16-bmc` will likely require the machine to pass ATAGS and the matching
-machine number (a small QEMU change), or to boot it through the Raptor U-Boot.
+```
+## Booting kernel from Legacy Image at 41000000 ...
+   Image Name:   Raptor AST2050 Linux 2.6.28
+   ...
+   Loading Kernel Image ... OK
+Using machid 0x8888 from environment
+Starting kernel ...
+```
 
-### Next steps
-1. Select the correct AST2050 kernel SoC config; finish the kernel build.
-2. Fix the U-Boot host-tool libfdt issue; finish the U-Boot build.
-3. Make `kgpe-d16-bmc` boot an ATAGS kernel (or chain via Raptor U-Boot), then
-   wire a `raptor-boot` CI job mirroring `boot-ssh`.
+So the kernel **receives control** with the correct machine id and an ATAG
+list, reusing the same BusyBox+dropbear `uInitrd` as C2. This decouples "launch
+a non-DT kernel" (**solved**) from "does the G4 model satisfy a G3 kernel"
+(below).
 
-This is realistically several hours of focused work; the path above is proven as
-far as "vintage gcc compiles the kernel".
+### ⏳ The remaining crux: G3-vs-G4 register modelling
+After `Starting kernel ...` the Raptor kernel produces **no console output and
+hangs in early init** — even with `console=ttyS0/1/2/4` and `earlyprintk`. This
+is *kernel-specific*, not a machine bug: the **modern aspeed-g4 kernel boots to
+SSH on this exact machine** (C2 ✅), proving the UART/RAM/timer models work.
+
+The `kgpe-d16-bmc` machine currently reuses the **AST2400 (G4)** peripheral
+models (that is *why* the modern G4 kernel boots). The Raptor kernel targets
+**AST2050/AST2100 (G3)** register semantics; G3 and G4 differ in the
+**SCU / clock / SDMC** layout. The most likely wedge is an early **SCU clock/PLL
+read** returning a G4-shaped value → bad divisor → silent hang before any
+console. Closing this means teaching QEMU to model the **G3 SCU/clock (and
+likely SDMC)** for this SoC — a `qom_socname` of its own plus G3 device
+variants, not a borrowed AST2400. **This is the bulk of C3's remaining work and
+is what makes it a multi-day, model-level task rather than a config tweak.**
+
+Concrete next diagnostic: rebuild the kernel with `CONFIG_DEBUG_LL` +
+`addruart` pinned to `0x1e784000` (the UART QEMU displays) to convert the silent
+hang into an exact stop address, then model the offending G3 register in QEMU.
+
+### Raptor U-Boot 2013.07 (secondary — not on the boot path)
+Not required for the boot above (OpenBMC U-Boot does the ATAGS launch), but
+needed to claim "Raptor's *own* U-Boot builds". Open obstacle: the 2013 host
+`libfdt` clashes with the modern system one — build with U-Boot's bundled
+libfdt or skip the host `dtc`.
+
+## How to reproduce
+
+```sh
+# 1. Toolchain (once):
+#    download kernel.org crosstool gcc-4.9.4-nolibc-arm-linux-gnueabi,
+#    symlink libmpfr.so.4 -> your libmpfr.so.6 into $XLIBS.
+# 2. Sources (once):
+git clone https://github.com/raptor-engineering/ast2050-linux-kernel
+# 3. Build kernel:
+KDIR=$PWD/ast2050-linux-kernel XGCC=…/arm-linux-gnueabi- XLIBS=…/xlibs \
+    ./scripts/build-raptor-kernel.sh
+# 4. Assemble flash (reuses C2's OpenBMC u-boot.bin + uInitrd):
+uv run scripts/mkflash-raptor.py --uboot …/u-boot.bin \
+    --kernel out/uImage-raptor --initrd …/uInitrd-kgpe-d16 --out flash-raptor.img
+# 5. Boot:
+uv run ../scripts/run-qemu.py boot --flash flash-raptor.img \
+    --expect "Linux version 2.6"   # <- currently blocked on the G3/G4 crux
+```
