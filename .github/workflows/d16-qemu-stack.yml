@@ -1,7 +1,8 @@
 name: D16 QEMU firmware stack
 
-# Builds the custom kgpe-d16-bmc (AST2050) QEMU from source and smoke-tests the
-# machine. Later phases (P2+) add kernel/initramfs build and boot jobs.
+# Builds the custom kgpe-d16-bmc (AST2050) QEMU + the new firmware stack from
+# source (C1) and boots it to an SSH login (C2). Raptor (C3) / proprietary (C4)
+# jobs land in later phases.
 on:
   push:
     paths:
@@ -13,38 +14,101 @@ on:
       - '.github/workflows/d16-qemu-stack.yml'
   workflow_dispatch:
 
+concurrency:
+  group: d16-qemu-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QEMU_DEPS: build-essential ninja-build pkg-config python3 python3-venv libglib2.0-dev libpixman-1-dev libslirp-dev flex bison
+  XC_DEPS: gcc-arm-linux-gnueabi bc flex bison libssl-dev libelf-dev u-boot-tools device-tree-compiler
+
 jobs:
   build-qemu:
     name: Build custom QEMU (kgpe-d16-bmc / AST2050)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (with QEMU submodule)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install QEMU build dependencies
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential ninja-build pkg-config python3 python3-venv \
-            libglib2.0-dev libpixman-1-dev flex bison
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Build qemu-system-arm with the kgpe-d16-bmc machine
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm
         run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
-
       - name: Smoke-test the machine instantiates
         run: |
           uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/run-qemu.py smoke \
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --timeout 15
 
-      - name: Upload qemu-system-arm
-        uses: actions/upload-artifact@v4
+  build-kernel:
+    name: Build D16 kernel (uImage + dtb)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $XC_DEPS
+      - name: Build kernel
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-kernel.sh
+      - uses: actions/upload-artifact@v4
         with:
-          name: qemu-system-arm-kgpe-d16
-          path: asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm
+          name: kernel
+          path: asus-kgpe-d16-firmware/qemu-firmware/kernel/out/
           if-no-files-found: error
+
+  build-initramfs:
+    name: Build initramfs (BusyBox + dropbear)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabi bzip2 cpio u-boot-tools openssh-client make
+      - uses: astral-sh/setup-uv@v5
+      - name: Build initramfs
+        run: uv run asus-kgpe-d16-firmware/qemu-firmware/initramfs/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: initramfs
+          path: asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/
+          if-no-files-found: error
+
+  boot-ssh:
+    name: Boot new stack + SSH login (C2)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS openssh-client
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel
+          path: kernel-out
+      - uses: actions/download-artifact@v4
+        with:
+          name: initramfs
+          path: initramfs-out
+      - name: Boot kgpe-d16-bmc and SSH in
+        run: |
+          chmod 600 initramfs-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/ssh-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test \
+            --boot-timeout 240
