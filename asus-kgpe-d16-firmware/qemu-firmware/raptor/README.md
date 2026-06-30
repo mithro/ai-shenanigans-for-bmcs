@@ -23,19 +23,28 @@ build with a modern toolchain. Progress and the concrete obstacle chain:
   `libmpfr.so.4 -> libmpfr.so.6.x` and add it to `LD_LIBRARY_PATH`.
 
 ### Remaining build obstacles
-- **Kernel SoC selection.** The **AST2050 is the `ARCH_AST1100` SoC choice** in
-  this tree (the part is also sold as AST1100). There is no ready
-  `ast1100_defconfig`; derive one from `ast2300_defconfig` and switch the SoC
-  choice to `CONFIG_ARCH_AST1100=y`. (`ast2400_defconfig` fails earlier on
-  `SCU_FUN_PIN_MAC1_PHY_LINK undeclared`.)
-- **`#err` + platform.h.** With `ARCH_AST1100`, `mach/platform.h:45` hits an
-  `#err` (a source typo for `#error`) — gcc-4.9's cpp rejects it as an "invalid
-  preprocessing directive", and it is reached because `ARCH_AST1100` alone does
-  not satisfy platform.h's SoC branch. Needs either an **era-appropriate
-  gcc-4.3/4.4** (older cpp tolerates `#err`) **and/or source patches** plus the
-  correct additional platform `CONFIG_*` to take a real branch.
+- **Kernel SoC selection.** `mach/platform.h` has **no `AST1100` branch** — its
+  `#if` chain is AST2000/2100/2200/2300/2400/2500/3200. The **AST2050's G3
+  platform is `CONFIG_ARCH_AST2100`** (G3 generation), *not* `ARCH_AST1100`
+  (which falls through to the `#else #err`). Derive a config from
+  `ast2300_defconfig` and set `CONFIG_ARCH_AST2100=y`. (`ast2400_defconfig`
+  fails earlier on `SCU_FUN_PIN_MAC1_PHY_LINK undeclared`; `ARCH_AST1100` hits
+  the `#err`.)
+- **`#err` typo.** `platform.h`'s else-branch uses `#err` (not `#error`); gcc-4.9
+  rejects it as an invalid directive. With the correct `ARCH_AST2100` it is not
+  reached; otherwise an era gcc-4.3/4.4 or a one-line patch is needed.
 - **U-Boot host tools.** The 2013 host `libfdt` clashes with the modern system
   one; build with U-Boot's bundled libfdt or skip the host dtc.
+
+### The real crux: G3 vs G4 machine modelling
+The Raptor kernel targets the **AST2050/AST2100 (G3)** register semantics, but
+the `kgpe-d16-bmc` QEMU machine currently reuses the **AST2400 (G4)** peripheral
+models (that is exactly why the *modern* aspeed-g4 kernel boots on it). The G3
+and G4 SCU/clock/SDMC layouts differ in places, so booting the Raptor G3 kernel
+will likely need the machine to model AST2050/G3 faithfully (a `qom_socname`
+of its own + G3 device variants), not just borrow AST2400. **This — plus the
+ATAGS-vs-DT boot path — is the bulk of C3's remaining work, and is what makes it
+a multi-day task rather than a defconfig tweak.**
 
 ### The boot challenge (after it builds)
 The 2.6.28.9 ARM kernel boots via **ATAGS + a fixed `MACH_TYPE`**, whereas QEMU's
