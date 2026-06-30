@@ -37,16 +37,33 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
    cross-compiler (`gcc-arm-linux-gnueabi`) is installed in CI. Fast local
    iteration of boots uses the host's `qemu-system-arm` 10.0.8 (`palmetto-bmc`).
 
-## Now
+## Now / progress (honest)
 
-**Done — P1 machine exists.** A custom `kgpe-d16-bmc` AST2050 machine:
-`ast2050-a1` SoC (reuses the register-compatible AST2400 peripheral models via a
-new `qom_socname` override; provisional AST2050 SCU7C rev `0x01000303`) + the
-`kgpe-d16-bmc` machine (128 MB DDR2, FTGMAC100 NIC, 8 MB SPI NOR, 24 MHz clock).
-Developed on `mithro/qemu` branch `d16-ast2050-machine` (off QEMU v10.0.7),
-vendored as a submodule at `qemu/qemu`. `qemu-system-arm` builds from it and
-`-M kgpe-d16-bmc` instantiates the SoC cleanly — smoke test green via
-`scripts/run-qemu.py smoke`.
+**C1 — builds from source on CI:** custom QEMU ✅ (machine smoke-test green on a
+CI run); initramfs (BusyBox + static dropbear) ✅ on CI; the kernel + `boot-ssh`
+jobs are running. Effectively in hand.
 
-**Next:** P1 CI job (build `qemu-system-arm` from the submodule + smoke-start on
-CI), then P2 (kernel `uImage` + initramfs with dropbear) → boot on the machine.
+**C2 — new stack boots + SSH on CI:** the from-source kernel + initramfs boot on
+`-M kgpe-d16-bmc` and accept an SSH key login — **verified locally**
+(`ssh-test.py → SSH_OK / kgpe-d16-bmc / Linux armv5tejl`); the CI `boot-ssh` job
+exercises the identical path. Remaining: a U-Boot stage in front of the kernel
+(the criterion names "u-boot/linux"; today QEMU loads the kernel directly).
+
+**C3 — Raptor stack: substantial open work.** Raptor's U-Boot 2013.07 and Linux
+2.6.28.9 do **not** build with the modern gcc-14 cross-toolchain: U-Boot cascades
+(needs `compiler-gccN.h` shims, hits host `libfdt` header conflicts) and the 2008
+kernel realistically needs a **vintage gcc-4.x** (e.g. kernel.org crosstool
+prebuilts). The board target exists (`asus`/`ast2050` in Raptor's `boards.cfg`),
+so the path is known — but it is hours of toolchain + patch work, not yet done.
+
+**C4 — proprietary firmware → web service: blocked / research-grade.** No public
+KGPE-D16 BMC image exists; the only AST2050 proprietary image in-repo is the Dell
+C410X firmware (`dell-c410x-firmware/backup/`). Booting a full proprietary BMC
+image to a *running web service* in QEMU needs near-complete AST2050 peripheral
+emulation (every I2C sensor / GPIO it probes, or it hangs/panics) — realistically
+a multi-day effort that may not be fully achievable. Highest-risk criterion.
+
+**Bottom line:** C1+C2 are essentially achieved (CI confirming). C3 is a known
+but heavy toolchain task; C4 is a research problem gated on firmware availability
+and emulation completeness. Scope for C3/C4 is worth agreeing before committing
+days of effort, especially to C4.
