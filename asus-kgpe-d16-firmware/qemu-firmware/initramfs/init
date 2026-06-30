@@ -1,0 +1,32 @@
+#!/bin/sh
+# Initramfs init for the ASUS KGPE-D16 BMC (AST2050) under the kgpe-d16-bmc
+# QEMU machine. Brings up networking + dropbear so CI can SSH in, then a shell.
+
+mount -t proc     proc     /proc
+mount -t sysfs    sysfs    /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /run /var/run /var/log /etc/dropbear /root/.ssh
+mount -t devpts devpts /dev/pts
+
+hostname kgpe-d16-bmc
+echo
+echo "ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  $(uname -r)"
+echo
+
+# Networking: loopback + eth0 via QEMU user-net DHCP (10.0.2.0/24).
+ip link set lo up
+ip link set eth0 up
+udhcpc -i eth0 -q -n -t 5 2>&1 || ip addr add 10.0.2.15/24 dev eth0
+ip addr show eth0 2>&1 | sed -n 's/.*inet \([0-9.]*\).*/eth0: \1/p'
+
+# SSH: dropbear with the build-time test host/authorized keys baked into the
+# rootfs. Generate any missing host keys, then start the daemon on :22.
+for t in rsa ecdsa ed25519; do
+	k="/etc/dropbear/dropbear_${t}_host_key"
+	[ -f "$k" ] || dropbearkey -t "$t" -f "$k" 2>&1 | grep -i fingerprint || true
+done
+dropbear -R -p 22 2>&1
+echo "dropbear: listening on :22 (ssh in via the QEMU hostfwd port)"
+
+echo "BMC-READY"   # marker the boot harness waits for
+exec /bin/sh

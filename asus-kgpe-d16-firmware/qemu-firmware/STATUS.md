@@ -11,9 +11,10 @@ See [PLAN.md](PLAN.md) for the design. CI workflow: `.github/workflows/d16-qemu-
 
 ## Phase progress
 
-- [ ] P1 — custom `kgpe-d16-bmc` (AST2050) QEMU machine; builds from source + starts
-- [ ] P2 — kernel + initramfs(+dropbear) + U-Boot build from source → **C1**
-- [ ] P3 — new stack boots to serial shell on `kgpe-d16-bmc`
+- [x] P1 — custom `kgpe-d16-bmc` (AST2050) QEMU machine; builds from source + starts
+- [~] P2 — build from source → **C1**: kernel ✅ (boots!), initramfs+dropbear 🟡, U-Boot ⬜
+- [~] P3 — boots on `kgpe-d16-bmc`: **kernel boots to `Linux version 6.6.7`** ✅ (locally);
+      serial shell pending the initramfs
 - [ ] P4 — SSH login green (networking + dropbear + ssh-test) → **C2**
 - [ ] P5 — Raptor stack boots → **C3**
 - [ ] P6 — proprietary firmware → web service → **C4**
