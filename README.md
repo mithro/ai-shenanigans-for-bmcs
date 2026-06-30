@@ -90,15 +90,30 @@ Key files:
 
 ### [`hpe-ipdu-firmware/`](hpe-ipdu-firmware/)
 
-Analysis of the HPE Intelligent Power Distribution Unit (iPDU) firmware.
+Analysis of the HPE Intelligent Modular PDU (iPDU, model AF531A) firmware.
 Unlike the other boards this uses a Digi NS9360 SoC (ARM926EJ-S) rather
-than an Aspeed part; firmware acquisition is currently blocked behind an
-HPE account wall, so work so far is board and datasheet analysis only.
+than an Aspeed part, and its stock firmware is **NET+OS** (a ThreadX-based
+RTOS), not Linux. Three firmware versions were obtained and
+reverse-engineered (Digi `bootHdr` format, LZSS2 decompression, NET+OS /
+RomPager internals, web UI, and security posture); a U-Boot port is being
+planned as the first step toward open firmware.
 
 Key files:
-- [`ANALYSIS.md`](hpe-ipdu-firmware/ANALYSIS.md) -- Board component inventory
-  and NS9360 I/O architecture.
-- [`STATUS.md`](hpe-ipdu-firmware/STATUS.md) -- Current state, blockers, and
-  open items.
+- [`ANALYSIS.md`](hpe-ipdu-firmware/ANALYSIS.md) -- Board component inventory,
+  NS9360 I/O architecture, and firmware internals.
+- [`STATUS.md`](hpe-ipdu-firmware/STATUS.md) -- Current state and open items.
+- [`RESOURCES.md`](hpe-ipdu-firmware/RESOURCES.md) -- Firmware URLs,
+  datasheets, and documentation links.
 - [`HEADERS-J1-J6.md`](hpe-ipdu-firmware/HEADERS-J1-J6.md) -- Debug/JTAG
   header documentation.
+- [`uboot-port/`](hpe-ipdu-firmware/uboot-port/) -- U-Boot port planning: an
+  [incremental, hardware-tested approach](hpe-ipdu-firmware/uboot-port/PLAN-INCREMENTAL-PORT.md)
+  and a [QEMU-based full-featured approach](hpe-ipdu-firmware/uboot-port/PLAN-FULL-FEATURED-PORT.md),
+  with [reference material](hpe-ipdu-firmware/uboot-port/REFERENCE-MATERIAL.md)
+  including Digi's NS9360 U-Boot source.
+- Firmware tooling: ~20 Python analysis scripts, including
+  [`extract_firmware.py`](hpe-ipdu-firmware/extract_firmware.py) and
+  [`decompress_firmware.py`](hpe-ipdu-firmware/decompress_firmware.py)
+  (LZSS2), covering ARM disassembly, web-UI extraction, NET+OS / RomPager
+  security assessment, and MAXQ3180 / display-MCU / extension-bar protocol
+  analysis.

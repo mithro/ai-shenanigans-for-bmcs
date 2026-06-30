@@ -37,8 +37,11 @@ sensors. This drives the directory layout:
   boot/build tooling. `REUSING-KGPE-D16-WORK.md` explains how to apply the
   shared KGPE-D16 SoC work here.
 - **`hpe-ipdu-firmware/`** — A different chip entirely (Digi NS9360, *not*
-  Aspeed). Component/datasheet analysis; firmware acquisition is currently
-  blocked behind an HPE auth wall.
+  Aspeed), whose stock firmware is **NET+OS** (a ThreadX RTOS), not Linux.
+  Three firmware versions were obtained and reverse-engineered (Digi
+  `bootHdr` format, LZSS2 decompression, NET+OS / RomPager internals,
+  security assessment); a U-Boot port is being planned under `uboot-port/`.
+  This board's open-firmware path is a U-Boot port, not OpenBMC/u-bmc.
 
 The C410X device tree (`aspeed-bmc-dell-c410x.dts`) is based on
 `aspeed-g4.dtsi` (AST2400) rather than a G3/AST2050 include, because the AST2050
@@ -65,9 +68,16 @@ is register-compatible enough and no upstream G3 binding exists yet.
 - `pex-i2c-analysis/README.md` → `PEX-I2C-COMMANDS.md` — the master reference for
   the PLX PEX switch I2C protocol; `analysis/` holds the supporting decompilation.
 
-**`hpe-ipdu-firmware/`** (analysis blocked on firmware acquisition):
-- `STATUS.md` (state/blockers), `RESOURCES.md`, `ANALYSIS.md` (NS9360 board
-  inventory), `HEADERS-J1-J6.md` (debug headers).
+**`hpe-ipdu-firmware/`** (Digi NS9360, NET+OS RTOS — firmware obtained and analysed):
+- `STATUS.md` — completed work and open items. `RESOURCES.md` — firmware/datasheet sources.
+- `ANALYSIS.md` — board inventory, NS9360 I/O, and firmware internals.
+- `HEADERS-J1-J6.md` — debug/JTAG headers.
+- `uboot-port/` — the U-Boot port plans (`PLAN-INCREMENTAL-PORT.md` for a
+  hardware-tested phased build, `PLAN-FULL-FEATURED-PORT.md` for a QEMU-first
+  build, `REFERENCE-MATERIAL.md` for the hardware spec) plus vendored Digi
+  NS9360 U-Boot source under `reference/`.
+- `extract_firmware.py`, `decompress_firmware.py`, and the `analyse_*.py`
+  scripts — stdlib-only Python (run with `uv run`) for the firmware RE.
 
 ## Python tooling: `uv run` + PEP 723
 
