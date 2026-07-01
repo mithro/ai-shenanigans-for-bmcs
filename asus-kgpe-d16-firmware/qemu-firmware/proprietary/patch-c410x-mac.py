@@ -35,9 +35,17 @@ import subprocess
 import sys
 
 MAC = bytes([0x00, 0xe0, 0x81, 0x12, 0x34, 0x56])
-ENABLE = 0x01  # blob byte 6 -> cfg[0x225]; must be non-zero for eth0 to register
 
 # (offset, expected_original_word_LE, new_word_LE) — words are little-endian u32.
+#
+# The gate at 0xc001a5b8 reads cfg[0x225] (the blob's enable byte). Setting the
+# enable byte lets *both* MAC0 and MAC1 register — but the kgpe-d16-bmc machine
+# models only MAC0 (ASPEED_MAC0_ON); bringing up eth1 on the unmodelled MAC1 at
+# 0x1e680000 corrupts the netdev and oopses in rtnl_fill_ifinfo. So instead of
+# the enable byte we retarget the gate to the *MAC index* byte at cfg[0x224]
+# (set to the port number at 0xc001a4e0) and register only index 0 (eth0/MAC0),
+# which is the one QEMU models. (Modelling MAC1 too would let us use the real
+# enable byte and register both — a future step.)
 PATCHES = [
     # 0x12518 bne 0x12534 (fail if iface type != 0,1) -> nop, fall through
     (0x12518, 0x1a000005, 0xe1a00000),
@@ -47,17 +55,18 @@ PATCHES = [
     (0x12520, 0xe3a02008, 0xe5870000),
     # 0x12524 bl 0x1a9fe0      -> ldr r0,[pc,#0x330]  (= blob word1 @ 0x1285c)
     (0x12524, 0xeb065ead, 0xe59f0330),
-    # 0x12528 cmp r0,#0        -> str  r0,[r7,#4]     (buffer[4..7]=MAC[4..5],EN,0)
-    #   (full word store, not strh, so the enable byte lands in buffer[6])
-    (0x12528, 0xe3500000, 0xe5870004),
+    # 0x12528 cmp r0,#0        -> strh r0,[r7,#4]     (buffer[4..5] = MAC[4..5])
+    (0x12528, 0xe3500000, 0xe1c700b4),
     # 0x1252c beq 0x1253c      -> b 0x1253c  (force the success path)
     (0x1252c, 0x0a000002, 0xea000002),
     # literal pool: blob word0 = MAC[0..3] little-endian (00 e0 81 12)
     (0x12858, 0x00024008, struct.unpack('<I', MAC[0:4])[0]),
-    # literal pool: blob word1 = MAC[4..5], enable byte, 0  (34 56 01 00)
-    (0x1285c, 0x00024010,
-     struct.unpack('<I', MAC[4:6] + bytes([ENABLE, 0x00]))[0]),
-    # 0x125c0 bne 0x125d0 = the enable gate -> LEFT INTACT (see NOTE above).
+    # literal pool: blob word1 = MAC[4..5] (34 56 00 00)
+    (0x1285c, 0x00024010, struct.unpack('<I', MAC[4:6] + b'\x00\x00')[0]),
+    # gate: read cfg[0x224] (MAC index) instead of cfg[0x225] (enable byte)...
+    (0x12868, 0x00000225, 0x00000224),
+    # ...and register only when it is 0 (MAC0): bne 0x125d0 -> beq 0x125d0
+    (0x125c0, 0x1a000002, 0x0a000002),
 ]
 
 
