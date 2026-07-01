@@ -74,6 +74,38 @@ HW but which fails silently under QEMU — see hypothesis 1/2).
 Also note a **second, non-fatal** `0x1399a8` call at `0xc001a810`
 (`r1=292 / 0x124`, result -> `[r4+0x104]`) — only logs, doesn't gate eth0.
 
+## RUNTIME FINDINGS (gdb-multiarch hardware watchpoint) — corrects the above
+
+Technique (works despite MMU: QEMU matches watchpoints by *virtual* address):
+`qemu … -S -gdb tcp::11234`, then `gdb-multiarch -batch`:
+`set architecture arm; target remote :11234; watch *(unsigned int*)0xc03523a4`,
+with `commands` that dump `$pc/$sp` + `x/24xw $sp` on the non-zero write.
+
+Results:
+- Two writes to the fc pointer `0xc03523a4`: (1) value 0 at pc `0xc000813c`
+  (BSS clear, early), (2) value **0xc5793220** at pc `0xc00ad6fc`.
+- pc `0xc00ad6fc` = **`0xa56fc`**: the store `streq r5,[r4]` at `0xa56f8` inside
+  **`0xa5678`** — a **lazy get-or-create singleton getter**: `lock; if [fc]==0 {
+  alloc (bl 0x87cd8); [fc]=new }`. So the fc IS created, not perpetually null.
+- The getter's return address on the stack is **`0x1399e8`** — i.e. the reader
+  `0x1399a8` itself calls `bl 0xa5678` at `0x1399e4` to create/get the fc, THEN
+  (`0x1399fc+`) re-reads and checks `[fc]`, `[fc+20]`, `[[fc+20]+56]`.
+- The fc-create fires BEFORE `Set MAC0` (serial only at "Machine: ASPEED-AST2050").
+
+**So the `-EFAULT` is NOT "fc is null".** The fc exists; the failure is
+`[fc+0x20]==0` or `[[fc+0x20]+0x38]==0` — the fc's **sub-structure chain is not
+populated** under QEMU. Something that runs on real HW to fill `fc->field20`
+(and its `+0x38` field) does not run / fails under QEMU.
+
+### Next: trace who populates fc->field20 (+0x38)
+The fc is a heap object (address varies per boot, e.g. 0xc5793220). Set a
+watchpoint on `fc+0x20` after the create: break at `0xa56f8` (create), read
+`$r5` (=fc), then `watch *(unsigned int*)($r5+0x20)` and continue to find the
+writer. That writer is the AIM component whose (missing) hardware dependency is
+the true C4 root cause — model that device (faithful fix), or, if it is a
+pure-software init that merely needs to run, ensure its initcall/module runs
+before the ftgmac probe.
+
 ## Hypotheses to test next (in priority order)
 
 1. **Initcall ordering.** The ftgmac probe is built-in and runs at kernel boot
