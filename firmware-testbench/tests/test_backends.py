@@ -11,6 +11,23 @@ def test_registry_has_both_backends():
     assert available_backends() == ["hil", "qemu"]
 
 
+def test_available_backends_self_populates_on_fresh_import():
+    # In THIS process the backend submodules are already imported (top of file),
+    # so run a fresh interpreter that imports only the package: available_backends()
+    # must populate the registry itself, not rely on a prior backend import.
+    import os
+    import subprocess
+    import sys
+
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = subprocess.check_output(
+        [sys.executable, "-c",
+         "import firmware_testbench as f; print(sorted(f.available_backends()))"],
+        cwd=pkg_parent, text=True,
+    )
+    assert out.strip() == "['hil', 'qemu']"
+
+
 def test_make_target_unknown_backend():
     with pytest.raises(ValueError):
         make_target("bogus", TargetConfig(board="c410x"))
@@ -22,8 +39,12 @@ def test_qemu_argv_c410x_kernel_boot():
         ssh_port=2223, ram_mb=128,
     )
     argv = build_qemu_argv(cfg, qemu_bin="qemu-system-arm")
-    assert argv[:5] == ["qemu-system-arm", "-M", "c410x-bmc", "-nographic", "-m"]
-    assert "128" in argv
+    assert argv[:3] == ["qemu-system-arm", "-M", "c410x-bmc"]
+    # '-display none' (not '-nographic') so it does not fight '-serial stdio'.
+    assert "-display" in argv and argv[argv.index("-display") + 1] == "none"
+    assert "-nographic" not in argv
+    assert argv[argv.index("-serial") + 1] == "stdio"
+    assert argv[argv.index("-m") + 1] == "128"
     for flag, val in [("-kernel", "uImage"), ("-dtb", "c410x.dtb"),
                       ("-initrd", "uInitrd")]:
         assert argv[argv.index(flag) + 1] == val

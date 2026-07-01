@@ -69,15 +69,24 @@ def register_backend(name: str, cls: type[Target]) -> None:
     _BACKENDS[name] = cls
 
 
+def _ensure_backends() -> None:
+    """Populate the registry by importing the backend modules (idempotent).
+
+    Backends self-register as an import side effect; import them lazily here so
+    importing this module never drags in heavy backend deps, while any public
+    entry point still sees a fully-populated registry.
+    """
+    from . import backends  # noqa: F401  (populates the registry)
+
+
 def available_backends() -> list[str]:
+    _ensure_backends()
     return sorted(_BACKENDS)
 
 
 def make_target(backend: str, config: TargetConfig) -> Target:
     """Factory: construct a Target for ``backend`` ("qemu" | "hil")."""
-    # Import lazily so importing this module never drags in heavy backend deps.
-    from . import backends  # noqa: F401  (populates the registry)
-
+    _ensure_backends()
     if backend not in _BACKENDS:
         raise ValueError(
             f"unknown backend {backend!r}; available: {available_backends()}"

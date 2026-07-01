@@ -7,10 +7,10 @@ socket at run time (exercised by integration CI once the QEMU fork is built).
 
 from __future__ import annotations
 
+import os
+import select
 import shutil
-import socket
 import subprocess
-from typing import Sequence
 
 from ..console import Console
 from ..target import Target, TargetConfig, register_backend
@@ -39,7 +39,10 @@ def build_qemu_argv(
             f"no QEMU machine for board {config.board!r}; "
             f"known: {sorted(BOARD_MACHINE)}"
         )
-    argv: list[str] = [qemu_bin, "-M", BOARD_MACHINE[config.board], "-nographic"]
+    # Use '-display none' (not '-nographic'): '-nographic' also muxes the serial
+    # + monitor onto stdio, which fatally conflicts with our explicit
+    # '-serial stdio' below ("cannot use stdio by multiple character devices").
+    argv: list[str] = [qemu_bin, "-M", BOARD_MACHINE[config.board], "-display", "none"]
 
     if config.ram_mb is not None:
         argv += ["-m", str(config.ram_mb)]
@@ -72,7 +75,6 @@ class QEMUTarget(Target):
         super().__init__(config)
         self._qemu_bin = qemu_bin
         self._proc: subprocess.Popen | None = None
-        self._sock: socket.socket | None = None
         self._console: Console | None = None
 
     def start(self) -> None:
@@ -81,21 +83,29 @@ class QEMUTarget(Target):
                 f"{self._qemu_bin} not found; build the mithro/qemu fork first"
             )
         argv = build_qemu_argv(self.config, qemu_bin=self._qemu_bin)
-        self._proc = subprocess.Popen(
+        proc = subprocess.Popen(
             argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, bufsize=0,
         )
-        stdout, stdin = self._proc.stdout, self._proc.stdin
+        self._proc = proc
+        stdout, stdin = proc.stdout, proc.stdin
         assert stdout is not None and stdin is not None
 
         def _read() -> bytes:
-            # Non-blocking-ish read of whatever is buffered.
-            import os
-            import select
+            # Non-blocking read of whatever is buffered.
             r, _, _ = select.select([stdout], [], [], 0)
-            if r:
-                return os.read(stdout.fileno(), 65536)
-            return b""
+            if not r:
+                return b""
+            data = os.read(stdout.fileno(), 65536)
+            if data:
+                return data
+            # EOF: the console pipe closed. No more output will ever arrive, so
+            # fail loud immediately rather than letting expect() burn its whole
+            # timeout masking a crashed/exited QEMU as a plain timeout.
+            raise RuntimeError(
+                f"{self._qemu_bin} closed its console (exit code {proc.poll()}) "
+                f"before the expected output"
+            )
 
         self._console = Console(_read, stdin.write)
 
@@ -105,13 +115,21 @@ class QEMUTarget(Target):
         return self._console
 
     def stop(self) -> None:
-        if self._proc is not None:
-            self._proc.terminate()
+        proc, self._proc = self._proc, None
+        self._console = None
+        if proc is None:
+            return
+        try:
+            proc.terminate()
             try:
-                self._proc.wait(timeout=10)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                self._proc.kill()
-            self._proc = None
+                proc.kill()
+                proc.wait()  # reap the killed child so it is not left a zombie
+        finally:
+            for pipe in (proc.stdin, proc.stdout):
+                if pipe is not None:
+                    pipe.close()
 
 
 register_backend("qemu", QEMUTarget)
