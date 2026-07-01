@@ -216,3 +216,13 @@ make the kernel see it — by modelling the SCU MAC-mode strap bits in the machi
 `ndo_open` succeeds → the bond gets an active eth0 slave → bond0 (10.0.2.15)
 transmits → the already-listening appweb answers on the hostfwd → **C4 done**.
 Everything else (kernel/register/crash/carrier/appweb/IP/bond) is verified in place.
+
+## 9. Status: config-word injection alone does not clear the EPERM
+
+Injecting a MAC-mode value (0x10000014) into `0xc035f2a8` before the probe (gdb)
+did NOT make `ifconfig eth0 up` succeed — still `SIOCSIFFLAGS: Permission denied`.
+So the `ndo_open` EPERM has an additional/other cause (a further driver check, a
+second hardware register read, or eth0's bond-slave state), not just that word.
+The exact `ndo_open` and its EPERM condition still need to be pinned (breakpoint
+`dev_open`/`dev->open` at the moment `ifconfig eth0 up` runs and single-step to the
+return). This is the one remaining item for C4; all other pieces are verified.
