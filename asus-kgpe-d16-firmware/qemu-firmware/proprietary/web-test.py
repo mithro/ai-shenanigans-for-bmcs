@@ -6,25 +6,39 @@
 web service (appweb) responds — the C4 acceptance check.
 
 Boots QEMU with the assembled flash and a slirp hostfwd (host port -> guest :80),
-then polls the forwarded port until appweb answers (the firmware DHCPs to slirp's
-10.0.2.15, so the forward reaches it). Succeeds when an HTTP response arrives.
+then polls the forwarded port until appweb answers. The wrapper initramfs brings
+eth0 up with slirp's guest IP (10.0.2.15), so the forward reaches the BMC web
+server. Succeeds when any HTTP response arrives (appweb 301-redirects to the HTTPS
+login page — a redirect still proves it serves).
 """
 import argparse
 import socket
 import subprocess
 import time
-import urllib.request
 
 
 def http_probe(port):
-    """Return (status, body_snippet) if the BMC web server answers, else None."""
+    """Return (status_line, snippet) if the BMC web server answers, else None.
+
+    Raw HTTP/1.0 GET over a socket so a 3xx redirect counts as "serving" (urllib
+    would follow appweb's 301 to https:// and fail).
+    """
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=6) as r:
-            return r.status, r.read(800)
-    except urllib.error.HTTPError as e:          # a 401/403/302 still proves it serves
-        return e.code, (e.read(400) if e.fp else b"")
-    except (urllib.error.URLError, ConnectionError, socket.timeout, OSError):
+        with socket.create_connection(("127.0.0.1", port), timeout=6) as s:
+            s.sendall(b"GET / HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+            s.settimeout(6)
+            data = b""
+            while len(data) < 800:
+                chunk = s.recv(800 - len(data))
+                if not chunk:
+                    break
+                data += chunk
+    except (ConnectionError, socket.timeout, OSError):
         return None
+    if not data.startswith(b"HTTP/"):
+        return None
+    status_line = data.split(b"\r\n", 1)[0].decode("latin1", "replace")
+    return status_line, data
 
 
 def main():
@@ -50,8 +64,8 @@ def main():
                 return 1
             probe = http_probe(args.port)
             if probe:
-                status, body = probe
-                print(f"\n=== BMC web responded: HTTP {status} ===")
+                status_line, body = probe
+                print(f"\n=== BMC web responded: {status_line} ===")
                 print(body.decode("latin1", "replace")[:800])
                 print("\nC4 RESULT: PASS — proprietary firmware booted to a "
                       "running BMC web service")
