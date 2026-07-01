@@ -2,16 +2,30 @@
 """Patch the Dell C410X vendor kernel to inject a valid MAC so eth0 registers
 under QEMU.
 
-The vendor ftgmac driver reads its MAC over I2C from a device this AST2400-based
-machine doesn't model; the read fails and the driver bails
-("Fail to get the MAC information!") with no random-MAC fallback, so eth0 never
-comes up and the (running) appweb web server is unreachable. This is the one
-unmodelled peripheral in an otherwise fully-booting BMC (C4).
+The vendor ftgmac driver reads an 8-byte "MAC information" blob over I2C from a
+device this AST2400-based machine doesn't model; the read fails and the driver
+bails ("Fail to get the MAC information!"). The blob layout (recovered by RE, see
+AST2050-PERIPHERAL-MODELING.md) is:
 
-Rather than reverse-engineer the exact I2C device, inject a valid MAC at the
-driver's success/fail branch (found by disassembly). The kernel is ARMv5 (no
-movw/movt), so we stash the MAC in the function's existing literal pool and load
-it with pc-relative ldr. Result MAC: 00:e0:81:12:34:56 (Avocent OUI).
+    byte 0..5 : MAC address              -> priv+0x13c / priv+0x140
+    byte 6    : PORT-ENABLE flag         -> cfg[0x225]   (cfg = priv+0x3a0)
+    byte 7    : (secondary flag)         -> cfg[0x226]
+
+At 0xc001a5b8 the probe reads cfg[0x225]; if it is 0 it calls free_netdev and
+SILENTLY skips register_netdevice (no error) -> no eth0. So injecting only the
+MAC bytes is not enough: byte 6 (the enable flag) must be non-zero, exactly as a
+present MAC would report on real hardware.
+
+Rather than reverse-engineer the exact I2C device, we synthesize the full blob at
+the driver's success/fail branch. The kernel is ARMv5 (no movw/movt), so we stash
+the two blob words in the function's existing literal pool and load them with
+pc-relative ldr. Result: MAC 00:e0:81:12:34:56 (Avocent OUI) with enable byte = 1.
+
+NOTE (correction to the earlier version of this script): 0xc001a5c0
+`bne 0x125d0` is NOT an "NCSI path" branch — it is the enable gate itself
+(`if cfg[0x225] != 0 -> register_netdevice`). The earlier script nop'd it, which
+forced the free_netdev path unconditionally and guaranteed eth0 never registered.
+We now leave that branch intact and instead set the enable byte in the blob.
 
 File offsets are into the DECOMPRESSED Image (linked at 0xC0008000).
 """
@@ -21,29 +35,29 @@ import subprocess
 import sys
 
 MAC = bytes([0x00, 0xe0, 0x81, 0x12, 0x34, 0x56])
+ENABLE = 0x01  # blob byte 6 -> cfg[0x225]; must be non-zero for eth0 to register
 
 # (offset, expected_original_word_LE, new_word_LE) — words are little-endian u32.
 PATCHES = [
     # 0x12518 bne 0x12534 (fail if iface type != 0,1) -> nop, fall through
     (0x12518, 0x1a000005, 0xe1a00000),
-    # 0x1251c mov r1,r7        -> ldr r0,[pc,#0x334]  (= MAC word0 @ 0x12858)
+    # 0x1251c mov r1,r7        -> ldr r0,[pc,#0x334]  (= blob word0 @ 0x12858)
     (0x1251c, 0xe1a01007, 0xe59f0334),
-    # 0x12520 mov r2,#8        -> str r0,[r7]
+    # 0x12520 mov r2,#8        -> str r0,[r7]         (buffer[0..3] = MAC[0..3])
     (0x12520, 0xe3a02008, 0xe5870000),
-    # 0x12524 bl 0x1a9fe0      -> ldr r0,[pc,#0x330]  (= MAC word1 @ 0x1285c)
+    # 0x12524 bl 0x1a9fe0      -> ldr r0,[pc,#0x330]  (= blob word1 @ 0x1285c)
     (0x12524, 0xeb065ead, 0xe59f0330),
-    # 0x12528 cmp r0,#0        -> strh r0,[r7,#4]
-    (0x12528, 0xe3500000, 0xe1c700b4),
+    # 0x12528 cmp r0,#0        -> str  r0,[r7,#4]     (buffer[4..7]=MAC[4..5],EN,0)
+    #   (full word store, not strh, so the enable byte lands in buffer[6])
+    (0x12528, 0xe3500000, 0xe5870004),
     # 0x1252c beq 0x1253c      -> b 0x1253c  (force the success path)
     (0x1252c, 0x0a000002, 0xea000002),
-    # literal pool: MAC word0 = dev_addr[0..3] little-endian (00 e0 81 12)
+    # literal pool: blob word0 = MAC[0..3] little-endian (00 e0 81 12)
     (0x12858, 0x00024008, struct.unpack('<I', MAC[0:4])[0]),
-    # literal pool: MAC word1 = dev_addr[4..5] (34 56 00 00)
-    (0x1285c, 0x00024010, struct.unpack('<I', MAC[4:6] + b'\x00\x00')[0]),
-    # 0x125c0 bne 0x125d0 (take NCSI path if NCSI_support!=0) -> nop, so the
-    # driver always takes the PHY path (bl 0x1c1f84). QEMU models the ftgmac100
-    # MII PHY but has no NC-SI responder, so PHY mode lets eth0 register.
-    (0x125c0, 0x1a000002, 0xe1a00000),
+    # literal pool: blob word1 = MAC[4..5], enable byte, 0  (34 56 01 00)
+    (0x1285c, 0x00024010,
+     struct.unpack('<I', MAC[4:6] + bytes([ENABLE, 0x00]))[0]),
+    # 0x125c0 bne 0x125d0 = the enable gate -> LEFT INTACT (see NOTE above).
 ]
 
 

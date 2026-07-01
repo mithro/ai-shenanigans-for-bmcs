@@ -112,3 +112,25 @@ tmp/qemu-dev/build/qemu-system-arm -M kgpe-d16-bmc -m 128 -display none \
   -D tmp/c4/unimp.log -d unimp,guest_errors
 # runtime gate check (gdb): see proprietary/re-tools/gate.gdb / force.gdb
 ```
+
+## 5. VERIFIED: the enable byte is the gate (register_netdevice now runs)
+
+Corrected `patch-c410x-mac.py` (blob byte 6 = enable = 1; `0x125c0` gate branch
+left intact) and rebuilt the flash (`flash-fixed.img`). Result:
+- `cfg[0x225]` is now non-zero → the probe takes the **register path** and
+  **`register_netdevice` is now called** (confirmed in the boot trace) — it was
+  never reached before. **This validates the corrected diagnosis end-to-end.**
+- However the boot then **oopses** during netdev registration: `rtnl_fill_ifinfo`
+  jumps to a bad PC `0x4e497210`; crash registers point into the ftgmac priv
+  (`r10=0xc57ad9e0`, priv≈`0xc57ad800`). So the ftgmac netdev registers but with a
+  corrupt callback (e.g. `dev->get_stats`) / priv state — a **ftgmac100 hardware
+  / driver-setup** issue that only manifests once the MAC is actually brought up
+  (it was masked before because the MAC was force-disabled).
+
+### Remaining work for C4 (now precise)
+The gate is solved; the last blocker is the ftgmac bring-up itself under QEMU.
+Next: trace why the registered ftgmac netdev has a bad `get_stats`/priv — either a
+setup step skipped by the synthetic MAC-info blob, or an ftgmac100 register the
+QEMU model returns 0 for that the vendor driver uses to size/populate the netdev
+(DMA rings, stats block). Modelling that ftgmac100 detail (or supplying the full
+real MAC-info blob via the I²C EEPROM) is the final step to a live eth0 + appweb.
