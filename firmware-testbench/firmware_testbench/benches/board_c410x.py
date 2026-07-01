@@ -22,7 +22,9 @@ EXPECTED_DIRECT: dict[int, set[int]] = {
     0xF0: set(range(0x40, 0x50)),          # 16x INA219 (per-slot power)
     0xF1: {0x70, 0x20},                     # PCA9544 mux + PCA9555 #5
     0xF2: {0x50},                           # AT24C256 EEPROM (FRU)
-    0xF3: {0x30, 0x32, 0x34, 0x36, 0xD0 >> 1, 0xD4 >> 1},  # PEX switches (see note)
+    # PEX switches, as 7-bit addresses (i2cdetect reports 7-bit). The GBT 8-bit
+    # forms are PEX8696 0x30/0x32/0x34/0x36 and PEX8647 0xD0/0xD4 (= 7-bit << 1).
+    0xF3: {0x30 >> 1, 0x32 >> 1, 0x34 >> 1, 0x36 >> 1, 0xD0 >> 1, 0xD4 >> 1},
     0xF4: {0x70, 0x71},                     # 2x PCA9548 mux
     0xF5: set(),                            # PMBus PSUs (addresses vary by PSU)
     0xF6: {0x20, 0x21, 0x22, 0x23, 0x4F},   # 4x PCA9555 + LM75 ambient
