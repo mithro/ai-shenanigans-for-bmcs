@@ -246,3 +246,35 @@ jobs:
             --flash flash-raptor.img \
             --key raptor-userspace-out/id_kgpe_d16_test \
             --boot-timeout 240
+
+  boot-c4-web:
+    name: Boot proprietary firmware -> BMC web service (C4)
+    runs-on: ubuntu-latest
+    needs: [build-uboot]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS u-boot-tools squashfs-tools
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: uboot, path: uboot-out }
+      - name: Build C4 flash from the committed Dell C410X firmware
+        run: |
+          uv run asus-kgpe-d16-firmware/qemu-firmware/proprietary/build-c4-flash.py \
+            --zip dell-c410x-firmware/backup/c410xbmc135.zip \
+            --uboot uboot-out/u-boot.bin \
+            --out c4out
+      - name: Boot proprietary firmware + verify BMC web service reachable
+        run: |
+          uv run asus-kgpe-d16-firmware/qemu-firmware/proprietary/web-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --flash c4out/flash-c4.img \
+            --port 8080 \
+            --boot-timeout 300
