@@ -97,7 +97,28 @@ Results:
 populated** under QEMU. Something that runs on real HW to fill `fc->field20`
 (and its `+0x38` field) does not run / fails under QEMU.
 
-### Next: trace who populates fc->field20 (+0x38)
+### RESULT: fc+0x20 is an empty list_head; nothing registers into it
+
+Watchpoint on `fc+0x20` (0xc5793240, deterministic boot) caught exactly TWO
+writes: `0` (pc 0xc016eeb0, alloc-zero) then `0xc5793240` (pc **0xc00a5970**) —
+the value equals the field's own address, i.e. `INIT_LIST_HEAD(&fc->list)`.
+**No third write** → the list stays EMPTY through the ftgmac probe. The reader
+does `r1=[fc+0x20]` (=self for an empty list) then `r6=[r1+0x38]` = `[fc+0x58]`
+=0 → `-EFAULT`. So eth0 fails because **no AIM component has registered an entry
+into `fc->list` yet** when the built-in ftgmac driver probes.
+
+This matches the userspace symptom `waitforsm: aim_config_get_int failed, SM did
+not start`: the whole AESS framework is only partially up under QEMU. The list is
+populated on real HW by an AESS component (one of the `aess_*.ko` set, or a
+built-in init) that either doesn't run early enough or fails on a missing AST2050
+device (video engine, KCS, PECI, fan/PWM sensors, legacy SMC flash, crypto…).
+**This is the "near-complete AST2050 peripheral emulation" C4 always required:**
+faithful completion = model the AST2050 blocks the AESS framework depends on so
+its init runs and registers into `fc->list` before the ftgmac probe. Trace the
+registrant by watching for the (absent) 3rd write to `fc+0x20` under a *fuller*
+peripheral model, or find the `list_add(&fc->list, …)` call site statically.
+
+### (superseded) trace who populates fc->field20 (+0x38)
 The fc is a heap object (address varies per boot, e.g. 0xc5793220). Set a
 watchpoint on `fc+0x20` after the create: break at `0xa56f8` (create), read
 `$r5` (=fc), then `watch *(unsigned int*)($r5+0x20)` and continue to find the
