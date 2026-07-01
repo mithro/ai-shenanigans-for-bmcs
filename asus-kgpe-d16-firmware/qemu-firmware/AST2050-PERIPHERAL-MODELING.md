@@ -257,3 +257,35 @@ open path (decode the `r4` derivation → identify the exact MAC registers it re
 → ensure the QEMU ftgmac100 returns sane values, and supply the MAC-mode config)
 is the remaining work. Everything upstream (register, crash, carrier, appweb :80,
 bond0 IP) is verified; this open path is the sole gate to a reachable web service.
+
+## 12. C4 SOLVED — proprietary firmware serves its BMC web service in QEMU
+
+The `dev->open` -EACCES came from the open writing the **"MAC activation status"
+to the legacy AST2050 SPI EEPROM** (config ids 0x2400f/0x24017 via `0x1a9b70`),
+which this AST2400-based machine doesn't model. Patching the open to ignore those
+failed writes and reach the real MAC-enable path (`0x1a3318 -> bl 0x1a179c`) lets
+`ifconfig eth0 up` succeed; with the QEMU RTL8211E carrier model (§6) eth0 then has
+carrier. A wrapper-initramfs helper brings eth0 up on slirp's guest IP (10.0.2.15)
+— the vendor bond0/NC-SI/osinet path does not complete under QEMU (no NC-SI
+responder), but appweb binds all interfaces so it is reachable regardless.
+
+**Result (standard build chain, no gdb):**
+```
+build-c4-flash.py --zip c410xbmc135.zip --uboot u-boot.bin --out c4out
+web-test.py --flash c4out/flash-c4.img
+  eth0: at 0xfe660000 IRQ:2 MAC 00:e0:81:12:34:56
+  GET / -> HTTP/1.0 301 Moved Permanently, Server: Mbedthis-Appweb/2.4.2
+  C4 RESULT: PASS
+```
+The Dell C410X Avocent BMC web server answers on the QEMU slirp hostfwd. **C4 met.**
+Wired into CI as the `boot-c4-web` job. The complete fix set: `patch-c410x-mac.py`
+(MAC inject + MAC0-only register gate + ndo_open unblock), `hw/net/ftgmac100.c`
+(RTL8211E PHYSR carrier), `build-c410x-initramfs.py` (eth0 bring-up),
+`build-c4-flash.py` (one-command build), `web-test.py` (acceptance).
+
+### Remaining faithfulness work (optional, not required for C4)
+The three kernel patches are RE stopgaps for unmodelled AST2050 blocks (the I2C
+MAC-info EEPROM and the legacy SPI EEPROM for MAC activation status). Modelling
+those devices (and the NC-SI responder for the vendor bond path) would let the
+*unmodified* vendor kernel run — the faithful end state. USB2.0 UDC + Video Engine
+(§1) remain unmodelled but are not on the web-service path.
