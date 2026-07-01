@@ -67,6 +67,17 @@ PATCHES = [
     (0x12868, 0x00000225, 0x00000224),
     # ...and register only when it is 0 (MAC0): bne 0x125d0 -> beq 0x125d0
     (0x125c0, 0x1a000002, 0x0a000002),
+
+    # --- ftgmac100 ndo_open (0xc01ab18c) ---------------------------------
+    # The open writes the "MAC activation status" to the SPI EEPROM (config ids
+    # 0x2400f/0x24017 via 0x1a9b70). This AST2400-based machine doesn't model the
+    # legacy AST2050 SMC/SPI EEPROM, so that access fails and the open returns
+    # -EACCES ("Set MaC activation status" error) -> `ifconfig eth0 up` gives
+    # "SIOCSIFFLAGS: Permission denied" and the NIC never transmits. Ignore the
+    # failed activation-status writes and take the real MAC-enable success path
+    # (0x1a3318 -> bl 0x1a179c). Two beq -> b (unconditional):
+    (0x1a3288, 0x0a000004, 0xea000004),   # beq 0x1a32a0 -> b 0x1a32a0
+    (0x1a32ac, 0x0a000019, 0xea000019),   # beq 0x1a3318 -> b 0x1a3318
 ]
 
 

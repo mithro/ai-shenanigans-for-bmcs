@@ -33,8 +33,31 @@ INIT = """#!/bin/busybox sh
 # would hold, as tmpfs, so the vendor BMC app can run.
 /bin/busybox mount -t tmpfs tmpfs /newroot/flash
 /bin/busybox mkdir -p /newroot/flash/data0
-echo "C410X-WRAPPER: handing off to vendor init"
-exec /bin/busybox switch_root /newroot /sbin/init
+# --- C4 network bring-up (boot-harness) ----------------------------------
+# eth0 registers and (with the ftgmac ndo_open patch + the QEMU RTL8211E carrier
+# model) can be opened and has carrier, but the vendor bring-up path is via a
+# bond0 + NC-SI + osinet stack that does not complete under QEMU (no NC-SI
+# responder). To expose the (already-running) appweb BMC web server through the
+# QEMU slirp hostfwd, bring eth0 up directly with slirp's guest IP. Written to
+# tmpfs /flash so it survives switch_root; backgrounded before the vendor init.
+/bin/busybox cat > /newroot/flash/netup.sh <<'NETEOF'
+#!/bin/busybox sh
+while true; do
+  /bin/busybox ifconfig eth0 up
+  /bin/busybox ifconfig eth0 10.0.2.15 netmask 255.255.255.0
+  /bin/busybox route add default gw 10.0.2.2 2>&1 | /bin/busybox head -0
+  /bin/busybox sleep 5
+done
+NETEOF
+/bin/busybox chmod +x /newroot/flash/netup.sh
+/bin/busybox cat > /newroot/flash/initwrap.sh <<'IWEOF'
+#!/bin/busybox sh
+/bin/busybox sh /flash/netup.sh &
+exec /sbin/init
+IWEOF
+/bin/busybox chmod +x /newroot/flash/initwrap.sh
+echo "C410X-WRAPPER: handing off to vendor init (+ eth0 network bring-up)"
+exec /bin/busybox switch_root /newroot /flash/initwrap.sh
 """
 
 # char: (name, mode, maj, min); block: loop devices for the squashfs mount.
