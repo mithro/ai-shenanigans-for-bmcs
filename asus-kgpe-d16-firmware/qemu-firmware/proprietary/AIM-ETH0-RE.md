@@ -52,12 +52,24 @@ and stores it to `dev->dev_addr` at `dev+0x13c`) then, at **0xc001a6f0**, does:
 ```
 
 The AIM global var `0xc03523a4` is in **BSS** (beyond the file; zero at boot). It
-is referenced in exactly **2** places (verified by scanning for the literal):
+is referenced by a **direct literal** in exactly **2** places (verified by
+scanning the image for the 4-byte constant `0xc03523a4`):
 - `0x139be8` — the reader (`0x1399a8`).
-- `0x139d84` — the setter: at `0xc001a370` (`ldr r0,[pc]@0x139d84 = 0xc03523a4;
-  ldr r1,[pc]@0x139d88 = 0x142; bl 0xa5768`). So **`0xa5768(&AIM_global, 0x142)`
-  is the only code that can set the AIM global.** `0xa5768` is also called widely
-  elsewhere — likely a generic register/publish helper.
+- `0x139d84` — a **cleanup/release**, NOT a setter. Traced `0xa5768`
+  (`0xc001a374 = bl 0xa5768`): it takes `(r0=&global, r1=refcount_ptr)`, does
+  `spin_lock (0x30c60); [r1]--; r5=*global; if [r1]==0 *global=0; spin_unlock
+  (0x30ba0); if r5!=0 { *(r5+0x64)=0; bl 0x9e060 /*free*/ }`. i.e. a
+  down/refcount-release helper. **So neither direct reference WRITES the global.**
+
+**Key correction:** the AIM global must therefore be set via a **computed
+address** (a base struct pointer + `0x3a4`), so a plain literal scan misses it.
+Next: find the base — e.g. the AIM subsystem struct that lives at
+`0xc0352000`(±) and is written during an AIM `initcall`; search for `str rX,
+[rBASE, #0x3a4]` or an `add rX, rBASE, #0x3a4` near an AIM init. Alternatively
+set a QEMU watchpoint on physical addr of `0xc03523a4` (virt−0xC0000000 =
+`0x3523a4`) and see which code writes it (or confirm nothing does → the field is
+only ever populated in the *NCSI* probe path, which the Dell build takes on real
+HW but which fails silently under QEMU — see hypothesis 1/2).
 
 Also note a **second, non-fatal** `0x1399a8` call at `0xc001a810`
 (`r1=292 / 0x124`, result -> `[r4+0x104]`) — only logs, doesn't gate eth0.
