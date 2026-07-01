@@ -80,12 +80,37 @@ type `0x02 = INTEL_NCSI`), and QEMU's `ftgmac100` has **no NCSI responder**
 override doesn't help (the driver bails before it). So the running `appweb` has
 no interface to serve on / no slirp-routable IP.
 
-**To close C4:** add a minimal NCSI responder to QEMU's `ftgmac100` (answer
-GET_VERSION / GET_CAPABILITIES / GET_MAC so the driver registers `eth0`), or
-model the exact I2C MAC-EEPROM channel+format the driver reads; then the firmware
-DHCPs to slirp's 10.0.2.15 and `web-test.py` can `curl` the BMC UI on the
-forwarded port. This is the genuine near-complete-emulation tail of C4 — every
-layer above the NIC's MAC source already runs.
+**Root cause (pinned via the ASPEED SDK source `ftgmac100_26.c`):** the driver
+selects NCSI vs PHY mode from **platform data** — `priv->NCSI_support =
+ast_eth_data->NCSI_support` (ftgmac100_26.c:2757) — and the Dell build sets it,
+so the driver runs the NCSI path. There it obtains the MAC over NCSI; with no
+responder it logs `Fail to get the MAC information!` and bails (no random-MAC
+fallback), so `eth0` never registers. Confirmed cheap workarounds don't help:
+`macaddr=` kernel param (driver bails first) and seeding a MAC-EEPROM at 0x50 on
+every I2C bus (driver doesn't read it there). QEMU 10.0.7 has **no NCSI**
+support anywhere in-tree.
+
+**NCSI is NOT the blocker (tested & ruled out).** A minimal NC-SI responder was
+prototyped in `hw/net/ftgmac100.c` (intercept EtherType 0x88F8 in the TX path,
+inject ACK responses + a MAC in GET_PARAMETERS via `ftgmac100_receive`) with an
+`fprintf` trace. On boot it triggered **zero times** — the vendor driver logs
+`Fail to get the MAC information!` and bails **before it ever sends an NC-SI
+frame**. So the MAC comes from a **pre-NCSI hardware read**, not NC-SI, and the
+responder was reverted (untested/irrelevant for this firmware). The SDK-source
+`NCSI_support = ast_eth_data->NCSI_support` selection happens later, in the
+driver's open path, only after a MAC is obtained.
+
+**To close C4 — find the pre-NCSI MAC source by disassembling the vendor driver.**
+The kernel is `objdump -D -b binary -m arm` friendly (raw ARM Image at
+0xC0008000; the fail string is referenced at ~0xc001a864). The MAC-read function
+checks the interface type (`cmp #1`/`#16`/`#32` = RMII/MII/GMII) and reads 6 MAC
+bytes from a hardware source that returns invalid data under QEMU. Candidates to
+identify and then model: an I2C EEPROM at a specific channel+offset+format (0x50
+offset-0 on every bus was tried and rejected), an SCU register (e.g. the
+SCU scratch reg 0x40), or a fixed flash/NVRAM location. Once the exact read is
+known, seed it (custom `i2c_init`, or an SCU value) with a valid MAC; the
+firmware then DHCPs to slirp's 10.0.2.15 and `web-test.py` can `curl` the BMC UI.
+This is the genuine reverse-engineering tail of C4.
 
 ## How to reproduce
 
