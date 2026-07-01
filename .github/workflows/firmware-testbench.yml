@@ -1,0 +1,25 @@
+# Unit-test the firmware-testbench harness (pure logic; no QEMU/hardware needed).
+name: firmware-testbench
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware-testbench/**'
+      - '.github/workflows/firmware-testbench.yml'
+  pull_request:
+    paths:
+      - 'firmware-testbench/**'
+      - '.github/workflows/firmware-testbench.yml'
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - working-directory: firmware-testbench
+        run: python -m pytest -q
