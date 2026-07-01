@@ -226,3 +226,14 @@ second hardware register read, or eth0's bond-slave state), not just that word.
 The exact `ndo_open` and its EPERM condition still need to be pinned (breakpoint
 `dev_open`/`dev->open` at the moment `ifconfig eth0 up` runs and single-step to the
 return). This is the one remaining item for C4; all other pieces are verified.
+
+## 10. Correction: 0xc001a8b4 is dev->init, not dev->open
+
+Runtime breakpoint shows `0xc001a8b4` is called from `register_netdevice+0x8c`
+(`lr=0xc01ca3c8`) — it is **`dev->init`** (returns -EINVAL there, but registration
+still succeeds for MAC0). The `SIOCSIFFLAGS: Permission denied` therefore comes
+from the *real* `dev->open` (a different net_device offset, set outside the probe
+window inspected), invoked later by `ifconfig eth0 up` / the bond enslave. Next
+step is to breakpoint the kernel `dev_open` path (near `0xc01ca3xx`) at the moment
+`ifconfig eth0 up` runs, read `dev->open`, and trace its EPERM return — then fix
+its dependency. This is the sole remaining item for C4.
