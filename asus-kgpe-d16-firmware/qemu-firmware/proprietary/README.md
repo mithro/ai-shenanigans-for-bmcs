@@ -100,7 +100,26 @@ responder was reverted (untested/irrelevant for this firmware). The SDK-source
 `NCSI_support = ast_eth_data->NCSI_support` selection happens later, in the
 driver's open path, only after a MAC is obtained.
 
-**To close C4 — find the pre-NCSI MAC source by disassembling the vendor driver.**
+### Progress: the MAC-read blocker is cracked (kernel patch); eth0 register is next
+
+`patch-c410x-mac.py` disassembles the driver's MAC-read success/fail branch and
+**injects a valid MAC** (Avocent OUI 00:e0:81:12:34:56) into the ARMv5 kernel via
+its existing literal pool (verifies the original opcodes before patching). With
+it, `Fail to get the MAC information!` is **gone** and the driver runs
+`Set MAC0 Address 0:e0:81:12:34:56` / `Set MAC1 Address` — the MAC is obtained.
+It also NOPs the NCSI-vs-PHY branch to force PHY mode (QEMU models the ftgmac MII
+PHY but has no NC-SI responder — confirmed by a prototype responder that never
+triggered).
+
+**Still open:** `eth0` does not register even so — after `Set MAC0/1` the probe
+returns without a netdev (it hits an error path near `0xc001a7bc` that returns
+`-ENODEV` after an alloc/register check). The next step is to disassemble the
+probe continuation (merge at `0xc001a670`, the per-MAC alloc/register loop and
+the `-ENODEV` path at `0xc001a7bc`) to find why `register_netdev`/`alloc_etherdev`
+fails under QEMU, and patch or model that. Each layer above the NIC has proven
+peelable; this is the current frontier.
+
+**Earlier plan (still valid) — find the pre-NCSI MAC source by disassembling the vendor driver.**
 The kernel is `objdump -D -b binary -m arm` friendly (raw ARM Image at
 0xC0008000; the fail string is referenced at ~0xc001a864). The MAC-read function
 checks the interface type (`cmp #1`/`#16`/`#32` = RMII/MII/GMII) and reads 6 MAC
