@@ -127,6 +127,23 @@ the true C4 root cause — model that device (faithful fix), or, if it is a
 pure-software init that merely needs to run, ensure its initcall/module runs
 before the ftgmac probe.
 
+## Eliminations (narrow the faithful-fix target)
+
+- **Legacy SMC flash is NOT the cause of the eth0/AESS failure.** `SPI Flash ID :
+  0x0` prints AFTER `Set MAC0 Address` (the ftgmac probe) in the boot log, so the
+  flash-driver init runs *after* the AESS failure that blocks eth0. (Modelling the
+  SMC is still worthwhile for the *unpatched* kernel, but it won't register eth0.)
+- **No AESS registrant is visible before the ftgmac probe.** The boot log between
+  `Machine: ASPEED-AST2050` and `Set MAC0` shows only standard subsystems
+  (Security/LSM, NET family 16/2, TCP, squashfs/JFFS2/fuse, io-sched, MTD, serial,
+  RAMDISK/loop/nbd). So whatever populates `fc->list` is an **invisible very-early
+  `__initcall`** (core_initcall/arch level) inside the AESS core — it emits no
+  console output. That AESS-core init is the true target: find it (search the
+  `.initcall*.init` sections for a fn that calls the getter `0xa5678` + a
+  `list_add` writing `fc+0x20`/`fc+0x24`), determine its hardware dependency, and
+  model that device. This is the faithful fix; it is deep because the AESS core is
+  proprietary and silent.
+
 ## Hypotheses to test next (in priority order)
 
 1. **Initcall ordering.** The ftgmac probe is built-in and runs at kernel boot
