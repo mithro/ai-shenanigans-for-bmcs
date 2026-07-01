@@ -237,3 +237,23 @@ window inspected), invoked later by `ifconfig eth0 up` / the bond enslave. Next
 step is to breakpoint the kernel `dev_open` path (near `0xc01ca3xx`) at the moment
 `ifconfig eth0 up` runs, read `dev->open`, and trace its EPERM return — then fix
 its dependency. This is the sole remaining item for C4.
+
+## 11. ndo_open located precisely: dev->open = 0xc01ab18c, returns -EACCES
+
+Located the real `dev->open` = **`0xc01ab18c`** (net_device `+0x200`; found by
+dumping the netdev ops table after `dev->init` runs — `+0x38`=init,
+`+0x4c`=get_stats=`0xc01a9080`, `+0x1a0/+0x200/+0x204` = ftgmac ops). It returns
+**`mvn r0,#12` = -13 = -EACCES** ("Permission denied") at `0x1a3310`, gated on the
+MAC-mode config word `[0xc035df34+0x10c] = 0xc035e040` (a *different* global from
+the MAC-info reader's `0xc035f2a8`) AND on hardware-derived value `r4` (success is
+`cmp r4,#0; bne 0x1a3318` at `0x1a3254`).
+
+Setting **both** config words to a plausible MAC-mode value (0x12000023) at the
+probe did NOT clear the EACCES — so `dev->open` also depends on **MAC hardware
+register reads** (the `r4` derivation in `0x1a31e4-0x1a3254`) that return 0 under
+QEMU. So the final C4 blocker is: `dev->open` needs both the MAC-mode config and
+specific ftgmac/MAC-status registers to read real values. Fully modelling that
+open path (decode the `r4` derivation → identify the exact MAC registers it reads
+→ ensure the QEMU ftgmac100 returns sane values, and supply the MAC-mode config)
+is the remaining work. Everything upstream (register, crash, carrier, appweb :80,
+bond0 IP) is verified; this open path is the sole gate to a reachable web service.
