@@ -159,3 +159,33 @@ Next: trace the `osinet` daemon / bond0 bring-up (does `ncsi_protocol.ko` load;
 does bond0 get an active slave once eth0 has carrier; which interface udhcpc
 binds to and why it is down) and either make that path complete or configure
 bond0 directly. This is the final step to a live web service on the hostfwd.
+
+## 7. Runtime network state: appweb listens, bond0 up — last blocker is ndo_open EPERM
+
+Using a boot-harness net-diagnostic (background script dropped into tmpfs /flash),
+the live network state under QEMU is now fully characterised:
+- **appweb IS listening on port 80**: `netstat -ltn` shows `:::80 LISTEN`. The BMC
+  web server is up and bound to all interfaces.
+- **bond0 is UP with slirp's guest IP** (10.0.2.15) once configured, but its HWaddr
+  is `00:00:00:00:00:00` and `/proc/net/bonding/bond0` reports
+  `Currently Active Slave: None`, `MII Status: down` — the bond has **no active
+  slave**, so it cannot pass traffic (curl to the hostfwd still gets nothing).
+- **eth0 cannot be brought up**: `ifconfig eth0 up` → `SIOCSIFFLAGS: Permission
+  denied`, and `ifenslave bond0 eth0` → `Enslave failed`. eth0's `/sys/.../carrier`
+  read returns `Invalid argument` (interface not up).
+
+So the *single* remaining C4 blocker is that the vendor **`aess_ftgmac100`
+`ndo_open` returns an error (EPERM)** under QEMU, so eth0 never opens → the bond
+never gets an active slave → bond0 (with the IP) can't transmit → the (listening)
+appweb is unreachable on the hostfwd.
+
+### Next step (precise)
+Find why `aess_ftgmac100`'s open path returns EPERM under QEMU (it likely re-reads
+the platform-config register `[dev+0x10c] & 0xf/0x70` — the same dispatch the
+MAC-info reader `0x1a8354` uses — or a MAC/PHY hardware register that reads 0).
+The open handler at `dev+0x38 = 0xc001a8b4` uses exactly that `[r0+0x10c]&0xf`
+config dispatch; the `cfg==0 -> 0xc001a8b4+? ` error path is the EPERM. Model the
+register it depends on (or satisfy the config value) so `ndo_open` succeeds; then
+the bond activates eth0, DHCP/static gives 10.0.2.15, and appweb is reachable —
+completing C4. All other pieces (kernel, register, crash, carrier, appweb, IP) are
+in place and verified.
