@@ -189,3 +189,30 @@ register it depends on (or satisfy the config value) so `ndo_open` succeeds; the
 the bond activates eth0, DHCP/static gives 10.0.2.15, and appweb is reachable —
 completing C4. All other pieces (kernel, register, crash, carrier, appweb, IP) are
 in place and verified.
+
+## 8. Root cause of the ndo_open EPERM: MAC-mode config word is 0 under QEMU
+
+Runtime watchpoint on the ftgmac platform-config word
+`global+0x10c = 0xc035f2a8` (global = `0xc035f19c`, the aess_ftgmac100 driver
+data) shows it is written exactly once — the BSS clear to **0** (pc 0xc000813c) —
+and **never set to a real value**. Every ftgmac function (the enable/open handler
+`0xc001a8b4`, the MAC-info reader `0x1a8354`, the low-level helpers) dispatches on
+`[global+0x10c] & 0xf` (checked for 1/3/4) and `& 0x70` (checked for 0x10) — the
+MAC interface-mode enum (RMII / NCSI / MII, matching U-Boot's `MAC0: RMII/NCSI`).
+With the word 0, all of them take the "unconfigured" path, so `ndo_open` fails
+(EPERM) and the MAC never actually comes up.
+
+On real hardware this word is populated with the MAC mode (from the SCU straps /
+board config / U-Boot). Under this machine it stays 0. The single store to
+`[global+0x10c]` (`0x1a7400`) only *toggles bit 7* at runtime — it is not the
+initial mode setup, which comes from elsewhere (SCU MAC-mode strap or a config
+the vendor U-Boot passes and the OpenBMC U-Boot here does not).
+
+### C4 completion is now one concrete step
+Determine the correct MAC-mode enum value for MAC0 (decode the `&0xf`/`&0x70`
+paths in `0xc001a8b4`/`0x1a8354`, or read it off the AST2050 SCU MAC strap) and
+make the kernel see it — by modelling the SCU MAC-mode strap bits in the machine
+(`hw_strap1`) so the driver's mode-init reads them, or by injecting the value. Then
+`ndo_open` succeeds → the bond gets an active eth0 slave → bond0 (10.0.2.15)
+transmits → the already-listening appweb answers on the hostfwd → **C4 done**.
+Everything else (kernel/register/crash/carrier/appweb/IP/bond) is verified in place.
