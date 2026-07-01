@@ -134,3 +134,28 @@ setup step skipped by the synthetic MAC-info blob, or an ftgmac100 register the
 QEMU model returns 0 for that the vendor driver uses to size/populate the netdev
 (DMA rings, stats block). Modelling that ftgmac100 detail (or supplying the full
 real MAC-info blob via the I²C EEPROM) is the final step to a live eth0 + appweb.
+
+## 6. eth0 registers + PHY carrier modeled; last mile is vendor userspace net
+
+Progress after the enable-byte/MAC0 fix:
+- **eth0 registers cleanly**: `eth0: at 0xfe660000 IRQ:2 MAC 00:e0:81:12:34:56`,
+  no oops; boot proceeds to `GUIProcessMonitor` (appweb) and userspace sees eth0
+  (`Interface: eth0`, `DHCPv4 Enabled -> LAN_TRUE`, the plugging daemon starts).
+- **PHY carrier now modeled** (`hw/net/ftgmac100.c`): the RTL8211E PHY-Specific
+  Status register (reg 17) was unimplemented (returned 0), so the vendor driver
+  never saw link. Implemented it to report a resolved 100M/full link mirroring the
+  emulated carrier. Verified: the "reg 17 not implemented" log is gone.
+
+**Remaining blocker for C4 (now purely vendor userspace networking):** the vendor
+brings the LAN up through `S_OSINET.sh` (an `osinet` daemon + `bonding.ko`
+mode=1/use_carrier=1 + `ncsi_protocol.ko`) and an ifplugd-style "Network Interface
+Plugging Daemon" over `eth0`/`bond0`. Under QEMU the DHCP interface stays down
+(`udhcpc: sendto: Network is down`) — the bond/osinet bring-up does not complete,
+so DHCP never gets slirp's 10.0.2.15 and appweb (bound to the LAN IP) isn't
+reachable on the hostfwd. A boot-harness helper that forces `ifconfig eth0 up`
+fails with `SIOCSIFFLAGS: Permission denied` because eth0 is a bonding slave.
+
+Next: trace the `osinet` daemon / bond0 bring-up (does `ncsi_protocol.ko` load;
+does bond0 get an active slave once eth0 has carrier; which interface udhcpc
+binds to and why it is down) and either make that path complete or configure
+bond0 directly. This is the final step to a live web service on the hostfwd.
