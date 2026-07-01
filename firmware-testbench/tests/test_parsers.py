@@ -8,37 +8,55 @@ from firmware_testbench.parsers import (
     parse_sysfs_int,
 )
 
-I2CDETECT_F0 = """\
-     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
-00:                         -- -- -- -- -- -- -- --
-10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-40: 40 41 42 43 44 45 46 47 48 49 4a 4b 4c 4d 4e 4f
-50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-70: -- -- -- -- -- -- -- --
-"""
+def render_i2cdetect(present, first=0x08, last=0x77):
+    """Render an ``i2cdetect -y`` grid byte-exactly, as the tool does.
+
+    Each column is a fixed 3-char field (" XX" / " --" / "   "); addresses
+    outside [first, last] are reserved and printed blank. This guarantees the
+    fixtures match real tool output so the fixed-width parser is tested honestly.
+    """
+    lines = ["     " + "  ".join(f"{c:x}" for c in range(16))]
+    for row in range(0x00, 0x80, 0x10):
+        cells = []
+        for col in range(16):
+            addr = row + col
+            if addr < first or addr > last:
+                cells.append("   ")
+            elif addr in present:
+                cells.append(f" {addr:02x}")
+            else:
+                cells.append(" --")
+        lines.append(f"{row:02x}:" + "".join(cells).rstrip())
+    return "\n".join(lines) + "\n"
 
 
 def test_parse_i2cdetect_full_row():
-    got = parse_i2cdetect(I2CDETECT_F0)
+    got = parse_i2cdetect(render_i2cdetect(set(range(0x40, 0x50))))
     assert got == set(range(0x40, 0x50))
 
 
+def test_parse_i2cdetect_low_addresses_in_00_row():
+    # Devices in the 0x00 row must not be mis-shifted by the leading blank
+    # reserved cells (0x00-0x02). Regression for the split()-based parser.
+    got = parse_i2cdetect(render_i2cdetect({0x08, 0x0c}, first=0x03))
+    assert got == {0x08, 0x0C}
+
+
 def test_parse_i2cdetect_uu_counts_as_present():
-    text = (
-        "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n"
-        "70: 70 -- UU -- -- -- -- --\n"
-    )
-    assert parse_i2cdetect(text) == {0x70, 0x72}
+    # Byte-exact short row: " 70"" --"" UU".
+    assert parse_i2cdetect("70: 70 -- UU\n") == {0x70, 0x72}
 
 
 def test_parse_i2cdetect_rejects_inconsistent_cell():
     # Address printed in the wrong column must fail loud.
-    text = "40: 41 -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n"
     with pytest.raises(ValueError):
-        parse_i2cdetect(text)
+        parse_i2cdetect("40: 41\n")
+
+
+def test_parse_i2cdetect_rejects_row_wider_than_16_columns():
+    # A malformed row with a 17th column must fail loud, not silently truncate.
+    with pytest.raises(ValueError):
+        parse_i2cdetect("00:" + " --" * 17 + "\n")
 
 
 def test_parse_sysfs_int():

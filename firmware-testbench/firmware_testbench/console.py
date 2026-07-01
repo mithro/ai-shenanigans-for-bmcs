@@ -8,6 +8,7 @@ IO, no wall-clock sleeps).
 
 from __future__ import annotations
 
+import codecs
 import re
 import time
 from dataclasses import dataclass
@@ -71,6 +72,9 @@ class Console:
         self._read = read
         self._write = write
         self._encoding = encoding
+        # Stateful incremental decoder so a multi-byte character split across two
+        # reads is reconstructed, not corrupted into replacement chars.
+        self._decoder = codecs.getincrementaldecoder(encoding)(errors="replace")
         self._clock = clock
         self._sleep = sleep
         self._poll = poll_interval
@@ -116,7 +120,7 @@ class Console:
 
             chunk = self._read()
             if chunk:
-                self._buf += chunk.decode(self._encoding, errors="replace")
+                self._buf += self._decoder.decode(chunk)
             else:
                 self._sleep(self._poll)
 

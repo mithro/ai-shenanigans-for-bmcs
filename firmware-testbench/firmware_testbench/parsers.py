@@ -15,39 +15,49 @@ def parse_i2cdetect(text: str) -> set[int]:
 
     Accepts the standard grid where each cell is a two-hex-digit address, ``--``
     (no device), or ``UU`` (device present but bound to a kernel driver -- which
-    still counts as *present*). The row label ``NN:`` gives the high nibble.
+    still counts as *present*). The row label ``NN:`` gives the high nibble, and
+    each column is a fixed three-character field.
 
-    >>> sorted(hex(a) for a in parse_i2cdetect(
-    ...     "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\\n"
-    ...     "00:                         -- -- -- -- -- -- -- --\\n"
-    ...     "40: 40 -- -- -- -- -- -- -- UU -- -- -- -- -- -- --\\n"))
+    >>> row = "40: 40 -- -- -- -- -- -- -- UU -- -- -- -- -- -- --"
+    >>> sorted(hex(a) for a in parse_i2cdetect(row))
     ['0x40', '0x48']
     """
     present: set[int] = set()
     for raw in text.splitlines():
-        line = raw.rstrip()
-        m = re.match(r"^\s*([0-9a-fA-F]{2}):\s*(.*)$", line)
+        m = re.match(r"^\s*([0-9a-fA-F]{2}):(.*)$", raw)
         if not m:
             continue  # header row / blank
         high = int(m.group(1), 16)
-        cells = m.group(2).split()
-        for col, cell in enumerate(cells):
-            if cell == "--":
+        region = m.group(2)
+        # i2cdetect prints a FIXED 3-char field per column (" XX" / " --" / " UU"
+        # / "   "). Parse by fixed width: splitting on whitespace would drop the
+        # blank reserved-address cells the 0x00 row prints for 0x00-0x07 and
+        # mis-shift every column after them.
+        for col in range(16):
+            field = region[col * 3 : col * 3 + 3]
+            if len(field) < 3:
+                break  # short final row (e.g. only 0x70-0x77 was scanned)
+            cell = field.strip()
+            if cell in ("", "--"):
                 continue
+            addr = high | col
             if cell == "UU":
-                # Device present but bound to a kernel driver; address is row|col.
-                present.add(high | col)
+                present.add(addr)  # present but bound to a kernel driver
             elif re.fullmatch(r"[0-9a-fA-F]{2}", cell):
-                addr = int(cell, 16)
-                # Sanity: the printed address must match row<<4 | col.
-                if addr != (high | col):
+                if int(cell, 16) != addr:
                     raise ValueError(
                         f"i2cdetect cell {cell!r} at row {high:#04x} col {col} "
-                        f"is inconsistent (expected {high | col:#04x})"
+                        f"is inconsistent (expected {addr:#04x})"
                     )
                 present.add(addr)
             else:
                 raise ValueError(f"unrecognised i2cdetect cell: {cell!r}")
+        # Fail loud on a row wider than the 16 columns i2cdetect can print.
+        if region[16 * 3:].strip():
+            raise ValueError(
+                f"i2cdetect row {high:#04x} has content beyond 16 columns: "
+                f"{region[16 * 3:]!r}"
+            )
     return present
 
 

@@ -70,3 +70,12 @@ def test_send_line_writes_bytes():
     c, written, _ = make_console([])
     c.send_line("root")
     assert bytes(written) == b"root\n"
+
+
+def test_expect_handles_multibyte_char_split_across_reads():
+    # 'é' is 0xC3 0xA9 in UTF-8; split it across two reads. A per-chunk decode
+    # would corrupt it into replacement chars; the incremental decoder must not.
+    c, _, _ = make_console([b"caf\xc3", b"\xa9 login: "])
+    m = c.expect("café")
+    assert m.after == "café"
+    assert "�" not in m.after
