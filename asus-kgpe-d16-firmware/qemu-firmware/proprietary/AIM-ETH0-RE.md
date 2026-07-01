@@ -185,3 +185,15 @@ before the ftgmac probe.
 port; today it returns FAIL (no eth0). Success = an HTTP response from appweb.
 `patch-c410x-mac.py` + `build-c410x-initramfs.py` + `mkflash-c410x.py` assemble
 the current best boot (firmware fully up, MAC set, eth0 pending on the above).
+
+## Scale of the remaining work (measured, not estimated)
+
+The AESS operation `0x1399a8` has **14 call-sites** and its lookup wrapper
+`0x13a190` has 4; the fc getter `0xa5678` has 5. The ftgmac uses the *lookup*
+variant, which `-EFAULT`s because the fc's registration state (`fc+0x58` / the
+list) is never populated under QEMU. The *register* variant lives among these
+call-sites and runs (on real HW) inside the silent AESS core early init, gated on
+AST2050 hardware. Populating that state faithfully means either (a) modelling the
+AST2050 blocks the AESS core init touches, or (b) reverse-engineering the register
+op + synthesizing valid `fc` sub-structures. Both are multi-session; the exact
+call-site list above is the entry point for either.
