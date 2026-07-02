@@ -1,0 +1,245 @@
+# HPE Intelligent Modular PDU -- Project Status
+
+## Completed Work
+
+### Board Identification and Component Inventory
+- Identified all major ICs from physical board photos (30 images analysed)
+- Main CPU: Digi NS9360B-0-C177 (ARM926EJ-S, NOT NS7520 as initially assumed)
+- Memory: 32 MB SDRAM + 16 MB NOR Flash
+- Power measurement: Maxim MAXQ3180-RAN 3-phase AFE
+- Sub-MCU: Toshiba TMP89FM42LUG for display/LED management
+- 3-4x TI MAX3243EI RS-232 level shifters
+- All crystals identified (29.4912, 25.000, 8.000, 3.6864 MHz)
+- Debug headers identified: J25 "Digi UART", J11 "Mox SPI", J10 "PIC JTAG", J27 "I2C"
+- Debug/JTAG headers identified: J1 (large ribbon connector), J6 (black 2x5 header)
+- Extension bar bus connector pairs identified: J2/J29, J3/J30, J4/J31
+
+### NS9360 Datasheet Analysis
+- Downloaded NS9360 datasheet (Rev D, 91001326_D.pdf)
+- Documented complete GPIO MUX table (73 pins, 4 mux options each)
+- Documented system address map and BBus peripheral map
+- Documented boot configuration (NOR Flash boot, PLL settings)
+- Documented serial port assignments (4x UART/SPI)
+- Documented I2C and Ethernet pin assignments
+- Extracted GPIO Configuration Register map from HW Reference Manual
+
+### Ethernet PHY Identified
+- U10 (marked "P47932M / 1893AFLF") is an ICS 1893AFLF Ethernet PHY Transceiver
+- Initially misidentified as a clock generator
+- 10Base-T/100Base-TX Integrated PHYceiver (Renesas/IDT)
+- Pairs with NS9360 on-chip Ethernet MAC via MII/RMII interface
+
+### Firmware Obtained and Analysed
+- Three firmware versions obtained: 1.6.16.12, 2.0.22.12, 2.0.51.12
+- **OS identified: NET+OS (Digi ThreadX-based RTOS)** -- NOT Linux
+- Board codename identified: "Brookline" (firmware codename: "Henning")
+- Confirmed AF531A is a supported model in firmware v2.0.51.12 README
+- Image format: Digi bootHdr (48-byte header + monolithic ARM binary)
+- Web server: Allegro RomPager Version 4.01
+- Firmware is a flat binary with embedded web UI, no filesystem
+- Documented upgrade path: 1.0.9.09 → 1.3.11.09 → 1.6.16.12 → 2.0.49.12
+- Created extract_firmware.py for automated analysis
+
+### Firmware Decompression (LZSS2)
+- Identified compression algorithm: Digi LZSS2 (Lempel-Ziv-Storer-Szymanski variant)
+- Ported decompressor from C# reference (gsuberland/open-network-ms)
+- Successfully decompressed all 3 firmware versions
+- Confirmed decompressed output is valid big-endian ARM code (ARM926EJ-S)
+- ARM vector table verified: `LDR PC, [PC, #0x38]` reset vector + NOPs
+- RAM load address: 0x00004000
+- Flash address: 0x00020000
+- Created parse_header.py, disasm_payload.py, decompress_firmware.py
+
+### Serial Port Analysis
+- Mapped all 4 serial port register references in firmware
+- Port B: primary communication port (13 refs, 6 register types, DMA-enabled)
+- Port C: secondary communication (3 refs, DMA-enabled)
+- Port A: debug UART (1 ref, polled/interrupt, J25 header)
+- Port D: minimal use (1 ref, polled/interrupt)
+- Found DMA descriptor table at ~0x757130 mapping Port B and C to DMA channels
+- Baud rates: 115200 (47 occurrences) and 9600 (6 occurrences) most common
+- Created analyse_serial_ports.py
+
+### Cross-Version Comparison
+- Compared all 3 firmware versions (v1.6.16.12, v2.0.22.12, v2.0.51.12)
+- v1.6→v2.0: major rewrite (+39%, LDAP, SSL, Rack View, jQuery, KLone)
+- v2.0.22→v2.0.51: minor patch (+0.2%, same URL paths, same features)
+- All versions share: RomPager 4.01, ThreadX G4.0.4.0, OpenSSL 0.9.7b, YAFFS
+- Default config identical across all versions
+- Created compare_firmware_versions.py
+
+### Security Assessment
+- **CVE-2014-9222** (Misfortune Cookie): all versions VULNERABLE (RomPager 4.01 < 4.34)
+- **OpenSSL 0.9.7b** (2003): hundreds of known CVEs, never updated
+- Attack surface: HTTP, HTTPS, Telnet, FTP, SNMP all network-accessible
+- Cookie handling code confirmed in binary ("Set-Cookie", session management)
+- Created assess_rompager_vuln.py
+
+### Web UI Extraction
+- Extracted embedded web resources from RomPager firmware
+- 1,192 URL paths, 912 RomPager directives
+- 12 HTML blocks (~11 MB), 66 GIF images, 47 PNG images
+- JavaScript libraries: jQuery 1.10.2, Raphael 1.5.2, stringencoders
+- Created extract_web_ui.py
+
+### NVRAM/Configuration Storage Analysis
+- Identified 12 NVRAM data sections with per-section corruption detection/recovery
+- YAFFS filesystem v1.6.4.1 on NOR flash for persistent storage
+- XML configuration format documented (PDU_GENERAL_CONFIG / PDU_SPECIFIC_CONFIG)
+- RIBCL XML command interface (HP iLO-compatible) documented
+- 20+ debug CLI commands identified (flash, mem, NVRAM, calibration, ThreadX)
+- KLone web framework configuration (/etc/kloned.conf) documented
+- NOR flash partition layout partially reconstructed
+- Created analyse_nvram.py
+
+### CRC32 Algorithm Identified
+- **Algorithm**: CRC-32 with polynomial 0x04C11DB7, non-reflected, init=0, xor_out=0
+- Verified against all 3 firmware versions (100% match)
+- Not standard CRC-32/zlib (which uses init=0xFFFFFFFF, reflected)
+- Polynomial constant found in firmware binary at offset 0x000B3D58
+- Created identify_crc.py and identify_crc_reveng.py
+
+### MAXQ3180 SPI Communication Analysis
+- SPI interface uses DMA-based transfers (4 error strings: tx/rx/slave tx/slave rx)
+- Dual SPI modes: master (MAXQ3180) and slave (extension bars?)
+- Calibration system: voltage → current → verify, persisted to flash
+- Debug CLI commands: gmcal, gmsave, gmstats, gmstats2, mgain
+- Measured parameters: watts, VA, voltage, current, power factor, frequency, energy
+- Extension bar ("stick") protocol: up to 6 sticks per core, 2 cores max
+- IPMI protocol support discovered (dipd, ipd_dump debug commands)
+- Created analyse_maxq3180.py
+
+### Display MCU (TMP89FM42LUG) Communication Analysis
+- Display module identified: "HP Intelligent Modular PDU Display Module"
+- Serial protocol: Dialog.c module, APP_DIALOG_PORT define, HpBlSeR09 handshake
+- Display capabilities: 7-segment display, error LED, UID LEDs, buzzer (LED Beep Codes)
+- Health monitoring: Display Connected/Disconnected events, configurable alarm
+- Front Bezel Testing: fbt_init, fbt_init2 commands
+- Complete debug CLI command table: 34+ commands (system, network, ThreadX, metering, etc.)
+- Serial console menu structure: full telnet menu with network/system/user/PDU configuration
+- Firmware thread architecture: Core Async/Proto, LED Task, Ribcl, Stick Async
+- Created analyse_display_mcu.py
+
+### Inter-PDU Communication and Interconnect Analysis
+- **PLC modem: NOT PRESENT** -- despite "PLC DIAG" label on J10, no PLC protocol in firmware
+- Daisy-chain protocol: "Core DC Proto" task/queue, physical detect pins for link detection
+- Three connection modes: standalone (0), cascaded (1), extended cascaded (2)
+- Redundancy management: primary/secondary PDU pairing via IP network
+- Extension bar discovery: Monitored vs Non-Monitored sticks
+- Firmware module table: supports AF528A, AF529A, AF547A, AF475A models
+- Extension bar firmware update capability over daisy-chain
+- Created analyse_interconnect.py
+
+### Extension Bar ("Stick") Protocol Analysis
+- Protocol framing: `stick.Start` / `stick.End` delimiters
+- Three stick types: Monitored, Non-Monitored, Unknown
+- RTOS tasks: `Stick Async`, `Stick Task`
+- Extension bar firmware update over serial link (Managed Ext. Bar + HP AC Module paths)
+- Outlet addressing: PDU number, Load segment, Outlet number
+- Protocol stack with packet buffering
+- ADDP (Digi Advanced Device Discovery Protocol) for network discovery
+- Hidden serial upgrade command for manufacturing/field service
+- Created analyse_stick_protocol.py
+
+### Documentation Created
+| File | Status | Description |
+|------|--------|-------------|
+| ANALYSIS.md | Complete | Board inventory, NS9360 I/O, firmware internals, security |
+| RESOURCES.md | Complete | Firmware URLs, datasheets, documentation links |
+| STATUS.md | Complete | This file |
+| HEADERS-J1-J6.md | Partial | J1/J6 debug header documentation, JTAG interface, RPi Zero W adapter guide |
+| extract_firmware.py | Complete | Firmware extraction and analysis script |
+| parse_header.py | Complete | Detailed bootHdr header parser and cross-version comparison |
+| disasm_payload.py | Complete | ARM disassembly of raw payload (confirmed compression) |
+| decompress_firmware.py | Complete | LZSS2 decompressor (Python port of gsuberland C# reference) |
+| analyse_decompressed.py | Complete | Full disassembly, MMIO reference scan, string analysis |
+| extract_gpio_init.py | Complete | GPIO init function cluster analysis |
+| trace_bsp_init.py | Complete | Reset handler trace, BSP GPIO table search |
+| analyse_serial_ports.py | Complete | Serial port register analysis, baud rate extraction |
+| compare_firmware_versions.py | Complete | Cross-version string, URL, and binary comparison |
+| assess_rompager_vuln.py | Complete | CVE-2014-9222 vulnerability assessment |
+| extract_web_ui.py | Complete | RomPager web UI resource extraction |
+| identify_crc.py | Complete | CRC32 algorithm identification (lookup table approach) |
+| identify_crc_reveng.py | Complete | CRC32 reverse-engineering with crcmod brute-force |
+| analyse_nvram.py | Complete | NVRAM/config storage analysis (YAFFS, flash partitions, CLI) |
+| analyse_maxq3180.py | Complete | MAXQ3180 SPI protocol, calibration, metering, stick protocol |
+| analyse_display_mcu.py | Complete | Display MCU protocol, CLI commands, serial console menus |
+| analyse_interconnect.py | Complete | Inter-PDU daisy-chain, PLC investigation, redundancy |
+| analyse_deep_binary.py | Complete | GPIO config values, DMA mapping, I2C bus, peripheral address map |
+| analyse_stick_protocol.py | Complete | Extension bar protocol strings, firmware update, outlet addressing |
+| analyse_firmware_map.py | Complete | Binary layout map: code/data/web regions, landmarks, type statistics |
+| datasheets/NS9360_datasheet_91001326_D.pdf | Downloaded | 80-page NS9360 datasheet |
+| datasheets/NS9360_HW_Reference_90000675_J.pdf | Downloaded | NS9360 register-level HW reference (2.7 MB) |
+| datasheets/MAXQ3180_datasheet.pdf | Downloaded | MAXQ3180 power measurement AFE (1.2 MB) |
+
+## Hardware Summary
+
+| Component | Details |
+|-----------|---------|
+| CPU | Digi NS9360B-0-C177 (ARM926EJ-S, ~177 MHz) |
+| SDRAM | 32 MB (ISSI IS42S32800D-7BLI) |
+| NOR Flash | 16 MB (2x Macronix MX29LV640EBXEI) |
+| Power Meas. | Maxim MAXQ3180-RAN (3-phase AFE, SPI) |
+| Sub-MCU | Toshiba TMP89FM42LUG (8-bit, display/LED) |
+| Serial Ports | 4x NS9360 UART/SPI + RS-232 (MAX3243EI) |
+| Ethernet | 10/100 (NS9360 MAC + ICS1893AFLF PHY, 25 MHz xtal) |
+| I2C | 1x bus (gpio[34]=SCL, gpio[35]=SDA) |
+| GPIO | Up to 73 pins (muxed with peripherals) |
+| System Crystal | 29.4912 MHz |
+| Debug Header | J25 "Digi UART" |
+| OS | NET+OS (ThreadX-based RTOS) |
+| Web Server | Allegro RomPager 4.01 + KLone (v2.0+) |
+| Board Codename | "Brookline" |
+
+## Open Items
+
+### Hardware Investigation (Requires Physical Access)
+- Boot log not yet captured (user will provide at a later date)
+- J25 "Digi UART" debug console output not yet captured
+- NOR flash contents not dumped
+- PLL bootstrap pin configuration not measured (determines CPU speed)
+- J11 "Mox SPI" connection target unknown (MAXQ3180? SPI flash? external?)
+- J10 "PIC JTAG" sub-MCU programming interface not traced
+- J1 and J6 debug headers documented in [HEADERS-J1-J6.md](HEADERS-J1-J6.md) --
+  physical form factors identified, exact pinouts require board tracing
+- Extension bar bus protocol (J2/J29, J3/J30, J4/J31 connector pairs) not documented
+- Firmware analysis found no PLC (power-line communication) protocol, consistent with
+  the J10 "PIC JTAG" identification rather than the earlier "PLC DIAG" silkscreen reading
+
+### Firmware Deep Analysis
+- **Firmware decompressed** -- all 3 versions decompressed with LZSS2, load address 0x4000
+- **Full ARM disassembly** performed -- MMIO references mapped, function calls traced
+- **Reset handler traced** -- boot sequence from 0xB7F64 through BSP init chain
+- **Default config table found** -- board name, default IPs, MAC OUI, credentials
+- **GPIO init functions located** -- 4 code clusters referencing GPIO config registers
+- **Serial port mapping** -- Port B primary (DMA Ch7), Port A debug, Port C secondary (DMA Ch15)
+- **Cross-version comparison** -- v1.6→v2.0 major rewrite, v2.0.22→v2.0.51 minor patch
+- **Security assessment** -- CVE-2014-9222 confirmed, OpenSSL 0.9.7b, full attack surface mapped
+- **Web UI extracted** -- 1192 URLs, HTML/CSS/JS/images extracted
+- **MAXQ3180 SPI communication analysed**: DMA-based SPI, calibration system, metering parameters, extension bar protocol, IPMI discovery (see MAXQ3180 section above)
+- **TMP89FM42LUG display MCU analysed**: HpBlSeR09 serial protocol, Dialog.c module, 7-segment display, LEDs, buzzer, health monitoring (see Display MCU section above)
+- **PLC modem: NOT PRESENT in firmware** -- J10 "PLC DIAG" purpose unclear, no PLC protocol strings found
+- **NVRAM/configuration storage analysed**: 12 sections, YAFFS filesystem, XML config format, debug CLI (see NVRAM section above)
+- **CRC32 algorithm identified**: non-reflected CRC-32 with init=0, xor_out=0 (see CRC32 section above)
+
+### Deep Binary Analysis
+- **GPIO config values partially extracted** from literal pools in Cluster 1 (0x000A97CC):
+  - Config #1 = 0x33333333: All pins 0-7 as GPIO inputs, **SPI B completely disabled**
+  - Config #2 = 0x13130101: Mixed -- Serial A RX (pin 9) + CTS (pin 11) in peripheral mode, rest GPIO
+- **Peripheral address map discovered** at 0x757114: MMU region table confirms all NS9360 peripheral ranges
+- **I2C bus confirmed active**: 20 register references, semaphore-protected driver (I2C_SEM, I2C_HOST_SEMAPHORE), event-based (i2cHostEvent), debug output ("I2C Bus:")
+- **DMA channel mapping**: Ch7 (23 refs) → Port B, Ch15 (7 refs) → Port C, Ch0 (3 refs) → system
+- **SPI B disabled via GPIO mux** -- MAXQ3180 SPI port still not definitively identified
+- **Port C strongest SPI candidate**: has Control A refs but no Bit Rate refs (SPI uses clock divider in Ctrl A, not Bit Rate register). Port B has Bit Rate refs → likely UART.
+- **I2C device addresses not extractable**: driver is generic, takes addresses as function parameters. Needs decompiler to trace through call chains.
+- GPIO config VALUES for registers 3-10 still not extracted (passed via stack operations)
+- Created analyse_deep_binary.py
+
+### Datasheet Gaps
+- ~~TMP89FM42LUG datasheet not yet downloaded~~ **DOWNLOADED** (5.5 MB / 428 pages)
+- ~~ICS1893AFLF Ethernet PHY datasheet not yet downloaded~~ **DOWNLOADED** (1.2 MB / 152 pages)
+
+### Cross-References Needed
+- ~~Confirm SPI port assignment~~ SPI B confirmed disabled; Port C is strongest SPI candidate (Ctrl A refs, no Bit Rate refs). Exact port needs decompiler to decode Control A register values.
+- ~~Determine if I2C bus has any devices~~ **I2C bus confirmed active** (20 register refs, semaphore driver, event system). Device addresses passed as function parameters -- not extractable without decompiler.
+- ~~Map NS9360 GPIO pins to board-level functions~~ **Partial**: pins 0-15 decoded from GPIO config values. Remaining pins (16-72) need decompiler for stack-passed values.
