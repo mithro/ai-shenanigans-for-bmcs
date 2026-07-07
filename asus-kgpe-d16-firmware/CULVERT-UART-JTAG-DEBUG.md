@@ -387,11 +387,16 @@ missing:
 - **LPC-to-AHB:** `HICR5[8] ENL2H` + `HICR7 ADRBASE` / `HICR8 ADRMASK`. =
   culvert **`ilpc`/`lpc2ahb`**. ✅
 - **External JTAG** for ARM code debug (§2.1, "ICE"-controllable CPU reset). ✅
-- **No UART debug console:** `SCU70` has no debug-UART-select strap (the
-  AST2500's `SCU70[29]` has no G3 equivalent; no UART5) and `SCU2C[10]` (the
-  AST2500 debug-UART enable) is **"Reserved."** So culvert's **`debug-uart`**
-  transport — and software-JTAG-over-serial — is a genuine dead end on the
-  AST2050. Reach the AHB via `p2a`, `ilpc`, or `devmem` instead. ✅
+- **No UART debug console — and not merely "undocumented":** comparing against
+  the **AST2500/AST2520 A2 datasheet (V1.6, 2017)**, its §1.4 feature table lists
+  "Hardware UART debug" as **AST2500 = Yes, AST2400 = No, AST2300 = No** — so it
+  was introduced with the AST2500 and is absent even from the newer AST2400/2300,
+  let alone the AST2050. The AST2500 documents it fully (§11; `SCU70[29]` select,
+  `SCU2C[10]` disable; command set `i/o/r/w/d/t/u/q`+`Esc` — which matches §2.4
+  above). On the AST2050 there is no such section, `SCU70[29]` is undefined, and
+  `SCU2C[10]` is **"Reserved."** So culvert's **`debug-uart`** transport — and
+  software-JTAG-over-serial — is a genuine dead end on the AST2050. Reach the AHB
+  via `p2a`, `ilpc`, or `devmem` instead. ✅
 
 ### 6.2 Software: culvert does not yet recognise the AST2050 ✅
 

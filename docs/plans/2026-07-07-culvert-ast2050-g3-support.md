@@ -107,22 +107,35 @@ The LPC controller's Host Interface Control Registers implement it:
 `HICR8[31:16] ADRMASK` = AHB remap base/mask. This is exactly culvert's
 iLPC2AHB/LPC2AHB path.
 
-### 3.3 Absent: the UART debug console (password-knock serial shell) ✅
+### 3.3 Absent: the UART debug console — and it's *not* an undocumented feature ✅
 
-The one thing genuinely missing is culvert's `debug-uart` transport:
+The one thing genuinely missing is culvert's `debug-uart` transport. Tested the
+"maybe it's just undocumented on the AST2050" hypothesis by comparing directly
+against the **AST2500/AST2520 A2 Datasheet, V1.6 (12 May 2017)** (vgamuseum
+`ast2520a2gp_datasheet.pdf`). The hypothesis fails — Aspeed documents the debug
+UART thoroughly *and* documents it as AST2500-exclusive:
 
-- `SCU70` (Hardware Trapping Register) — full bit map read from the datasheet
-  (bits `[23:0]` are LPC-reset / test-mode / PCI-AD / clock / MAC / VGA / boot
-  straps; `[31:24]` are just "software defined trapping registers"). There is
-  **no debug-UART-select bit** — the AST2500's `SCU70[29]` (UART1↔UART5) has no
-  G3 equivalent, and the AST2050 has no UART5.
-- `SCU2C` (Misc. Control) bit 10 — the AST2500's debug-UART *enable*
-  (`SCU_MISC_UART_DBG`) — is **"Reserved"** on the AST2050.
+- **AST2500 §1.4 feature-comparison table** ("AST2500/AST2400/AST2300") lists:
+  **Hardware UART debug — AST2500 = Yes, AST2400 = No, AST2300 = No.** So the
+  feature is absent even from the *newer* AST2400 and AST2300; the older AST2050
+  (G3) is not a candidate. The AST2500 datasheet also calls it "a **new** debug
+  interface through UART" for AST25x0. ✅
+- **AST2500 §11 "UART Debug Interface"** fully specifies it: default UART5
+  (`SCU70[29]=0` → UART1), disable via `SCU2C[10]=1`, entry = 1200 baud + paste
+  password → `$ ` → 115200, command set `i/o/r/w/d/t/u/q` + `Esc`. `SCU70[29]`
+  describes it as "working as a hardware u-boot interface … **similar to the
+  PCIe-to-AHB bridge**" — i.e. the UART peer of the P2A bridge (§3.1). ✅
+- **AST2050 datasheet has none of this**: no §11 / UART-debug section; `SCU70[29]`
+  is undefined (within the `[31:24]` "software defined trapping" storage); the
+  AST2500 debug-UART disable bit `SCU2C[10]` is **"Reserved"** on the AST2050;
+  and the AST2050 has no UART5. ✅
 
-So `culvert … via debug-uart` (and software-JTAG-over-serial) is genuinely a
-dead end on the AST2050 — not because the AHB is unreachable, but because this
-particular *serial* backdoor was added in a later generation. Reach the AST2050
-AHB via P2A / iLPC2AHB / devmem instead (§4).
+Conclusion: the UART debug console was **introduced with the AST2500**, is not
+present on the AST2400/AST2300, and is neither documented nor strapped on the
+AST2050. `culvert … via debug-uart` (and software-JTAG-over-serial) is a dead
+end on the AST2050 — reach the AHB via P2A / iLPC2AHB / devmem instead (§4).
+*(Cross-benefit: the §11 command grammar matches culvert's `bridge/debug.c`
+exactly, validating that reverse engineering.)*
 
 ### 3.4 External JTAG for the ARM core — present ✅
 
