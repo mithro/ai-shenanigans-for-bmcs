@@ -42,6 +42,31 @@ Commits (on `ast2050-support`): `bca3ae5` (rev/soc G3 recognition + `g3.dts`),
 Not applicable on G3 (by design): `debug-uart` (AST2500-only), `otp`/`coprocessor`
 (AST2600-only). See [`CULVERT-UART-JTAG-DEBUG.md`](CULVERT-UART-JTAG-DEBUG.md) §3.3.
 
+## AST2050 SMC flash — reverse-engineering notes (driver spec)
+
+Hardware RE toward the `sfc` driver (`SMC @ 0x16000000`, datasheet §11), all read
+over P2A on 2026-07-08:
+
+- **Boot flash is SPI on CE2.** `SMC00 = 0x00000240` decodes as: segment size
+  **32 MB** (`[1:0]=00`), CE0=NOR, CE1=NAND, **CE2=SPI NOR** (`[9:8]=10`).
+  `ast2050.h` confirms "Boot SPI: CS2". With 32 MB segments the CE2 window is
+  `0x10000000 + 2×32MB = 0x14000000` (= Raptor's `PHYS_FLASH_1`); CE2 is also
+  aliased into CPU boot space at `0x00000000`.
+- `SMC04/08/0C` (CE0/1/2 control) all read `0` → command mode `[1:0]=00`
+  "Normal Read (03h)" with default timing.
+- **Direct reads return 0** at both `0x00000000` and `0x14000000`, while P2A
+  concurrently reads real data elsewhere (`SCU7C=0x00000202`, `SCU04=0x000ffe5c`,
+  `DRAM 0x40000000=0x00101000`). So the flash content is *not* available via a
+  passive memory-mapped read in this state (BMC CPU held in reset, SMC not
+  actively clocking the SPI in normal-read mode).
+- **Implication for the driver:** dumping the flash needs the SMC **command/user
+  mode** — manually assert CE2, clock out `03h + 3-byte addr`, read data — via the
+  SMC control register, rather than relying on the mapped normal-read window (as
+  culvert's AST2500 FMC driver does in user mode, but with the AST2050 SMC
+  register interface). This is the remaining work for a real `sfc` on G3; it
+  requires coordinated AHB **writes** to the SMC, so it must be logged in
+  `HARDWARE-COORDINATION.md` before running.
+
 ## Reproduce
 
 On the PXE host (`root@192.168.77.138`, from the Pi):
