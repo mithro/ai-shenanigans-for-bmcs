@@ -27,6 +27,20 @@ ASPEED_DIR = Path(__file__).resolve().parent / "aspeed"
 # Each entry: dest filename, url, expected sha256, zip-member (or None), note
 DOCS = [
     (
+        "AST2050_AST1100_A3_Datasheet_V1.02.pdf",
+        "https://www.verical.com/datasheet/aspeed-technology-inc-interface-misc-ast2050a3-gp-4078885.pdf",
+        "48e2ec3202fbfea90b979efb236e88397e60958a3af96394551b9a860c30b6d9",
+        None,
+        "AST2050/AST1100 A3 Datasheet V1.02 (Sep 2008, 397pp) -- our boards' BMC SoC",
+    ),
+    (
+        "AST2050_AST1100_A3_Datasheet_V1.05.pdf",
+        "https://raw.githubusercontent.com/erik-smit/oohhh-what-does-this-ipmi-doooo-no-deedee-nooooo/master/1-discovering/beetje-poepe-daan/ASPEED/AST2050%20iRMC%20A3%20Datasheet%20(1.05).pdf",
+        "6dde868ba24990b464fa748192eebe3361ed5f023c4baa9bbe27bf0718ef5e6e",
+        None,
+        "AST2050/AST1100 A3 Datasheet V1.05 (May 2010, 403pp) -- newer revision",
+    ),
+    (
         "AST2400_Datasheet.pdf",
         "https://www.vgamuseum.info/images/doc/aspeed/ast2400_datasheet.zip",
         "c229cec162e12d2d0214184761f08ba171862eb94ec30c7e7b408b507e41f83e",
