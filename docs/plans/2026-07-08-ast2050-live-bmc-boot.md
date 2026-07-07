@@ -70,6 +70,36 @@ BIOS/CMOS RE (battery going in "tomorrow", host PXE sessions). Per
 write / DDR2 bring-up.** Sequence the BMC-boot work so it doesn't clobber
 instance-A's host sessions (e.g. take a window, or after the battery/CMOS work).
 
+## M-prep progress (2026-07-08): Raptor U-Boot build (offline, no rig)
+
+Advanced PR #16's "one remaining task" (building Raptor's *own* AST2050 U-Boot,
+the one with real DDR2 init). Reproducible recipe, verified working through
+cross-compilation:
+
+```sh
+# toolchain (already on disk from the C3 build):
+XPREFIX=.../.worktrees/d16-qemu/tmp/gcc-4.9.4-nolibc/arm-linux-gnueabi/bin/arm-linux-gnueabi-
+# gcc-4.9.4's cc1 needs libmpfr.so.4 -> shim it to the system so.6:
+mkdir -p xlibs && ln -sf /usr/lib/x86_64-linux-gnu/libmpfr.so.6 xlibs/libmpfr.so.4
+# source: .worktrees/d16-qemu/tmp/raptor-uboot  (board config include/configs/ast2050.h; CONFIG_DDRII1G_200)
+make ARCH=arm CROSS_COMPILE=$XPREFIX asus_config          # ✓ "Configuring for asus board..." (ast2050)
+LD_LIBRARY_PATH=$PWD/xlibs make ARCH=arm CROSS_COMPILE=$XPREFIX u-boot.bin   # cross-compile ✓
+```
+
+**Verified working:** toolchain runs, the `asus`/ast2050 board config applies, and
+the ARM target cross-compiles (mpfr shim fixed it). **Remaining build blocker:**
+the documented vintage **libfdt host-tools clash** — U-Boot 2013.07's `tools/`
+(`mkimage`/`image-sig`/`aisimage`) pull the modern system `/usr/include/libfdt.h`
+alongside the bundled `include/libfdt.h` (different include guards → inline-fn
+redefinitions). The AST2050 board uses **no FIT/FDT** (`ast2050.h` has no
+`CONFIG_FIT`), so the fix is to stop the host image tools pulling libfdt (drop the
+non-Aspeed `NOPED` image tools + neutralise `image-sig`'s libfdt include, or build
+the `u-boot` ELF and `objcopy` it directly, bypassing `tools/`). A few more
+iterations; **does not** need the rig.
+
+> Note: even a finished `u-boot.bin` cannot *run* without the rig — loading it
+> (spispy/JTAG) + resetting the AST2050 are the coordinated steps below.
+
 ## Immediate next steps
 
 1. Confirm with instance-A the spispy image-load mechanism on this ULX3S (or that
