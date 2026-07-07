@@ -68,9 +68,10 @@ AMD SP5100 southbridge (SB700 family)  ── SMBus + LPC
 > Both PDFs' internal `/Title` metadata reads "AST1100 Software Programming
 > Guide" — an Aspeed LaTeX-template artifact; the **content is the A3 Datasheet**
 > (page 1: "Integrated Remote Management Processor — A3 Datasheet"). Aspeed does
-> not officially distribute it, so these are publicly-circulated copies. Newer
-> register-compatible parts: AST2500 (`ast2520a2gp_datasheet.pdf`) / AST2600
-> (`ast2600_datasheet.pdf`) on vgamuseum.info.
+> not officially distribute it, so these are publicly-circulated copies. The
+> register-compatible successors (AST2400/AST2500/AST2600) are vendored in-repo
+> at [`../../datasheets/aspeed/`](../../datasheets/aspeed/) — the shared Aspeed
+> SoC datasheet collection, which also mirrors these two AST2050 revisions.
 
 ### SPI NOR flash (BMC boot / BMC_FW1)
 

@@ -76,7 +76,7 @@ constants to add to `rev.c` (§5, Phase 1).
 ## 3. What the AST2050 datasheet actually says about AHB back-doors ✅
 
 Checked against the in-repo **AST2050/AST1100 A3 Datasheet, V1.02, 19 Sep 2008**
-(`dell-c410x-firmware/datasheets/AST2050_AST1100_Datasheet.pdf`). The AST2050 has
+(`datasheets/aspeed/AST2050_AST1100_A3_Datasheet_V1.02.pdf`). The AST2050 has
 **two of culvert's AHB backdoor transports, fully documented** — plus external
 JTAG. Only the *UART* debug console is missing.
 
@@ -344,7 +344,7 @@ Settled by the datasheet (§3.3), not inference:
 ## 8. References
 
 - **AST2050/AST1100 A3 Datasheet, V1.02 (19 Sep 2008)** —
-  `dell-c410x-firmware/datasheets/AST2050_AST1100_Datasheet.pdf`. §2.1 (CPU/JTAG),
+  `datasheets/aspeed/AST2050_AST1100_A3_Datasheet_V1.02.pdf`. §2.1 (CPU/JTAG),
   §36 P-Bus-to-AHB (P2A), LPC HICR5–8 (LPC-to-AHB), `SCU70`/`SCU2C`/`SCU30`.
   The primary source of truth for every AST2050 hardware claim here.
 - Vendored culvert source: `asus-kgpe-d16-firmware/culvert/` (`src/rev.c`,
