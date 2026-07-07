@@ -59,15 +59,21 @@ registers + DRAM works (that's how culvert reaches it).
       (was a fixed uninitialised pattern). The hardest low-level bring-up is proven
       — payloads can now be loaded into BMC DRAM over P2A. Non-destructive; SCU/SDMC
       relocked after.
-- [ ] **M2 — U-Boot prompt** on `/dev/ttyUSB0`. Now that DRAM is up over P2A, the
-      cleanest path is: build/obtain a U-Boot with **`CONFIG_SKIP_LOWLEVEL_INIT`**
-      (it needn't re-init DDR — P2A already did), **load it into DRAM via P2A**
-      (culvert write / bulk), and **start the ARM at that address**. ARM-run
-      mechanisms, cheapest first: (a) physical `AST_JTAG1` + OpenOCD on the Pi
-      (halt → set PC → resume — the AST2050's external ICE JTAG, wired per
-      `RPI4-OPENOCD-JTAG-WIRING.md`); (b) spispy-load U-Boot into the CE2 boot
-      flash + reset; (c) SCU boot-vector redirect. Coordinate the ARM
-      reset/release with instance-A first.
+- [ ] **M2 — U-Boot prompt** on `/dev/ttyUSB0`. The **ARM-start mechanism is the
+      blocker**, and it's now pinned down on hardware:
+      - **JTAG path is DEAD (physical).** OpenOCD 0.12 is on the Pi and the
+        Raptor-verified configs load, but the TAP scan returns **all-ones**
+        (`IDCODE 0xffffffff`, "unknown EmbeddedICE 0xffffffff") — the `AST_JTAG1`
+        header is not electrically connected (it's an unpopulated footprint per
+        `HEADER-PINOUTS.md`; needs soldering/wiring — physical access, not remote).
+      - **So the path is spispy.** `SCU70[1:0]=10` (read live: `SCU70=0x00819582`)
+        → the ARM **boots from SPI flash (CE2)** on reset. Therefore: **load a
+        U-Boot into the ULX3S spispy CE2 boot-flash emulation, then reset the
+        ARM** → it boots our U-Boot; DRAM is already up (M1) so lowlevel DDR init
+        is moot. **Two external blockers remain:** (1) the **spispy image-load
+        mechanism** on the ULX3S — asked instance-A (twice) in the coordination
+        log; (2) a **U-Boot binary** (vintage build is a quagmire — see above; or
+        a modern build). Reset is coordinated with instance-A.
 - [ ] **M3 — Linux boots** (our kernel + initramfs) to a shell/SSH.
 - [ ] **M4 — culvert in-band:** run culvert on the BMC via `devmem`; `sfc` dump the
       real flash; `console` — closing the culvert-port verification.
