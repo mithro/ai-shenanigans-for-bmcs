@@ -50,7 +50,8 @@ AST2050 BMC
 
 | Datasheet | Part | Qty | Manufacturer | Description |
 |-----------|------|-----|-------------|-------------|
-| [AST2050_AST1100_Datasheet.pdf](AST2050_AST1100_Datasheet.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz integrated BMC SoC with VGA, I2C, GPIO, Ethernet, USB, SPI |
+| [AST2050_AST1100_A3_Datasheet_V1.02.pdf](AST2050_AST1100_A3_Datasheet_V1.02.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz integrated BMC SoC with VGA, I2C, GPIO, Ethernet, USB, SPI. A3 Datasheet V1.02 (Sep 2008). |
+| [AST2050_AST1100_A3_Datasheet_V1.05.pdf](AST2050_AST1100_A3_Datasheet_V1.05.pdf) | AST2050 / AST1100 | — | Aspeed | Same SoC — A3 Datasheet V1.05 (May 2010), newer revision. |
 
 ### Temperature & Fan Control
 

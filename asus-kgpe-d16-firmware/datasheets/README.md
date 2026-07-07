@@ -62,7 +62,15 @@ AMD SP5100 southbridge (SB700 family)  ── SMBus + LPC
 
 | Datasheet | Part | Qty | Manufacturer | Notes |
 |-----------|------|-----|--------------|-------|
-| [AST2050_AST1100_Datasheet.pdf](AST2050_AST1100_Datasheet.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz BMC SoC. This PDF is the **AST1100 Software Programming Guide (397 pp)** — the register-programming manual; the *full* AST2050 datasheet is NDA (see [Still missing](#still-missing--nda-restricted)). |
+| [AST2050_AST1100_A3_Datasheet_V1.02.pdf](AST2050_AST1100_A3_Datasheet_V1.02.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz BMC SoC. Full Aspeed **A3 Datasheet V1.02** (Sep 2008, 397 pp, "ASPEED Confidential"). |
+| [AST2050_AST1100_A3_Datasheet_V1.05.pdf](AST2050_AST1100_A3_Datasheet_V1.05.pdf) | AST2050 / AST1100 | — | Aspeed | Newer **A3 Datasheet V1.05** (May 2010, 403 pp) — same SoC, later revision. |
+
+> Both PDFs' internal `/Title` metadata reads "AST1100 Software Programming
+> Guide" — an Aspeed LaTeX-template artifact; the **content is the A3 Datasheet**
+> (page 1: "Integrated Remote Management Processor — A3 Datasheet"). Aspeed does
+> not officially distribute it, so these are publicly-circulated copies. Newer
+> register-compatible parts: AST2500 (`ast2520a2gp_datasheet.pdf`) / AST2600
+> (`ast2600_datasheet.pdf`) on vgamuseum.info.
 
 ### SPI NOR flash (BMC boot / BMC_FW1)
 
@@ -103,15 +111,15 @@ port shares this repo's SoC bring-up goal. **These are not on the BMC's I2C bus.
 
 | Category | ICs | Files |
 |----------|-----|-------|
-| BMC SoC | AST2050 / AST1100 | 1 |
+| BMC SoC | AST2050 / AST1100 (A3 Datasheet V1.02 + V1.05) | 2 |
 | SPI NOR flash (BMC boot) | M25P64 / M25P128 / S25FL128P / MX25L12835F / W25X64 | 5 |
 | BMC I2C sensor / EEPROM | LM75, AT24C256 | 2 |
 | Host-side board context | W83795G, AMD SR5690, AMD SP5100 | 3 |
-| **Total committed** | **11 documents** | **~66 MiB** |
+| **Total committed** | **12 documents** | **~68 MiB** |
 
-Files shared byte-for-byte with the C410X collection: **AST2050, the 5 SPI-NOR
-flash chips, LM75, AT24C256** (8 of 11). KGPE-D16-specific additions: **W83795G,
-AMD SR5690, AMD SP5100** (3 of 11).
+Files shared byte-for-byte with the C410X collection: **both AST2050 A3 Datasheet
+revisions, the 5 SPI-NOR flash chips, LM75, AT24C256** (9 of 12). KGPE-D16-specific
+additions: **W83795G, AMD SR5690, AMD SP5100** (3 of 12).
 
 ---
 
@@ -139,7 +147,6 @@ run so the gaps stay visible.
 
 | Part | Status | Best available |
 |------|--------|----------------|
-| **Aspeed AST2050 (full datasheet)** | NDA | Committed `AST2050_AST1100_Datasheet.pdf` (AST1100 SW Programming Guide, 397 pp) is the public substitute. AST2500 (`ast2520a2gp_datasheet.pdf`) / AST2600 (`ast2600_datasheet.pdf`) on vgamuseum.info are register-compatible references for newer G-series parts. |
 | **Winbond W83667HG-A (host Super I/O)** | Registration/NDA-gated | Distributor mirrors 403; alldatasheet serves a truncated ~19 pp preview only. Open reference: coreboot `src/superio/winbond/w83667hg-a/`. |
 | **BMC Ethernet PHY** (ASMB4/5, RMII) | **Unidentified** | `../RAPTOR-PORTING-GUIDE.md:958` flags it as an open question. RTL8201EL/RTL8211BN/RTL8201N in the analysis are the AST2050 driver's *supported* PHY list, **not** a board ID. Needs a board photo / ASMB schematic. Candidate if later confirmed as an RTL8201-class part: `http://realtek.info/pdf/rtl8201.pdf`. |
 | **BMC FRU EEPROM (exact part)** | Class ref committed | Present per `ast2050.h` / U-Boot but density/vendor unread; `AT24C256_Datasheet.pdf` stands in until the marking is read off the chip. |
