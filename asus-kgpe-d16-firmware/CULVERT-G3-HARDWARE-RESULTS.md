@@ -92,9 +92,34 @@ CC=gcc meson setup build && ninja -C build
 ./build/src/culvert read --type=ram 0x40000000 64 via p2a vga | xxd
 ```
 
+## The decisive constraint: this is a *dead-BMC* bench
+
+culvert is designed to reach into a **running / initialised** BMC. This bench has
+**no BMC firmware** (the ARM core is held in reset, subsystems un-initialised), so
+culvert functions split into two classes here:
+
+- **Exercisable on a dead BMC via P2A — ported & verified:** SoC recognition,
+  device-tree + all driver binding, `probe`, register read/write, RAM read, bridge
+  selection. ✅ These are the whole point of an out-of-band AHB tool and they work.
+- **Require a live / initialised BMC (or a side path) — cannot be verified on this
+  bench, and not because of the port:**
+  - `sfc` flash **dump** — needs the SMC actively serving the flash window (a live
+    BMC), or the **spispy/ULX3S SPI path** (bypasses the SMC). Prototyped over P2A →
+    the flash data window isn't served here. Not a driver gap on this bench.
+  - `console` — a getty on the **BMC's own console** is meaningless with no firmware
+    running; needs a live BMC.
+  - Full `probe` **posture** for `p2a`/`ilpc` — reads G3-specific enable/lock regs
+    (P2A00 protection key in PCI-config space; HICR5[8] `ENL2H`); real driver work,
+    read-verifiable, but cosmetic for the working read path.
+
+The natural time to finish the "live-BMC" functions is **once we boot our own
+firmware on the BMC** (the project's end goal) — then `sfc`/`console` become
+testable in-band, and running culvert on the BMC via `devmem` also unlocks.
+
 ## Next (per the plan, [`../docs/plans/2026-07-07-culvert-ast2050-g3-support.md`](../docs/plans/2026-07-07-culvert-ast2050-g3-support.md))
 
-1. **AST2050 SMC flash driver** → real `sfc`/firmware dump (the key open-firmware capability).
-2. **G3 `pciectl`/`ilpcctl`** register offsets → correct `probe` posture.
-3. Validate **`jtag`** (software bitbang) and **`console`** on hardware.
+1. Flash **dump now** via spispy/ULX3S (bench); add a G3 SMC `sfc` driver for
+   **live-BMC** boards (RE done, register map in this doc).
+2. **G3 `pciectl`/`ilpcctl`** register offsets → correct `probe` posture (read-verifiable here).
+3. Validate **`jtag`** (software bitbang → OpenOCD) on hardware — the one live-core item plausibly testable on a held ARM core.
 4. Refine `g3.dts` (DDR2 SDMC decode; dedicated `aspeed,ast2050-*` bindings + driver matches).
