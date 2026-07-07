@@ -366,64 +366,63 @@ For the OpenOCD side you need OpenOCD built **with `remote_bitbang`**
 
 ## 6. Applicability to **our** hardware (AST2050 / G3) — read this first
 
-This is the part that decides whether culvert is plug-and-play or a porting job
-on the KGPE-D16 and Dell C410X (both AST2050). The findings are **verified in
-culvert source**, and they are not encouraging out-of-the-box:
+Two questions decide this: (a) does the AST2050 *hardware* expose culvert's AHB
+backdoors, and (b) does culvert's *software* recognise the part. Cross-checked
+against the **AST2050/AST1100 A3 Datasheet, V1.02 (2008)**
+(`../dell-c410x-firmware/datasheets/AST2050_AST1100_Datasheet.pdf`) and culvert
+source. Full porting roadmap:
+[`../docs/plans/2026-07-07-culvert-ast2050-g3-support.md`](../docs/plans/2026-07-07-culvert-ast2050-g3-support.md).
 
-1. **Culvert does not recognise the AST2050 silicon.** Its revision table lists
-   only AST2400 (`0x02……`), AST2500 (`0x04……`) and AST2600 (`0x05……`)
-   (`src/rev.c:18-23`); `rev_generation` only maps generations `0x02/0x04/0x05`
-   → `g4/g5/g6` (`src/rev.c:171-177`). An AST2050 revision falls through to
-   *"Revision 0x… is unsupported"* and `soc_probe()` fails. ✅
-2. **There is no G3 device tree.** Culvert only ships `g4.dts` (AST2400),
-   `g5.dts` (AST2500), `g6.dts` (AST2600) (`src/devicetree/`). The JTAG node and
-   debug-bridge-controller node live only in those. ✅
-3. **Consequence — split behaviour on an AST2050:**
-   - The **raw debug-UART shell driver** (`src/bridge/debug.c`) is
-     **SoC-agnostic** — it just opens the serial port and speaks the byte
-     protocol of §2.4. So *if the AST2050 exposes the hardware debug UART*, you
-     can peek/poke its AHB with the shell (manually, or via a culvert patched to
-     skip `soc_probe`). 🔶
-   - Anything that calls `soc_probe()` first — **`culvert jtag`** (needs a
-     matching JTAG node) and **`culvert probe`**'s posture report, `sfc`, etc. —
-     will bail on an AST2050 until a **G3 port** is added to culvert (a silicon
-     rev entry in `rev.c` + a `g3.dts` describing the SCU/JTAG/debug-bridge +
-     match data). ✅
-4. **⚠️ Open question — does the AST2050 even have the debug UART shell?** The
-   published password and shell are documented for AST2400/2500/2600. Whether
-   the older AST2050 (G3) implements the same hardware debug console, and on
-   which UART/strap, is **not answerable from culvert** and must be tested on
-   real silicon. We have exactly the rig to test it: the
-   `rpi4-asus-aspeed2050-dev` bridge already has serial access to the AST2050
-   (see the project's hardware-bridge notes). The test is cheap: at 1200 baud,
-   send the §2.3 password, look for a `$ ` prompt.
-5. **Register compatibility is plausible.** This repo already builds the C410X
-   device tree on `aspeed-g4.dtsi` because "the AST2050 is register-compatible
-   enough" (`CLAUDE.md`). If that holds for the SCU strap, JTAG master
-   (`@1e6e4000`) and UART blocks, a G3 culvert port is mostly a matter of adding
-   the revision id and a device tree cloned from `g4.dts`. 🔶
+### 6.1 Hardware: the AST2050 *does* have AHB backdoor bridges ✅
 
-**Why this is still valuable to us.** If the debug UART is present (step 4),
-culvert (with a small G3 port) becomes a **no-soldering** alternative to the
-physical-JTAG rig in [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md):
-same OpenOCD/GDB workflow against the ARM926EJ-S core, but carried over the
-existing serial console instead of the unpopulated `AST_JTAG1` header. Even
-without the JTAG port, the debug-UART shell alone is a fast way to read/write
-AST2050 registers during bring-up and to cross-check the reverse-engineered
-DDR2/clock init against live silicon.
+Contrary to a first guess from culvert's device trees, the AST2050 datasheet
+documents the same backdoor family culvert uses — only the *UART* console is
+missing:
+
+- **P2A (P-Bus→AHB), §36:** verbatim "a back door for host CPU to access all the
+  internal IP modules in ARM SOC sub-system," stated use "H/W or S/W debugging
+  through host CPU." 64 KiB window (`P2A04[31:16]` base, `P2A00[0]` enable key,
+  regs at MMIOBASE+`F000h`/`F004h`), via the Aspeed VGA PCI function `1A03:2000`
+  (`SCU30`). = culvert **`p2a`**. ✅
+- **LPC-to-AHB:** `HICR5[8] ENL2H` + `HICR7 ADRBASE` / `HICR8 ADRMASK`. =
+  culvert **`ilpc`/`lpc2ahb`**. ✅
+- **External JTAG** for ARM code debug (§2.1, "ICE"-controllable CPU reset). ✅
+- **No UART debug console:** `SCU70` has no debug-UART-select strap (the
+  AST2500's `SCU70[29]` has no G3 equivalent; no UART5) and `SCU2C[10]` (the
+  AST2500 debug-UART enable) is **"Reserved."** So culvert's **`debug-uart`**
+  transport — and software-JTAG-over-serial — is a genuine dead end on the
+  AST2050. Reach the AHB via `p2a`, `ilpc`, or `devmem` instead. ✅
+
+### 6.2 Software: culvert does not yet recognise the AST2050 ✅
+
+- Its revision table lists only AST2400/2500/2600 (`src/rev.c:18-23`) and
+  `rev_generation` only maps generations `0x02/0x04/0x05` → `g4/g5/g6`
+  (`src/rev.c:171-177`). The AST2050 generation nibble (`SCU 0x7C[31:24]`) is
+  **`0x00`**, so `soc_probe()` fails with "Revision 0x… is unsupported" — and
+  culvert's G6 heuristic may even mis-detect the `0x00`-gen part. ✅
+- No G3 device tree (`src/devicetree/` has only g4/g5/g6). ✅
+- Everything that calls `soc_probe()` (`probe`, `p2a`, `ilpc`, `sfc`, `jtag`)
+  therefore needs a **G3 port** first: a `rev.c` entry + `g3.dts` + driver match
+  data, then G3 register offsets for the `p2a`/`ilpc` drivers. See the plan.
+
+### 6.3 Board split ⚠️
+
+- **KGPE-D16:** an AMD Opteron host is wired to the BMC over PCI **and** LPC, so
+  `p2a` and `ilpc` work **from the host** (host powered), and `devmem` from the
+  BMC once our firmware boots.
+- **Dell C410X:** **no host CPU** — nothing drives the PCI/LPC backdoors, so
+  culvert there runs **on the BMC via `devmem`**, or you use physical JTAG.
 
 ### Suggested next steps (open items)
 
-- [ ] ⚠️ On `rpi4-asus-aspeed2050-dev`, test whether the AST2050 answers the
-      debug-UART password at 1200 baud on UART1 **and** UART5. Record which
-      (if any) responds. → feeds a new item in
-      [`RAPTOR_AST2050_SUMMARY.md`](RAPTOR_AST2050_SUMMARY.md).
-- [ ] 🔶 If it responds: prototype a culvert **G3 port** — add the AST2050
-      silicon-revision id to `src/rev.c` and a `g3.dts` cloned from `g4.dts`,
-      then try `culvert probe` / `culvert jtag --target arm via debug-uart`.
-- [ ] Compare culvert's internal-JTAG SCU routing (`MISC_CTRL[15:14]`,
-      `@1e6e4000`) against the AST2050 datasheet / [`ast2050.h`](ast2050.h) to
-      confirm the JTAG-master→ARM route exists on G3.
+- [ ] Prototype the culvert **G3 port** (rev id + `g3.dts` + `p2a`/`ilpc` G3
+      offsets) on `mithro/culvert` branch `ast2050-support`; test
+      `culvert probe via devmem` on the BMC. See the plan doc.
+- [ ] (KGPE-D16, from host) confirm the Aspeed VGA function `1A03:2000`
+      enumerates, then exercise `culvert … via p2a`.
+- [ ] Confirm the internal JTAG-master base + `MISC_CTRL[15:14]` routing exist on
+      G3 (external JTAG itself is datasheet-confirmed) before relying on
+      `culvert jtag`.
 
 ---
 
