@@ -68,15 +68,24 @@ over P2A on 2026-07-08:
   culvert's AST2500 FMC driver does in user mode, but with the AST2050 SMC
   register interface).
 
-- **User-mode read prototyped over P2A — and it does not yield flash data on this
-  rig.** Confirmed P2A can *write* the SMC (`SMC0C 0x1600000c` ← `0x00000003`
-  reads back), entered User Mode (`[1:0]=11`, CE# asserted), clocked `03h`+addr,
-  and read the CE2 window — all reads returned `0`. The SMC clock is **not** the
-  cause: `SCU0C` (Clock Stop Control) has no SMC/flash bit — the SMC runs on HCLK
-  (always on). So the block is that the SMC **flash data window (`0x14000000`) is
-  not served over P2A** (P2A reaches config registers and DRAM, but not the SMC's
-  memory-mapped flash decode / SPI data path), and/or the boot flash is
-  **spispy-emulated by the ULX3S** on this bench.
+- **User-mode read prototyped over P2A — does not yield flash data on this rig,
+  and the cause is proven by elimination.** Confirmed P2A can *write* the SMC
+  (`SMC0C 0x1600000c` ← `0x00000003` reads back), entered User Mode (`[1:0]=11`,
+  CE# asserted), clocked `03h`+addr, read the CE2 window — all reads `0`.
+  Eliminated every internal cause:
+  - **Not clock-gated:** `SCU0C` (Clock Stop Control) has no SMC/flash bit — the
+    SMC is on HCLK (always on).
+  - **Not held in reset:** `SCU04` (System Reset Control, `0x000FFE5C`) resets
+    PCI/MIC/MDMA/USB/MAC/PECI/PWM/VGA/Video/LPC — there is **no SMC reset bit**.
+  - **P2A itself works:** it concurrently read real `SCU7C=0x00000202` and
+    `DRAM 0x40000000=0x00101000`.
+
+  So the SMC engine is live, yet the flash window yields `0`. What remains: the
+  SMC **flash CE decode (`0x14000000`) is not reachable via P2A** (P2A is the
+  §36 "back door to the internal IP modules in the ARM SOC sub-system" — SoC
+  registers + DRAM — not the SMC's external memory-mapped flash path), and/or the
+  boot flash is on the **external spispy/ULX3S rig**. Either way it is a
+  transport/bench limit, not a culvert-driver gap.
 - **Conclusion:** a flash *dump on this rig* is not a culvert-driver gap — it is a
   transport/bench limitation. Use the **spispy / ULX3S SPI path** (reads the flash
   chip directly, bypassing the AST2050 SMC), which instance-A already has wired.
