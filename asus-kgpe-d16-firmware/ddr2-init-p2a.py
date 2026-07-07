@@ -119,8 +119,7 @@ def build_host_script():
         '$C write 0x40000004 0x12345678',
         'echo -n "0x40000000 = "; $C read 0x40000000',
         'echo -n "0x40000004 = "; $C read 0x40000004',
-        'echo "(expect 0xdeadbeef / 0x12345678 if DDR2 is alive; the fixed",'
-        '     "0x00101000-style pattern means still uninitialised)"',
+        'echo "(expect deadbeef/12345678 if DDR2 alive; a fixed 0x00101000-style pattern = still uninitialised)"',
     ]
     return "\n".join(lines) + "\n"
 

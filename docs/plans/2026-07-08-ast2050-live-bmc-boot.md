@@ -52,11 +52,22 @@ registers + DRAM works (that's how culvert reaches it).
 
 ## Milestones (each independently verifiable)
 
-- [ ] **M1 — DDR2 alive.** Initialise the DDR2 controller (path 1's U-Boot, or path
-      2's P2A sequence) and prove DRAM with a write/read-back over P2A (the
-      repeating-pattern → real storage). This alone unblocks loading payloads.
-- [ ] **M2 — U-Boot prompt** on `/dev/ttyUSB0` (serial console). Press a key within
-      the boot delay; confirm `AST2050`/DRAM banner.
+- [x] **M1 — DDR2 alive. DONE + hardware-verified (2026-07-08).** `ddr2-init-p2a.py`
+      (path 2, the faithful `platform.S` sequence over P2A) initialised the DDR2
+      controller on the real AST2050; DRAM `0x40000000`/`0x100`/`0x40100000`/
+      `0x41000000` now store & read back `deadbeef`/`a5a5a5a5`/`cafebabe`/`0badf00d`
+      (was a fixed uninitialised pattern). The hardest low-level bring-up is proven
+      — payloads can now be loaded into BMC DRAM over P2A. Non-destructive; SCU/SDMC
+      relocked after.
+- [ ] **M2 — U-Boot prompt** on `/dev/ttyUSB0`. Now that DRAM is up over P2A, the
+      cleanest path is: build/obtain a U-Boot with **`CONFIG_SKIP_LOWLEVEL_INIT`**
+      (it needn't re-init DDR — P2A already did), **load it into DRAM via P2A**
+      (culvert write / bulk), and **start the ARM at that address**. ARM-run
+      mechanisms, cheapest first: (a) physical `AST_JTAG1` + OpenOCD on the Pi
+      (halt → set PC → resume — the AST2050's external ICE JTAG, wired per
+      `RPI4-OPENOCD-JTAG-WIRING.md`); (b) spispy-load U-Boot into the CE2 boot
+      flash + reset; (c) SCU boot-vector redirect. Coordinate the ARM
+      reset/release with instance-A first.
 - [ ] **M3 — Linux boots** (our kernel + initramfs) to a shell/SSH.
 - [ ] **M4 — culvert in-band:** run culvert on the BMC via `devmem`; `sfc` dump the
       real flash; `console` — closing the culvert-port verification.
