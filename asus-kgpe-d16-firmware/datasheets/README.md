@@ -76,7 +76,7 @@ revision; all are 64 or 128 Mbit.
 | [M25P128_Datasheet.pdf](M25P128_Datasheet.pdf) | M25P128 (STM25P128) | STMicro / Micron | 128 Mbit | 47 pp, full datasheet |
 | [S25FL128P_Datasheet.pdf](S25FL128P_Datasheet.pdf) | S25FL128P | Spansion / Infineon | 128 Mbit | 44 pp, full datasheet |
 | [MX25L12835F_Datasheet.pdf](MX25L12835F_Datasheet.pdf) | MX25L12835F (MX25L128D) | Macronix | 128 Mbit | full datasheet |
-| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 | Winbond | 64 Mbit | **product brief only** (2 pp SpiFlash flyer) — full W25X64 datasheet is registration-gated |
+| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 | Winbond | 64 Mbit | 50 pp full datasheet (covers W25X16/16A/32/64, Rev I) |
 
 ### BMC I2C — sensors & EEPROM
 

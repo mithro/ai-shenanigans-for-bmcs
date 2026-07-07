@@ -106,7 +106,7 @@ actual part varies by board revision — all are 64 or 128 Mbit SPI NOR.
 | [M25P128_Datasheet.pdf](M25P128_Datasheet.pdf) | M25P128 (STM25P128) | STMicro / Micron | 128 Mbit | 50 MHz |
 | [S25FL128P_Datasheet.pdf](S25FL128P_Datasheet.pdf) | S25FL128P | Spansion / Infineon | 128 Mbit | 104 MHz |
 | [MX25L12835F_Datasheet.pdf](MX25L12835F_Datasheet.pdf) | MX25L12835F (MX25L128D) | Macronix | 128 Mbit | 133 MHz |
-| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 | Winbond | 64 Mbit | 104 MHz |
+| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 (W25X16/16A/32/64 Rev I) | Winbond | 64 Mbit | 104 MHz |
 
 ### PCIe Switches
 

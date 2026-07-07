@@ -81,8 +81,11 @@ DATASHEETS = [
     ),
     (
         "W25X64_Datasheet.pdf",
-        ["https://www.winbond.com/productResource-files/DA05-0006.pdf"],
-        "W25X64 - 64Mbit SPI Flash with Dual Output (Winbond)",
+        [
+            "https://media.digikey.com/pdf/data%20sheets/winbond%20pdfs/w25x16,16a,32,64.pdf",
+            "https://web.archive.org/web/2id_/https://media.digikey.com/pdf/data%20sheets/winbond%20pdfs/w25x16,16a,32,64.pdf",
+        ],
+        "W25X64 - 64Mbit SPI NOR Flash, Dual Output (Winbond) - full datasheet (W25X16/16A/32/64, Rev I, 50pp)",
     ),
 
     # ============================================================
