@@ -63,9 +63,23 @@ over P2A on 2026-07-08:
   mode** — manually assert CE2, clock out `03h + 3-byte addr`, read data — via the
   SMC control register, rather than relying on the mapped normal-read window (as
   culvert's AST2500 FMC driver does in user mode, but with the AST2050 SMC
-  register interface). This is the remaining work for a real `sfc` on G3; it
-  requires coordinated AHB **writes** to the SMC, so it must be logged in
-  `HARDWARE-COORDINATION.md` before running.
+  register interface).
+
+- **User-mode read prototyped over P2A — and it does not yield flash data on this
+  rig.** Confirmed P2A can *write* the SMC (`SMC0C 0x1600000c` ← `0x00000003`
+  reads back), entered User Mode (`[1:0]=11`, CE# asserted), clocked `03h`+addr,
+  and read the CE2 window — all reads returned `0`. The SMC clock is **not** the
+  cause: `SCU0C` (Clock Stop Control) has no SMC/flash bit — the SMC runs on HCLK
+  (always on). So the block is that the SMC **flash data window (`0x14000000`) is
+  not served over P2A** (P2A reaches config registers and DRAM, but not the SMC's
+  memory-mapped flash decode / SPI data path), and/or the boot flash is
+  **spispy-emulated by the ULX3S** on this bench.
+- **Conclusion:** a flash *dump on this rig* is not a culvert-driver gap — it is a
+  transport/bench limitation. Use the **spispy / ULX3S SPI path** (reads the flash
+  chip directly, bypassing the AST2050 SMC), which instance-A already has wired.
+  A culvert SMC `sfc` driver would still be worth adding for boards with a **live**
+  BMC (SMC already serving the flash window), but cannot be verified on this
+  dead-BMC bench via P2A. `SMC0C` was restored to `0` after the prototype.
 
 ## Reproduce
 
