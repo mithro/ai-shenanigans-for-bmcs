@@ -94,11 +94,23 @@ tools build. **Remaining blocker (vintage quagmire, offline):** `tools/mkimage`
 image-format objects can't simply be dropped, and the 2013 vs modern **libfdt**
 header clash on those needs a cleaner resolution than the `-I` tweak.
 
-**Recommended cleaner path (avoids the vintage-toolchain quagmire entirely):** port
-`platform.S`'s AST2050 **DDR2 init into the modern OpenBMC U-Boot** that PR #16
-already builds green (`uboot/build-uboot.sh`, v2019.04) — a real-HW `u-boot.bin`
-from a clean modern build, instead of fighting Raptor's 2013.07 + gcc-4.9.4 host
-tools. Either path is offline and rig-independent.
+**libfdt clash — SOLVED** (reusable): in `tools/Makefile` `HOSTCPPFLAGS`, change
+`-idirafter $(SRCTREE)/include` → `-I $(SRCTREE)/include` **and** add `-DLIBFDT_H`
+(the modern system `/usr/include/libfdt.h` guard is `LIBFDT_H`; the bundled one is
+`_LIBFDT_H`, so predefining `LIBFDT_H` makes the system header self-skip, leaving
+only the bundled libfdt the tools need). This clears the redefinitions.
+
+**But it's a multi-issue quagmire:** the next vintage-vs-modern break is
+`include/compiler.h:66` (a `##sfx` bswap macro the modern host cpp rejects) — and
+there will be more. This confirms PR #16's "hard-to-build" call.
+
+**Recommended path (avoids the vintage quagmire entirely):** port `platform.S`'s
+AST2050 **DDR2 init into the modern OpenBMC U-Boot** that PR #16 already builds
+green (`uboot/build-uboot.sh`, v2019.04) — a real-HW `u-boot.bin` from a clean
+modern build. **Alternatively** (culvert-native, no U-Boot build at all): script
+`platform.S`'s SDMC register sequence over **P2A** to bring DDR2 up directly
+(milestone M1), then load a payload — needs the rig + coordination but no vintage
+build. Either path is the concrete next step.
 
 > Note: even a finished `u-boot.bin` cannot *run* without the rig — loading it
 > (spispy/JTAG) + resetting the AST2050 are the coordinated steps below.
