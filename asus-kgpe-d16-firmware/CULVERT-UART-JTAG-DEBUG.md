@@ -369,7 +369,7 @@ For the OpenOCD side you need OpenOCD built **with `remote_bitbang`**
 Two questions decide this: (a) does the AST2050 *hardware* expose culvert's AHB
 backdoors, and (b) does culvert's *software* recognise the part. Cross-checked
 against the **AST2050/AST1100 A3 Datasheet, V1.02 (2008)**
-(`../dell-c410x-firmware/datasheets/AST2050_AST1100_Datasheet.pdf`) and culvert
+(`../datasheets/aspeed/AST2050_AST1100_A3_Datasheet_V1.02.pdf`) and culvert
 source. Full porting roadmap:
 [`../docs/plans/2026-07-07-culvert-ast2050-g3-support.md`](../docs/plans/2026-07-07-culvert-ast2050-g3-support.md).
 
