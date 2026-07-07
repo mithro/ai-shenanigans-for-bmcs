@@ -37,10 +37,13 @@ Commits (on `ast2050-support`): `bca3ae5` (rev/soc G3 recognition + `g3.dts`),
 |---|---|
 | **Flash dump (`sfc`)** | The AST2050 uses the older **SMC @ `0x16000000`** with the flash mapped at `0x14000000` (`ast2050.h` `PHYS_FLASH_1`). Culvert's `sfc` driver only matches `aspeed,ast2500-fmc`/`-spi` (G5+) — it fails "Failed to acquire SPI controller". The mmap window `0x14000000` reads `0x0` (the SMC isn't decoding the flash — no firmware ran to configure it). **Requires a new AST2050 SMC driver** (configure `AST_SMC_BASE`, read the flash), not just a DT node. |
 | ~~Bridge posture accuracy~~ **FIXED + verified** | `probe` used to mis-report `ilpc: Permissive` (backdoor actually off) and `p2a: Disabled` (while in use). Fixed: added `aspeed,ast2050-ilpc-ahb-bridge` ops reading **`HICR5[8] ENL2H`** → now correctly `ilpc: Disabled`; dropped the mismatched G4 `pcie-device-controller` node (culvert's pciectl reads `SCU 0x180`, which is not the PCIe config on G3) so no false `p2a`/`xdma` line. Commit `0cf9bfe`. An *accurate* G3 P2A posture (from `P2A00`/`SCU2C[8]`) is still future work. |
-| **`jtag` / `console`** | Not yet tested on hardware. `jtag` needs the JTAG master + `SCU MISC_CTRL[15:14]` routing validated on G3; `console` needs the UART mux. |
+| ~~`jtag`~~ **resolved: N/A on G3** | The AST2050 has **no internal JTAG master** — the datasheet documents only an external ICE debug interface (§2.1) and has nothing at `0x1e6e4000` (register bases jump `0x1e6e2000` SCU → `0x1e6e3000`). culvert's software JTAG (internal master routed to the ARM via `SCU MISC_CTRL[15:14]`) is an AST2400+ feature. Dropped the bogus g3.dts jtag node; **verified** `culvert jtag` now fails cleanly ("Failed to acquire JTAG controller"). AST2050 ARM debug = external `AST_JTAG1` header + OpenOCD. Commit `16b7ce0`. |
+| **`console`** | Needs a **live BMC** (a getty on the BMC's running firmware); not exercisable on a dead board. Uses the LPC UART mux. |
 
-Not applicable on G3 (by design): `debug-uart` (AST2500-only), `otp`/`coprocessor`
-(AST2600-only). See [`CULVERT-UART-JTAG-DEBUG.md`](CULVERT-UART-JTAG-DEBUG.md) §3.3.
+Not applicable on G3 (absent hardware, culvert now rejects them cleanly):
+`debug-uart` (AST2500-only), `jtag` (no internal JTAG master — AST2400+),
+`otp`/`coprocessor` (AST2600-only). See
+[`CULVERT-UART-JTAG-DEBUG.md`](CULVERT-UART-JTAG-DEBUG.md) §3.3.
 
 ## AST2050 SMC flash — reverse-engineering notes (driver spec)
 
@@ -116,10 +119,24 @@ The natural time to finish the "live-BMC" functions is **once we boot our own
 firmware on the BMC** (the project's end goal) — then `sfc`/`console` become
 testable in-band, and running culvert on the BMC via `devmem` also unlocks.
 
+## Status of every culvert function on the AST2050
+
+| Function | State |
+|---|---|
+| `probe` (recognition, posture) | ✅ ported + hw-verified (correct `ilpc: Disabled`, no false p2a) |
+| `read`/`write --type=ram`, `p2a`, `ilpc`, `debug` (raw AHB) | ✅ ported + hw-verified (P2A) |
+| SoC drivers (scu, sdmc, clk, strap, sioctl, vuart, ilpcctl) | ✅ bind + init on hw |
+| bridge auto-selection | ✅ fixed + hw-verified |
+| `ilpc` posture | ✅ fixed + hw-verified (`ENL2H`) |
+| `jtag`, `debug-uart`, `otp`, `coprocessor` | ✅ correctly **rejected** — hardware absent on G3 (not gaps) |
+| `p2a` posture (fine-grained) | ⬜ needs a G3 driver reading `P2A00`/`SCU2C[8]` (PCI-config) |
+| `sfc` flash **dump** | ⬜ bench: use spispy (flash not served via P2A on a dead BMC); a G3 SMC driver (RE'd + spec'd above) is for **live-BMC** boards |
+| `console`, on-BMC `devmem` | ⬜ need a **live BMC** (our own firmware) — testable once booted |
+
 ## Next (per the plan, [`../docs/plans/2026-07-07-culvert-ast2050-g3-support.md`](../docs/plans/2026-07-07-culvert-ast2050-g3-support.md))
 
 1. Flash **dump now** via spispy/ULX3S (bench); add a G3 SMC `sfc` driver for
-   **live-BMC** boards (RE done, register map in this doc).
-2. **G3 `pciectl`/`ilpcctl`** register offsets → correct `probe` posture (read-verifiable here).
-3. Validate **`jtag`** (software bitbang → OpenOCD) on hardware — the one live-core item plausibly testable on a held ARM core.
+   **live-BMC** boards (RE done, register map + user-mode sequence in this doc).
+2. Accurate **G3 P2A posture** driver (read `P2A00` protection key / `SCU2C[8]`).
+3. Re-test **`console`** + on-BMC **`devmem`** once we boot our own firmware.
 4. Refine `g3.dts` (DDR2 SDMC decode; dedicated `aspeed,ast2050-*` bindings + driver matches).
