@@ -87,15 +87,18 @@ LD_LIBRARY_PATH=$PWD/xlibs make ARCH=arm CROSS_COMPILE=$XPREFIX u-boot.bin   # c
 ```
 
 **Verified working:** toolchain runs, the `asus`/ast2050 board config applies, and
-the ARM target cross-compiles (mpfr shim fixed it). **Remaining build blocker:**
-the documented vintage **libfdt host-tools clash** — U-Boot 2013.07's `tools/`
-(`mkimage`/`image-sig`/`aisimage`) pull the modern system `/usr/include/libfdt.h`
-alongside the bundled `include/libfdt.h` (different include guards → inline-fn
-redefinitions). The AST2050 board uses **no FIT/FDT** (`ast2050.h` has no
-`CONFIG_FIT`), so the fix is to stop the host image tools pulling libfdt (drop the
-non-Aspeed `NOPED` image tools + neutralise `image-sig`'s libfdt include, or build
-the `u-boot` ELF and `objcopy` it directly, bypassing `tools/`). A few more
-iterations; **does not** need the rig.
+the ARM target cross-compiles (mpfr shim fixed it). Changing tools' `HOSTCPPFLAGS`
+`-idirafter $(SRCTREE)/include` → `-I $(SRCTREE)/include` lets the non-libfdt host
+tools build. **Remaining blocker (vintage quagmire, offline):** `tools/mkimage`
+(always built) **links** `aisimage.o`/`kwbimage.o`/… (`tools/Makefile:214`), so the
+image-format objects can't simply be dropped, and the 2013 vs modern **libfdt**
+header clash on those needs a cleaner resolution than the `-I` tweak.
+
+**Recommended cleaner path (avoids the vintage-toolchain quagmire entirely):** port
+`platform.S`'s AST2050 **DDR2 init into the modern OpenBMC U-Boot** that PR #16
+already builds green (`uboot/build-uboot.sh`, v2019.04) — a real-HW `u-boot.bin`
+from a clean modern build, instead of fighting Raptor's 2013.07 + gcc-4.9.4 host
+tools. Either path is offline and rig-independent.
 
 > Note: even a finished `u-boot.bin` cannot *run* without the rig — loading it
 > (spispy/JTAG) + resetting the AST2050 are the coordinated steps below.
