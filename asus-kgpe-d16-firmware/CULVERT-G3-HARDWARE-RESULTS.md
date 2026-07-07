@@ -36,7 +36,7 @@ Commits (on `ast2050-support`): `bca3ae5` (rev/soc G3 recognition + `g3.dts`),
 | Gap | Detail |
 |---|---|
 | **Flash dump (`sfc`)** | The AST2050 uses the older **SMC @ `0x16000000`** with the flash mapped at `0x14000000` (`ast2050.h` `PHYS_FLASH_1`). Culvert's `sfc` driver only matches `aspeed,ast2500-fmc`/`-spi` (G5+) — it fails "Failed to acquire SPI controller". The mmap window `0x14000000` reads `0x0` (the SMC isn't decoding the flash — no firmware ran to configure it). **Requires a new AST2050 SMC driver** (configure `AST_SMC_BASE`, read the flash), not just a DT node. |
-| **Bridge posture accuracy** | `probe` reports `p2a: Disabled` (while we're using it!) and `ilpc: Permissive` (while it reads `0xffffffff`). The `pciectl`/`ilpcctl` drivers read **AST2400 register offsets** via the g4-compatible bindings; the AST2050 enable/lock registers differ. Posture is cosmetic for read use but wrong for `probe --require`. |
+| ~~Bridge posture accuracy~~ **FIXED + verified** | `probe` used to mis-report `ilpc: Permissive` (backdoor actually off) and `p2a: Disabled` (while in use). Fixed: added `aspeed,ast2050-ilpc-ahb-bridge` ops reading **`HICR5[8] ENL2H`** → now correctly `ilpc: Disabled`; dropped the mismatched G4 `pcie-device-controller` node (culvert's pciectl reads `SCU 0x180`, which is not the PCIe config on G3) so no false `p2a`/`xdma` line. Commit `0cf9bfe`. An *accurate* G3 P2A posture (from `P2A00`/`SCU2C[8]`) is still future work. |
 | **`jtag` / `console`** | Not yet tested on hardware. `jtag` needs the JTAG master + `SCU MISC_CTRL[15:14]` routing validated on G3; `console` needs the UART mux. |
 
 Not applicable on G3 (by design): `debug-uart` (AST2500-only), `otp`/`coprocessor`
