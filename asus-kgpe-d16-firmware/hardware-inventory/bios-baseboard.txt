@@ -1,0 +1,184 @@
+# dmidecode 3.7
+Getting SMBIOS data from sysfs.
+SMBIOS 2.6 present.
+
+Handle 0x0000, DMI type 0, 24 bytes
+Platform Firmware Information
+	Vendor: American Megatrends Inc.
+	Version: 3309   
+	Release Date: 06/16/2016
+	Address: 0xF0000
+	Runtime Size: 64 KiB
+	ROM Size: 2 MiB
+	Characteristics:
+		ISA is supported
+		PCI is supported
+		PNP is supported
+		Firmware is upgradeable
+		Firmware shadowing is allowed
+		ESCD support is available
+		Boot from CD is supported
+		Selectable boot is supported
+		Firmware ROM is socketed
+		EDD is supported
+		5.25"/1.2 MB floppy services are supported (int 13h)
+		3.5"/720 kB floppy services are supported (int 13h)
+		3.5"/2.88 MB floppy services are supported (int 13h)
+		Print screen service is supported (int 5h)
+		8042 keyboard services are supported (int 9h)
+		Serial services are supported (int 14h)
+		Printer services are supported (int 17h)
+		CGA/mono video services are supported (int 10h)
+		ACPI is supported
+		USB legacy is supported
+		LS-120 boot is supported
+		ATAPI Zip drive boot is supported
+		BIOS boot specification is supported
+		Targeted content distribution is supported
+	Platform Firmware Revision: 8.15
+
+Handle 0x0001, DMI type 1, 27 bytes
+System Information
+	Manufacturer: ASUSTeK Computer INC.
+	Product Name: KGP(M)E-D16
+	Version: System Version
+	Serial Number: System Serial Number
+	UUID: 1e0033e0-008c-7200-e263-f07959393e79
+	Wake-up Type: Power Switch
+	SKU Number: To Be Filled By O.E.M.
+	Family: To Be Filled By O.E.M.
+
+Handle 0x0002, DMI type 2, 15 bytes
+Base Board Information
+	Manufacturer: ASUSTeK Computer INC.
+	Product Name: KGP(M)E-D16
+	Version: Rev 1.xxG
+	Serial Number: 141236749400034
+	Asset Tag: To Be Filled By O.E.M.
+	Features:
+		Board is a hosting board
+		Board is replaceable
+	Location In Chassis: To Be Filled By O.E.M.
+	Chassis Handle: 0x0003
+	Type: Motherboard
+	Contained Object Handles: 0
+
+Handle 0x0003, DMI type 3, 21 bytes
+Chassis Information
+	Manufacturer: Chassis Manufacture
+	Type: Desktop
+	Lock: Not Present
+	Version: Chassis Version
+	Serial Number: Chassis Serial Number
+	Asset Tag: Asset-1234567890
+	Boot-up State: Safe
+	Power Supply State: Safe
+	Thermal State: Safe
+	Security Status: None
+	OEM Information: 0x00000001
+	Height: Unspecified
+	Number Of Power Cords: 1
+	Contained Elements: 0
+
+Handle 0x0004, DMI type 4, 42 bytes
+Processor Information
+	Socket Designation: CPU 1
+	Type: Central Processor
+	Family: Other
+	Manufacturer: AMD              
+	ID: 20 0F 60 00 FF FB 8B 17
+	Version: AMD Opteron(tm) Processor 6376                      
+	Voltage: 1.0 V
+	External Clock: 200 MHz
+	Max Speed: 4000 MHz
+	Current Speed: 2300 MHz
+	Status: Populated, Enabled
+	Upgrade: Socket G34
+	L1 Cache Handle: 0x0005
+	L2 Cache Handle: 0x0006
+	L3 Cache Handle: 0x0007
+	Serial Number: To Be Filled By O.E.M.
+	Asset Tag: To Be Filled By O.E.M.
+	Part Number: To Be Filled By O.E.M.
+	Core Count: 16
+	Core Enabled: 16
+	Thread Count: 16
+	Characteristics:
+		64-bit capable
+
+Handle 0x0008, DMI type 4, 42 bytes
+Processor Information
+	Socket Designation: CPU 2
+	Type: <OUT OF SPEC>
+	Family: <OUT OF SPEC>
+	Manufacturer: AMD              
+	ID: 00 00 00 00 00 00 00 00
+	Version:                                                     
+	External Clock: Unknown
+	Max Speed: 4000 MHz
+	Current Speed: Unknown
+	Status: Unpopulated
+	Upgrade: <OUT OF SPEC>
+	L1 Cache Handle: 0x0009
+	L2 Cache Handle: 0x000A
+	L3 Cache Handle: 0x000B
+	Serial Number: To Be Filled By O.E.M.
+	Asset Tag: To Be Filled By O.E.M.
+	Part Number: To Be Filled By O.E.M.
+	Characteristics: None
+
+Handle 0x003B, DMI type 10, 6 bytes
+On Board Device Information
+	Type: Video
+	Status: Enabled
+	Description:   AST2050
+
+Handle 0x003D, DMI type 13, 22 bytes
+Firmware Language Information
+	Language Description Format: Long
+	Installable Languages: 1
+		en|US|iso8859-1
+	Currently Installed Language: en|US|iso8859-1
+
+Handle 0x003E, DMI type 15, 55 bytes
+System Event Log
+	Area Length: 240 bytes
+	Header Start Offset: 0x0810
+	Data Start Offset: 0x0810
+	Access Method: General-purpose non-volatile data functions
+	Access Address: 0xC000
+	Status: Valid, Not Full
+	Change Token: 0x00000000
+	Header Format: No Header
+	Supported Log Type Descriptors: 9
+	Descriptor 1: Single-bit ECC memory error
+	Data Format 1: POST results bitmap
+	Descriptor 2: Multi-bit ECC memory error
+	Data Format 2: POST results bitmap
+	Descriptor 3: Parity memory error
+	Data Format 3: Multiple-event
+	Descriptor 4: I/O channel block
+	Data Format 4: Multiple-event
+	Descriptor 5: POST error
+	Data Format 5: POST results bitmap
+	Descriptor 6: PCI parity error
+	Data Format 6: Multiple-event handle
+	Descriptor 7: PCI system error
+	Data Format 7: Multiple-event handle
+	Descriptor 8: System limit exceeded
+	Data Format 8: POST results bitmap
+	Descriptor 9: OEM-specific
+	Data Format 9: POST results bitmap
+
+Handle 0x0061, DMI type 32, 20 bytes
+System Boot Information
+	Status: No errors detected
+
+Handle 0x0063, DMI type 41, 11 bytes
+Onboard Device
+	Reference Designation:   AST2050
+	Type: Video
+	Status: Enabled
+	Type Instance: 0
+
+ControlSocket /home/tim/.ssh/tmp/master-claude@rpi4-asus-aspeed2050-dev.iot.welland.mithis.com:22 already exists, disabling multiplexing

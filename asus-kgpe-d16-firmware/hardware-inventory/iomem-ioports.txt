@@ -1,0 +1,158 @@
+===== /proc/iomem =====
+00000000-00000fff : Reserved
+  00000ca2-00000ca2 : IPMI Address 1
+  00000ca3-00000ca3 : IPMI Address 2
+00001000-0009c7ff : System RAM
+0009c800-0009ffff : Reserved
+000a0000-000bffff : PCI Bus 0000:00
+000c0000-000c7fff : Video ROM
+000ce000-000cefff : Adapter ROM
+000cf000-000cffff : Adapter ROM
+000d0000-000dffff : PCI Bus 0000:00
+000e6000-000fffff : Reserved
+  000f0000-000fffff : System ROM
+00100000-cff7ffff : System RAM
+cff80000-cff8dfff : RAM buffer
+cff8e000-cff8ffff : Unknown E820 type
+cff90000-cffa1fff : ACPI Tables
+cffa2000-cffdffff : ACPI Non-volatile Storage
+cffe0000-cfffffff : Reserved
+d0000000-dfffffff : PCI Bus 0000:00
+  d6000000-dfffffff : PCI Bus 0000:04
+    d6000000-d7ffffff : 0000:04:00.0
+    d8000000-dfffffff : 0000:04:00.0
+e0000000-efffffff : PCI ECAM 0000 [bus 00-ff]
+  e0000000-efffffff : Reserved
+    e0000000-efffffff : pnp 00:08
+f0000000-febfffff : PCI Bus 0000:00
+  f6000000-f6003fff : amd_iommu
+  f8ff6000-f8ff6fff : 0000:00:12.0
+    f8ff6000-f8ff6fff : ohci_hcd
+  f8ff7000-f8ff7fff : 0000:00:12.1
+    f8ff7000-f8ff7fff : ohci_hcd
+  f8ffc000-f8ffcfff : 0000:00:13.0
+    f8ffc000-f8ffcfff : ohci_hcd
+  f8ffd000-f8ffdfff : 0000:00:13.1
+    f8ffd000-f8ffdfff : ohci_hcd
+  f8ffe400-f8ffe7ff : 0000:00:11.0
+    f8ffe400-f8ffe7ff : ahci
+  f8ffe800-f8ffe8ff : 0000:00:12.2
+    f8ffe800-f8ffe8ff : ehci_hcd
+  f8ffec00-f8ffecff : 0000:00:13.2
+    f8ffec00-f8ffecff : ehci_hcd
+  f8fff000-f8ffffff : 0000:00:14.5
+    f8fff000-f8ffffff : ohci_hcd
+  f9000000-f9dfffff : PCI Bus 0000:01
+    f9000000-f97fffff : 0000:01:01.0
+    f9de0000-f9dfffff : 0000:01:01.0
+      f9de0000-f9dfffff : ast
+  f9e00000-f9efffff : PCI Bus 0000:02
+    f9edc000-f9edffff : 0000:02:00.0
+      f9edc000-f9edffff : e1000e
+    f9ee0000-f9efffff : 0000:02:00.0
+      f9ee0000-f9efffff : e1000e
+  f9f00000-f9ffffff : PCI Bus 0000:03
+    f9fdc000-f9fdffff : 0000:03:00.0
+      f9fdc000-f9fdffff : e1000e
+    f9fe0000-f9ffffff : 0000:03:00.0
+      f9fe0000-f9ffffff : e1000e
+  fa000000-fbffffff : PCI Bus 0000:04
+    fa000000-faffffff : 0000:04:00.0
+    fbffc000-fbffffff : 0000:04:00.1
+      fbffc000-fbffffff : ICH HD audio
+fec00000-fec003ff : IOAPIC 0
+fec10000-fec1001f : pnp 00:05
+fec20000-fec203ff : IOAPIC 1
+fed00000-fed003ff : HPET 2
+  fed00000-fed003ff : PNP0103:00
+fed20000-fed3ffff : pnp 00:05
+fed40000-fed8ffff : pnp 00:05
+fee00000-fee00fff : pnp 00:04
+ffb80000-ffbfffff : pnp 00:05
+ffe00000-ffffffff : Reserved
+100000000-12effffff : System RAM
+  110e00000-1122e0c57 : Kernel code
+  112400000-1133f7fff : Kernel rodata
+  113400000-1136df1ff : Kernel data
+  11408c000-1145fffff : Kernel bss
+12f000000-12fffffff : RAM buffer
+===== /proc/ioports (look for BMC KCS/LPC) =====
+0000-0cf7 : PCI Bus 0000:00
+  0000-001f : dma1
+  0020-0021 : pic1
+  0040-0043 : timer0
+  0050-0053 : timer1
+  0060-0060 : keyboard
+  0061-0061 : PNP0800:00
+  0064-0064 : keyboard
+  0070-0071 : rtc0
+  0080-008f : dma page reg
+  00a0-00a1 : pic2
+  00c0-00df : dma2
+  00f0-00ff : PNP0C04:00
+    00f0-00ff : fpu
+  0170-0177 : 0000:00:14.1
+    0170-0177 : pata_atiixp
+  01f0-01f7 : 0000:00:14.1
+    01f0-01f7 : pata_atiixp
+  0290-029f : pnp 00:03
+    0295-0296 : w83627ehf
+      0295-0296 : w83627ehf
+  02f8-02ff : serial
+  0376-0376 : 0000:00:14.1
+    0376-0376 : pata_atiixp
+  03c0-03df : vga+
+  03f6-03f6 : 0000:00:14.1
+    03f6-03f6 : pata_atiixp
+  03f8-03ff : serial
+  040b-040b : pnp 00:05
+  04d0-04d1 : pnp 00:05
+  04d6-04d6 : pnp 00:05
+  0550-0551 : pnp 00:05
+  0800-089f : pnp 00:05
+    0800-0803 : ACPI PM1a_EVT_BLK
+    0804-0805 : ACPI PM1a_CNT_BLK
+    0808-080b : ACPI PM_TMR
+    0810-0815 : ACPI CPU throttle
+    0820-0827 : ACPI GPE0_BLK
+  0900-090f : pnp 00:05
+  0910-091f : pnp 00:05
+  0b00-0b0f : pnp 00:05
+    0b00-0b08 : piix4_smbus
+  0b20-0b3f : pnp 00:05
+    0b20-0b28 : piix4_smbus
+  0c00-0c01 : pnp 00:05
+  0c14-0c14 : pnp 00:05
+  0c50-0c51 : pnp 00:05
+  0c52-0c52 : pnp 00:05
+  0c6c-0c6c : pnp 00:05
+  0c6f-0c6f : pnp 00:05
+  0cd0-0cd1 : pnp 00:05
+  0cd2-0cd3 : pnp 00:05
+  0cd4-0cd5 : pnp 00:05
+  0cd6-0cd7 : pnp 00:05
+  0cd8-0cdf : pnp 00:05
+0cf8-0cff : PCI conf1
+0d00-ffff : PCI Bus 0000:00
+  6000-600f : 0000:00:11.0
+    6000-600f : ahci
+  7000-7003 : 0000:00:11.0
+    7000-7003 : ahci
+  8000-8007 : 0000:00:11.0
+    8000-8007 : ahci
+  9000-9003 : 0000:00:11.0
+    9000-9003 : ahci
+  a000-a007 : 0000:00:11.0
+    a000-a007 : ahci
+  b000-bfff : PCI Bus 0000:01
+    bc00-bc7f : 0000:01:01.0
+      bc00-bc7f : ast
+  c000-cfff : PCI Bus 0000:02
+    cc00-cc1f : 0000:02:00.0
+  d000-dfff : PCI Bus 0000:03
+    dc00-dc1f : 0000:03:00.0
+  e000-efff : PCI Bus 0000:04
+    ec00-ec7f : 0000:04:00.0
+  fe00-fefe : pnp 00:05
+  ff00-ff0f : 0000:00:14.1
+    ff00-ff0f : pata_atiixp
