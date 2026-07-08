@@ -97,46 +97,67 @@ The intended P2A-only recipe:
 4. Watchdog-reset the ARM (`0x1E785000` sequence).
 5. ARM re-fetches `0x0` → now DRAM → runs our code.
 
-## 2. Reset-tree analysis — the decisive part (datasheet §8, V1.05 p84‑96)
+## 2. Reset-tree analysis — the decisive part (datasheet §8, **V1.02** p82‑96)
 
-**Good news — DDR2 survives a watchdog reset.** *Figure 40 (Memory Controller
-Reset, p94):* `MMC_RST_N` is driven only by `pwrstn` (power-on) OR `SCU04[0]`
-(software) — **`wdt_rst` is not an input.** The *Reset Tree Control Table (Fig 20,
-p86)* agrees: the DRAM Controller row is marked under `SRST#` and the `DRAM`
-register-control column, **not under `WDT`.** → a watchdog reset leaves DDR2
-initialised. So M1 does not need re-running after a wdt reset.
+> Register facts below are re-verified against the in-repo datasheet
+> (`AST2050_AST1100_A3_Datasheet_V1.02.pdf`, the actual file — the "V1.05" cited
+> earlier does not exist here). Two claims in the first draft were **corrected**
+> (marked ⚠) after reading the register definitions, per "verify before believing."
 
-**The obstacle — the ARM CPU and the remap share one reset domain.** *Figure 39
-(AHB Bus Reset, p94)* generates **`HRST_N`** from `pwrstn OR EXTRSTNin OR
-(wdt_rst AND SCU3C[3])`. The *Clock/Reset Mapping Table (Fig 19, p85)* lists **both
-"ARM CPU" and "AHB Controller" as `HRST_N`.** The AHB Controller is where the remap
-register (`0x1E60008C`) lives. And the Reset Control Table has **no `SCU04` column
-to reset the ARM CPU by itself** — the ARM resets only via global `SRST#`/`WDT`
-(i.e. `HRST_N`). Consequences:
+**Good news — DDR2 survives a watchdog reset.** *Figure 39 (Memory Controller
+Reset, p92):* `MMC_RST_N = pwrstn OR SCU04[0]` — **`wdt_rst`/`hrstn` are not
+inputs.** *Clock/Reset Mapping Table (Fig 18, p83):* DRAM Controller → `MMC_RST_N`.
+→ a watchdog reset leaves DDR2 initialised. **Empirically confirmed** in STAGE 2
+(DRAM held `0xeafffffe` through the reset).
 
-- To make the ARM re-fetch, I must assert `HRST_N` (watchdog, with `SCU3C[3]=1`).
-- That same `HRST_N` also resets the AHB Controller.
-- `SCU3C[3]` only gates *whether* `wdt_rst` reaches `HRST_N` — it can't reset the
-  ARM while sparing the AHB Controller (they are the same net). So there is **no
-  "reset only the ARM CPU" mode** on the AST2050.
+**The obstacle — the ARM CPU and the remap share one reset domain.** *Figure 38
+(AHB Bus Reset, p92)* generates **`HRST_N`** from `wdt_rst OR EXTRSTNin(gated) OR
+PWRSTNin`. *Clock/Reset Mapping Table (Fig 18)* lists **both "ARM CPU" and "AHB
+Controller" as `HRST_N`.** The AHB Controller is where the remap register
+(`AHBC8C` = `0x1E60008C`) lives → a watchdog `HRST_N` hits both. There is **no
+"reset only the ARM CPU" mode** on the AST2050.
 
-## 3. THE PIVOTAL OPEN QUESTION
+⚠ **Correction (was wrong in the first draft):** `SCU3C[3]` is **"Enable external
+SOC reset (GPIOB7/EXTRST#)"** (datasheet SCU3C p215) — it gates the *external reset
+pin*, **not** `wdt_rst`. So `wdt_rst → HRST_N` is **unconditional**; no SCU3C
+change is needed to make the watchdog reset the ARM. (`SCU3C[1]` is the read-back
+**"watchdog reset flag"**, set by the wdt reset — a handy post-reset witness.)
+
+**Host stays alive across the reset (why STAGE 2 is safe).** The host reaches the
+BMC over P2A through the **VGA/PCI-slave endpoint** (`PCI_RST_N`, *Fig 47*:
+`BRSTNin OR SCU04[8] OR PWRSTNin` — **not** `hrstn`) → it **survives** a watchdog
+`HRST_N`, so the x86 host keeps the PCIe device. Only the internal **A2P bridge**
+(`A2P_RST_N`, *Fig 55*, includes `hrstn`) resets — but a fresh `culvert` invocation
+re-inits it (== `ahb_reinit_bridge`). **Confirmed:** after the reset, P2A read
+`SCU7C=0x202` immediately.
+
+## 3. THE PIVOTAL QUESTION — ✅ ANSWERED (STAGE 2, 2026-07-08)
 
 > **Does the remap register `0x1E60008C[0]` reset on `HRST_N`, or is it a
 > power-on-only ("sticky") register?**
 
-- **If power-on-only** (common for boot/strap registers): during the watchdog's
-  `HRST_N` pulse the remap *holds* the value P2A set, so when `HRST_N` deasserts the
-  ARM fetches `0x0` = **DRAM = our code**. ✅ The P2A-only path works.
-- **If it resets on `HRST_N`**: the remap clears to its default (flash at `0x0`) the
-  instant the watchdog fires, so the ARM re-fetches **flash**, not DRAM. ❌ The
-  P2A-only path is blocked; starting the ARM then still needs JTAG (set PC directly,
-  no reset) or a writable boot flash (spispy stub at `0x0`).
+**ANSWER: it resets on `HRST_N`.** `remap-test-p2a.py stage2` set the remap, armed
+WDT1 (2 s @ 1 MHz, `WDT0C=0x13`), let the BMC `HRST_N`, then read back over P2A:
 
-The datasheet's block-level table says the *AHB Controller* resets on `WDT`, but
-individual boot-control registers within a block frequently have a *narrower*
-(power-only) reset — the table's granularity doesn't settle it. **This is the one
-fact that decides the whole approach, and it is empirically testable.**
+| Read (post-reset) | Value | Meaning |
+|---|---|---|
+| `SCU7C` | `0x00000202` | chip alive, **P2A survived** (host safe) |
+| `SCU3C` | `0x00000003` | bit1 set = **watchdog reset fired** (witness) |
+| `0x1E60008C` (remap) | `0x00000000` | **remap CLEARED by `HRST_N`** |
+| `0x00000000` | `0x00000000` | `0x0` reverted to (dead) flash |
+| `0x40000000` (DRAM) | `0xeafffffe` | **DDR2 survived** the reset |
+
+So the naive **"set remap + watchdog reset" P2A-only boot is BLOCKED**: any
+ARM-restarting reset also clears the remap, so the ARM re-fetches `0x0` = flash
+(which reads `0` on this rig → dead). The datasheet block-level table (AHB
+Controller → `HRST_N`) predicted this; STAGE 2 proves it at the register level.
+
+**What still works / what this bought us:**
+- A **host-safe P2A watchdog reset** of the AST2050 (host + P2A recover; DDR2
+  survives) — reusable for any future reboot control.
+- The **remap-live** mechanism (STAGE 1) and **DDR2 init** (M1) remain valid.
+- It rules out the easy path cleanly, pointing at the real options in §6 — **and**
+  at one more P2A-only idea worth testing: **§6a, the clock-gate-across-reset trick.**
 
 ## 4. Test procedure to resolve §3 (on the next power-on, carefully)
 
@@ -191,7 +212,32 @@ function → **hangs the x86 host** (2026-07-08 incident: I crashed the PXE host
 way). **NEVER write `0x0` before step 4 confirms the remap points it at DRAM.** Test
 the remap with a *read* of `0x0` first; only write `0x0` once it reads back DRAM.
 
-## 6. If §3 comes back "blocked": the honest fallbacks
+## 6a. The clock-gate-across-reset trick — the remaining P2A-only candidate
+
+§3 says `HRST_N` clears the remap *and* the ARM in the same pulse — so the ARM
+always re-fetches `0x0`=flash. But the **ARM clock gate lives in the SCU**, and the
+SCU is **`PWRSTNin`-only reset** (Fig 37: *"All registers in SCU reset by PWRSTNin
+only; no other reset input can affect them"*). So the gate **survives `HRST_N`.**
+That opens a P2A-only sequence that side-steps the cleared remap:
+
+1. M1 (DDR2 up); load the payload into DRAM (reset vector at the DRAM base).
+2. **Gate the ARM clock** (freeze the core) — culvert `clk_disable(clk_arm)` writes
+   the SCU strap (G3 `ast2400` path: set `SCU70[0]`, clear via `SCU7C[0]`).
+3. **Watchdog `HRST_N`.** This resets the ARM (PC→`0x0`) and clears the remap, but
+   the ARM is **clock-gated → frozen at `0x0`, not fetching**; the SCU gate and DDR2
+   both survive.
+4. **Re-set the remap over P2A** (AHB unlock + `0x1E60008C[0]=1`) → `0x0` = DRAM again.
+5. **Un-gate the ARM clock** → the ARM's first fetch at `0x0` = DRAM = **our code**.
+
+**Unverified assumptions to test (in order):** (a) writing `SCU70[0]` live actually
+*gates the running ARM's clock* on the AST2050 (it may be a boot-latched strap, not
+a live gate) — verify with a UART-signature stub that stops printing when gated;
+(b) the gate **survives `HRST_N`** (SCU is `PWRSTNin`-only, so it should); (c) after
+step 3 the ARM truly holds at `0x0` and, once un-gated in step 5, fetches the
+freshly-re-mapped DRAM. If (a) fails, this path is dead and we're on §6 (JTAG/spispy).
+This is the natural next experiment; it needs the ARM stub (#19) as the witness.
+
+## 6. If the P2A-only paths are all blocked: the honest fallbacks
 
 - **JTAG** — set the ARM PC directly (no reset, no remap dependency). Needs the
   unpopulated `AST_JTAG1` header soldered/wired (physical). TAP scan currently
@@ -201,15 +247,20 @@ the remap with a *read* of `0x0` first; only write `0x0` once it reads back DRAM
   moved from the host BIOS to the BMC boot flash + the spispy load tool (instance-A's
   rig knowledge).
 
-## 7. Summary
+## 7. Summary (updated 2026-07-08 after STAGE 1 + STAGE 2)
 
-- **Establish the UART second channel first (§0).** P2A-only, no ARM needed, works the
-  instant the board is powered — an independent witness for every step and the future
-  U-Boot console. `AST_UART1` → Pi `ttyS0`, 115200 8N1.
-- **Load DRAM: solved (M1).** The hard part was never writing the code — it's PC control.
-- **DDR2 survives a watchdog reset** (Fig 40) — a real, useful finding.
-- **The P2A-only boot's viability reduces to one testable bit**: the reset domain of
-  `0x1E60008C[0]` (§3). Resolve it empirically (§4) before building a full payload.
-- If it's power-only-reset, your "write DRAM + jump" idea works entirely over P2A.
-  If it's `HRST_N`-reset, we're back to JTAG/spispy — but now with the exact reason
-  documented, not a guess.
+- **UART second channel (§0): DONE + validated** — BMC UART2 `0x1e784000` → Pi
+  `/dev/serial-bmc-console`, 1200 8N1 proven. Independent witness for the ARM stub.
+- **DDR2 init (M1): DONE + hardware-verified**, and **survives a watchdog reset**
+  (Fig 39; confirmed empirically in STAGE 2).
+- **Remap goes live over P2A (STAGE 1): YES** — `0x0` becomes DRAM after the AHB
+  unlock + `0x1E60008C[0]=1`.
+- **Remap survives `HRST_N` (STAGE 2): NO** — it clears on any ARM-restarting reset,
+  so the "set remap + reset" P2A boot is **blocked** (the pivotal question, answered).
+- **Bonus:** a **host-safe P2A watchdog reset** now exists (host + P2A recover), and
+  `SCU3C[1]` witnesses it.
+- **Remaining P2A-only hope:** the **clock-gate-across-reset trick (§6a)** — freeze
+  the ARM (SCU gate survives `HRST_N`), reset, re-set the remap, un-gate. Needs the
+  ARM stub (#19) as witness and hinges on `SCU70[0]` being a *live* ARM clock gate.
+- **If §6a fails:** JTAG or spispy-on-BMC-flash (§6), both currently blocked on
+  physical/rig changes — but now the exact reason each is needed is documented.
