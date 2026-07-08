@@ -35,12 +35,20 @@ All over **P2A + TFTP**, no spispy/JTAG:
 ## Milestones (each independently verifiable; ⬜ todo, 🔶 partial, ✅ done)
 
 ### Phase A — Modern kernel on the real hardware
-- **A0 ⬜ Recover the x86 host** (P2A dependency). Power-cycle → PXE-boot SystemRescue
-  → rebuild culvert. (Resets the BMC — fine, we're replacing its kernel.)
-- **A1 ⬜ Boot the modern kgpe-d16 kernel on real HW** over P2A/TFTP. It's a **DTB**
-  kernel: `bootm <kernel> <initrd> <dtb>` (3-arg), machid/`aspeed` DT. Get a shell.
-- **A2 ⬜ NFS root.** NFS server on the Pi (export a Debian-armel/Yocto rootfs);
-  kernel `root=/dev/nfs ip=dhcp nfsroot=192.168.66.1:/srv/nfs/bmc`. A real filesystem.
+- **A0 ✅ Recover the x86 host** — PXE-boots SystemRescue 6.18.34 unattended (fixed the
+  ISO loop-mount + NAT persistence); culvert rebuilt; P2A verified.
+- **A1 ✅ Modern Linux 6.6.70 boots on the real AST2050** over P2A/TFTP. FDT U-Boot
+  (`CONFIG_OF_LIBFDT`) 3-arg `bootm K I dtb` passes the DT (`Machine model: ASUS
+  KGPE-D16 BMC`); 64 MB sizing; **ASPEED rev 0x202** recognized; **ftgmac100 + I2C +
+  8250 console** all bind; console stays alive to userspace with **`clk_ignore_unused`**
+  (the AST2050 clock driver gates UARTCLK otherwise, and that gating survives the
+  SCU-preserving reset → also reset SCU0C in `ddr2-init`). Boots cleanly to the VFS
+  root-mount (panics only for lack of a rootfs — expected → A2). tftp-gap fixed (8 s).
+- **A2 🔶 NFS root.** NFS server + export ready on the Pi (`/srv/nfs/bmc`, busybox
+  rootfs bootstrapped). **Blocker:** kernel .config lacks `CONFIG_IP_PNP` /
+  `CONFIG_ROOT_NFS` / `CONFIG_NFS_FS` → **rebuild the kernel** with NFS-root + IP
+  autoconfig (and fold in the OpenBMC driver gaps + clock fix). Then boot
+  `root=/dev/nfs nfsroot=192.168.66.1:/srv/nfs/bmc ip=dhcp`.
 - **A3 ⬜ Peripheral driver coverage.** Every OpenBMC-used block binds on G3: I2C,
   GPIO, PWM/tach (fans), ADC (voltages), MAC/ftgmac, watchdog, LPC (KCS/BT/SNOOP for
   IPMI + host), eSPI/SuperIO, SPI/SMC, RTC, video/2D (for KVM), UART/VUART. Audit the
