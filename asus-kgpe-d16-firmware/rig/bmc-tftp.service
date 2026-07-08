@@ -1,0 +1,22 @@
+# TFTP server for booting the AST2050 BMC over its own NIC (eth-bmc).
+# Install on the ASUS bridge Pi as /etc/systemd/system/bmc-tftp.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bmc-tftp
+#
+# Serves /srv/tftp-bmc (uImage-raptor, uInitrd-raptor.cpio.gz, culvert, ...) over
+# TFTP only (port=0 => no DNS, no dhcp-range => no DHCP), bound to eth-bmc so it
+# never clashes with the host-PXE dnsmasq on eth-host. --bind-dynamic tolerates the
+# USB-ethernet adapter re-enumerating (the RTL8153 on this Pi flaps). eth-bmc's
+# static 192.168.66.1/24 is provided by the NetworkManager profile 'eth-bmc-static'.
+[Unit]
+Description=BMC TFTP (dnsmasq on eth-bmc for AST2050 U-Boot/Linux boot)
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --port=0 --enable-tftp \
+    --tftp-root=/srv/tftp-bmc --interface=eth-bmc --bind-dynamic --tftp-no-blocksize
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
