@@ -154,6 +154,35 @@ Non-destructive, one step at a time, each logged to `HARDWARE-COORDINATION.md`:
    - remap bit 0 / `0x0` back to flash → **`HRST_N` clears it → path blocked**; fall
      back to JTAG (wire the header) or spispy-on-BMC-flash.
 
+### ✅ STAGE 1 RESULT (2026-07-08) — the remap goes LIVE over P2A
+
+Steps 1–4 ran on the real AST2050 (`remap-test-p2a.py stage1`), **no reset**:
+
+| Step | Action | Result |
+|---|---|---|
+| M1 | `ddr2-init-p2a.py` | DRAM `0x40000000`=`0xdeadbeef` (DDR2 alive; board had been power-cycled so M1 was re-run) |
+| 1 | seed DRAM `0x40000000..1c` = `0xeafffffe` (`b .`) | read back `0xeafffffe` |
+| 3a | AHB unlock `0xaeed1a03` → `0x1e600000` | (enables the write below) |
+| 3b | set `0x1e60008c` bit0 | reads back **`0x00000001`** (register writable ⇒ unlock correct) |
+| 4 | **read `0x00000000` over P2A** | **`0xeafffffe`** — i.e. `0x0` *is* the DRAM |
+
+So **the DRAM→`0x0` remap works live over P2A** (the AHB key + remap bit from
+Raptor's `board_init()` are correct on real silicon), and **`0x0` is now backed by
+writable DRAM** (retires the §5 crash hazard for `0x0`). The **host did not crash**
+flipping the remap. This answers *half* of §3 (the remap goes live); the other half
+— does it **survive `HRST_N`** — is STAGE 2, which needs a working G3 reset (see below).
+
+**STAGE 2 blocker found:** `culvert reset soc wdtN` does **not** work on G3 yet —
+`g3.dts` declares the watchdog nodes `compatible = "aspeed,ast2400-wdt"` but
+culvert's `wdt.c` driver only matches `"aspeed,ast2500-wdt"`, so it never binds.
+And `wdt_perform_reset`'s reset-**mask** register (`0x1c`) and `RESET_SOC/CPU` mode
+bits are AST2500 additions — the AST2050 reset tree (§2) has only a single
+`wdt_rst` gated by `SCU3C[3]`. So STAGE 2 requires porting the wdt reset to G3
+(bind `ast2400-wdt`, use the AST2050 `WDT_CTRL`=`0x23` semantics, verify against the
+datasheet) **and** it should carry a **UART-signature ARM stub** (#19) as the
+witness — so the ARM running our code shows on `/dev/serial-bmc-console`
+*independently of whether the reset disturbs P2A/the host*.
+
 ## 5. HARD safety rule (the host-crash lesson)
 
 Writing `0x00000000` (or the `0x14000000` flash window) over P2A **while the remap
