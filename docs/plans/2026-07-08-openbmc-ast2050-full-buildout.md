@@ -147,6 +147,21 @@ Extensive real-HW debugging of "eth0 doesn't work" narrowed it to a deeper issue
 
 ## Status log
 
+### 2026-07-09 — 🎉 Phase C MILESTONE: modern OpenBMC + Redfish running (QEMU)
+Track A complete for the QEMU vehicle. Built `obmc-phosphor-image` for `romulus`
+(6531 tasks, all succeeded; Linux 6.18.38 + systemd 259.5 + bmcweb), booted the 32 MB
+`.static.mtd` in `qemu-system-arm -M romulus-bmc`, and verified over Redfish:
+- `GET /redfish/v1` → ServiceRoot v1_15_0, **RedfishVersion 1.17.0**, full tree.
+- Auth (`root:0penBmc`) → Systems/Chassis/Managers collections.
+- **Power control path**: `POST .../ComputerSystem.Reset {On}` → **HTTP 204**, and
+  `PowerState` moved `Off → PoweringOff` — i.e. Redfish→bmcweb→D-Bus→phosphor-state-
+  manager works end-to-end (physical transition needs real HW; QEMU models only the BMC).
+- **vKVM** advertised (Manager GraphicalConsole KVMIP=true); boot override
+  Pxe/Hdd/Cd/Usb/BiosSetup; Sensors endpoint 200 (empty in bare QEMU).
+See `asus-kgpe-d16-firmware/openbmc-qemu/README.md` for the full evidence + the
+path to the real AST2050 (kgpe-d16 machine + our AST2050 kernel + NIC fix).
+
+
 - 2026-07-08: plan created. Foundation (U-Boot/Linux/culvert-devmem/rig) done.
   Starting **Phase A0** (recover host) → **A1** (modern kernel on real HW).
 - 2026-07-08: **A1 prep done.** Modern kernel = **Linux 6.6.70** uImage-kgpe-d16 (DTB
