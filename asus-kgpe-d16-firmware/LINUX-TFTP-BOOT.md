@@ -80,14 +80,41 @@ Getting it to a **shell** took untangling the initramfs:
    (`0xeedd4` = the raw cpio.gz size.) `linux-boot.py --cmdline-initrd 0xeedd4
    --initrd uInitrd-raptor.cpio.gz` does this.
 
-## Status / next steps
+## ✅ Linux boots to a root shell + culvert runs in-band (2026-07-08)
 
-- **Done + verified:** BMC↔Pi network (`eth-bmc`), U-Boot ping, TFTP into DRAM,
-  **Raptor 2.6.28 kernel boots** (SoC + 64 MB DRAM + serial console all correct).
-- **Static ARM `culvert` built:** `culvert-arm/` recipe →
-  `culvert/build-arm/culvert-arm-static` (ELF ARM EABI5, static — runs on the musl
-  initramfs). Ready to TFTP into the running Linux.
-- **In progress:** get Linux to a shell via `initrd=` cmdline, then run
-  `culvert ... devmem` **in-band** to finish `sfc` flash-dump / `console` (task #23).
-- **Next / ideal:** rebuild the initramfs to **bundle `culvert-arm-static`** and set
-  `eth0` to `192.168.66.2`, for a one-shot `boot → shell-with-culvert`.
+The complete chain works, all over P2A/TFTP — **no spispy, no JTAG**:
+
+1. **U-Boot** over P2A (`P2A-DRAM-BOOT-SEQUENCE.md`) → `boot#`.
+2. **TFTP** kernel + raw `cpio.gz` into DRAM; `bootm <kernel>` with
+   `initrd=0x42000000,0xeedd4` → the kernel unpacks the initramfs
+   (`checking if image is initramfs... it is`, `Freeing initrd memory: 955K`) and
+   runs `/init` to a **`~ #` root shell** on `ttyS1@1200`.
+3. **In-band culvert** (task #23): reconfigured `eth0` to `192.168.66.2`, `tftp`'d
+   the **musl-static** `culvert` (`culvert-arm/`) onto the BMC, and ran it:
+   - `mknod /dev/mem c 1 1` (static-node initramfs); `devmem 0x1e6e207c` → `0x00000202`.
+   - `./culvert probe via devmem` → `ilpc: Disabled`, **EXIT 0**.
+   - `./culvert devmem read 0x1e6e207c` → `0x00000202` (SCU7C = AST2050 ID), **EXIT 0**.
+
+   → culvert's **devmem bridge is hardware-verified in-band**. `sfc` flash-dump has no
+   data on this bench (the SMC flash window `0x14000000` reads `0` in-band too — no
+   readable boot flash; the board is in its dead-firmware state).
+
+## Reproduce (one-shot)
+
+```sh
+# on the Pi: eth-bmc up + TFTP (see above), files in /srv/tftp-bmc/
+uv run asus-kgpe-d16-firmware/linux-boot.py \
+    --initrd uInitrd-raptor.cpio.gz --cmdline-initrd 0xeedd4 --watch 190
+# -> ~ #  root shell; then reconfigure eth0 + tftp culvert-musl-static + run it
+```
+
+## Next steps
+
+- **Bundle culvert into the initramfs** (`build-bmc-initramfs.py`, using the
+  **musl** binary) + set `eth0=192.168.66.2`, for a one-shot `boot → shell with
+  culvert present + network up` (no live reconfigure/tftp over slow serial).
+- **`sfc` dump** needs a board with a readable boot flash (not this dead-firmware
+  bench) to return real data; the code path is exercised in-band otherwise.
+- **Speed:** the Pi mini-UART caps the console at 1200 baud — switch the Pi to the
+  PL011 (`dtoverlay=disable-bt`, `ttyAMA0`) + kernel `console=ttyS1,115200` for a
+  usable interactive shell (task #26).
