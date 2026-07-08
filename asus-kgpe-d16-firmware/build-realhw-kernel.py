@@ -33,8 +33,9 @@ def main():
     if not os.path.isdir(SRC):
         sys.exit(f"kernel source not found at {SRC} -- run the qemu-firmware build first")
     nproc = str(os.cpu_count() or 4)
+    extra = sys.argv[1:]        # extra config fragments (e.g. a built-in initramfs)
     run(["make", "aspeed_g4_defconfig"])
-    run(["scripts/kconfig/merge_config.sh", "-m", ".config", FRAG_QEMU, FRAG_HW])
+    run(["scripts/kconfig/merge_config.sh", "-m", ".config", FRAG_QEMU, FRAG_HW, *extra])
     run(["make", "olddefconfig"])
     # confirm the NFS-root options actually made it in
     cfg = open(os.path.join(SRC, ".config")).read()
@@ -45,11 +46,13 @@ def main():
     run(["make", f"-j{nproc}", "zImage", "dtbs"])
     run(["make", f"-j{nproc}", "LOADADDR=0x40008000", "uImage"])
     os.makedirs(OUT, exist_ok=True)
+    # extra fragments (e.g. a built-in initramfs for a shell kernel) -> distinct name
+    suffix = "-shell" if extra else ""
     shutil.copy(os.path.join(SRC, "arch/arm/boot/uImage"),
-                os.path.join(OUT, "uImage-kgpe-d16-realhw"))
+                os.path.join(OUT, f"uImage-kgpe-d16-realhw{suffix}"))
     shutil.copy(os.path.join(SRC, "arch/arm/boot/dts/aspeed/aspeed-bmc-asus-kgpe-d16.dtb"),
                 os.path.join(OUT, "aspeed-bmc-asus-kgpe-d16-realhw.dtb"))
-    print(f"[done] {OUT}/uImage-kgpe-d16-realhw", flush=True)
+    print(f"[done] {OUT}/uImage-kgpe-d16-realhw{suffix}", flush=True)
 
 
 if __name__ == "__main__":
