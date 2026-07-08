@@ -1,0 +1,14 @@
+#!/bin/sh
+# rcS for the KGPE-D16 BMC NFS root. The kernel already brought up eth0 + mounted
+# NFS (ip=dhcp root=/dev/nfs) and auto-mounted devtmpfs (CONFIG_DEVTMPFS_MOUNT), so
+# this just finishes the mounts and prints status.
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mkdir -p /dev/pts /run /var/run /var/log /tmp
+mount -t devpts devpts /dev/pts
+hostname kgpe-d16-bmc
+echo
+echo "=== ASUS KGPE-D16 BMC (AST2050) — NFS root — $(uname -r) ==="
+ip addr show eth0 | sed -n 's/.*inet \([0-9.]*\).*/  eth0: \1/p'
+echo "  /dev/mem: $(ls -l /dev/mem)"
+echo
