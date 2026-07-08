@@ -47,6 +47,18 @@ curl -s tftp://192.168.66.1/uImage-raptor -o /dev/shm/b # BMC TFTP
 curl -s -o /dev/shm/c -w '%{http_code}\n' http://192.168.77.1:8080/
 ```
 
+## NAT (host + BMC → internet through the Pi)
+
+The diskless SystemRescue host must reach the internet to rebuild culvert each boot
+(and the BMC to fetch packages). The Pi NATs both BMC-side subnets out its uplink
+`eth0`. Persistent via **nftables** (this Pi has no `iptables`):
+- `/etc/sysctl.d/99-bmc-nat.conf`: `net.ipv4.ip_forward=1`
+- `/etc/nftables.conf` (nftables.service **enabled**): a `table ip nat` with
+  `postrouting` masquerade for `192.168.77.0/24` + `192.168.66.0/24` `oif "eth0"`.
+
+Without this the host PXE-boots but `pacman`/`git` fail to resolve hosts, so the
+culvert rebuild (`tmp/host_repair.py`) fails.
+
 ## TFTP roots (files persist on the Pi's SD card)
 
 - `/srv/pxe/tftp/` — host: `pxelinux.0`, `vmlinuz`, `sysresccd.img`, `pxelinux.cfg/default`.

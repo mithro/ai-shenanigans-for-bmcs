@@ -99,3 +99,14 @@ All over **P2A + TFTP**, no spispy/JTAG:
 
 - 2026-07-08: plan created. Foundation (U-Boot/Linux/culvert-devmem/rig) done.
   Starting **Phase A0** (recover host) → **A1** (modern kernel on real HW).
+- 2026-07-08: **A1 prep done.** Modern kernel = **Linux 6.6.70** uImage-kgpe-d16 (DTB
+  kernel, `aspeed-bmc-asus-kgpe-d16.dts` on `aspeed-g4.dtsi` + `aspeed,ast2050-scu`
+  clock override). Fixes for real HW: DTB memory **128→64 MB** (recompiled
+  `...-64mb.dtb`); U-Boot **`CONFIG_OF_LIBFDT` enabled** (was off) so 3-arg
+  `bootm K I dtb` passes the FDT; `linux-boot.py --dtb` mode added. Console is
+  **ttyS4** (uart5 = 0x1e784000 = UART2). Kernel .config already has the OpenBMC
+  driver set: FTGMAC100, I2C/GPIO/SGPIO, **SENSORS_ASPEED** (fan/PWM), **ASPEED_ADC**,
+  **KCS+BT IPMI-BMC**, LPC_CTRL+SNOOP, UART_ROUTING, P2A_CTRL, SPI_SMC. **Gaps for
+  later:** `ASPEED_VIDEO` (KVM/VGA, D5) and an explicit VUART/`8250_aspeed_vuart`
+  (SOL, D3) not yet enabled. Also fixed the rig: the host PXE HTTP rootfs
+  (SystemRescue ISO) is now a **persistent fstab loop-mount** (was the missing piece).
