@@ -135,7 +135,7 @@
 		};
 
 		ethernet@1e660000 {
-			compatible = "aspeed,ast2400-mac", "faraday,ftgmac100";
+			compatible = "aspeed,ast2050-mac", "aspeed,ast2400-mac", "faraday,ftgmac100";
 			reg = <0x1e660000 0x180>;
 			interrupts = <0x02>;
 			clocks = <0x02 0x11>;
