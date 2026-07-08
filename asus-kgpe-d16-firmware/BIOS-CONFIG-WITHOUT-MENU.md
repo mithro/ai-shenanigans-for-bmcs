@@ -12,10 +12,11 @@ from the stock BIOS image dumped in-system with flashrom
   setup engine `av02.61 (C)1985-2010 American Megatrends`. **Not Aptio/UEFI**
   (no `/sys/firmware/efi`), so **AMISCE / SCELNX_64 does not apply** (that's an
   Aptio EFI-variable tool).
-- Settings live in **battery-backed CMOS RTC NVRAM**. With the current **dead
-  CMOS battery** they don't survive a power-off (this is also why every cold
-  boot halts at the AMI *F1=Setup / F2=defaults* prompt). Replacing the battery
-  makes CMOS writes persistent.
+- Settings live in **battery-backed CMOS RTC NVRAM**. The CMOS coin cell was
+  **replaced 2026-07-08**, so CMOS writes now **persist across power-off**, and the
+  cold-boot *F1=Setup / F2=defaults* halt + wrong-boot-clock (which had been
+  breaking TLS for `pacman`/`git`) should be gone. (Before the swap, the dead
+  battery reset CMOS on every power-off.)
 - Flash is a **socketed** 2 MB W25Q16; flashrom reads it in-system, but WRITE is
   disabled by the SP5100 **IMC** guard (needs `amd_imc_force`; external flashing
   is the safe route).
@@ -56,54 +57,70 @@ Set this and the board powers on with AC instead of needing the Tasmota plug
    (16-bit sum over the CMOS data range, stored in two CMOS bytes) — otherwise the
    BIOS reports *CMOS checksum bad*, loads defaults, and discards the change on
    the next boot.
-3. With a **good battery** the written CMOS persists across power-off; with the
-   dead battery it only survives a *warm* reboot (RTC stays powered).
+3. With the coin cell **replaced (2026-07-08)** the written CMOS now **persists
+   across power-off** (previously, the dead battery meant a change only survived a
+   *warm* reboot).
 
 ## Static parse of the setup table (module 1B) — results
-Going deeper than the string list: the **setup question table** is in the
-decompressed runtime module `amibody_1b.rom` (the "SLAB"), laid out per setup
-page. Each question record is:
+The **setup question table** is in the decompressed runtime module
+`amibody_1b.rom` (the "SLAB"), laid out per setup page. A question record is:
 ```
-<prompt-token:2> <help-token:2> <0x0291> <parent-token:2> <STORAGE-word:2> <0x0380> <value-token>... 0x01
+<prompt-token:2> <help-token:2> 91 02 <parent-token:2> <cmos-byte> <mask-byte> 80 <count:1> <value-token>×count 0x01
 ```
-Worked example — the two Onboard-LAN-Boot questions, structurally identical
-except for their storage handle:
+Worked example — the two Onboard-LAN-Boot questions, identical except for their
+CMOS index:
 ```
-Onboard LAN1 Boot:  6a04  2596  0291  046c  16d6  0380  00ba 046d 046e  01   (Disabled/PXE/iSCSI)
-Onboard LAN2 Boot:  6b04  2598  0291  046c  16e4  0380  00ba 046d 046e  01
-                    prompt help  --   --    STORE  --    values           end
+Onboard LAN1 Boot:  6a04 2596 91 02 046c | D6 16 | 80 03 | 00ba 046d 046e | 01
+Onboard LAN2 Boot:  6b04 2598 91 02 046c | E4 16 | 80 03 | 00ba 046d 046e | 01
+                    prompt help          | cmos·mask| fl·cnt| Disabled/PXE/iSCSI
 ```
-The value lists (Disabled / PXE / iSCSI) are confirmed inline; the records differ
-only in prompt token, help token, and the **STORAGE word** (`0x16d6` vs `0x16e4`).
-(Other pages — Remote Access/serial, power — use the same record grammar with
-minor per-page variation; the serial options sit on the Remote Access page around
-module-1B offset 0x11fxx.)
+- **`cmos-byte`**: bit 7 = shown/hidden flag; bits 0–6 = the **RTC CMOS index**
+  (0x00–0x7F).
+- **`mask-byte`**: bitfield position/width within that CMOS byte.
+- **`80 <count>`**: flag + **number of option values**; exactly `count` value-tokens
+  follow (LAN Boot = 3 values → `03`, and `00ba 046d 046e` = Disabled/PXE/iSCSI ✓).
 
-### Course-correction from the parse
-`0x16d6` is **far beyond the 128-byte RTC CMOS** (indices 0x00–0x7F). So these
-settings are stored in AMIBIOS8's large **"setup variable" NVRAM** (flash-backed),
-**not** the RTC CMOS that the F1/F2 checksum guards. Consequences:
-- They very likely **persist across power-off even with the dead battery** (flash,
-  not battery-backed) — the dead battery may only be resetting the *core* RTC-CMOS
-  settings (date, and whatever trips the checksum).
-- A plain `/dev/nvram` (RTC) write will **not** reach them. The menu-less write
-  target is the **flash NVRAM store** (or coreboot), and any empirical diff must
-  watch the flash region, not just `/dev/nvram`.
+### Decoded RTC CMOS locations (index = byte & 0x7F)
+| Setting | CMOS index | mask | # values |
+|---|---|---|---|
+| ACPI 2.0 Support | 0x3A | 0x15 | 3 |
+| Onboard LAN1 Boot | **0x56** | 0x16 | 3 |
+| Onboard LAN2 Boot | **0x64** | 0x16 | 3 |
 
-## Confirming the exact storage location per option
-Two complementary methods:
-1. **Empirical diff on the right medium** — baseline, change ONE option in Setup,
-   re-read, diff. Do it against **both** `/dev/nvram` (RTC) **and** a flashrom
-   re-read of the NVRAM region, so we see which medium each setting lands in:
-   ```
-   dump A  →  change ONE option in Setup  →  dump B  →  diff(A,B) = that option's bytes
-   ```
-   Best done once the battery is in (a single menu pass sticks), driven over the
-   Magewell. Once **serial redirection** is confirmed on, all future BIOS access is
-   over `/dev/serial-com1` — no menu, no Magewell.
-2. **Finish the static decode** — map the STORAGE word (e.g. `0x16d6`) to a
-   physical NVRAM offset by locating the setup-variable base in module 1B / the
-   flash NVRAM block. This yields offsets with no menu at all, cross-checked by (1).
+**Corrected reading** (was previously mis-read as a flash-NVRAM word offset): the
+byte after the CMOS index is the *mask* (varies per setting), not a word's high
+half — so these settings live in the **128-byte RTC CMOS** (`/dev/nvram`, ports
+70/71h), matching the documented AMIBIOS8 format (RTC index with **bit 7 = shown**,
+per the [Win-Raid legacy-AMIBIOS8 guide](https://winraid.level1techs.com/t/guide-legacy-amibios8-make-all-compiled-settings-available/37221))
+and the dead-battery F1/F2 symptom. RTC CMOS is the write target; the fresh
+battery (2026-07-08) makes it persist.
+
+Only the LAN/ACPI records use this exact 3-value variant; the **serial options are
+a sibling variant on the Remote Access page** — the complete, exact map for every
+setting is best pulled from **AMIBCP** (see below).
+
+## Cross-validated with AMIBCP (+ the stock defaults)
+AMIBCP 3.51 was run on the dump **sandboxed** (dedicated user + no network + VNC
+:99) — see [`amibcp/README.md`](amibcp/README.md). It does **not** expose the raw
+CMOS offset (so the hand-decode above stays the offset source), but its **Handle**
+column equals our tokens 1:1 (03BA/0458/03B4/0456/046A/046B/01C9 all confirmed),
+independently verifying the module-1B decode.
+
+It also revealed the **stock defaults reframe the task**: `Remote Access` (serial
+redir) is **Enabled** by default and `Onboard LAN1/LAN2 Boot` default to **PXE** —
+so nothing is "off". The real changes are the sub-values:
+1. **Serial Port Mode → 115200** (Optimal default index 01 = 57600 by the ROM's
+   value order — a 115200 capture would see nothing),
+2. **Redirection After BIOS POST → Always** (default 00 likely stops redir after POST),
+3. confirm **Serial port number = COM1**, and
+4. **Boot order → Network first** for PXE (Boot page) — LAN-boot itself is already PXE.
+
+Confirm any exact CMOS byte with a one-shot empirical diff:
+```
+dump /dev/nvram  →  change ONE option in Setup (Magewell)  →  dump  →  diff = that option's byte+bit
+```
+Once serial redirection at the right baud is confirmed, all future BIOS access is
+over `/dev/serial-com1` — no menu, no Magewell.
 
 ## Tooling used (installed locally)
 - `bios_extract` (coreboot) — decompresses the AMIBIOS8 LZH modules (the

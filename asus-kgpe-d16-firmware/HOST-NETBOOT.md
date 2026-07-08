@@ -99,10 +99,11 @@ flashing iPXE onto the NIC ROM is the permanent alternative, but is a hardware
 change and not needed given `tftp-no-blocksize`.
 
 ## Gotchas
-- **Dead CMOS/RTC battery** → every cold boot halts at the AMI **"F1 = Setup /
-  F2 = load defaults & continue"** prompt (needs a keypress), *and* the host boots
-  with a wrong clock (breaks TLS for `pacman`/`git` — fix with `date -u -s` synced
-  from the Pi). Replacing the coin cell removes both problems.
+- **CMOS/RTC battery** — the coin cell was **replaced 2026-07-08**, which removes
+  the two dead-battery symptoms: the cold-boot AMI **"F1 = Setup / F2 = load
+  defaults & continue"** halt, and the wrong boot clock (which had broken TLS for
+  `pacman`/`git`; the workaround was `date -u -s` synced from the Pi). BIOS/CMOS
+  settings now persist across power-off.
 - Cold-cycle the board via the Tasmota plug `au-plug-10` (see the memory notes).
 - Only one host NIC is cabled; the other reports `PXE-E61: Media test failure`.
 - To give the booted host **internet** (for tools): NAT on the Pi with `nft`
