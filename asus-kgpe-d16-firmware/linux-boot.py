@@ -54,6 +54,8 @@ def main():
                          "Use with a RAW cpio.gz --initrd (not a uImage).")
     ap.add_argument("--watch", type=int, default=160)
     ap.add_argument("--gap", type=float, default=4.0)
+    ap.add_argument("--tftp-gap", type=float, default=8.0,
+                    help="settle after each tftp (8s @115200; use 20 @1200)")
     ap.add_argument("--skip-load", action="store_true",
                     help="skip DDR2+U-Boot load (U-Boot already at prompt)")
     args = ap.parse_args()
@@ -118,9 +120,10 @@ def main():
     time.sleep(args.gap)
     for c in seq:
         send(c)
-        # a tftp transfer + its 1200-baud progress print needs a long settle,
-        # or the next command interleaves with the still-running transfer
-        time.sleep(20.0 if c.startswith("tftp") else args.gap)
+        # a tftp transfer + its progress print needs a settle before the next
+        # command, or they interleave. At 115200 the transfer is fast (~seconds);
+        # 8s is plenty. (At 1200 baud this needed ~20s.)
+        time.sleep(args.tftp_gap if c.startswith("tftp") else args.gap)
     try:
         raw, _ = cap.communicate(timeout=args.watch + 8)
     except subprocess.TimeoutExpired:
