@@ -229,13 +229,24 @@ That opens a P2A-only sequence that side-steps the cleared remap:
 4. **Re-set the remap over P2A** (AHB unlock + `0x1E60008C[0]=1`) → `0x0` = DRAM again.
 5. **Un-gate the ARM clock** → the ARM's first fetch at `0x0` = DRAM = **our code**.
 
-**Unverified assumptions to test (in order):** (a) writing `SCU70[0]` live actually
-*gates the running ARM's clock* on the AST2050 (it may be a boot-latched strap, not
-a live gate) — verify with a UART-signature stub that stops printing when gated;
-(b) the gate **survives `HRST_N`** (SCU is `PWRSTNin`-only, so it should); (c) after
-step 3 the ARM truly holds at `0x0` and, once un-gated in step 5, fetches the
-freshly-re-mapped DRAM. If (a) fails, this path is dead and we're on §6 (JTAG/spispy).
-This is the natural next experiment; it needs the ARM stub (#19) as the witness.
+**Liveness test result (2026-07-08, `arm-stub/boot-p2a.py --mode live`):** seeded the
+UART stub (`arm-stub/uart-hello.S`, all 8 vectors → `_start`, prints
+`AST2050-ARM-ALIVE-P2A-DRAM-BOOT`) into DRAM and set the remap **with no reset**.
+Read-back confirmed `0x0`=`0xea000006` (stub at the reset vector). **No signature
+appeared** on `/dev/serial-bmc-console` in 20 s. → The ARM is **not** cycling back
+to the low vectors: it NOP-slid up from `0x0` at power-on, hit unmapped AHB space and
+**stalled (hung high)** — it never re-fetches `0x0`. So a plain remap-while-live can
+**not** boot it; **only a reset forces `PC=0x0`** — and that clears the remap. This
+makes §6a (freeze-across-reset) **the** remaining P2A-only route.
+
+**Unverified assumptions to test (in order):** (a) find a **safe** ARM-clock-stop —
+**not** culvert's bare `SCU70=0x1` write (AST2050 `SCU70` is plain RW, that would
+wipe the live strap `0x00819582`); the ARM clock is in the SCU **clock-stop /
+CPU-divider** path (`SCU0C`, datasheet §... — investigate, use read-modify-write).
+(b) verify it *gates the running ARM live* (witness: the stub stops/starts printing).
+(c) the gate **survives `HRST_N`** (SCU is `PWRSTNin`-only, so it should). (d) after
+the reset the ARM holds at `0x0`, and once un-gated fetches the re-mapped DRAM. If a
+safe live gate doesn't exist, this path is dead and we're on §6 (JTAG/spispy).
 
 ## 6. If the P2A-only paths are all blocked: the honest fallbacks
 
