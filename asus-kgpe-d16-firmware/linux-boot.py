@@ -91,6 +91,7 @@ def main():
         seq = [
             "setenv ipaddr 192.168.66.2",
             "setenv serverip 192.168.66.1",
+            "setenv verify y",   # bootm checks the uImage CRC -> catches a DDR2-corrupted load
             "setenv fdt_high 0xffffffff",           # don't relocate the DTB
             f"tftp {KADDR:#x} {args.kernel}",
             f"tftp {DADDR:#x} {args.dtb}",
@@ -103,6 +104,7 @@ def main():
         seq = [
             "setenv ipaddr 192.168.66.2",
             "setenv serverip 192.168.66.1",
+            "setenv verify y",   # bootm checks the uImage CRC -> catches a DDR2-corrupted load
             f"setenv initrd_high {args.initrd_high}",
             "setenv fdt_high 0xffffffff",           # don't relocate the DTB
             f"tftp {KADDR:#x} {args.kernel}",
@@ -116,6 +118,7 @@ def main():
         seq = [
             "setenv ipaddr 192.168.66.2",
             "setenv serverip 192.168.66.1",
+            "setenv verify y",   # bootm checks the uImage CRC -> catches a DDR2-corrupted load
             f"tftp {KADDR:#x} {args.kernel}",
             f"tftp {RADDR:#x} {args.initrd}",
             f"setenv bootargs {args.bootargs} initrd={RADDR:#x},{args.cmdline_initrd:#x}",
@@ -125,6 +128,7 @@ def main():
         seq = [
             "setenv ipaddr 192.168.66.2",
             "setenv serverip 192.168.66.1",
+            "setenv verify y",   # bootm checks the uImage CRC -> catches a DDR2-corrupted load
             f"setenv initrd_high {args.initrd_high}",
             f"tftp {KADDR:#x} {args.kernel}",
             f"tftp {RADDR:#x} {args.initrd}",
