@@ -131,6 +131,20 @@ Extensive real-HW debugging of "eth0 doesn't work" narrowed it to a deeper issue
   +panic at 4.18 s, so the hang point is somewhat variable.) Using `initcall_debug` to
   name the exact hanging initcall — that's the current front.
 
+## Two-track plan (2026-07-09, @mithro: "both — QEMU build + NIC in parallel")
+
+- **Track A — OpenBMC in QEMU (Phase C, running).** `git clone openbmc` →
+  `. setup romulus` → `bitbake obmc-phosphor-image` (build log `/home/tim/openbmc-build.log`,
+  ~6531 tasks, multi-hour). Goal: a modern OpenBMC + **Redfish/bmcweb** running in the
+  QEMU `romulus-bmc` machine (full observability), then adapt the userspace toward the
+  real AST2050 (SoC-agnostic phosphor/bmcweb runs over the NFS root once the NIC lands).
+  romulus (ast2500) chosen for best QEMU+Redfish support; real-HW target is an
+  ast2400-class kgpe-d16 machine + our modern AST2050 kernel.
+- **Track B — real-HW NIC (deep-dive).** Register comparison done (SCU identical → not
+  clock/pinmux; DMA-coherency config is correct). Remaining: inspect the live TX ring at
+  `TXR_BADR` over P2A (descriptor OWN/pointer), or bisect vs Raptor `ftgmac100_26`
+  (checked: DBLAC/ITC differ but U-Boot TXes with the modern DBLAC, so not those).
+
 ## Status log
 
 - 2026-07-08: plan created. Foundation (U-Boot/Linux/culvert-devmem/rig) done.
