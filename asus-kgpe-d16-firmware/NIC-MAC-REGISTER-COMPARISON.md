@@ -95,11 +95,40 @@ drops to **0 and stays 0 for ~74s** — `TXR_BADR` never becomes a Linux ring ad
 never brought up. The blocker is `ndo_open`/`ftgmac100_init_hw`/`adjust_link` bailing out
 early — NOT TX-DMA, NOT the clock/pinmux/SCU, NOT the descriptor content.
 
-**To find the exact bail-out** you need the kernel messages from `ndo_open` (which the
-dead-at-4s console hides). Two ways: (1) fix the console so it survives past 4s — it dies
-when the 8250 takes over from earlycon, so verify the `serialN`↔`0x1e784000` (UART2) DT
-alias and that `console=ttyS?` matches the wired UART, or keep earlycon with a proper
-`earlycon=uart8250,mmio32,0x1e784000`; (2) write a **printk-ringbuffer (prb) parser** for
-`read_logbuf.py` (the modern 6.6 kernel replaced the flat `__log_buf`; the current reader
-only recovers the first ~7 lines). Then the `ndo_open` error (PHY connect? `-EACCES` MAC
-gate like QEMU C4? clk?) is visible and directly fixable.
+**To find the exact bail-out** you need the kernel messages from `ndo_open`. The console
+does NOT actually die at 4s — it's just quiet; adding `initcall_debug` (keeps printing)
+carries it to ~7s. That revealed the smoking gun.
+
+### 2026-07-09 FINAL — ndo_open HANGS; MAC control-block WRITES stall the AHB
+
+Booting `kgpe-flclk.dtb` (fixed-link + `clock-frequency=24000000` on the UART) with
+`earlycon initcall_debug ignore_loglevel ftgmac100.dyndbg=+pmf` + step markers added to
+`ftgmac100_open` showed:
+```
+[7.038] calling ip_auto_config
+[7.042] AST2050-OPEN: step1 alloc_rings
+[7.046] AST2050-OPEN: step2 reset_and_config_mac   <-- then HANG (no step3)
+```
+So **`ftgmac100_open` hangs inside `ftgmac100_reset_and_config_mac`** and never returns —
+this is a hard hang, not a carrier wait. `ip_auto_config` never completes; the MAC is
+left at U-Boot's config (`MACCR=0x80500`), eth0 never comes up, 0 Linux packets.
+
+Bisecting `ftgmac100_reset_mac` (patches applied live in the d16-qemu kernel tree):
+- Skipping the SW_RST **poll** (keeping the writes): still hangs at step2 → not the poll.
+- Skipping the SW_RST **write** (keeping the first `iowrite32(maccr)`): still hangs at
+  step2 → the first `iowrite32(MACCR)` itself stalls.
+- Skipping the **entire** `reset_mac` (no writes, just a marker): prints "reset_mac
+  skipped" then hangs before step3 → the NEXT MAC write (in `init_hw`/`init_all`) stalls.
+
+**Conclusion: any WRITE to the MAC control block hangs the CPU during `ndo_open`, while
+READs worked at probe (5.9s).** Root cause is a clock/reset/AHB-state that differs between
+probe-time and open-time in the post-P2A-reset-boot Linux context (candidates: a MAC clock
+gate the clk framework re-gates despite `clk_ignore_unused`; the RMII RCLK the driver
+skips for "AST2400"; or an AHB-arbitration interaction with the live P2A bridge). U-Boot's
+writes work because it sets the MAC clocks its own way before writing.
+
+**Next (bounded):** add a marker to `ftgmac100_init_hw` to confirm the write-stall there;
+read SCU0C/SCU04/the MAC clock-gate over P2A *at the moment of the hang* (compare vs probe
+time); try enabling the RMII RCLK; or bisect the MAC clock setup against Raptor's
+`ftgmac100_26` init (which sets up PHY/clocks before touching MACCR). The diagnostic
+scaffolding (open-step markers + reset bisect) is live in the d16-qemu `ftgmac100.c`.
