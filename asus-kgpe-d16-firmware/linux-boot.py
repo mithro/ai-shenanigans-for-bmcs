@@ -152,6 +152,15 @@ def main():
     for marker in ("BMC-READY", "Kernel panic", "Cannot open root", "/ #", "# "):
         if marker in out:
             print(f"\n[*] saw: {marker!r}")
+    # The P2A/reset-boot load is occasionally flaky: the kernel image can load with
+    # a bad CRC, or the ARM doesn't cleanly restart (no kernel output at all). Report
+    # that as a non-zero exit so a wrapper can retry until a clean boot.
+    started = ("Booting Linux on physical CPU" in out) or ("ASPEED Unknown rev" in out)
+    badcrc = "Bad Data CRC" in out
+    if badcrc or not started:
+        print(f"\n[!] kernel did not start cleanly (started={started}, badcrc={badcrc}) "
+              f"-- flaky P2A load, retry")
+        return 2
     return 0
 
 
