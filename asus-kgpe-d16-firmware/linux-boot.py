@@ -72,9 +72,10 @@ def main():
     sh(["ssh", "-o", "BatchMode=yes", PI,
         f"sudo stty -F {BMC} 1200 raw -echo -crtscts cs8 -parenb -cstopb"],
        capture_output=True, text=True)
+    # capture bytes (serial can carry non-UTF-8 noise); decode leniently at the end
     cap = subprocess.Popen(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", PI,
                             f"sudo timeout {args.watch} cat {BMC}"],
-                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(1.5)
     if args.cmdline_initrd:
         # raw cpio.gz + initrd=addr,size on the cmdline; bootm kernel-only
@@ -104,9 +105,10 @@ def main():
         send(c)
         time.sleep(gaps.get(i, args.gap))
     try:
-        out, _ = cap.communicate(timeout=args.watch + 8)
+        raw, _ = cap.communicate(timeout=args.watch + 8)
     except subprocess.TimeoutExpired:
-        cap.kill(); out, _ = cap.communicate()
+        cap.kill(); raw, _ = cap.communicate()
+    out = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
     print(out)
     for marker in ("BMC-READY", "Kernel panic", "Cannot open root", "/ #", "# "):
         if marker in out:
