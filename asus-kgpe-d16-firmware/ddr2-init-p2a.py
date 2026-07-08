@@ -38,10 +38,12 @@ SEQ = [
     (M + 0x00, 0xfc600309),     # unlock SDRAM regs
     (M + 0x6c, 0x00909090),     # DLL ctrl #3
     (M + 0x64, 0x00050000),     # DLL ctrl #1
-    ("mcr04", 0x00000589),      # CONFIG | ((SCU70 & 0xc) << 2); bit11=0 => 4-BANK
-    # (was 0x00000d89 = 8-bank; this KGPE-D16 DDR2 is 4-bank -- 8-bank aliased
-    #  address bit13 so DRAM >8KB was scrambled, breaking large payloads. Verified
-    #  on hardware 2026-07-08 by the A==A^0x2000 alias test in tmp/mcr04_test.py.)
+    ("mcr04", 0x00000585),      # CONFIG | ((SCU70 & 0xc) << 2); 4-BANK + 64MB
+    # (was 0x00000d89 = 8-bank/1G; this KGPE-D16 DDR2 is 4-bank, 64MB. 8-bank
+    #  aliased address bit13 (scrambled DRAM >8KB); 128MB [3:2]=10 gave a phantom
+    #  64-128MB alias that wrapped onto U-Boot's own code at 0x40000000. bits[3:2]=01
+    #  = 64MB matches the real chip. Verified on hw 2026-07-08 (tmp/mcr04_test.py,
+    #  tmp/dramsize.py: real size aliases mod 64MB).)
     (M + 0x08, 0x0011030f),     # graphics mem protection
     (M + 0x10, 0x22201725),     # NSPEED AC timing #1
     (M + 0x18, 0x1e29011a),     # NSPEED AC timing #2
@@ -109,7 +111,7 @@ def build_host_script():
             lines.append("sleep 0.05")
         elif addr == "mcr04":
             # MCR04 = 0x00000d89 | ((SCU70 & 0xc) << 2)
-            lines.append('MCR04=$(printf "0x%08x" $(( 0x00000589 | ((SCU70 & 0xc) << 2) )))')
+            lines.append('MCR04=$(printf "0x%08x" $(( 0x00000585 | ((SCU70 & 0xc) << 2) )))')
             lines.append('$C write 0x1e6e0004 "$MCR04"')
         elif addr == "scu40done":
             lines.append('$C write 0x1e6e2040 $(printf "0x%08x" $(( SCU40 | 0x40 )))')
