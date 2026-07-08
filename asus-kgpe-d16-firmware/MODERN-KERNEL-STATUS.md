@@ -65,12 +65,25 @@ else (DDR2, console, load, DMA) is ruled out. Tooling to get here: `verify=y` +
 `tmp/boot_retry.py` (reliable clean boots), `tmp/mac_regs.py` (P2A reg reads),
 `initcall_debug ignore_loglevel`.
 
-Leading hypothesis for the carrier: the **RTL8201CP RMII reference-clock direction**.
+**RULED OUT the PHY (2026-07-09): `fixed-link` also fails.** Booted with a `fixed-link`
+DTB (Generic PHY, immediate carrier, kernel never touches the RTL8201CP): the BMC
+*still* sends **0 packets** (Pi tcpdump) and NFS never mounts. So it is **not** the PHY
+reset / RMII-clock-direction — it is the **MAC-side RMII TX** in the modern ftgmac100
+driver that is broken on the AST2050. U-Boot's ftgmac100 TXes fine (tftp works); the
+kernel's does not. Localised to the MAC/RMII clocking in `ftgmac100.c`. Leading
+candidate now: `ftgmac100_setup_clk` sets MACCLK to 100 MHz (or the missing RMII
+`RCLK`/refclk gate the driver only handles for AST2500/2600) — U-Boot's AST2050 path
+only de-asserts the MAC reset (SCU04[11]) and leaves the MAC clock at its default. Fix
+to try: for the AST2050, skip/adjust the `setup_clk` rate and/or supply the RMII
+refclk, matching U-Boot. Needs a driver patch + rebuild, or a shell to compare MAC
+regs live.
+
+(Superseded PHY hypothesis: the RTL8201CP RMII reference-clock direction —
 In RMII the PHY can be strapped/registered to *output* the 50 MHz refclk (page-7 reg
 `RMSR`); U-Boot sets it, but the kernel's `genphy_soft_reset` on open may revert it →
 the MAC loses its RMII clock → no link. Fix candidates: a Realtek PHY fixup / DT PHY
-node config for the RMII clock, or the aspeed ftgmac100 RMII clocking. Needs a shell
-(initramfs-in-kernel, no `ip=`) to poke PHY/MAC registers, or a driver patch + rebuild.
+node config for the RMII clock. — superseded, since fixed-link bypasses the PHY and
+still fails.)
 
 ### Next steps for the NIC (the real-HW driver-porting work)
 1. Read `ftgmac100_adjust_link` + the reset path (`ftgmac100_reset_task` /
