@@ -39,7 +39,12 @@ def send(cmd):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bootargs", default="console=ttyS1,1200n8")
+    ap.add_argument("--bootargs", default="console=ttyS1,1200n8 earlyprintk")
+    ap.add_argument("--initrd-high", default="0x43800000",
+                    help="relocate ramdisk to end here (safe: clear of kernel + U-Boot); "
+                         "0xffffffff = no relocation")
+    ap.add_argument("--kernel", default="uImage-raptor")
+    ap.add_argument("--initrd", default="uInitrd-raptor")
     ap.add_argument("--watch", type=int, default=160)
     ap.add_argument("--gap", type=float, default=4.0)
     ap.add_argument("--skip-load", action="store_true",
@@ -52,9 +57,9 @@ def main():
            capture_output=True, text=True)
         print("[2] load U-Boot + reset-boot...")
         r = sh(["uv", "run", os.path.join(HERE, "p2a-image-boot.py"),
-                "--image", UBOOT, "--baud", "1200", "--watch", "8"],
+                "--image", UBOOT, "--baud", "1200", "--watch", "22"],
                capture_output=True, text=True)
-        if "boot#" not in r.stdout and "U-Boot" not in r.stdout:
+        if "U-Boot" not in r.stdout:
             print("[!] U-Boot did not reach prompt:\n", r.stdout[-500:]); return 1
         print("    U-Boot up.")
 
@@ -70,9 +75,9 @@ def main():
     seq = [
         "setenv ipaddr 192.168.66.2",
         "setenv serverip 192.168.66.1",
-        "setenv initrd_high 0xffffffff",          # <-- do NOT relocate the ramdisk
-        f"tftp {KADDR:#x} {KERNEL}",
-        f"tftp {RADDR:#x} {INITRD}",
+        f"setenv initrd_high {args.initrd_high}",
+        f"tftp {KADDR:#x} {args.kernel}",
+        f"tftp {RADDR:#x} {args.initrd}",
         f"setenv bootargs {args.bootargs}",
         f"bootm {KADDR:#x} {RADDR:#x}",
     ]
