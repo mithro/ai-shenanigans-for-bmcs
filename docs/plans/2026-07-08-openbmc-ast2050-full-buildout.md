@@ -44,11 +44,18 @@ All over **P2A + TFTP**, no spispy/JTAG:
   (the AST2050 clock driver gates UARTCLK otherwise, and that gating survives the
   SCU-preserving reset → also reset SCU0C in `ddr2-init`). Boots cleanly to the VFS
   root-mount (panics only for lack of a rootfs — expected → A2). tftp-gap fixed (8 s).
-- **A2 🔶 NFS root.** NFS server + export ready on the Pi (`/srv/nfs/bmc`, busybox
-  rootfs bootstrapped). **Blocker:** kernel .config lacks `CONFIG_IP_PNP` /
-  `CONFIG_ROOT_NFS` / `CONFIG_NFS_FS` → **rebuild the kernel** with NFS-root + IP
-  autoconfig (and fold in the OpenBMC driver gaps + clock fix). Then boot
-  `root=/dev/nfs nfsroot=192.168.66.1:/srv/nfs/bmc ip=dhcp`.
+- **A2 🔶 NFS root.** NFS server + export + busybox rootfs + `inittab`/`rcS` ready on
+  the Pi (`/srv/nfs/bmc`). Kernel rebuilt with NFS root (`kgpe-d16-realhw.config`:
+  `IP_PNP`+`ROOT_NFS`+`NFS_FS`+`NETWORK_FILESYSTEMS`) → `uImage-kgpe-d16-realhw`.
+  `linux-boot.py --no-initrd` boots `bootm K - D`. **Real-HW NIC issues found:**
+  (1) DT `fixed-link` was a QEMU-ism → removed it (real DTS), now the ftgmac100
+  auto-scans MDIO and finds the real **RTL8201CP** PHY at 0x20; (2) the kernel then
+  hangs right after `netconsole: network logging started` — netconsole's netpoll
+  stalls waiting for eth0's carrier (the QEMU fixed-link had an instant carrier) →
+  **disabled `CONFIG_NETCONSOLE`** (rebuilding). tcpdump on the Pi saw **0 packets**
+  from the BMC (consistent with the boot hanging before IP-config). Next: boot the
+  netconsole-off kernel; if eth0 links + NFS mounts → A2 done; else the RMII refclk
+  / SCU48 MAC-clock-delay is the culprit (porting-guide Change 10).
 - **A3 ⬜ Peripheral driver coverage.** Every OpenBMC-used block binds on G3: I2C,
   GPIO, PWM/tach (fans), ADC (voltages), MAC/ftgmac, watchdog, LPC (KCS/BT/SNOOP for
   IPMI + host), eSPI/SuperIO, SPI/SMC, RTC, video/2D (for KVM), UART/VUART. Audit the
