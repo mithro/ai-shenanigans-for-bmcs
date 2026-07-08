@@ -65,12 +65,26 @@ also U-Boot mid-tftp, **not** Linux. So the earlier "Linux reaches a fully-enabl
 claim is unconfirmed — we have **not** yet cleanly captured Linux's own ring.
 
 To get Linux's real state you must capture **after** the boot fully completes (Linux ~40s
-in, sitting in the `ip_auto_config` carrier wait) — not during the U-Boot tftp. On
-2026-07-09 this was blocked by **boot flakiness**: 4 consecutive `boot_retry` attempts
-failed, including a *new* mode where the full 3.4 MB kernel + DTB load cleanly (bytes
-transferred OK) yet bootm never prints "Booting Linux" (`started=False`). That points to
-a degraded U-Boot/reset-boot state after many boot+kill cycles (or a `linux-boot.py`
-bootm-timing issue), independent of the NIC. **Next session, on a fresh rig:** get one
-clean fixed-link boot, then `run_mac_block.py` + `run_tx_ring.py` to see Linux's ring —
-if txdes[0] shows OWN=MAC persistently, the MAC isn't consuming (refclk/PHY-timing); if
-OWN=SW with no buffer, the driver never queued (higher layer / DMA).
+in, sitting in the `ip_auto_config` carrier wait) — not during the U-Boot tftp.
+
+### 2026-07-09 later — REFINED root cause: the MAC is UNCONFIGURED, not mis-TXing
+
+The "flaky boots" turned out to be the **short `--watch` window** cutting off before
+"Booting Linux": with `--watch 100` the kernel booted clean (exit 0). Capturing Linux's
+*real* state (`run_mac_block.py`) after that boot gave **MACCR=0, MAC_MADR=0, TXR_BADR=0,
+IER=0** — the MAC is **completely unconfigured**. So the earlier "MAC enabled but not
+TXing" was wrong (that was U-Boot's tftp state); the truth is **`ftgmac100_open`/adjust_link
+never configures the MAC**. The DTS uses the real RMII PHY (RTL8201CP @ MDIO 0x20,
+`phy-mode="rmii"`, no fixed-link), and the driver logs `Unsupported PHY mode rmii !`. Chain:
+`ndo_open` → `phy_start` → the PHY **never reports link-up** → `adjust_link(link=up)` is
+never called → MACCR stays 0 → eth0 has no carrier → `ip_auto_config` waits 120s → fails →
+0 packets. The console dies at ~4.05s (dns_resolver) so the ndo_open/PHY messages aren't
+visible; `read_logbuf.py` only recovers the first ~7 lines (modern 6.6 kernel uses the
+printk **ringbuffer/prb**, not the old flat `__log_buf`, so the reader needs a prb parser).
+
+**Test in progress**: a **fixed-link** DTB (`tmp/kgpe-fixedlink.dtb`, adds a
+`fixed-link { speed=100; full-duplex; }` subnode) forces link-up, bypassing PHY
+negotiation. If MACCR becomes `0x8050f` (configured) → the PHY/MDIO negotiation is the
+blocker (fix the RMII PHY handling / use NC-SI or fixed-link). If MACCR stays `0` →
+ndo_open fails earlier (cf. the QEMU C4 finding: `ftgmac ndo_open -EACCES`, a MAC-enable
+gate) — chase that. Either way the fix is now in the **link/open path, not TX-DMA**.
