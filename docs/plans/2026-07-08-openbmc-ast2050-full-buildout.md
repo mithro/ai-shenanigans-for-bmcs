@@ -116,6 +116,21 @@ All over **P2A + TFTP**, no spispy/JTAG:
   U-Boot → tftp kernel+dtb+initrd → NFS-boot. The `linux-boot.py` orchestrator
   generalises to this.
 
+## Debug session findings (2026-07-08, NIC/boot) — see MODERN-KERNEL-STATUS.md
+
+Extensive real-HW debugging of "eth0 doesn't work" narrowed it to a deeper issue:
+- **Boot reliability:** the P2A/reset-boot load of the 3.45 MB kernel is occasionally
+  bad. `verify=y` (bootm CRC) + a `boot_retry` wrapper (retry until clean CRC + kernel
+  start) give reliable boots. **DDR2 is NOT the cause** (16 MB P2A pattern test = 0
+  errors).
+- **The real blocker is a kernel HANG at ~4.05 s**, not eth0 or the console: with
+  `earlycon keep_bootcon` BOTH consoles (direct-MMIO earlycon + 8250) stop at the same
+  instant → the kernel is hung, not the UART. It hangs *after* the driver initcalls
+  (last seen: `dns_resolver registered`) and *before* `prepare_namespace`, so eth0 is
+  never even opened on these boots. (A *no-root* boot reached `prepare_namespace`
+  +panic at 4.18 s, so the hang point is somewhat variable.) Using `initcall_debug` to
+  name the exact hanging initcall — that's the current front.
+
 ## Status log
 
 - 2026-07-08: plan created. Foundation (U-Boot/Linux/culvert-devmem/rig) done.
