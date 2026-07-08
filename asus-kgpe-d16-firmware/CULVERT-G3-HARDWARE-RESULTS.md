@@ -128,6 +128,45 @@ The natural time to finish the "live-BMC" functions is **once we boot our own
 firmware on the BMC** (the project's end goal) — then `sfc`/`console` become
 testable in-band, and running culvert on the BMC via `devmem` also unlocks.
 
+## ✅ IN-BAND on a live BMC (2026-07-08) — `devmem` bridge verified
+
+We booted our own firmware on the real AST2050 entirely over P2A/TFTP (no spispy/JTAG
+— see `LINUX-TFTP-BOOT.md`): U-Boot over P2A → TFTP Linux 2.6.28 → root shell. A
+**musl-static** ARM `culvert` (`culvert-arm/`; glibc-static segfaults on the 2.6.28
+kernel — glibc's 3.2.0 kernel floor) was TFTP'd onto the BMC and run **in-band**:
+
+```
+~ # /tmp/culvert -v probe via devmem
+[*] Host probing found bridge driver 'devmem', using it
+[*] Probing devmem
+[*] ahb_readl: 0x1e6e207c: 0x00000202
+[*] SCU004 top byte is not the AST2600 signature; treating as G3
+[*] Found revision 0x202
+[*] Accessing the BMC's AHB via the devmem bridge
+[*] Selected devicetree for SoC 'aspeed,ast2050'
+[*] Found 16 registered drivers
+[*] Bound sdmc driver to /ahb/apb/memory-controller@1e6e0000
+[*] Bound clk/strap/sioctl/scu drivers to /ahb/apb/syscon@1e6e2000...
+[*] Bound vuart driver to /ahb/apb/serial@1e787000
+[*] Bound ilpcctl driver to /ahb/apb/lpc@1e789000/bridge-controller
+[*] ahb_readl: 0x1e789080: 0x98000000
+ilpc:	Disabled
+[*] Unbound instance of driver ilpcctl/vuart/scu/sioctl/strap/clk/sdmc   (clean teardown)
+~ # /tmp/culvert devmem read 0x1e6e207c
+0x1e6e207c: 0x00000202
+```
+
+So culvert's **devmem bridge is hardware-verified in-band** — it opens `/dev/mem`
+(`mknod /dev/mem c 1 1` on the static-node initramfs), identifies the AST2050 (G3),
+selects the `aspeed,ast2050` devicetree, binds the full G3 SoC driver stack, reads
+registers correctly, and tears down cleanly. Same result as over P2A, now from the
+BMC's own Linux.
+
+`sfc` flash-dump still returns no data — the SMC flash window `0x14000000` reads `0`
+even **in-band** (confirmed via busybox `devmem`): there is no readable boot flash on
+this dead-firmware bench, so there is nothing for `sfc` to dump here (a rig state,
+not a culvert gap).
+
 ## Status of every culvert function on the AST2050
 
 | Function | State |
@@ -139,8 +178,9 @@ testable in-band, and running culvert on the BMC via `devmem` also unlocks.
 | `ilpc` posture | ✅ fixed + hw-verified (`ENL2H`) |
 | `jtag`, `debug-uart`, `otp`, `coprocessor` | ✅ correctly **rejected** — hardware absent on G3 (not gaps) |
 | `p2a` posture (fine-grained) | ⬜ needs a G3 driver reading `P2A00`/`SCU2C[8]` (PCI-config) |
-| `sfc` flash **dump** | ⬜ bench: use spispy (flash not served via P2A on a dead BMC); a G3 SMC driver (RE'd + spec'd above) is for **live-BMC** boards |
-| `console`, on-BMC `devmem` | ⬜ need a **live BMC** (our own firmware) — testable once booted |
+| `sfc` flash **dump** | ⬜ no readable boot flash on this dead-fw bench (`0x14000000`=0 even in-band); nothing to dump here. Code path exercised; needs a board with real flash |
+| on-BMC `devmem` (in-band bridge) | ✅ **hw-verified in-band** (musl `culvert -v probe via devmem`: full G3 driver bind + register reads; `devmem read 0x1e6e207c`=0x202) |
+| `console` (vuart) | ⬜ vuart driver **binds** in-band; end-to-end host↔BMC console test still open |
 
 ## Next (per the plan, [`../docs/plans/2026-07-07-culvert-ast2050-g3-support.md`](../docs/plans/2026-07-07-culvert-ast2050-g3-support.md))
 
