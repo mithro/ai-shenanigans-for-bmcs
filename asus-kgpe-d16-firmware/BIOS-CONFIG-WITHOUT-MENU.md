@@ -59,17 +59,51 @@ Set this and the board powers on with AC instead of needing the Tasmota plug
 3. With a **good battery** the written CMOS persists across power-off; with the
    dead battery it only survives a *warm* reboot (RTC stays powered).
 
-## The one remaining piece — the exact CMOS byte+bit per option
-The AMIBIOS8 setup module binds each option's string-token to a CMOS byte+bit,
-but parsing that table statically is AMIBCP-level work. The reliable, definitive
-method is a **one-shot empirical CMOS diff**, per option:
+## Static parse of the setup table (module 1B) — results
+Going deeper than the string list: the **setup question table** is in the
+decompressed runtime module `amibody_1b.rom` (the "SLAB"), laid out per setup
+page. Each question record is:
 ```
-read /dev/nvram (baseline)  →  change ONE option in Setup  →  read /dev/nvram  →  diff = that option's byte+bit
+<prompt-token:2> <help-token:2> <0x0291> <parent-token:2> <STORAGE-word:2> <0x0380> <value-token>... 0x01
 ```
-Do this once the battery is in (so a single menu pass sticks), driven over the
-Magewell; thereafter every change is a menu-less `/dev/nvram` write + checksum
-fixup. And once **serial redirection** is confirmed on, all future BIOS access is
-over `/dev/serial-com1` — no menu, no Magewell.
+Worked example — the two Onboard-LAN-Boot questions, structurally identical
+except for their storage handle:
+```
+Onboard LAN1 Boot:  6a04  2596  0291  046c  16d6  0380  00ba 046d 046e  01   (Disabled/PXE/iSCSI)
+Onboard LAN2 Boot:  6b04  2598  0291  046c  16e4  0380  00ba 046d 046e  01
+                    prompt help  --   --    STORE  --    values           end
+```
+The value lists (Disabled / PXE / iSCSI) are confirmed inline; the records differ
+only in prompt token, help token, and the **STORAGE word** (`0x16d6` vs `0x16e4`).
+(Other pages — Remote Access/serial, power — use the same record grammar with
+minor per-page variation; the serial options sit on the Remote Access page around
+module-1B offset 0x11fxx.)
+
+### Course-correction from the parse
+`0x16d6` is **far beyond the 128-byte RTC CMOS** (indices 0x00–0x7F). So these
+settings are stored in AMIBIOS8's large **"setup variable" NVRAM** (flash-backed),
+**not** the RTC CMOS that the F1/F2 checksum guards. Consequences:
+- They very likely **persist across power-off even with the dead battery** (flash,
+  not battery-backed) — the dead battery may only be resetting the *core* RTC-CMOS
+  settings (date, and whatever trips the checksum).
+- A plain `/dev/nvram` (RTC) write will **not** reach them. The menu-less write
+  target is the **flash NVRAM store** (or coreboot), and any empirical diff must
+  watch the flash region, not just `/dev/nvram`.
+
+## Confirming the exact storage location per option
+Two complementary methods:
+1. **Empirical diff on the right medium** — baseline, change ONE option in Setup,
+   re-read, diff. Do it against **both** `/dev/nvram` (RTC) **and** a flashrom
+   re-read of the NVRAM region, so we see which medium each setting lands in:
+   ```
+   dump A  →  change ONE option in Setup  →  dump B  →  diff(A,B) = that option's bytes
+   ```
+   Best done once the battery is in (a single menu pass sticks), driven over the
+   Magewell. Once **serial redirection** is confirmed on, all future BIOS access is
+   over `/dev/serial-com1` — no menu, no Magewell.
+2. **Finish the static decode** — map the STORAGE word (e.g. `0x16d6`) to a
+   physical NVRAM offset by locating the setup-variable base in module 1B / the
+   flash NVRAM block. This yields offsets with no menu at all, cross-checked by (1).
 
 ## Tooling used (installed locally)
 - `bios_extract` (coreboot) — decompresses the AMIBIOS8 LZH modules (the
