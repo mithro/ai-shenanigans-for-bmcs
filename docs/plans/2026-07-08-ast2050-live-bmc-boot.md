@@ -13,6 +13,26 @@ window (`0x40000000`) reads a fixed repeating pattern (`0x00101000 …`) → **D
 not initialised**; the SMC flash window reads `0`. P2A read/write of SoC
 registers + DRAM works (that's how culvert reaches it).
 
+## Rig is now FULLY remote-controllable (established 2026-07-08)
+
+Four independent channels (see the memory `hardware-rig-capabilities`):
+- **Power** — Tasmota `au-plug-10` (`cmnd=Power on/off`; `cmnd=Status 8` power meter:
+  ~3 W standby vs ~80–150 W running = host off/on). BIOS now **Restore-on-AC = Power On**
+  (CMOS battery replaced, boot order = PXE) → plug-on auto-boots the host. Remote power-cycle
+  for the M2 reset testing now works without a physical button.
+- **PXE host** — boots SystemRescue → `root@192.168.77.138` (via the Pi). **Per-boot repair
+  recipe** (host is diskless/tmpfs, SystemRescue strips dev files):
+  `ssh-keygen -R 192.168.77.138` (host key regenerates); `printf 'nameserver 1.1.1.1\n' >/etc/resolv.conf`
+  (dnsmasq gives no DNS); rebuild culvert with `pacman -S --noconfirm glibc linux-api-headers`
+  **force-reinstall** (restores `libc_nonshared.a` + `linux/falloc.h`) then
+  `git clone -b ast2050-support https://github.com/mithro/culvert && meson setup build && ninja -C build`.
+  *TODO: bake the PXE/dnsmasq/http + NAT + DNS + culvert-build into a persistent Pi service.*
+- **P2A** — `culvert p2a vga read/write` on the host (`/root/culvert-g3`). `SCU7C=0x00000202`.
+- **BMC serial console — VALIDATED** — UART2 `0x1e784000` → **`/dev/serial-bmc-console`** on
+  the Pi (1200 8N1 proven; wiring swap fixed). An **independent witness** to P2A for the ARM stub.
+- **Video** — Magewell `/dev/video0`: `ffmpeg -f v4l2 -i /dev/video0 -frames:v 1 out.png`
+  captures the VGA (host POST/BIOS; works even with dead BMC firmware).
+
 ## Assets we already have
 
 - **Real DDR2 init**: `asus-kgpe-d16-firmware/platform.S` (Raptor's AST2050 DDR2

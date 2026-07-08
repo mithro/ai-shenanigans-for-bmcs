@@ -1,0 +1,10 @@
+# AST2050 BMC debug console (UART2 @ 0x1e784000), wired to the Pi's GPIO14/15
+# hardware UART. Install on the ASUS bridge Pi as /etc/udev/rules.d/99-bmc-console.rules.
+#
+# Validated 2026-07-08: driving BMC UART2 over culvert P2A reads byte-perfect on this
+# port at 1200 8N1 (the 2 jumpers were originally crossed — BMC-TXD was on GPIO14; now
+# BMC-TXD -> Pi GPIO15/pin10, BMC-RXD -> Pi GPIO14/pin8, GND pin6).
+#
+# ttyS0 is the flaky mini-UART; for reliable 115200 (real U-Boot console), switch the
+# Pi to the PL011 (dtoverlay=disable-bt, drop console=serial0) and change KERNEL to ttyAMA0.
+SUBSYSTEM=="tty", KERNEL=="ttyS0", SYMLINK+="serial-bmc-console"

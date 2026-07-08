@@ -21,12 +21,25 @@ same P2A path we're trying to validate. `RPI4-OPENOCD-JTAG-WIRING.md` says to wi
 this first for exactly this reason ("UART proves the BMC is alive before you risk
 JTAG").
 
-**Confirmed wiring** (`RPI4-OPENOCD-JTAG-WIRING.md:194‑207`): the BMC console is the
-Raptor **`AST_UART1`** 4-pin 3.3 V header, **115200 8N1**, cross-wired to the **Pi
-UART0 (GPIO14/15)** → **`/dev/serial0` (`ttyS0`)**:
-`GPIO14/TX(p8)→BMC RXD`, `GPIO15/RX(p10)←BMC TXD`, `GND p6`.
-(`/dev/ttyUSB0` = a Prolific adapter aliased `serial-com1` — the *host* COM1, not the
-BMC; `/dev/ttyUSB1` = the ULX3S/spispy. So watch **`ttyS0`** for BMC output.)
+### ✅ VALIDATED ON HARDWARE (2026-07-08) — read this, the rest of §0 is the method
+
+- **The BMC debug UART is UART2 = `0x1e784000`** (matches Raptor's `.Done`). UART1
+  (`0x1e783000`) is **not connected** (0 edges when driven).
+- **The docs' pin table was WRONG.** The two jumpers were **crossed**: BMC-TXD landed on
+  Pi **GPIO14 (pin 8 = Pi TX)** instead of GPIO15. Found by a `gpiomon` bitbang probe
+  (60 edges @ ~829 µs = 1200 baud showed up on GPIO14). **Now swapped** to the correct
+  cross: **BMC-TXD → Pi GPIO15/pin10 (RX)**, **BMC-RXD → Pi GPIO14/pin8 (TX)**, **GND pin6**.
+- **Proven working:** driving UART2 over P2A at **1200 8N1** reads byte-perfect on the Pi.
+  Named **`/dev/serial-bmc-console`** (udev `99-bmc-console.rules`, `-> ttyS0`).
+- **UARTCLK = 24 MHz** confirmed (`SCU0C[15]=0` clock on, `SCU2C[12]=0`), so **1200 baud
+  → divisor 1250** (DLL=`0xE2`, DLH=`0x04`). For **115200** (real U-Boot) use divisor 13
+  (DLL=`0x0D`) — but `ttyS0` is the flaky mini-UART; switch the Pi to the **PL011**
+  (`dtoverlay=disable-bt`, drop `console=serial0`, reboot → `ttyAMA0`) before trusting 115200.
+- `/dev/ttyUSB0` = a Prolific adapter (`serial-com1`) = the *host* COM1; `/dev/ttyUSB1` =
+  ULX3S. Watch **`/dev/serial-bmc-console`** for BMC output.
+
+**Original (incorrect) doc wiring** for reference — do NOT use: `RPI4-OPENOCD-JTAG-WIRING.md`
+claimed BMC-TXD→GPIO15 already; in reality it was on GPIO14 until the 2026-07-08 swap.
 
 **P2A UART bring-up + identify** — Raptor's `.Done` debug goes to UART2
 (`0x1e784000`), but which register-UART is physically `AST_UART1` is confirmed by
