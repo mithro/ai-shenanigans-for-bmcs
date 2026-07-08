@@ -81,11 +81,19 @@ imperfect reset-boot). The smaller 2.98 MB QEMU kernel booted reliably in the A1
 tests; the larger real-HW kernel does not.
 
 **Mitigation added:** `linux-boot.py` now `setenv verify y`, so U-Boot's `bootm`
-CRC-checks the loaded uImage — a corrupted load fails cleanly (`Bad Data CRC`) instead
-of silently running a broken kernel. **Next:** make `linux-boot.py` retry the tftp
-until the CRC passes (reliable boots), and/or revisit the DDR2 init margins for
-sustained multi-MB transfers. Reliable boots are the prerequisite for efficiently
-finishing the NIC + everything downstream.
+CRC-checks the loaded uImage. On a **clean (CRC-OK) boot the console stays alive past
+4 s** (`clk: Not disabling unused clocks` + the panic on a no-root boot are seen) —
+so the earlier "console dies at 4 s" boots were **corrupted loads**, not a driver bug.
+
+**DDR2 storage is NOT the cause** — a direct P2A test (`tmp/ddr2_test_host.py`, run via
+`tmp/run_ddr2_test.py`) wrote a 16 MB deterministic pattern and read it back with **0
+byte errors** (0.0000%). So the flakiness is not DRAM corruption. The remaining
+inconsistency (some clean boots reach `prepare_namespace`, others stop a few ms
+earlier) points to the **reset-boot mechanism / a kernel-init timing sensitivity** for
+the larger real-HW kernel, not memory. **Next:** (a) make `linux-boot.py` retry until
+`bootm` reports a clean CRC *and* the kernel reaches a known marker; (b) then, on a
+confirmed-clean boot, resume the eth0 debug (a clean boot with `ftgmac100.dyndbg=+p`
+should finally show whether eth0 links + the reset reason, or an `AHB bus error`).
 
 ## Boot recipe (today)
 ```sh
