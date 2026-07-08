@@ -53,6 +53,25 @@ kernel runs:
   `rmii_rclk` gate that the AST2400/2050 lacks). Real-PHY **RMII on AST2400/2050** is
   the gap. The Raptor 2.6.28 `ftgmac100_26.c` supported it (porting-guide Change 10).
 
+### PINPOINTED (2026-07-09): the boot "hang" is `ip_auto_config` waiting on eth0's carrier
+`initcall_debug` + `ignore_loglevel` (over `earlycon`) shows the **last initcall is
+`ip_auto_config`** — it never returns. That's the kernel's `ip=` handler: it opens
+eth0 and waits up to `CONF_CARRIER_TIMEOUT` (120 s) for the link. The console goes
+silent because the wait is silent (not because the kernel/console died — a *no-root*
+boot skips `ip_auto_config` and reaches `prepare_namespace`/panic fine). So the single
+root cause is: **eth0's RMII carrier never comes up under the modern kernel** (U-Boot's
+driver links fine; the kernel's ftgmac100 reset leaves the RMII link down). Everything
+else (DDR2, console, load, DMA) is ruled out. Tooling to get here: `verify=y` +
+`tmp/boot_retry.py` (reliable clean boots), `tmp/mac_regs.py` (P2A reg reads),
+`initcall_debug ignore_loglevel`.
+
+Leading hypothesis for the carrier: the **RTL8201CP RMII reference-clock direction**.
+In RMII the PHY can be strapped/registered to *output* the 50 MHz refclk (page-7 reg
+`RMSR`); U-Boot sets it, but the kernel's `genphy_soft_reset` on open may revert it →
+the MAC loses its RMII clock → no link. Fix candidates: a Realtek PHY fixup / DT PHY
+node config for the RMII clock, or the aspeed ftgmac100 RMII clocking. Needs a shell
+(initramfs-in-kernel, no `ip=`) to poke PHY/MAC registers, or a driver patch + rebuild.
+
 ### Next steps for the NIC (the real-HW driver-porting work)
 1. Read `ftgmac100_adjust_link` + the reset path (`ftgmac100_reset_task` /
    `ftgmac100_init_hw`/`start_hw`) — find why the link-change reset loops on the
