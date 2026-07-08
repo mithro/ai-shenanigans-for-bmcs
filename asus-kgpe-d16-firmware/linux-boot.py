@@ -45,6 +45,10 @@ def main():
                          "0xffffffff = no relocation")
     ap.add_argument("--kernel", default="uImage-raptor")
     ap.add_argument("--initrd", default="uInitrd-raptor")
+    ap.add_argument("--cmdline-initrd", type=lambda s: int(s, 0), default=0,
+                    help="if set (=raw cpio.gz size), pass initrd=<RADDR>,<size> on the "
+                         "kernel cmdline and bootm kernel-only (bypasses the ATAG). "
+                         "Use with a RAW cpio.gz --initrd (not a uImage).")
     ap.add_argument("--watch", type=int, default=160)
     ap.add_argument("--gap", type=float, default=4.0)
     ap.add_argument("--skip-load", action="store_true",
@@ -72,15 +76,26 @@ def main():
                             f"sudo timeout {args.watch} cat {BMC}"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     time.sleep(1.5)
-    seq = [
-        "setenv ipaddr 192.168.66.2",
-        "setenv serverip 192.168.66.1",
-        f"setenv initrd_high {args.initrd_high}",
-        f"tftp {KADDR:#x} {args.kernel}",
-        f"tftp {RADDR:#x} {args.initrd}",
-        f"setenv bootargs {args.bootargs}",
-        f"bootm {KADDR:#x} {RADDR:#x}",
-    ]
+    if args.cmdline_initrd:
+        # raw cpio.gz + initrd=addr,size on the cmdline; bootm kernel-only
+        seq = [
+            "setenv ipaddr 192.168.66.2",
+            "setenv serverip 192.168.66.1",
+            f"tftp {KADDR:#x} {args.kernel}",
+            f"tftp {RADDR:#x} {args.initrd}",
+            f"setenv bootargs {args.bootargs} initrd={RADDR:#x},{args.cmdline_initrd:#x}",
+            f"bootm {KADDR:#x}",
+        ]
+    else:
+        seq = [
+            "setenv ipaddr 192.168.66.2",
+            "setenv serverip 192.168.66.1",
+            f"setenv initrd_high {args.initrd_high}",
+            f"tftp {KADDR:#x} {args.kernel}",
+            f"tftp {RADDR:#x} {args.initrd}",
+            f"setenv bootargs {args.bootargs}",
+            f"bootm {KADDR:#x} {RADDR:#x}",
+        ]
     # tftp needs longer settle; give big gaps before/after the transfers
     gaps = {3: 12.0, 4: 10.0}   # after kernel tftp, after initrd tftp
     send("")  # wake
