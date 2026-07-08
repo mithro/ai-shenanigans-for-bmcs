@@ -54,12 +54,40 @@ Memory: U-Boot relocated to the top of the 64 MB DRAM; the kernel loads at
 > kernel log at 1200 baud is slow (~minutes). If the kernel won't honour 1200,
 > switch the Pi to the PL011 (`dtoverlay=disable-bt`, `ttyAMA0`) and use 115200.
 
+## The kernel boots — but the initramfs needed care
+
+The Raptor **Linux 2.6.28.9 boots cleanly** over P2A (CPU ARM926EJ-S, SOC
+AST1100/AST2050, `Memory: 64MB`, `console [ttyS1] enabled` fully readable at 1200).
+Getting it to a **shell** took untangling the initramfs:
+
+1. **Pair the kernel with its own initrd.** `uInitrd-kgpe-d16` is built for the
+   *modern* DTB kernel (`uImage-kgpe-d16`, `bootm K I dtb`); the Raptor 2.6.28 kernel
+   pairs with **`uInitrd-raptor`** (`bootm K I`, ATAG, machid 8888 — our
+   `arch_number=0x22B8` already is 8888). Mixing them → panic.
+2. **`bootm` would not pass the ramdisk ATAG to this 2.6.28 kernel.** With every
+   `initrd_high` value the kernel still reported `Memory: 61212KB available` (initrd
+   not reserved) and panicked `VFS: Cannot open root device "<NULL>"`. The cmdline
+   ATAG *did* get through (`console=ttyS1` took effect), so `CONFIG_CMDLINE_TAG`
+   works but `ATAG_INITRD2` isn't reaching the kernel.
+3. **Fix: the `initrd=<start>,<size>` early param.** The ARM 2.6.28 kernel
+   (`CONFIG_RD_GZIP=y`, `CONFIG_BLK_DEV_INITRD=y`) supports pointing at the ramdisk
+   directly on the cmdline, bypassing the ATAG. Use a **raw** `cpio.gz`
+   (`uInitrd-raptor.cpio.gz`, no uImage header), tftp it to `0x42000000`, and:
+   ```
+   setenv bootargs console=ttyS1,1200n8 initrd=0x42000000,0xeedd4
+   bootm 0x41000000        # kernel only (no ramdisk arg)
+   ```
+   (`0xeedd4` = the raw cpio.gz size.) `linux-boot.py --cmdline-initrd 0xeedd4
+   --initrd uInitrd-raptor.cpio.gz` does this.
+
 ## Status / next steps
 
-- **Done + verified:** BMC↔Pi network (`eth-bmc`), U-Boot ping, TFTP into DRAM.
-- **In progress:** `bootm` the kernel+initrd → Linux shell on the serial console.
-- **Next:** cross-build a **static ARM `culvert`** (soft-float `arm-linux-gnueabi`,
-  `-march=armv5te -static`), TFTP it into the running Linux, and run culvert **in-band**
-  (`devmem`) to finish `sfc` flash-dump / `console` verification — closing the culvert
-  port (task #23). The initramfs would ideally bundle culvert + set `eth0` to
-  `192.168.66.2` for a one-shot boot.
+- **Done + verified:** BMC↔Pi network (`eth-bmc`), U-Boot ping, TFTP into DRAM,
+  **Raptor 2.6.28 kernel boots** (SoC + 64 MB DRAM + serial console all correct).
+- **Static ARM `culvert` built:** `culvert-arm/` recipe →
+  `culvert/build-arm/culvert-arm-static` (ELF ARM EABI5, static — runs on the musl
+  initramfs). Ready to TFTP into the running Linux.
+- **In progress:** get Linux to a shell via `initrd=` cmdline, then run
+  `culvert ... devmem` **in-band** to finish `sfc` flash-dump / `console` (task #23).
+- **Next / ideal:** rebuild the initramfs to **bundle `culvert-arm-static`** and set
+  `eth0` to `192.168.66.2`, for a one-shot `boot → shell-with-culvert`.
