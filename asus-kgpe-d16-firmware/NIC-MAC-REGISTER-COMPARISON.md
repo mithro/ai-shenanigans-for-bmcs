@@ -53,3 +53,24 @@ working state, the remaining suspects are **not** register config:
 
 Captured dumps: `tmp/mac-uboot-working.txt`, `tmp/mac-linux-broken.txt`,
 `tmp/mac-linux-fixedlink.txt`. Re-dump with `uv run tmp/run_mac_block.py`.
+
+## 2026-07-09 update — TX descriptor ring probe + a capture-timing gotcha
+
+Added `tmp/tx_ring_host.py` / `tmp/run_tx_ring.py` to dump the ftgmac100 TX descriptor
+ring over P2A (decodes txdes0 OWN bit + txdes3 buffer address). **Key gotcha discovered:**
+`TXR_BADR` reads `0x43fe9760` in *every* capture because that is **U-Boot's** ring, and
+the captures kept landing during U-Boot's `tftp` phase (U-Boot uses a tiny 1-descriptor
+ring with EDOTR set at txdes[0], OWN=SW). The `MACCR=0x8050f` "fully enabled" reading was
+also U-Boot mid-tftp, **not** Linux. So the earlier "Linux reaches a fully-enabled MAC"
+claim is unconfirmed — we have **not** yet cleanly captured Linux's own ring.
+
+To get Linux's real state you must capture **after** the boot fully completes (Linux ~40s
+in, sitting in the `ip_auto_config` carrier wait) — not during the U-Boot tftp. On
+2026-07-09 this was blocked by **boot flakiness**: 4 consecutive `boot_retry` attempts
+failed, including a *new* mode where the full 3.4 MB kernel + DTB load cleanly (bytes
+transferred OK) yet bootm never prints "Booting Linux" (`started=False`). That points to
+a degraded U-Boot/reset-boot state after many boot+kill cycles (or a `linux-boot.py`
+bootm-timing issue), independent of the NIC. **Next session, on a fresh rig:** get one
+clean fixed-link boot, then `run_mac_block.py` + `run_tx_ring.py` to see Linux's ring —
+if txdes[0] shows OWN=MAC persistently, the MAC isn't consuming (refclk/PHY-timing); if
+OWN=SW with no buffer, the driver never queued (higher layer / DMA).
