@@ -68,6 +68,25 @@ Once eth0 passes traffic, the NFS root (server + export + busybox rootfs +
 `inittab`/`rcS` are all staged on the Pi) mounts and Phase A2 completes, unblocking
 A3 (driver audit) and Phase C (OpenBMC).
 
+## ⚠️ Boot reliability (found while debugging the NIC — affects everything)
+
+The modern-kernel boot on real HW is **flaky**: the *same* `uImage-kgpe-d16-realhw`
+booted with a full dmesg on some attempts and **no console output at all** on others
+(and stalls at varying points in between). This inconsistency — not the NIC — is what
+made the eth0 symptoms so hard to pin down (the "console dies at ~4 s" is really the
+kernel keeping going while the console stops, and some boots the kernel is corrupt
+from the start). The likely cause is the **3.45 MB kernel being corrupted during the
+tftp-into-DDR2 + reset-boot load** (DDR2 storage errors and/or an occasionally
+imperfect reset-boot). The smaller 2.98 MB QEMU kernel booted reliably in the A1
+tests; the larger real-HW kernel does not.
+
+**Mitigation added:** `linux-boot.py` now `setenv verify y`, so U-Boot's `bootm`
+CRC-checks the loaded uImage — a corrupted load fails cleanly (`Bad Data CRC`) instead
+of silently running a broken kernel. **Next:** make `linux-boot.py` retry the tftp
+until the CRC passes (reliable boots), and/or revisit the DDR2 init margins for
+sustained multi-MB transfers. Reliable boots are the prerequisite for efficiently
+finishing the NIC + everything downstream.
+
 ## Boot recipe (today)
 ```sh
 # modern kernel, NFS root (blocked on eth0):
