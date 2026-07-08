@@ -5,6 +5,12 @@
 # port at 1200 8N1 (the 2 jumpers were originally crossed — BMC-TXD was on GPIO14; now
 # BMC-TXD -> Pi GPIO15/pin10, BMC-RXD -> Pi GPIO14/pin8, GND pin6).
 #
-# ttyS0 is the flaky mini-UART; for reliable 115200 (real U-Boot console), switch the
-# Pi to the PL011 (dtoverlay=disable-bt, drop console=serial0) and change KERNEL to ttyAMA0.
-SUBSYSTEM=="tty", KERNEL=="ttyS0", SYMLINK+="serial-bmc-console"
+# 2026-07-08: switched to the PL011 for reliable 115200. The Pi 4 mini-UART (ttyS0)
+# has a core-clock-dependent baud that is only stable at 1200; the PL011 (ttyAMA0)
+# has a fixed clock and is reliable at 115200. Applied on the Pi:
+#   /boot/firmware/config.txt : + dtoverlay=disable-bt   (routes PL011 -> GPIO14/15,
+#                                                          frees it from Bluetooth)
+#   /boot/firmware/cmdline.txt : removed console=serial0,115200  (the Pi's own kernel
+#                                console was sharing this UART and injecting noise)
+# After a reboot, /dev/serial0 -> ttyAMA0 and this rule names it serial-bmc-console.
+SUBSYSTEM=="tty", KERNEL=="ttyAMA0", SYMLINK+="serial-bmc-console"
