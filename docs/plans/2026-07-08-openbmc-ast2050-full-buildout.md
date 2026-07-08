@@ -53,9 +53,15 @@ All over **P2A + TFTP**, no spispy/JTAG:
   hangs right after `netconsole: network logging started` — netconsole's netpoll
   stalls waiting for eth0's carrier (the QEMU fixed-link had an instant carrier) →
   **disabled `CONFIG_NETCONSOLE`** (rebuilding). tcpdump on the Pi saw **0 packets**
-  from the BMC (consistent with the boot hanging before IP-config). Next: boot the
-  netconsole-off kernel; if eth0 links + NFS mounts → A2 done; else the RMII refclk
-  / SCU48 MAC-clock-delay is the culprit (porting-guide Change 10).
+  from the BMC (consistent with the boot hanging before IP-config). **Root-caused
+  (see `MODERN-KERNEL-STATUS.md`):** eth0's **RMII link negotiates** (RTL8201CP @0x20,
+  MACCR shows 100M/full via `adjust_link`) but the driver **resets the MAC in a loop**
+  (MACCR flaps `0x80500`↔`0`), so TX/RX enables never stick → 0 packets. The aspeed
+  ftgmac100 warns `Unsupported PHY mode rmii` — real-PHY **RMII on AST2400/2050** is a
+  driver gap (Raptor's `ftgmac100_26.c` had it; porting-guide Change 10). **This NIC
+  driver fix is the current critical path** — it blocks NFS root + all OpenBMC
+  networking. All infra staged: NFS server/export/rootfs on the Pi, `linux-boot.py`,
+  `build-realhw-kernel.py`, `tmp/mac_regs.py` (live P2A register reads).
 - **A3 ⬜ Peripheral driver coverage.** Every OpenBMC-used block binds on G3: I2C,
   GPIO, PWM/tach (fans), ADC (voltages), MAC/ftgmac, watchdog, LPC (KCS/BT/SNOOP for
   IPMI + host), eSPI/SuperIO, SPI/SMC, RTC, video/2D (for KVM), UART/VUART. Audit the
