@@ -85,6 +85,22 @@ the MAC loses its RMII clock → no link. Fix candidates: a Realtek PHY fixup / 
 node config for the RMII clock. — superseded, since fixed-link bypasses the PHY and
 still fails.)
 
+### Two concrete next paths to the fix (pick one)
+1. **Driver patch, tested via tcpdump (no shell needed).** Patch `ftgmac100_setup_clk`
+   to NOT `clk_set_rate(MACCLK, 100MHz)` for the AST2050 (leave the MAC clock as U-Boot
+   left it — U-Boot's AST2050 path only de-asserts SCU04[11]). Rebuild, boot NFS root
+   (which opens eth0), and watch the Pi `tcpdump` for ANY packet from the BMC. If
+   packets appear, the MAC clocking was it. Iterate on the exact MAC-init diff vs
+   U-Boot's `aspeednic.c` otherwise.
+2. **Interactive shell** to diff MAC regs live. A `CONFIG_INITRAMFS_SOURCE` shell
+   kernel (`build-realhw-kernel.py <shell-fragment>`, `rdinit=/bin/sh`, no `ip=`) was
+   built but the built-in initramfs unpack is still not landing on a shell (first a
+   `junk within compressed archive` panic — fixed with a clean `newc` cpio +
+   `INITRAMFS_COMPRESSION_NONE`; then a silent stop in `do_populate_rootfs`). Once it
+   reaches `/bin/sh`: `ip link set eth0 up` → `busybox devmem 0x1e6600xx` for MACCR/etc
+   → compare with the values U-Boot leaves (read via P2A after a U-Boot tftp). Tooling:
+   `tmp/eth0_debug.py` (command sequence), `tmp/shell_cmds.py`.
+
 ### Next steps for the NIC (the real-HW driver-porting work)
 1. Read `ftgmac100_adjust_link` + the reset path (`ftgmac100_reset_task` /
    `ftgmac100_init_hw`/`start_hw`) — find why the link-change reset loops on the
