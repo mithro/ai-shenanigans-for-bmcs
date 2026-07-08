@@ -46,8 +46,10 @@ def main():
     ap.add_argument("--image", required=True)
     ap.add_argument("--load", type=lambda s: int(s, 0), default=0x40000000)
     ap.add_argument("--watch", type=int, default=30)
-    ap.add_argument("--baud", type=int, default=1200,
-                    help="UART capture baud (stub=1200; real U-Boot usually 115200)")
+    ap.add_argument("--baud", type=int, default=115200,
+                    help="UART capture baud. 115200 once the Pi is on the PL011 "
+                         "(dtoverlay=disable-bt, ttyAMA0) and U-Boot/kernel use 115200; "
+                         "use 1200 only for the old mini-UART / a 1200-baud image.")
     ap.add_argument("--max-patch-iters", type=int, default=6)
     args = ap.parse_args()
 

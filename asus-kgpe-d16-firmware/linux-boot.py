@@ -39,7 +39,7 @@ def send(cmd):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--bootargs", default="console=ttyS1,1200n8 earlyprintk")
+    ap.add_argument("--bootargs", default="console=ttyS1,115200n8 earlyprintk")
     ap.add_argument("--initrd-high", default="0x43800000",
                     help="relocate ramdisk to end here (safe: clear of kernel + U-Boot); "
                          "0xffffffff = no relocation")
@@ -61,7 +61,7 @@ def main():
            capture_output=True, text=True)
         print("[2] load U-Boot + reset-boot...")
         r = sh(["uv", "run", os.path.join(HERE, "p2a-image-boot.py"),
-                "--image", UBOOT, "--baud", "1200", "--watch", "22"],
+                "--image", UBOOT, "--baud", "115200", "--watch", "22"],
                capture_output=True, text=True)
         if "U-Boot" not in r.stdout:
             print("[!] U-Boot did not reach prompt:\n", r.stdout[-500:]); return 1
@@ -70,7 +70,7 @@ def main():
     print("[3] drive U-Boot -> tftp + bootm...")
     # start the serial capture for the whole Linux boot
     sh(["ssh", "-o", "BatchMode=yes", PI,
-        f"sudo stty -F {BMC} 1200 raw -echo -crtscts cs8 -parenb -cstopb"],
+        f"sudo stty -F {BMC} 115200 raw -echo -crtscts cs8 -parenb -cstopb"],
        capture_output=True, text=True)
     # capture bytes (serial can carry non-UTF-8 noise); decode leniently at the end
     cap = subprocess.Popen(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", PI,

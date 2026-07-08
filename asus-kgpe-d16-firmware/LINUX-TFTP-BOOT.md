@@ -115,6 +115,11 @@ uv run asus-kgpe-d16-firmware/linux-boot.py \
   culvert present + network up` (no live reconfigure/tftp over slow serial).
 - **`sfc` dump** needs a board with a readable boot flash (not this dead-firmware
   bench) to return real data; the code path is exercised in-band otherwise.
-- **Speed:** the Pi mini-UART caps the console at 1200 baud — switch the Pi to the
-  PL011 (`dtoverlay=disable-bt`, `ttyAMA0`) + kernel `console=ttyS1,115200` for a
-  usable interactive shell (task #26).
+- **Speed — DONE (2026-07-08).** The Pi is now on the **PL011** (`dtoverlay=disable-bt`
+  → `ttyAMA0`, `/dev/serial-bmc-console` → `ttyAMA0`); the flaky mini-UART's baud
+  tracked the VPU clock and was only stable at 1200, but the PL011 is reliable at
+  **115200**. Verified: switched the running BMC Linux console to 115200 live
+  (`stty -F /dev/ttyS1 115200`) and interacted cleanly at 115200 on `ttyAMA0`. U-Boot
+  is rebuilt at 115200 (`raptor-uboot.bin`), and the tools now default to 115200
+  (`p2a-image-boot.py --baud`, `linux-boot.py` bootargs `console=ttyS1,115200n8`) — so
+  a fresh cold boot comes up with a fast interactive console (~96× faster than 1200).
