@@ -97,13 +97,13 @@ def main():
             f"setenv bootargs {args.bootargs}",
             f"bootm {KADDR:#x} {RADDR:#x}",
         ]
-    # tftp needs longer settle; give big gaps before/after the transfers
-    gaps = {3: 12.0, 4: 10.0}   # after kernel tftp, after initrd tftp
     send("")  # wake
     time.sleep(args.gap)
-    for i, c in enumerate(seq):
+    for c in seq:
         send(c)
-        time.sleep(gaps.get(i, args.gap))
+        # a tftp transfer + its 1200-baud progress print needs a long settle,
+        # or the next command interleaves with the still-running transfer
+        time.sleep(20.0 if c.startswith("tftp") else args.gap)
     try:
         raw, _ = cap.communicate(timeout=args.watch + 8)
     except subprocess.TimeoutExpired:
