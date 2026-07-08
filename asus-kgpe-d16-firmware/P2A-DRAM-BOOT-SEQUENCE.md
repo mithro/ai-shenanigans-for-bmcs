@@ -302,9 +302,27 @@ Flash: SPI Flash ID: 0
 Can't support this SPI Flash!!
 ```
 
-`DRAM: 64 MiB` proves the ARM ran our code and probed real DRAM. The SPI-flash line
-is expected (the boot flash isn't served over P2A on this dead-firmware rig; U-Boot
-halts there for lack of an environment — a downstream concern, not a boot failure).
+`DRAM: 64 MiB` proves the ARM ran our code and probed real DRAM.
+
+**And it's fully interactive** — with three no-flash board fixes (see
+`RAPTOR-UBOOT-BUILD.md` / `uboot-patches/`) U-Boot boots all the way to a `boot#`
+prompt and executes commands sent over the UART:
+
+```
+...
+Net:   aspeednic#0: PHY at 0x20
+autoboot in 3 seconds (stop with 'Delete' key)...
+Wrong Image Format for bootm command
+ERROR: can't get kernel image!
+boot# version
+U-Boot 2013.07 (Jul 08 2026 - 18:52:58)
+arm-linux-gnueabi-gcc (GCC) 4.9.4
+GNU ld (GNU Binutils) 2.29.1.20170915
+boot#
+```
+
+The SPI-flash line is expected (the boot flash isn't served over P2A on this
+dead-firmware rig); the board fixes make U-Boot continue past it to the prompt.
 
 **The complete P2A-only recipe (what got us here):**
 1. `ddr2-init-p2a.py` — DDR2 up. **Three geometry/timing fixes were required and
