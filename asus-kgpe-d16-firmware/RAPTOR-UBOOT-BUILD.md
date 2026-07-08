@@ -33,9 +33,19 @@ quagmire.
    16 MB up clears the ~164 KB image.
 4. **Environment = NOWHERE** (`include/configs/asus.h` end: `#undef
    CONFIG_ENV_IS_IN_FLASH` → `#define CONFIG_ENV_IS_NOWHERE`). The boot flash isn't
-   served over P2A, so reading the env from flash data-aborts *after* the banner
-   ("Can't support this SPI Flash!!" is itself non-fatal). Using the compiled-in
-   default environment lets U-Boot reach an **interactive prompt**.
+   served over P2A. Use the compiled-in default environment so U-Boot doesn't read/
+   write flash for its env.
+5. **flash_get_size: handle "no flash"** (`board/aspeed/ast2050/flash_spi.c`). When
+   the SPI flash ID is unknown (ID reads `0` — no chip over P2A), the `default:` case
+   only printed "Can't support this SPI Flash!!" and fell through with an
+   **uninitialised `sector_count`**; the sector-setup loop then indexed
+   `info->start[]` out of bounds and **data-aborted (silent hang after the banner)**.
+   Also, returning size `0` makes U-Boot's generic flash wrapper print `*** failed ***`
+   and `hang()` ("### ERROR ### Please RESET"). `CONFIG_SYS_NO_FLASH` doesn't work here
+   (this vintage `cmd_bootm.c` hard-references `flash_info_t.start[]`). Fix: report a
+   **benign single-sector geometry** (`sector_count=1, size=0x10000`) so `flash_init()>0`
+   and U-Boot reaches the prompt — `flash_protect` only touches in-RAM flags, so no
+   bogus flash hardware access happens at boot.
 
 ## The DDR2-init skip (why run-from-DRAM works)
 
