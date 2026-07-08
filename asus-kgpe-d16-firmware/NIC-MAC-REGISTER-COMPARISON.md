@@ -82,9 +82,24 @@ never called → MACCR stays 0 → eth0 has no carrier → `ip_auto_config` wait
 visible; `read_logbuf.py` only recovers the first ~7 lines (modern 6.6 kernel uses the
 printk **ringbuffer/prb**, not the old flat `__log_buf`, so the reader needs a prb parser).
 
-**Test in progress**: a **fixed-link** DTB (`tmp/kgpe-fixedlink.dtb`, adds a
-`fixed-link { speed=100; full-duplex; }` subnode) forces link-up, bypassing PHY
-negotiation. If MACCR becomes `0x8050f` (configured) → the PHY/MDIO negotiation is the
-blocker (fix the RMII PHY handling / use NC-SI or fixed-link). If MACCR stays `0` →
-ndo_open fails earlier (cf. the QEMU C4 finding: `ftgmac ndo_open -EACCES`, a MAC-enable
-gate) — chase that. Either way the fix is now in the **link/open path, not TX-DMA**.
+**Test done — fixed-link ALSO leaves the MAC unconfigured.** Built `tmp/kgpe-fixedlink.dtb`
+(adds `fixed-link { speed=100; full-duplex; }` to bypass PHY negotiation). After a clean
+fixed-link boot, `run_mac_block.py` still shows MACCR=0 / TXR_BADR=0. So it is **not**
+purely PHY negotiation.
+
+**Definitive poll** (`rig/nic-diag/run_poll_ring.py`, sample in `sample-ring-poll.txt`):
+polling TXR_BADR/MACCR/MADR straight through a boot shows U-Boot's live state
+(`TXR_BADR=0x43fe9760 MACCR=0x80500 MADR=0x960e`) during tftp, then at bootm everything
+drops to **0 and stays 0 for ~74s** — `TXR_BADR` never becomes a Linux ring address. So
+**Linux's `ftgmac100` never configures the MAC / never sets up its TX ring**: eth0 is
+never brought up. The blocker is `ndo_open`/`ftgmac100_init_hw`/`adjust_link` bailing out
+early — NOT TX-DMA, NOT the clock/pinmux/SCU, NOT the descriptor content.
+
+**To find the exact bail-out** you need the kernel messages from `ndo_open` (which the
+dead-at-4s console hides). Two ways: (1) fix the console so it survives past 4s — it dies
+when the 8250 takes over from earlycon, so verify the `serialN`↔`0x1e784000` (UART2) DT
+alias and that `console=ttyS?` matches the wired UART, or keep earlycon with a proper
+`earlycon=uart8250,mmio32,0x1e784000`; (2) write a **printk-ringbuffer (prb) parser** for
+`read_logbuf.py` (the modern 6.6 kernel replaced the flat `__log_buf`; the current reader
+only recovers the first ~7 lines). Then the `ndo_open` error (PHY connect? `-EACCES` MAC
+gate like QEMU C4? clk?) is visible and directly fixable.
