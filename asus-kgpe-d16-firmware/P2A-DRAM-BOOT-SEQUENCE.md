@@ -288,6 +288,39 @@ safe live gate doesn't exist, this path is dead and we're on §6 (JTAG/spispy).
   moved from the host BIOS to the BMC boot flash + the spispy load tool (instance-A's
   rig knowledge).
 
+## 🎉 GOAL ACHIEVED (2026-07-08): U-Boot runs on the AST2050 over P2A alone
+
+The full Raptor AST2050 **U-Boot booted on the real BMC via culvert/P2A** — no
+spispy, no JTAG. The BMC UART (`/dev/serial-bmc-console`, 1200 8N1) printed:
+
+```
+U-Boot 2013.07 (Jul 08 2026 - 18:25:48)
+I2C:   ready
+DRAM:  64 MiB
+WARNING: Caches not enabled
+Flash: SPI Flash ID: 0
+Can't support this SPI Flash!!
+```
+
+`DRAM: 64 MiB` proves the ARM ran our code and probed real DRAM. The SPI-flash line
+is expected (the boot flash isn't served over P2A on this dead-firmware rig; U-Boot
+halts there for lack of an environment — a downstream concern, not a boot failure).
+
+**The complete P2A-only recipe (what got us here):**
+1. `ddr2-init-p2a.py` — DDR2 up. **Three geometry/timing fixes were required and
+   hardware-verified:** 4-bank (`MCR04` bit11=0), 64 MB (`MCR04[3:2]=01`, value
+   `0x585`), and the **FINAL DLL block** (`MCR64=0x002d3000` + `MCR68=0x02020202`;
+   platform.S writes MCR64 twice and the final value is the real DQS delay — omitting
+   it caused 0.29% data errors that corrupted the payload). Also sets `SCU40[6]`.
+2. Build `u-boot.bin` (`RAPTOR-UBOOT-BUILD.md`): board `ast2050`, TEXT_BASE 0x0, baud
+   1200, init-SP moved +16 MB (stock `+0x1000` collides with the DRAM-loaded image),
+   `SUBDIR_TOOLS=` to skip the unbuildable vintage host tools.
+3. `p2a-image-boot.py --image u-boot.bin --baud 1200` — siphon into DRAM, verify
+   byte-perfect, then the **reset-boot trick (§6a)**: disable ARM (`SCU70[1:0]=11`,
+   survives `HRST_N`), watchdog `HRST_N`, re-set the remap, enable ARM (`=10`).
+   `lowlevel_init` sees `SCU40[6]` and **skips the DDR2 re-init** (which would crash
+   the running-from-DRAM code).
+
 ## 7. Summary (updated 2026-07-08 after STAGE 1 + STAGE 2)
 
 - **UART second channel (§0): DONE + validated** — BMC UART2 `0x1e784000` → Pi
