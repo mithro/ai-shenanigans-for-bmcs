@@ -132,3 +132,20 @@ read SCU0C/SCU04/the MAC clock-gate over P2A *at the moment of the hang* (compar
 time); try enabling the RMII RCLK; or bisect the MAC clock setup against Raptor's
 `ftgmac100_26` init (which sets up PHY/clocks before touching MACCR). The diagnostic
 scaffolding (open-step markers + reset bisect) is live in the d16-qemu `ftgmac100.c`.
+
+### 2026-07-09 refinement — the hang survives skipping ALL reset register writes
+Booting the skip-entire-`reset_mac` kernel with **minimal** console (no initcall_debug) put
+ndo_open at 4.1s and still stopped at exactly `reset_mac skipped (G3)` — and eth0 stayed
+down (MACCR=0x80500, ping fails, only U-Boot tftp packets on the wire). Since that build
+does **zero** MAC register writes in the reset path, the freeze point is now the
+`usleep_range()` between the two reset calls (or the console dying at that instant). Two
+important consequences: (a) the "MAC-write-stall" is not the whole story — the hang
+persists with no writes; (b) console-blocking is **not** it either (minimal console, still
+dead). **This is no longer productively debuggable blind.** The reliable next move is an
+**interactive shell**: boot the modern kernel with a bundled initramfs + `rdinit=/bin/sh`
++ **no `ip=`** (so `ip_auto_config` never auto-opens eth0 and can't hang the boot). From a
+shell you can `dmesg`, then `ip link set eth0 up` under `strace`/ftrace and watch exactly
+where `ndo_open` blocks, and read the printk ringbuffer directly. That same shell also
+unblocks the culvert in-band feature exercise (project task E). The console reaches the
+shell fine (it's quiet, not dead) with `console=ttyS4` + the `clock-frequency=24000000`
+UART pin (`kgpe-flclk.dtb`).
