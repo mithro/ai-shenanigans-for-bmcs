@@ -26,13 +26,19 @@ PI = "asus-bmc"
 HOST = "root@192.168.77.138"
 CULVERT = "/root/culvert-g3/build/src/culvert p2a vga"
 
-SCU00, SCU20, SCU40, SCU70 = 0x1e6e2000, 0x1e6e2020, 0x1e6e2040, 0x1e6e2070
+SCU00, SCU0C, SCU20, SCU40, SCU70 = 0x1e6e2000, 0x1e6e200c, 0x1e6e2020, 0x1e6e2040, 0x1e6e2070
 M = 0x1e6e0000  # SDMC (MCRxx) base
 
 # (addr, value) exactly as platform.S writes them, in order. MCR04 and the SCU40
 # done-flag are computed at run time (marked None) and handled specially below.
 SEQ = [
     (SCU00, 0x1688a8a8),        # unlock SCU
+    # Reset SCU0C (clock-stop) to its power-on default. A previously-booted modern
+    # kernel gates "unused" clocks -- notably UARTCLK (SCU0C[15]) -- and the SCU is
+    # PWRSTNin-only reset, so that gating SURVIVES the watchdog reset in the P2A
+    # boot trick -> the next U-Boot boots with a dead console. Restoring the default
+    # (0x000c3e8b) re-enables UARTCLK (+ LCLK etc.) so serial works after a kernel.
+    (SCU0C, 0x000c3e8b),
     (SCU20, 0x000041f0),        # SCU M-PLL params
     ("delay", 0),               # ~400us
     (M + 0x00, 0xfc600309),     # unlock SDRAM regs
