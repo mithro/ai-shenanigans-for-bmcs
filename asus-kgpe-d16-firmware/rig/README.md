@@ -25,7 +25,13 @@ sudo nmcli connection add type ethernet con-name eth-bmc-static ifname eth-bmc \
   hands the host a lease (192.168.77.50-150) and `pxelinux.0` → SystemRescue
   (`vmlinuz` + `sysresccd.img` over TFTP from `/srv/pxe/tftp`).
 - **`host-pxe-http.service`** — `python3 -m http.server 8080` on `/srv/pxe/http`, for
-  the SystemRescue rootfs (`archiso_http_srv=http://192.168.77.1:8080/iso/`).
+  the SystemRescue rootfs (`archiso_http_srv=http://192.168.77.1:8080/iso/`). The
+  SystemRescue **ISO must be loop-mounted** at `/srv/pxe/http/iso` so the ~1.1 GB
+  `sysresccd/x86_64/airootfs.sfs` is served — otherwise the host PXE-boots but 404s on
+  the rootfs and drops to the initramfs prompt. Made persistent via `/etc/fstab`:
+  ```
+  /home/claude/systemrescue.iso /srv/pxe/http/iso iso9660 loop,ro,nofail 0 0
+  ```
 - **`bmc-tftp.service`** — dnsmasq TFTP-only on `eth-bmc` (`/srv/tftp-bmc`): serves the
   AST2050 U-Boot's `tftp` of `uImage-raptor` + `uInitrd-raptor.cpio.gz` / `culvert`.
 
