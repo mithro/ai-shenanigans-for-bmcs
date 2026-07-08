@@ -56,9 +56,14 @@ def main():
     src = open(init).read()
     src = src.replace("ip addr add 10.0.2.15/24 dev eth0\n"
                       "ip route add default via 10.0.2.2 2>&1 || true\n", NET_PATCH)
-    # announce culvert so the operator sees it's present
+    # The 2.6.28 kernel predates devtmpfs, so /dev falls back to the static cpio nodes
+    # which lack /dev/mem -- culvert's devmem bridge needs it. Create it explicitly.
+    src = src.replace('mount -t devpts devpts /dev/pts',
+                      'mount -t devpts devpts /dev/pts\n'
+                      'mknod -m 600 /dev/mem c 1 1 2>&1 || true   # for culvert devmem')
+    # announce culvert (and a quick in-band probe) so the boot log shows it's usable
     src = src.replace('echo "BMC-READY"',
-                      'echo "culvert: $(culvert --help >/dev/null 2>&1 && echo present)"\n'
+                      'culvert probe via devmem 2>&1 | sed "s/^/culvert: /" || true\n'
                       'echo "BMC-READY"')
     open(init, "w").write(src)
 
