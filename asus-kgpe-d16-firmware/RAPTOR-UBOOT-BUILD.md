@@ -31,6 +31,11 @@ quagmire.
    stack at `0x40000F00` — fine when code is in flash, but **it collides with our
    U-Boot image loaded at `0x40000000`** and corrupts the relocation code. Moving it
    16 MB up clears the ~164 KB image.
+4. **Environment = NOWHERE** (`include/configs/asus.h` end: `#undef
+   CONFIG_ENV_IS_IN_FLASH` → `#define CONFIG_ENV_IS_NOWHERE`). The boot flash isn't
+   served over P2A, so reading the env from flash data-aborts *after* the banner
+   ("Can't support this SPI Flash!!" is itself non-fatal). Using the compiled-in
+   default environment lets U-Boot reach an **interactive prompt**.
 
 ## The DDR2-init skip (why run-from-DRAM works)
 
