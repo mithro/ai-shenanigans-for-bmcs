@@ -24,7 +24,7 @@ PI = "asus-bmc"
 BMC = "/dev/serial-bmc-console"
 UBOOT = os.path.join(ROOT, "tmp", "raptor-uboot.bin")
 KERNEL, INITRD = "uImage-raptor", "uInitrd-kgpe-d16"
-KADDR, RADDR = 0x41000000, 0x42000000
+KADDR, RADDR, DADDR = 0x41000000, 0x42000000, 0x43000000   # kernel / initrd / dtb
 
 
 def sh(cmd, **kw):
@@ -45,6 +45,9 @@ def main():
                          "0xffffffff = no relocation")
     ap.add_argument("--kernel", default="uImage-raptor")
     ap.add_argument("--initrd", default="uInitrd-raptor")
+    ap.add_argument("--dtb", default=None,
+                    help="device-tree blob filename (modern DTB kernel). If set, uses "
+                         "3-arg `bootm <kernel> <initrd> <dtb>` (needs U-Boot CONFIG_OF_LIBFDT).")
     ap.add_argument("--cmdline-initrd", type=lambda s: int(s, 0), default=0,
                     help="if set (=raw cpio.gz size), pass initrd=<RADDR>,<size> on the "
                          "kernel cmdline and bootm kernel-only (bypasses the ATAG). "
@@ -77,7 +80,21 @@ def main():
                             f"sudo timeout {args.watch} cat {BMC}"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(1.5)
-    if args.cmdline_initrd:
+    if args.dtb:
+        # modern DTB kernel: tftp kernel + initrd + dtb; 3-arg bootm passes the FDT.
+        # initrd_high keeps the ramdisk clear of the kernel + U-Boot; fdt_high too.
+        seq = [
+            "setenv ipaddr 192.168.66.2",
+            "setenv serverip 192.168.66.1",
+            f"setenv initrd_high {args.initrd_high}",
+            "setenv fdt_high 0xffffffff",           # don't relocate the DTB
+            f"tftp {KADDR:#x} {args.kernel}",
+            f"tftp {RADDR:#x} {args.initrd}",
+            f"tftp {DADDR:#x} {args.dtb}",
+            f"setenv bootargs {args.bootargs}",
+            f"bootm {KADDR:#x} {RADDR:#x} {DADDR:#x}",
+        ]
+    elif args.cmdline_initrd:
         # raw cpio.gz + initrd=addr,size on the cmdline; bootm kernel-only
         seq = [
             "setenv ipaddr 192.168.66.2",
