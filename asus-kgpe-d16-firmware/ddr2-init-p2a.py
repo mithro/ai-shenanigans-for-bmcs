@@ -58,6 +58,15 @@ SEQ = [
     (M + 0x50, 0x00000000), (M + 0x54, 0x00000000), (M + 0x58, 0x00000000),
     (M + 0x5c, 0x00000000),
     (M + 0x60, 0x032aa02a),     # IO buffer mode
+    # FINAL DLL block (platform.S lines 451-469) -- CRITICAL. platform.S writes
+    # MCR64 TWICE: early 0x00050000 (above) then this final 0x002d3000, which sets
+    # the real DQS/DLL delay. Omitting it left the DLL mistuned => ~0.29% DDR2 data
+    # errors that corrupted large payloads. Restored to match platform.S exactly.
+    (M + 0x64, 0x002d3000),     # DLL ctrl #1 (FINAL delay value)
+    (M + 0x68, 0x02020202),     # DLL ctrl #2
+    (M + 0x70, 0x00000000),     # test ctrl/status
+    (M + 0x74, 0x00000000),     # test start addr/length
+    (M + 0x78, 0x00000000),     # test fail DQ bit
     (M + 0x7c, 0x00000000),     # test init value
     (M + 0x34, 0x00000001),     # power ctrl (start)
     ("delay", 0),               # ~400us
