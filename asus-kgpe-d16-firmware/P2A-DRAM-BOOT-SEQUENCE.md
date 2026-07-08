@@ -212,7 +212,37 @@ function → **hangs the x86 host** (2026-07-08 incident: I crashed the PXE host
 way). **NEVER write `0x0` before step 4 confirms the remap points it at DRAM.** Test
 the remap with a *read* of `0x0` first; only write `0x0` once it reads back DRAM.
 
-## 6a. The clock-gate-across-reset trick — the remaining P2A-only candidate
+## 6a. ✅ SOLVED — P2A-only ARM boot works (freeze-across-reset via SCU70[1:0])
+
+**Achieved 2026-07-08** (`arm-stub/boot-p2a.py --mode reset-boot`): the ARM booted our
+stub from DRAM over P2A alone — the BMC UART printed `AST2050-ARM-ALIVE-P2A-DRAM-BOOT`.
+The winning primitive is **`SCU70[1:0]` = "ARM CPU boot code selection"** (datasheet
+p215): `10` = boot from SPI, **`11` = "Disable ARM CPU operation"** — a *live* ARM
+enable/disable. Because the SCU is `PWRSTNin`-only reset, the disable **survives
+`HRST_N`**, so it holds the ARM at the reset vector while we re-establish the remap.
+
+**The working sequence (all over culvert P2A, no spispy/JTAG):**
+1. `ddr2-init-p2a.py` — DDR2 up (M1).
+2. Seed the payload into DRAM (reset vector at the DRAM base).
+3. Set the DRAM→`0x0` remap (AHB unlock + `0x1E60008C[0]=1`).
+4. **Disable the ARM**: SCU-unlock (`0x1688A8A8`→`SCU00`), `SCU70 |= 0x1` (→`[1:0]=11`), relock. *(RMW — preserves the strap `0x00819582`; culvert's bare `SCU70=0x1` would corrupt it.)*
+5. **Watchdog `HRST_N`**: arm WDT1 (`WDT0C=0x13`, 2 s @ 1 MHz), wait. HRST_N resets the ARM's PC→`0x0` but it is **held disabled**; the remap clears; **DDR2 and the SCU survive**.
+6. **Re-set the remap** (AHB unlock + `0x1E60008C[0]=1`) → `0x0` = DRAM = payload again.
+7. **Enable the ARM**: SCU-unlock, `SCU70 &= ~0x1` (→`[1:0]=10`), relock → the ARM fetches `0x0` = DRAM and **runs our code**.
+
+Why the simpler variants failed (documented so we don't retry them):
+- *remap-while-live* (`--mode live`): the firmware-dead ARM NOP-slid off `0x0` at
+  power-on and **stalled high** — it never re-fetches `0x0`, so seeding+remap alone
+  never runs. Only a reset forces `PC=0x0`.
+- *SCU70 toggle with no reset* (`--mode arm-restart`): toggling `[1:0]` `10→11→10`
+  changes the register but does **not** restart the ARM (its PC isn't `0x0`; a live
+  enable/disable doesn't reset PC). The `HRST_N` is what makes `PC=0x0`.
+
+This is the mechanism for booting **U-Boot** the same way (§8): DDR2 is already up, so
+a U-Boot that runs from DRAM needs only to be bulk-loaded into DRAM and started by
+this trick.
+
+## 6b. (historical) The clock-gate-across-reset trick — superseded by §6a
 
 §3 says `HRST_N` clears the remap *and* the ARM in the same pulse — so the ARM
 always re-fetches `0x0`=flash. But the **ARM clock gate lives in the SCU**, and the
@@ -270,8 +300,9 @@ safe live gate doesn't exist, this path is dead and we're on §6 (JTAG/spispy).
   so the "set remap + reset" P2A boot is **blocked** (the pivotal question, answered).
 - **Bonus:** a **host-safe P2A watchdog reset** now exists (host + P2A recover), and
   `SCU3C[1]` witnesses it.
-- **Remaining P2A-only hope:** the **clock-gate-across-reset trick (§6a)** — freeze
-  the ARM (SCU gate survives `HRST_N`), reset, re-set the remap, un-gate. Needs the
-  ARM stub (#19) as witness and hinges on `SCU70[0]` being a *live* ARM clock gate.
-- **If §6a fails:** JTAG or spispy-on-BMC-flash (§6), both currently blocked on
-  physical/rig changes — but now the exact reason each is needed is documented.
+- **✅ P2A-only ARM boot SOLVED (§6a):** freeze the ARM across a watchdog `HRST_N`
+  using **`SCU70[1:0]=11` ("Disable ARM CPU operation")** — which survives the reset —
+  then re-set the remap and re-enable (`=10`). The ARM ran our stub from DRAM; the BMC
+  UART printed `AST2050-ARM-ALIVE-P2A-DRAM-BOOT`. No spispy, no JTAG.
+- **Next: U-Boot the same way (§8)** — bulk-load a DRAM-runnable U-Boot over P2A and
+  start it with the §6a trick. JTAG/spispy (§6) are no longer needed.
