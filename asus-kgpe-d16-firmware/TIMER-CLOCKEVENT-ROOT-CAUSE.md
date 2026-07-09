@@ -43,6 +43,21 @@ below is the investigation trail that led here.
   (`tmp/power.py off/on` + `tmp/host_repair.py` to rebuild culvert) clears it. Verify a clean
   boot-to-userspace with `tmp/boot_until_ping.py` (retries the load, stops when the BMC pings
   192.168.66.2), then `ssh -i scratchpad/bmc_key root@192.168.66.2` from the Pi.
+
+### NEW blocker (2026-07-09): eth0 hard-hangs at the NFS-root mount under load
+Even the clean-fix kernel (pristine MAC reset) reliably reaches `IP-Config: Complete`
+(eth0 works for light BOOTP) then **hard-hangs at the NFS-root mount**: the BMC is
+ARP-dead (no ICMP/ARP response — a hard CPU hang, not an I/O wait) and **no NFS mount RPC
+ever reaches the Pi** (empty `journalctl -u nfs-server`, mountd never hit). So eth0 dies
+the instant the mount's sustained TCP traffic starts. ipconfig keeps the root device open
+(no re-open), so it's eth0 RX/TX under load — prime suspect is **ftgmac100 DMA on the
+non-coherent ARM926 (VIVT cache, no HW coherency)**: descriptors go stale under sustained
+transfer. This is INDEPENDENT of the timer fix (which is solid).
+**PATH FORWARD = boot an initramfs (rootfs in RAM, no eth0 needed to mount root)** — gives
+a userspace shell to (1) prove the full stack, (2) debug eth0-under-load interactively
+(cat /proc/interrupts, ping, then reproduce the NFS hang), (3) run culvert in-band. This is
+exactly how the Raptor 2.6.28 chain reached a shell + in-band culvert. Load kernel + a
+separate `initrd=<addr>,<size>` raw cpio.gz (bootm won't pass ATAG_INITRD2), `rdinit=/init`.
 ---
 
 
