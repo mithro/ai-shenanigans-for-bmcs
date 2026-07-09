@@ -31,14 +31,47 @@ sleeps) comes up.
 - Yet the timer interrupt doesn't fire/deliver. Serial (irq 19) + eth (irq 20) IRQs *do*
   work, so the VIC delivers some interrupts — but not the timer's hwirq 16.
 
-## Prime suspects for the fix (next)
-1. **Timer VIC line wrong for the G3**: the DT uses the AST2400 timer IRQ (16). The
-   AST2050 (G3) VIC may map TIMER1 to a different hwirq → request_irq unmasks the wrong
-   line → the timer's real interrupt stays masked. Cross-check vs Raptor's AST2050 timer
-   IRQ + the AST2050 datasheet interrupt map. This is the leading candidate.
-2. **PCLK rate**: clocksource works (timestamps look right), so tick_rate is ~right — but
-   verify the exact PCLK vs the G3 (a small error would still tick, so lower priority).
-3. **aspeed count-down match logic** (`set_next_event`, lines 142-160) vs the G3 timer.
+## Investigation so far (2026-07-09, on the fresh power-cycled rig)
+Read live over P2A while the kernel is hung in ndo_open (udelay build):
+- **Timer IS set up + running**: TMC30 control (0x1e782030) = `0x15` = TIMER1 ENABLE|INT +
+  TIMER2 ENABLE; TIMER1 counting (count 0x1083a below load 0x7270e, MATCH1=0). So the timer
+  counts down toward the match and *should* assert its interrupt.
+- **Timer IRQ (16) is CORRECT for the AST2050**: cross-checked Raptor's `ast2100_irqs.h`
+  (the AST2050/AST1100 family): MAC0=2, UART1=10, **TIMER0=16** — all match this DT. (The
+  older ast2000 family had TIMER0=3, but that's not this SoC; eth@irq2 + uart@irq10 work,
+  confirming ast2100.) So the DT `interrupts=<0x10>` is right.
+- **No interrupts are being delivered at all**: the boot runs entirely interrupt-free
+  (sequential + udelay) to ndo_open; the first hrtimer sleep hangs. VIC (aspeed AVIC @
+  0x1e6c0080) INT_ENABLE (+0x20) reads 0, but the driver treats it write-1-to-set and never
+  reads it back, so that read is likely write-only / inconclusive.
+
+So the timer asserts but its interrupt never reaches the CPU. The break is in delivery:
+VIC enable/mask, the ARM IRQ line, or a G3-specific interrupt quirk.
+
+## Localised further (2026-07-09): timer fires but never reaches the VIC
+Live P2A while hung: TIMER1 count is **moving** (0x5491f → 0x39fab), so the timer runs and
+reaches its match (MATCH1=0). But the AVIC RAW_STATUS/EDGE_STATUS/IRQ_STATUS (low word,
+bit16) all read **0** across repeated reads — the timer's interrupt pulse never appears at
+the VIC. Timer IRQ number is confirmed correct (16). So the break is between the timer's
+interrupt output and the VIC latching it.
+
+## Prime suspects for the fix (next), most-likely first
+1. **VIC edge/level sense mismatch**: the DT VIC uses `#interrupt-cells = <1>` (no
+   per-IRQ edge/level flag), so all lines get a fixed sense from `avic_of_init`. The aspeed
+   timer's match interrupt is a brief pulse at count==0 (immediately reloads); if the VIC
+   treats line 16 as level (not edge-latched), the pulse is missed. Check
+   `irq-aspeed-vic.c` `avic_of_init` sense/edge setup + the AST2050 vs AST2400 timer
+   interrupt polarity. **Leading candidate.**
+2. **Timer interrupt output not routed on the G3**: the AST2050 may need an extra
+   enable/route bit beyond `TIMER_1_CR_ASPEED_INT` (BIT2) for the interrupt to reach the
+   VIC. Compare vs Raptor's AST2050 timer init (`mach-aspeed`).
+3. **PCLK rate**: clocksource timestamps look right, so low priority.
+
+## The workaround vs the fix
+`uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
+gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
+**The real fix is the timer interrupt reaching the VIC**; once it does, the whole boot
+(eth0 + NFS + OpenBMC) works with the *unmodified* ftgmac100 driver.
 
 ## Reproduce / continue
 - Boot `uImage-kgpe-d16-udelay` (fix3 + `udelay` for `usleep_range` in ftgmac100 — a
