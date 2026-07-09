@@ -67,11 +67,22 @@ REF_CLK runs) but the MAC RECEIVES NOTHING (rx=0, rxerr=0 = not even bad frames 
 clock/data path, NOT a MAC-filter issue). Note `ip=...:off` sets a STATIC IP with NO network
 exchange, so "IP-Config Complete" never tested eth0. Fix direction: the DT uses **fixed-link**
 (bypasses the real RTL8201CP PHY) — fixed-link asserts link-up but never configures the PHY,
-so the physical RX path never comes up. **NEXT: drive the real PHY (rmii, RTL8201CP @ phy 0x20
-per U-Boot "aspeednic#0: PHY at 0x20") — DT phy node + phy-handle instead of fixed-link — and/or
-the RMII RX clock (the driver skips `devm_clk_get_optional("RCLK")` on G3).** TX now works (the
-old "RMII TX dead" was the timer); only RX remains. Then: SSH in → culvert in-band, peripherals,
-OpenBMC. Diagnostic: `tmp/init-prod` (eth0 stat dump), `tmp/boot_initramfs.py`.
+so the physical RX path never comes up. TX now works (the old "RMII TX dead" was the timer).
+**Progress (2026-07-10), RX STILL 0:**
+- Replaced `fixed-link` with **MDIO auto-scan** (no phy-handle; `reg=<0x20>`=32 is an invalid
+  MDIO addr — U-Boot's "PHY at 0x20" is a display quirk): the **RTL8201CP PHY now attaches**
+  and `eth0: Link is Up 100Mbps/Full flow control rx/tx` (vs fixed-link's "off") — real
+  negotiation. Committed to the DTS.
+- Added **RMII1 pinctrl** (`pinctrl-0 = <&pinctrl_rmii1_default>`; the node had none, unlike
+  every real aspeed board DT). Committed.
+- **STILL `tx=10 rx=0 rxerr=0`** (even promisc). So the MAC still receives nothing despite a
+  negotiated link. Remaining suspects (in order): (1) **RMII RCLK** — the ftgmac100 driver does
+  `devm_clk_get_optional("RCLK")`→NULL on the G3 DT; the AST2050 RMII RX path may need a 50MHz
+  RCLK the DT must supply (add an `RCLK`/`clock-names` to the eth node + the SCU RMII-clock
+  gate). (2) RX DMA/descriptor own-bit handling in the ftgmac100 aspeed path. (3) SCU RMII
+  clock-source/divisor (SCU08/SCU48/SCU0C MAC bits). Compare live MAC/SCU vs U-Boot (whose
+  RX works) over P2A. Diagnostic: `tmp/init-prod` (eth0 stat dump), `tmp/boot_initramfs.py`,
+  `tmp/boot_diag.py` (heartbeat). Then: SSH in → culvert in-band, peripherals, OpenBMC.
 
 ### ✅✅✅ SOLVED (2026-07-09): the DT was missing the aspeed VGA framebuffer reservation
 Root cause of the "eth0 RX DMA corruption": the DT had **no `reserved-memory` node**, so the

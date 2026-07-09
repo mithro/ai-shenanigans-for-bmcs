@@ -157,10 +157,12 @@
 			clocks = <0x02 0x11>;
 			status = "okay";
 			phy-mode = "rmii";
-			fixed-link {
-				speed = <100>;
-				full-duplex;
-			};
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_rmii1_default>;
+			/* No fixed-link, no phy-handle: the ftgmac100 driver auto-scans its
+			 * embedded MDIO bus and connects to the first real PHY it finds
+			 * (RTL8201CP). fixed-link asserted an instant carrier but left the
+			 * physical RX path unconfigured -> rx=0. */
 			/* Real HW: no fixed-link (that's a QEMU-ism -- QEMU's ftgmac100 has
 			 * no PHY). The ftgmac100 driver auto-scans its embedded MDIO and
 			 * connects to the real PHY (U-Boot finds it at MDIO addr 0x20), so
@@ -690,7 +692,7 @@
 						groups = "RGMII2";
 					};
 
-					rmii1_default {
+					pinctrl_rmii1_default: rmii1_default {
 						function = "RMII1";
 						groups = "RMII1";
 					};
