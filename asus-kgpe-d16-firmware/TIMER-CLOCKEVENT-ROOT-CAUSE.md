@@ -137,6 +137,28 @@ Verify: rebuild + boot, `FTTMR010-CHECK` should flip to **FIRING**, and the boot
 proceed past ndo_open → NFS → userspace with the *unmodified* ftgmac100 (revert the udelay
 hack once confirmed).
 
+## 🎯 2026-07-09 TRUE ROOT CAUSE: wrong VIC driver — G3 IC is PL190 @ 0x1e6c0000
+Applied the SENSE/EVENT/DUAL config fix and booted — but the ARM-side readback showed
+`AST2050-VIC: after cfg SENSE=0x0 EVENT=0x0 DUAL=0x0`: **the writes had no effect**. The
+registers at base `0x1e6c0080+0x40/0x48/0x50` are not writable on the AST2050 (and neither
+is INT_ENABLE at +0x20 — hence the earlier ENABLE=0). The mainline `irq-aspeed-vic.c` uses
+the AST2400's *newer* interleaved register map at `0x1e6c0080` (SENSE/EVENT/DUAL/EDGE); the
+**AST2050 (G3) does not have that map**.
+
+The AST2050 IC is at **`0x1e6c0000`** with the classic **ARM PL190 VIC** layout (Raptor
+`hwreg.h`): IRQ_STATUS 0x00, FIQ_STATUS 0x04, RAW_INT_STATUS 0x08, IRQ_SELECT 0x0C,
+IRQ_ENABLE 0x10, IRQ_CLEAR 0x14, SOFT_INT 0x18, SOFT_INT_CLEAR 0x1C, PROTECT 0x20 — exactly
+PL190 (VICIRQSTATUS/…/VICPROTECTION). Raptor's U-Boot `platform.S` already drives it there
+(polls Timer3 at `0x1e6c0008`), and `RAPTOR-PORTING-GUIDE.md` §6 says the VIC is at
+`0x1e6c0000` — it even flagged the reused-G4-node assumption as unverified ("if they match,
+likely"). It does NOT match.
+
+**So the whole aspeed-vic driver writes to registers the G3 lacks → no IRQ is ever enabled
+→ the timer (and every) interrupt is dead.** Fix: use the mainline ARM PL190 VIC driver
+(`irq-vic.c`, `compatible="arm,pl190-vic"`) at `reg=<0x1e6c0000 0x1000>` instead of
+`aspeed,ast2400-vic` @ `0x1e6c0080`. (Earlier "VIC all-zero / EVENT=0 falling-edge" analysis
+was a red herring caused by reading the non-existent new-map registers.)
+
 ## The workaround vs the fix
 `uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
 gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
