@@ -59,6 +59,22 @@ a userspace shell to (1) prove the full stack, (2) debug eth0-under-load interac
 exactly how the Raptor 2.6.28 chain reached a shell + in-band culvert. Load kernel + a
 separate `initrd=<addr>,<size>` raw cpio.gz (bootm won't pass ATAG_INITRD2), `rdinit=/init`.
 
+### ✅ REAL blocker ISOLATED (2026-07-09): eth0 RX DMA corrupts memory → init SIGILL
+Instrumented `/init` with `/dev/kmsg` markers + a per-second heartbeat (readable in
+`__log_buf`). Result: **the kernel is NOT hanging** — it runs userspace fine, `/init`
+prints ~26 heartbeats over ~28s, then **`Kernel panic: Attempted to kill init! exitcode=0x4`
+(0x4 = SIGILL)**. Decisive A/B test:
+- **eth0 UP** (`ip=...`, Pi ARPs it → sustained RX): init SIGILLs/panics at ~HB 26 (up≈48s).
+- **eth0 DOWN** (no `ip=`, no RX): init sails past — **HB 42+ (up≈72s), no panic**, CPU idle.
+
+=> **eth0 RX DMA writes into the wrong memory (init's code → illegal instruction)** on the
+non-coherent ARM926 (VIVT cache). The NFS-mount case crashed faster (far heavier RX). The
+timer/VIC fix is unrelated and solid. This is now a specific ftgmac100/AST2050 DMA bug:
+suspects = a `dma-ranges` / DMA-address translation error (RX desc → wrong phys addr) or a
+cache-line-alignment issue in the RX buffers. ftgmac100+ARM926 works on the AST2400, so find
+the G3 difference (DT dma-ranges / memory node / the ast2050-mac path). Diagnostic tooling:
+`tmp/{boot_diag.py,init-diag}` (heartbeat trace), `tmp/boot_initramfs.py`.
+
 ### The initramfs boots — and reveals the REAL remaining blocker (2026-07-09)
 Built the hybrid boot path (`linux-boot.py`: `bootm K - D` + `initrd=<RADDR>,<size>` raw
 cpio.gz — committed) and an in-RAM rootfs (cpio of `/srv/nfs/bmc`, non-PIE busybox,
