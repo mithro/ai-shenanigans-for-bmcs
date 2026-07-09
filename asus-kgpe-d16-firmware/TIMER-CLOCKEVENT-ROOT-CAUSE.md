@@ -159,6 +159,26 @@ likely"). It does NOT match.
 `aspeed,ast2400-vic` @ `0x1e6c0080`. (Earlier "VIC all-zero / EVENT=0 falling-edge" analysis
 was a red herring caused by reading the non-existent new-map registers.)
 
+## 🚀 2026-07-09 BREAKTHROUGH: interrupts now reach the CPU (PL190 @ 0x1e6c0000)
+Switched the DT to `compatible="arm,pl190-vic"` `reg=<0x1e6c0000 0x1000>` + enabled
+`CONFIG_ARM_VIC` (via `select ARM_VIC` on `MACH_ASPEED_G4`). Booted; `__log_buf` shows:
+- `VIC @...: id 0x00000000, vendor 0x0000` — the PL190 driver probes (no AMBA ID regs on
+  the G3 → "unknown vendor, continuing anyways" → ARM path). Good.
+- The boot then hangs **right after `Switching to timer-based delay loop`** — i.e. at
+  `local_irq_enable()` in `start_kernel`, the moment the timer IRQ is unmasked. Previously
+  (aspeed-vic) the boot sailed to ndo_open. So the timer interrupt **now reaches the CPU** —
+  the base 0x1e6c0000 is correct — but it is never **cleared** → an interrupt storm hangs
+  the CPU in the ISR.
+
+**How the AST2050 clears a timer interrupt:** Raptor `platform.S` writes **`0x1e6c0038`**
+("Clear Timer3 ISR") — an IC-level edge/ISR-clear at `IC_base + 0x38` (it polls the status
+at `IC_base + 0x08`). Neither the pure-PL190 `irq-vic.c` (`handle_level_irq`, no ack write)
+nor `irq-aspeed-vic.c` (wrong base) performs it. **The AST2050 IC is a HYBRID:** PL190 base
+registers (STATUS 0x00, RAW 0x08, ENABLE 0x10, ENABLE_CLR 0x14, SELECT 0x0C ...) PLUS an
+aspeed edge-clear at 0x38. Need a small irqchip driver (or an aspeed-vic G3 variant) that
+ENABLEs at 0x10, masks via 0x14, and for the fixed edge sources (timers 16-18, RTC 22-26,
+WDT 27 — per datasheet Table 36) ACKs by writing `IC_base + 0x38`.
+
 ## The workaround vs the fix
 `uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
 gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
