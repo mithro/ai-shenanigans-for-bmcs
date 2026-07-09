@@ -58,6 +58,30 @@ a userspace shell to (1) prove the full stack, (2) debug eth0-under-load interac
 (cat /proc/interrupts, ping, then reproduce the NFS hang), (3) run culvert in-band. This is
 exactly how the Raptor 2.6.28 chain reached a shell + in-band culvert. Load kernel + a
 separate `initrd=<addr>,<size>` raw cpio.gz (bootm won't pass ATAG_INITRD2), `rdinit=/init`.
+
+### The initramfs boots — and reveals the REAL remaining blocker (2026-07-09)
+Built the hybrid boot path (`linux-boot.py`: `bootm K - D` + `initrd=<RADDR>,<size>` raw
+cpio.gz — committed) and an in-RAM rootfs (cpio of `/srv/nfs/bmc`, non-PIE busybox,
+`uInitrd-nfsbmc` / raw `initrd-nfsbmc.cpio.gz` on the Pi; size **0x15083a**). On a fresh
+rig `__log_buf` shows the full chain working:
+```
+Unpacking initramfs.....            (SUCCESS — earlier "invalid magic" was a size typo + rig corruption)
+IP-Config: Complete ipaddr=192.168.66.2
+Freeing unused kernel image (initmem) memory: 1024K
+Run /init as init process
+```
+…then the kernel **HARD-HANGS** (BMC ARP-dead, no route). **This is the SAME hard-hang as
+the NFS-root mount** — and `/init` does no heavy I/O — so the blocker is **not** NFS-specific
+and **not** heavy-load: it's a hard CPU hang the instant the kernel enters full multitasking
+(userspace running + all IRQ sources live). Prime suspects: (a) **ftgmac100 RX DMA on the
+non-coherent ARM926** (VIVT cache) corrupting under any sustained RX incl. ARP replies, or
+(b) an **interrupt-handling edge case in irq-aspeed-g3-vic under concurrent load** (e.g. a
+level source that momentarily fails to clear → `g3vic_handle_irq` spins). NEXT (focused
+session, stable rig): get a working interactive console (try `console=ttyS4,1200` matching
+the Pi capture, or the `/dev/serial-bmc-console` path) OR add markers in `/init`'s first
+lines + the IRQ handlers, read `__log_buf`, to bisect whether the hang is the first eth0 RX
+interrupt, a specific /init command, or the g3vic handler. The timer/VIC fix itself is SOLID
+and unaffected.
 ---
 
 
