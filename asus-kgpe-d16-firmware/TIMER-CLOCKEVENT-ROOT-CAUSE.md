@@ -69,11 +69,22 @@ prints ~26 heartbeats over ~28s, then **`Kernel panic: Attempted to kill init! e
 
 => **eth0 RX DMA writes into the wrong memory (init's code → illegal instruction)** on the
 non-coherent ARM926 (VIVT cache). The NFS-mount case crashed faster (far heavier RX). The
-timer/VIC fix is unrelated and solid. This is now a specific ftgmac100/AST2050 DMA bug:
-suspects = a `dma-ranges` / DMA-address translation error (RX desc → wrong phys addr) or a
-cache-line-alignment issue in the RX buffers. ftgmac100+ARM926 works on the AST2400, so find
-the G3 difference (DT dma-ranges / memory node / the ast2050-mac path). Diagnostic tooling:
-`tmp/{boot_diag.py,init-diag}` (heartbeat trace), `tmp/boot_initramfs.py`.
+timer/VIC fix is unrelated and solid.
+
+**Two root-cause hypotheses (leading one is the DDR2):**
+- (a) ftgmac100 RX DMA cache/alignment bug — **UNLIKELY**: the RX path is stock streaming
+  DMA (`netdev_alloc_skb_ip_align` + `dma_map_single(DMA_FROM_DEVICE)` / `dma_unmap_single`),
+  which ARM's DMA layer handles, and the SAME driver + ARM926 + non-coherent DMA runs fine on
+  the AST2400 (palmetto OpenBMC). DT is 1:1 (memory@0x40000000/64MB, no dma-ranges).
+- (b) **MARGINAL DDR2 init under sustained DMA — LEADING.** The ONE thing our AST2050 does
+  differently from a working AST2400 is the hand-crafted DDR2 bring-up (`ddr2-init-p2a.py`, a
+  reverse-engineered `platform.S` sequence) instead of vendor firmware. Marginal DDR2 timing
+  passes light/cached CPU use but corrupts under **sustained DMA write bursts** = exactly eth0
+  RX. The earlier "1MB write/read = 0 errors" was a single light pass, not sustained DMA load.
+  **NEXT: tighten the DDR2 init** (re-derive MCR timing/DLL from the datasheet; compare every
+  MCRxx write against `platform.S`; a sustained multi-pass DRAM stress at DMA rates) — or run
+  the g3vic kernel on a board with vendor-firmware DDR2 to confirm eth0 is then stable.
+Diagnostic tooling: `tmp/{boot_diag.py,init-diag}` (heartbeat trace), `tmp/boot_initramfs.py`.
 
 ### The initramfs boots — and reveals the REAL remaining blocker (2026-07-09)
 Built the hybrid boot path (`linux-boot.py`: `bootm K - D` + `initrd=<RADDR>,<size>` raw
