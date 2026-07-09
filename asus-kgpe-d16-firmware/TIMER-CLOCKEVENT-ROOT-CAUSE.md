@@ -21,9 +21,28 @@ ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full
 IP-Config: Complete ;  random: crng init done
 ```
 The clockevent fires, hrtimers work, the boot sails past `local_irq_enable`, **eth0 comes
-up with real interrupts**, and kernel IP-config completes → the NFS-root mount. The
-ftgmac100 `udelay` workaround is now unnecessary (the NIC was never broken) and should be
-reverted. Everything below is the investigation trail that led here.
+up with real interrupts**, and kernel IP-config completes → the NFS-root mount. Everything
+below is the investigation trail that led here.
+
+### Post-fix: NIC hacks reverted + NFS-root userspace
+- **ftgmac100 reverted to stock** (kernel commit): the G3 "skip the MAC software reset +
+  udelay-instead-of-usleep_range" hack was built on the FALSE premise "any MAC write during
+  ndo_open hangs the AHB" — that hang was the dead timer clockevent all along. With the timer
+  fixed, the stock MAC reset + usleep_range run fine. **Skipping the MAC reset left eth0 on
+  U-Boot's config, which destabilised it under sustained NFS traffic** → a hard hang at the
+  NFS-root mount (eth0 stops answering ARP). Restoring the stock reset is the fix (kept only
+  the plausible G3 MACCLK-left-at-default tweak). This proves the NIC was never broken.
+- **NFS root** (`/srv/nfs/bmc` on the Pi, `no_root_squash,rw`, vers=3/tcp): the modern kernel
+  **mounts it and execs init** on a good boot (confirmed: reached `Run /sbin/init` → panic
+  "No working init found"). That panic was because the staged busybox is **static-PIE**, which
+  fails to exec as a real NFS root on this kernel — swapped in a **plain static (non-PIE)**
+  ARMv5 busybox (`.worktrees/d16-qemu/tmp/inspect/bin/busybox`) + added an SSH key to
+  `root/.ssh/authorized_keys`; boot with `init=/init` (brings up dropbear on :22).
+- **Gating issue = P2A reset-boot flakiness** (NOT the fix): after ~20 boot/kill cycles the
+  reset-boot degrades (kernel TFTPs fine but `bootm` never reaches userspace); a power-cycle
+  (`tmp/power.py off/on` + `tmp/host_repair.py` to rebuild culvert) clears it. Verify a clean
+  boot-to-userspace with `tmp/boot_until_ping.py` (retries the load, stops when the BMC pings
+  192.168.66.2), then `ssh -i scratchpad/bmc_key root@192.168.66.2` from the Pi.
 ---
 
 
