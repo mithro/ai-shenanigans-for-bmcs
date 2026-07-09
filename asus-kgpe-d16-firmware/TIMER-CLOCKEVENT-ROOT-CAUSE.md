@@ -2,6 +2,31 @@
 
 **This is the real blocker behind the "eth0 ndo_open hang" — and it is NOT a NIC bug.**
 
+---
+## ✅✅✅ SOLVED (2026-07-09): wrong VIC driver — G3 needs `aspeed,ast2050-vic` @ 0x1e6c0000
+The AST2050 interrupt controller is a **compact VIC at 0x1e6c0000** (datasheet §16:
+VIC00 STATUS / VIC10 ENABLE / VIC14 ENABLE_CLR / VIC24 SENSE(1=level) / VIC28 DUAL /
+VIC2C EVENT(1=high/rising) / VIC38 EDGE_CLEAR), NOT the AST2400 interleaved map at
+0x1e6c0080 that mainline `irq-aspeed-vic.c` drives. Wrote a dedicated driver
+`drivers/irqchip/irq-aspeed-g3-vic.c` (compatible `aspeed,ast2050-vic`) that programs
+sense/event/dual per datasheet Table 36 (timers 16-18 + WDT 27 = edge/rising, RTC 22-26
+= both-edge, peripherals = level/high) and ACKs edge sources via VIC38. Enabled via
+`select ARM_VIC`… no — via `obj-$(CONFIG_ARCH_ASPEED)` in the irqchip Makefile. DT node
+switched to `compatible="aspeed,ast2050-vic" reg=<0x1e6c0000 0x1000>`.
+
+**Verified on the real AST2050** (`uImage-kgpe-d16-g3vic` + `kgpe-g3vic.dtb`):
+```
+FTTMR010-CHECK: timer IRQ count 274 -> 316 after 200ms (clockevent FIRING)   <- ~1kHz tick
+ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full
+IP-Config: Complete ;  random: crng init done
+```
+The clockevent fires, hrtimers work, the boot sails past `local_irq_enable`, **eth0 comes
+up with real interrupts**, and kernel IP-config completes → the NFS-root mount. The
+ftgmac100 `udelay` workaround is now unnecessary (the NIC was never broken) and should be
+reverted. Everything below is the investigation trail that led here.
+---
+
+
 ## What actually happens
 The modern kernel boots on the real AST2050 and reaches `ip_auto_config` → `ftgmac100_open`
 (ndo_open). ndo_open calls `usleep_range()` (in `reset_and_config_mac`) — and **hangs
