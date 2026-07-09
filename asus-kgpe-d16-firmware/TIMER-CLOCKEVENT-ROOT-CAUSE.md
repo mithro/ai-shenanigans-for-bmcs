@@ -59,6 +59,20 @@ a userspace shell to (1) prove the full stack, (2) debug eth0-under-load interac
 exactly how the Raptor 2.6.28 chain reached a shell + in-band culvert. Load kernel + a
 separate `initrd=<addr>,<size>` raw cpio.gz (bootm won't pass ATAG_INITRD2), `rdinit=/init`.
 
+### ➡️ FINAL remaining piece (2026-07-10): eth0 RX dead (rx=0), TX works (tx=10)
+With userspace stable (VGA fix), the BMC boots to a shell + dropbear but is unreachable.
+`/init` eth0 stat dump (to `/dev/kmsg` → `__log_buf`): **`tx=10 rx=0 txerr=0 txdrop=0
+rxerr=0`** even in **promiscuous** mode. So eth0 TX works (10 pkts, 0 err — the 50MHz RMII
+REF_CLK runs) but the MAC RECEIVES NOTHING (rx=0, rxerr=0 = not even bad frames → no RX
+clock/data path, NOT a MAC-filter issue). Note `ip=...:off` sets a STATIC IP with NO network
+exchange, so "IP-Config Complete" never tested eth0. Fix direction: the DT uses **fixed-link**
+(bypasses the real RTL8201CP PHY) — fixed-link asserts link-up but never configures the PHY,
+so the physical RX path never comes up. **NEXT: drive the real PHY (rmii, RTL8201CP @ phy 0x20
+per U-Boot "aspeednic#0: PHY at 0x20") — DT phy node + phy-handle instead of fixed-link — and/or
+the RMII RX clock (the driver skips `devm_clk_get_optional("RCLK")` on G3).** TX now works (the
+old "RMII TX dead" was the timer); only RX remains. Then: SSH in → culvert in-band, peripherals,
+OpenBMC. Diagnostic: `tmp/init-prod` (eth0 stat dump), `tmp/boot_initramfs.py`.
+
 ### ✅✅✅ SOLVED (2026-07-09): the DT was missing the aspeed VGA framebuffer reservation
 Root cause of the "eth0 RX DMA corruption": the DT had **no `reserved-memory` node**, so the
 kernel used the whole 64 MB — including the top 8 MB (SCU70[3:2]=00 → 8 MB VGA at
