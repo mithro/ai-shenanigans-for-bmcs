@@ -67,6 +67,20 @@ interrupt output and the VIC latching it.
    VIC. Compare vs Raptor's AST2050 timer init (`mach-aspeed`).
 3. **PCLK rate**: clocksource timestamps look right, so low priority.
 
+## Tested (2026-07-09), did NOT fix it
+- Patched `vic_init_hw` to `writel(0xffffffff, AVIC_INT_SENSE)` (force all level) before
+  reading it. After boot the SENSE register still reads `0` over P2A and the boot still
+  hangs after ndo_open (only U-Boot tftp packets on the wire, ping fails). So either the
+  AVIC_INT_SENSE is read-only / hardware-fixed, or level-vs-edge isn't the mechanism. The
+  timer's interrupt still never appears at the VIC (RAW/EDGE/IRQ bit16 = 0) even though the
+  timer counts and its INT bit is set.
+- Open question narrowing: the timer's match interrupt genuinely isn't reaching VIC bit16.
+  Next: (a) confirm the clockevent is actually *armed* (MATCH1 reads 0 — is set_next_event
+  running? oneshot vs periodic?), (b) check the AST2050 datasheet timer→VIC interrupt
+  routing (the pulse at count==0 with MATCH1=0 may not assert on the G3), (c) compare live
+  register-for-register against a booted AST2400 (mainline) timer, (d) try the RTC/other
+  aspeed clockevent, or a `arm,arm926` local-timer alternative.
+
 ## The workaround vs the fix
 `uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
 gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
