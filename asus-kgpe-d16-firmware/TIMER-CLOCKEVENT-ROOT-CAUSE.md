@@ -59,6 +59,23 @@ a userspace shell to (1) prove the full stack, (2) debug eth0-under-load interac
 exactly how the Raptor 2.6.28 chain reached a shell + in-band culvert. Load kernel + a
 separate `initrd=<addr>,<size>` raw cpio.gz (bootm won't pass ATAG_INITRD2), `rdinit=/init`.
 
+### ✅✅✅ SOLVED (2026-07-09): the DT was missing the aspeed VGA framebuffer reservation
+Root cause of the "eth0 RX DMA corruption": the DT had **no `reserved-memory` node**, so the
+kernel used the whole 64 MB — including the top 8 MB (SCU70[3:2]=00 → 8 MB VGA at
+`0x43800000..0x44000000`) that the **x86 host's display actively writes** through the aspeed
+video PCI device. Under eth0 RX memory pressure the kernel allocated init pages / RX buffers
+there → the host's VGA traffic corrupted them → **init SIGILL**. Every upstream aspeed board
+DT reserves this (palmetto: `vga_memory` 16 MB `no-map`); ours was missing it.
+**FIX (DTS):** add
+```
+reserved-memory { #address-cells=<1>; #size-cells=<1>; ranges;
+    vga_memory: framebuffer@43800000 { no-map; reg = <0x43800000 0x800000>; }; };
+```
+**VERIFIED on real hardware, eth0 UP:** the diag `/init` heartbeats now run past the old
+deterministic crash (HB 26/up≈48s) to **HB 55+ (up≈72s), no panic** — userspace is STABLE.
+This was never the timer/NIC/DDR2/a-hang. The DDR2 init was confirmed byte-for-byte faithful
+to `platform.S`. The userspace-stability blocker that gated ALL downstream work is resolved.
+
 ### ✅ REAL blocker ISOLATED (2026-07-09): eth0 RX DMA corrupts memory → init SIGILL
 Instrumented `/init` with `/dev/kmsg` markers + a per-second heartbeat (readable in
 `__log_buf`). Result: **the kernel is NOT hanging** — it runs userspace fine, `/init`

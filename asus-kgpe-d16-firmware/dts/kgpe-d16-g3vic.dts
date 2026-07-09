@@ -46,6 +46,23 @@
 		reg = <0x40000000 0x4000000>;
 	};
 
+	reserved-memory {
+		#address-cells = <0x01>;
+		#size-cells = <0x01>;
+		ranges;
+
+		/* AST2050 [ast2050-support]: the video engine / host-VGA framebuffer lives
+		 * at the TOP of DRAM (SCU70[3:2]=00 -> 8MB VGA -> 0x43800000..0x44000000)
+		 * and is actively written by the host's display via the VGA PCI device.
+		 * Without this reservation the kernel allocates there (eth0 RX buffers / init
+		 * pages under memory pressure) and the VGA traffic corrupts it -> userspace
+		 * SIGILL. Every aspeed board DT reserves this; ours was missing it. */
+		vga_memory: framebuffer@43800000 {
+			no-map;
+			reg = <0x43800000 0x800000>;
+		};
+	};
+
 	ahb {
 		compatible = "simple-bus";
 		#address-cells = <0x01>;
