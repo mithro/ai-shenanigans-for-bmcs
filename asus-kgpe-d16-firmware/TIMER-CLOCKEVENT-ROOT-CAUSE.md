@@ -109,6 +109,34 @@ meaningless (the write never landed; the readback was blind). The VIC may well b
   and the `pr_warn` shows exactly how the sense/event is misconfigured so we fix it in-driver
   (writable from the ARM side even though P2A is blind).
 
+## ✅ 2026-07-09 ROOT CAUSE CONFIRMED + FIX (ARM-side evidence, not phantom P2A)
+Booted a diagnostic kernel (regular 3.4MB image — the 4.1MB shell image is too big for
+the flaky P2A load) with two ARM-side probes, read back from `__log_buf`:
+- **`FTTMR010-CHECK: timer IRQ count 0 -> 0 after 200ms (clockevent DEAD)`** — a counter in
+  the timer ISR, reported from a `late_initcall` after a 200ms busy-wait. The timer
+  interrupt genuinely never reaches the CPU. (Console is dead ~from boot, but the kernel
+  runs fine — `__log_buf` shows the full boot incl. ndo_open reaching step5 via the udelay
+  hack. "started=False" was only a dead-console artifact.)
+- **`AST2050-VIC: SENSE=0x0 EVENT=0x0 DUAL=0x0 ENABLE=0x0 RAW=0x0`** — the VIC powers on
+  ALL ZERO. The reset-boot has no firmware to configure it.
+
+**Mechanism:** the mainline `irq-aspeed-vic.c` only *reads* SENSE (=0 → `edge_sources=~0`,
+all-edge) and never writes EVENT. EVENT=0 selects the **falling** edge for every source.
+The AST2050 timer asserts a **rising** edge on match and holds the line high until the ISR
+acks it (via `AVIC_EDGE_CLR`); a falling-edge VIC waits for the line to go low, which only
+happens *after* the ack — it never latches. Hence the clockevent is dead.
+
+**Fix (in `vic_init_hw`, ARM-side — the ARM CAN write the VIC even though P2A can't):**
+program the VIC per datasheet Table 36:
+```
+SENSE = 0x903897fe   ; level(1): 1-10,12,15,19,20,21,28,31 ; edge(0): 16-18,22-27
+EVENT = 0x983f97fe   ; rising/high(1): the level-high sources + timer(16-18) + WDT(27)
+DUAL  = 0x07c00000   ; both-edge: RTC 22-26
+```
+Verify: rebuild + boot, `FTTMR010-CHECK` should flip to **FIRING**, and the boot should
+proceed past ndo_open → NFS → userspace with the *unmodified* ftgmac100 (revert the udelay
+hack once confirmed).
+
 ## The workaround vs the fix
 `uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
 gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
