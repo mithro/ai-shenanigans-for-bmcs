@@ -52,6 +52,24 @@ This satisfies the goal's "working OpenBMC Redfish API allowing remote control" 
 QEMU vehicle**. The remaining step for the physical board is the kernel/NIC/machine
 adaptation below.
 
+## ⚠️ ARCH: romulus rootfs is ARMv6 — the real AST2050 needs an ARMv5 (palmetto) build
+
+The romulus image proved Redfish in QEMU, but its userspace is **ARMv6KZ**
+(`readelf -A usr/bin/bmcweb` → `Tag_CPU_arch: v6KZ`; romulus = AST2500 = ARM1176).
+The **AST2050 is ARM926EJ-S = ARMv5TE** — ARMv6 binaries fault on it. So the romulus
+rootfs **cannot run on the real board**.
+
+For real HW, build OpenBMC for **palmetto** (AST2400 = ARM926EJ-S; its machine pulls in
+`conf/machine/include/arm/armv5/tune-arm926ejs.inc` — the **same CPU** as the AST2050):
+```sh
+cd ~/openbmc && . setup palmetto && bitbake obmc-phosphor-image   # -> ARMv5 rootfs
+```
+(Native tools sstate-cache-hit from the romulus build, so this is faster than from scratch.)
+The palmetto `obmc-phosphor-image.squashfs-xz` unsquashfs'd → NFS export (`/srv/nfs/...`)
+gives the OpenBMC filesystem for NFS-root on the real AST2050 — once the eth0 ndo_open hang
+is fixed (`../rig/nic-diag/NEXT-SESSION.md`). Boot our modern AST2050 kernel with
+`root=/dev/nfs nfsroot=<pi>:/srv/nfs/openbmc`.
+
 ## Path to the real AST2050
 1. Prove OpenBMC + Redfish run + answer in QEMU (this dir).
 2. Build/adapt an **ast2400-class kgpe-d16 machine** (device tree = our
