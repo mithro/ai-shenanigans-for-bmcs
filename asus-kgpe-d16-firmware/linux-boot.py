@@ -85,7 +85,24 @@ def main():
                             f"sudo timeout {args.watch} cat {BMC}"],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     time.sleep(1.5)
-    if args.dtb and args.no_initrd:
+    if args.dtb and args.cmdline_initrd:
+        # modern DTB kernel + IN-RAM initramfs: tftp kernel + RAW cpio.gz + dtb, then
+        # `bootm K - D` (kernel + FDT, no ramdisk slot) with initrd=<RADDR>,<size> on the
+        # cmdline. The Raptor U-Boot doesn't fix the initrd into the DT/ATAG, so we point
+        # the kernel at the raw cpio.gz directly via the initrd= early param. RADDR must be
+        # clear of the kernel/dtb (0x42000000 sits between kernel@0x41.. and dtb@0x43..).
+        seq = [
+            "setenv ipaddr 192.168.66.2",
+            "setenv serverip 192.168.66.1",
+            "setenv verify y",
+            "setenv fdt_high 0xffffffff",
+            f"tftp {KADDR:#x} {args.kernel}",
+            f"tftp {RADDR:#x} {args.initrd}",
+            f"tftp {DADDR:#x} {args.dtb}",
+            f"setenv bootargs {args.bootargs} initrd={RADDR:#x},{args.cmdline_initrd:#x}",
+            f"bootm {KADDR:#x} - {DADDR:#x}",
+        ]
+    elif args.dtb and args.no_initrd:
         # modern DTB kernel, NFS root (no ramdisk): tftp kernel + dtb; the `-` in
         # bootm skips the initrd slot so the kernel mounts / over NFS via ip=/root=.
         seq = [
