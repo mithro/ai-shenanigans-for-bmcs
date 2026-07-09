@@ -81,6 +81,34 @@ interrupt output and the VIC latching it.
   register-for-register against a booted AST2400 (mainline) timer, (d) try the RTC/other
   aspeed clockevent, or a `arm,arm926` local-timer alternative.
 
+## ⚠️ 2026-07-09 CRITICAL: the P2A window is BLIND to the VIC — prior VIC reads were phantom
+Direct test (`rig/nic-diag/vic_probe_host.py`, via `culvert p2a vga read/write`):
+- **P2A read+write works for DRAM** (wrote `0xdeadbeef` to `0x41234000`, read it back) and
+  for the **SCU** (`0x1e6e207c`=`0x00000202`) and the **Timer** (`0x1e782000` COUNT moving,
+  `0x1e782030` CONTROL=`0x15`, LOAD=`0x7270e`). So P2A itself is healthy.
+- **P2A canNOT touch the 0x1e6c0000 VIC region**: the whole block `0x1e6c0000..0x1e6c0070`
+  reads `0x00000000`; writing `0x00010000` to the R/W `INT_ENABLE` (`0x1e6c00a0`) and
+  `0xA5A5A5A5` to `INT_SENSE` (`0x1e6c00c0`) both read back `0`. The Aspeed P2A bridge
+  filters the interrupt-controller block (a security-sensitive region) out of the "vga"
+  window — reads return 0, writes go nowhere, regardless of the real VIC state.
+
+**Consequence:** every earlier VIC observation in this doc — "RAW/EDGE/IRQ_STATUS bit16 = 0",
+"the timer interrupt never reaches the VIC", "INT_SENSE reads 0 so the all-level write didn't
+stick" — was reading **phantom zeros**, not the hardware. The "timer IRQ doesn't reach the
+VIC" localisation is therefore **UNPROVEN**, and the "all level" SENSE write test result was
+meaningless (the write never landed; the readback was blind). The VIC may well be fine.
+
+**The only reliable VIC observer is the ARM core itself.** So we now instrument the kernel:
+- `irq-aspeed-vic.c` `vic_init_hw`: `pr_warn` the real `SENSE/EVENT/DUAL/ENABLE/RAW` (ARM-side
+  reads — reliable). Prints the true power-on VIC config.
+- `timer-fttmr010.c`: an `atomic_t` counter in `fttmr010_timer_interrupt` + a `late_initcall`
+  (`fttmr010_irq_check`) that `mdelay(200)`s and prints whether the count advanced —
+  **the definitive "does the clockevent fire" test**, read back from `__log_buf` over P2A
+  (DRAM, which P2A *can* read). This one build settles: (A) clockevent FIRES → the ndo_open
+  `usleep_range` hang is a real ndo_open bug, not the timer; (B) DEAD → confirmed timer/VIC,
+  and the `pr_warn` shows exactly how the sense/event is misconfigured so we fix it in-driver
+  (writable from the ARM side even though P2A is blind).
+
 ## The workaround vs the fix
 `uImage-kgpe-d16-udelay` swaps `usleep_range`→`udelay` in the ftgmac100 reset path — that
 gets ndo_open through, but the net stack + NFS mount still use hrtimers and will hang.
