@@ -113,6 +113,25 @@ From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
   Deferred refinement (documented): stop decoding the AST2400 0x80+ aliases (G3
   firmware never touches them — cosmetic only).
 
+### Phase 1 — SDRAM (DDR2): test + doc done; model gated on the boot check
+- Subagent extracted §17 (pp.183-203) → `peripherals/sdram/DATASHEET-SDRAM.md`:
+  MCR00 lock-latch (unlock 0xFC600309, reads 0/1), MCR04 config `Init=0` with DDR2
+  geometry ([3:2]=cap, [9:8]=width, [11]=bank), **no DRAM-size auto-detect** (firmware
+  writes MCR04 from a constant), MCR100=0xA8, no ECC block.
+- `fwtest.c` (6 checks) baseline: protect/unlock/refresh already faithful; **3 gaps**
+  — MCR04 resets to a DDR3-synthesised `0x41` (want 0), writes get *recomputed* to
+  `0x5c1` (want verbatim `0xD89`), MCR100 reads 0 (want 0xA8).
+- **Model deferred + gated:** the `aspeed.sdmc-ast2050` DDR2 variant changes MCR04
+  reset/encoding, which feeds U-Boot DRAM sizing — so it lands only after the CI
+  C1–C4 boots confirm the SCU+VIC changes are green. The 3 gaps are xfail meanwhile.
+- Integration suite: **21 passed, 3 xfailed**. Committed locally; **push held** so the
+  in-flight CI boot run (validating SCU+VIC) isn't cancelled by the concurrency group.
+
+### CI boot check (in flight)
+- Run on the VIC commit: U-Boot/D16-kernel/Raptor-kernel/initramfs builds all green;
+  custom-QEMU build + C2/C4 boot jobs still running. Pre-existing unrelated failure:
+  the C3 Raptor *musl userspace* build (toolchain), not the SoC model — its boot skips.
+
 ### Next
-- SDRAM/DDR2 controller (U-Boot DRAM init), then timer (with the SCU PLL
-  post-divider clock-rate check), UART, WDT → completes the Phase-1 boot foundation.
+- Confirm C1–C4 boots green → push the SDRAM work → implement the boot-gated DDR2
+  SDMC model → timer (with SCU PLL post-divider clock-rate check) → UART → WDT.
