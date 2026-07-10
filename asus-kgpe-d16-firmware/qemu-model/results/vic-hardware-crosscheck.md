@@ -152,6 +152,14 @@ kallsyms — 20 318 syms):**
   usermode-helper completion, not a bare device IRQ — deeper and more tangled than a
   single dropped interrupt.
 
+- **Refinement (module disassembly):** `aess_pecisensor_init` just `request_irq`s
+  IRQ 15, inits a waitqueue, and creates debugfs nodes — it **returns, it does not
+  block**. So the hang is not the PECI init body; per the backtraces it is the
+  **module-load `uevent` → `call_usermodehelper_exec` → `wait_for_completion`**
+  (waiting for the spawned hotplug helper to finish) around that load. A genuinely
+  tangled multi-process interaction (kernel load thread + khelper workqueue + the
+  helper process), not a single driver's IRQ wait.
+
 **Still open:** why this module's load + helper never completes on the G3 VIC when
 the VIC presents *identical vendor-visible register state* to the AST2400 VIC. Next
 step: isolate the *permanent* wait from the transient ones (e.g. break on the
