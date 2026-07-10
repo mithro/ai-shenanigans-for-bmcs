@@ -197,14 +197,29 @@ backtrace**. Findings that overturn the earlier "blocked in aess driver init":
   starts/pets too late to beat the wall-clock WDT deadline. The AST2400 VIC boots the
   same firmware because it's slightly faster and the daemon keeps up.
 
-**So the fix is a TIMING/efficiency issue in the G3 VIC interrupt path, not a dropped
-IRQ.** Likely: the vendor ISR hammers `0x14`/`0x38` and the G3 VIC path loses/ delays
-timer ticks vs the AST2400 path. **Next:** measure the timer_tick / jiffies rate over
-fixed wall time on G3 vs AST2400 (confirm the drift), then find what in the G3 VIC
-delivery makes it slower (or whether the WDT/clock model is the real culprit). Tooling
-built: `tmp/c4work/{showstate,logflood,wdt}_diag.py` + the gdb `show_state_filter`
-recipe + `console_loglevel@0xc031e7a0`. This supersedes the "IRQ 15/12/20 dispatch
-cascade" framing — those IRQs simply never happen because the boot is reset first.
+**Measured, and the "jiffies drift" mechanism is REFUTED.** Counting timer IRQs
+(line 16) over a fixed 12 s wall window: **AST2400 = 926, G3 = 932** — identical; both
+reach the same boot point (116 console lines) in 12 s. So the guest's time is NOT
+slow and the boot is NOT slower on the G3 VIC.
+
+**What IS different — the watchdog pet count.** WDT trace over the full boot: the
+watchdog is petted (`@0x8 = 0x4755`) **5× on the AST2400 VIC (survives 20 s)** but only
+**3× on the G3 VIC (WDT-resets at ~16 s)**. So on the G3 VIC the pets fall behind /
+stop a couple seconds early and the 10 s WDT expires. The daemon pets every 5 s and
+the timer rate is identical, so this is a **marginal, still-unexplained watchdog-timing
+difference** — the boot fully progresses (AIM up, no D-state task) but the WDT wins by
+a few seconds on the G3 VIC. Note the trace also shows the driver toggling WDT_CTRL
+(0x0c) between 0x16 (disable) and 0x17 (enable) around each pet, so the aspeed_wdt
+reload-on-enable behaviour may matter.
+
+**Still open (next session):** timestamp the WDT trace to see exactly when the pets vs
+the expiry fall on G3 vs AST2400, and whether it's the daemon starting later, an extra
+disable/enable that restarts the count differently, or an aspeed_wdt reload-timing
+subtlety. The CONFIRMED, valuable result is the reframing: **the G3-VIC failure is a
+watchdog-timing race, NOT a dropped interrupt** — the "IRQ 15/12/20 dispatch" framing
+is superseded (those IRQs never happen only because the boot is WDT-reset first).
+Tooling: `tmp/c4work/{showstate,logflood,wdt}_diag.py` + the gdb `show_state_filter`
+recipe + `console_loglevel@0xc031e7a0`.
 
 ## Provenance
 
