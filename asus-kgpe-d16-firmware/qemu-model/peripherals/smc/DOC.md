@@ -17,14 +17,20 @@ controller is only probed, but a faithful G3 must present it.
 Boot CE is aliased to `0x0` until the AHBC address-remap (`0x1E60008C`). The AST2050
 is **SPI-only** in practice, though the register set is a NOR/NAND/SPI superset.
 
-## 2. QEMU faithfulness — UNMODELLED
+## 2. QEMU faithfulness — control registers MODELLED (data windows deferred)
 
-`peripherals/smc/fwtest.c` vs the current model — **all checks FAIL**: `0x16000000`
-reads 0 (not the `0x240` reset), and the flash data window `0x10000000` reads 0 (not
-mapped). Mainline QEMU models only the **FMC (0x1E620000)**; the **legacy SMC
-(0x16000000) is not modelled** (the machine's "tolerate unmodelled MMIO → 0" flag
-returns 0). The current boots load the flash via the FMC / `-drive if=mtd`, so this gap
-does **not** affect them.
+**Fixed 2026-07-10.** A G3-only `aspeed.smc-ast2050` device (created in the SoC
+realize when `silicon_rev == AST2050_A1_SILICON_REV`) now presents the legacy SMC
+**control-register block at 0x16000000**: `SMC00` config reads its **`0x240`** reset
+value and `SMC04` CE0-control is writable. Both fwtest checks (`smc00.reset`,
+`smc04.rw`) **PASS** (no longer xfail). Previously the vendor firmware's pokes here
+hit unmapped MMIO and relied on the machine's tolerate-unmapped flag.
+
+Still deferred (fwtest reads but does not assert them): the flash **data windows**
+`0x10000000` (CE0) / `0x12000000` / `0x14000000` and the boot alias to `0x0`
+pre-remap — a larger AHB-mapping change, coordinated with the AHBC remap model.
+Mainline QEMU models only the AST2400 **FMC (0x1E620000)**, which the current boots
+use, so both are independent.
 
 ## 3. Faithful-model plan (oracle-gated, larger change)
 
@@ -40,5 +46,5 @@ with the AHBC remap model.
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ (documents the unmodelled legacy SMC) |
 | 2 | doc (this + `DATASHEET-SMC.md`) | ☑ |
-| 3 | QEMU model | ☐ new `aspeed.smc-ast2050` + flash map (§3, oracle-gated) |
-| 4 | integration test (`../../integration/test_smc.py`) | ◐ checks xfail until §3 |
+| 3 | QEMU model | ◐ **control regs modelled** (`aspeed.smc-ast2050`, ☑); flash data map still ☐ |
+| 4 | integration test (`../../integration/test_smc.py`) | ☑ `smc00.reset` + `smc04.rw` PASS |

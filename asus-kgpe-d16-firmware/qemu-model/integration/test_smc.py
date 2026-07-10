@@ -19,9 +19,6 @@ import runner  # noqa: E402
 skip_reason = runner.preconditions()
 pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "")
 
-UNMODELLED = "legacy SMC unmodelled (mainline models the FMC); needs aspeed.smc-ast2050 (DOC.md §3)"
-
-
 @pytest.fixture(scope="module")
 def smc():
     return runner.run_fwtest("smc")
@@ -32,7 +29,11 @@ def test_reaches_halt(smc):
 
 
 @pytest.mark.parametrize("label", ["smc00.reset", "smc04.rw"])
-@pytest.mark.xfail(reason=UNMODELLED, strict=False)
 def test_smc_modelled(smc, label):
+    """The legacy SMC control block (0x16000000) is now modelled by the G3-only
+    aspeed.smc-ast2050 device: SMC00 config reads its 0x240 reset value and
+    SMC04 CE0-control is writable. Fixed 2026-07-10 (DOC.md §3). The flash *data*
+    windows (0x10000000 etc.) remain deferred — the fwtest reads but does not
+    assert them."""
     c = next((c for c in smc.checks if c[0] == label), None)
     assert c is not None and c[1]
