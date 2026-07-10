@@ -123,20 +123,46 @@ to the AST2400 VIC (the vendor programs `sense/dual/event = 0xfff8ffff`, matchin
 the AST2400 hardwired values), yet the vendor's main thread blocks after line 151
 (around `waitforaim` / network bring-up) **only** on the G3 VIC.
 
-**gdb probe (fresh datum):** attaching QEMU's gdbstub at the ~13 s hang caught the
-CPU at `0xc002f018` — inside an ARM926 **cache-flush / Wait-For-Interrupt idle
-helper** (`0xc002f014 = mcr p15,0,r0,c7,c0,4` is WFI; the caught insn writes SCTLR
-back). Single-stepping shows it **returning to its caller and advancing**, not
-tight-spinning. So the CPU is **idle-blocked (WFI/idle path), not crashed** — the
-signature of a **lost wakeup**: a sleeping task waits for an interrupt/event that
-never arrives on the G3 VIC. That strongly implicates a single dropped interrupt in
-the G3 VIC path, but pinning *which* needs the 2.6.23 kernel's symbols (kallsyms is
-in the image; not yet extracted) or a trace-diff of AST2400-vs-G3 VIC delivery
-aligned to the block. Until then the machine keeps the AST2400 VIC (all legacy boots
-green; C4 PASS). The G3 register model is hardware-confirmed faithful and the
-combinational-level fix (a genuine improvement) stays in-tree. **This corrects the
-two earlier wrong conclusions in this file's history — the div0 (SMC, not VIC) and
-the irqmap-visibility theory.**
+**gdb probe + vendor symbols (recovered via `vmlinux-to-elf` from the kernel's
+kallsyms — 20 318 syms):**
+- At the ~13 s hang the CPU is the **idle task**: `start_kernel → rest_init →
+  cpu_idle → default_idle → cpu_arm926_do_idle` (WFI). So init/rcS is **sleeping**
+  and nothing wakes it — a **lost wakeup**, not a crash.
+- **The timer is NOT the cause.** Breakpoints show `asm_do_IRQ →
+  aspeed_timer_interrupt → timer_tick` all fire regularly on the G3 VIC → jiffies
+  advances, timer-based sleeps would wake.
+- **At the hang the only IRQ dispatched to the kernel is IRQ 16 (timer)** — the
+  system is fully quiescent. So the blocked task waits on a **non-timer interrupt /
+  completion that was dropped *earlier* in boot**, leaving it stuck at the
+  `waitforaim` step (line 151→152) that the AST2400 boot passes.
+
+**Narrowed a lot further (still not fully root-caused):**
+- **Differential VIC-line trace (G3 vs AST2400).** On the working AST2400 VIC the
+  vendor fires IRQ **12 (I2C, 1434×)**, **20 (GPIO, 2634×)**, **15 (PECI, 1×)**; on
+  the G3 VIC **none of those ever fire**. But that is a *consequence*: the boot
+  blocks in the `aess_*` driver-init chain **before** those drivers get active.
+- **Blocking phase pinned.** `rcS → preinit.sh (line 151 = its jffs2 mount of an
+  empty MTD) → I_SYS_Drv.sh` which `insmod`s 12 `aess_*` drivers in order. Counting
+  `sys_init_module` calls: **9 modules load, then it blocks on the ~9th** (≈
+  `aess_pecisensordrv` by rcS order, if there are no earlier loads).
+- **Block context (gdb backtraces).** The block sits in the **module-load uevent /
+  usermodehelper path**: `sys_init_module → mod_sysfs_setup → kobject_uevent →
+  call_usermodehelper_exec → wait_for_completion` (waiting for the spawned hotplug
+  helper), alongside a userspace `sys_poll → schedule_timeout`. So the wait is for a
+  usermode-helper completion, not a bare device IRQ — deeper and more tangled than a
+  single dropped interrupt.
+
+**Still open:** why this module's load + helper never completes on the G3 VIC when
+the VIC presents *identical vendor-visible register state* to the AST2400 VIC. Next
+step: isolate the *permanent* wait from the transient ones (e.g. break on the
+specific completion and check who should `complete()` it), and confirm the exact
+`aess_*` module (read its name from the module list) — feasible with the recovered
+symbols (`tmp/c4work/vendor-vmlinux.elf`) but a further focused effort. The
+diagnostic scripts (`tmp/c4work/*_diag.py`) are saved for resumption. Until solved
+the machine keeps the AST2400 VIC (all legacy boots green; C4 PASS); the G3 register
+model is hardware-confirmed faithful and the combinational-level fix stays in-tree.
+**This corrects the two earlier wrong conclusions — the div0 (SMC, not VIC) and the
+irqmap-visibility theory.**
 
 ## Provenance
 
