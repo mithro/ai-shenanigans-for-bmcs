@@ -29,17 +29,18 @@ pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "
 # fwtest check label -> xfail reason (None = must pass). The six G3 trigger-config
 # checks need the G3 VIC wired. Its REGISTER model is hardware-confirmed faithful
 # (JTAG: sense/dual/event reset 0 + fully writable — results/vic-hardware-crosscheck.md),
-# but wiring it alone breaks the C4 vendor boot via IRQ *routing*, not the register
-# model: this SoC uses the AST2400 irqmap (UART2-4/TIMER4-8 on lines 32-39, above the
-# G3's single 32-bit bank) so the vendor firmware hangs and the WDT resets it (~16s).
-# The earlier "div0 in the vendor SPI-NOR path" is the UNMODELLED legacy SMC and fires
-# on the AST2400 VIC too (non-fatal) — it was never the VIC. Completing the G3 VIC
-# needs a Table-36 irqmap (+DTS) and the legacy SMC model; until then keep AST2400 VIC.
+# but wiring TYPE_ASPEED_2050_VIC hangs the C4 vendor boot (main thread blocks after
+# line 151, WDT reset ~16s) for a cause NOT yet pinned: investigation ruled out the
+# div0 (unmodelled SMC, fires on AST2400 VIC too), the combinational-level fix
+# (disabling it changed nothing), 0x14/0x38 read semantics (JTAG-confirmed 0), and the
+# irqmap (every vendor-used device maps to Table-36 lines <=31 on both models). The two
+# VIC types present identical vendor-visible state yet diverge -> needs a trace-diff or
+# gdb into the 2.6.23 vendor kernel. Until then keep the AST2400 VIC (legacy boots green).
 C4 = ("the G3 VIC register model is hardware-confirmed faithful, but wiring "
-      "TYPE_ASPEED_2050_VIC needs a G3 Table-36 irqmap (+DTS) and the legacy SMC "
-      "model before the C410X vendor firmware (C4) boots — the AST2400 irqmap "
-      "routes UART2-4/TIMER4-8 above the G3's 32-bit bank, hanging the vendor "
-      "firmware (WDT reset). Machine keeps the AST2400 VIC. See DOC.md + "
+      "TYPE_ASPEED_2050_VIC hangs the C410X vendor firmware (C4) after BusyBox "
+      "(main thread blocks, WDT reset ~16s) for a cause not yet pinned — ruled "
+      "out div0/SMC, the combinational fix, 0x14/0x38 read semantics, and the "
+      "irqmap. Machine keeps the AST2400 VIC. See DOC.md + "
       "results/vic-hardware-crosscheck.md.")
 CHECKS = {
     "irqstat.reset": None, "fiqstat.reset": None, "rawstat.reset": None,

@@ -124,15 +124,19 @@ Tracing the C4 vendor firmware then corrected the *whole* earlier story:
 - The **`div0` in `aess_write_spi_nor_flash` is the unmodelled legacy SMC** (flash ID
   reads 0), **not** the VIC — it fires on the AST2400 VIC too, non-fatal.
 - With the G3 VIC wired (+ a combinational-level fix), C4 boots *past* the div0 to
-  BusyBox, then **the watchdog resets it at ~16 s**. Cause: this SoC uses the AST2400
-  irqmap, which routes `UART2-4 → 32-34` and `TIMER4-8 → 35-39`, **above** the G3's
-  single 32-bit bank — invisible IRQs → vendor firmware hangs.
+  BusyBox, then its **main thread blocks after line 151 and the watchdog resets it
+  at ~16 s**. Root cause **NOT yet pinned** — investigation ruled out the div0
+  (SMC), the combinational fix (disabling it changed nothing), `0x14`/`0x38` read
+  semantics (JTAG-confirmed 0), and the irqmap (every vendor-used device maps to
+  Table-36 lines ≤31 on both models). The two VIC types present identical
+  vendor-visible state yet diverge.
 
-**Corrected resolution:** the register model is right; wiring the G3 VIC needs two
-more faithful pieces — a **G3 Table-36 irqmap** (+ matching DTS interrupt numbers
-for our kernel) and the **legacy SMC** model. Until both land, keep the AST2400 VIC
-(all legacy boots green; C4 re-verified PASS). §7 below is the pre-hardware state,
-now superseded.
+**Resolution for now:** the register model is hardware-confirmed faithful; wiring
+the G3 VIC hangs C4 for a subtle, still-unidentified reason (needs a trace-diff of
+AST2400-vs-G3 VIC events or gdb into the 2.6.23 vendor kernel). Keep the AST2400
+VIC (all legacy boots green; C4 PASS). See the ruled-out table in
+[`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md) §5.
+§7 below is the pre-hardware state, superseded.
 
 ## 7. End-to-end bring-up: driver ready, but BLOCKED by the C4 oracle (2026-07-10)
 

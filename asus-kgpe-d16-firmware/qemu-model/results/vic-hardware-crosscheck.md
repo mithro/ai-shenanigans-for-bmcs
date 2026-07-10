@@ -102,29 +102,34 @@ never latched into `raw` → its IRQ is lost → the vendor's ftgmac100/SPI-NOR 
 waits on that IRQ, times out with a 0 geometry, and divides by zero (`__div0` in
 `aess_write_spi_nor_flash` during `ftgmac100_open`).
 
-**Fix applied + tested — and it exposed the *real* blocker.** Made level
+**Fix applied + tested; root cause NARROWED but not yet pinned.** Made level
 sensitivity **combinational** in the G3 model (on a write to `sense(0x24)`/
 `event(0x2c)`, re-derive `raw` for level sources from `s->level`) and wired
-`TYPE_ASPEED_2050_VIC`. Result: C4 now boots **past** the div0 and reaches BusyBox
-`rcS` (further than before), but then **hangs and the watchdog resets it at ~16 s**
-(the vendor installs the WDT at 10 s, `nowayout=1`). Root cause, found by tracing
-`aspeed_vic_set_irq`: **the div0 is a red herring** — it comes from the *unmodelled
-legacy SMC/SPI-NOR* (`SPI Flash ID: 0x0 … doesn't support`) and fires on the
-AST2400 VIC too (non-fatal). The G3-specific hang is **IRQ routing**: this SoC uses
-the AST2400 irqmap, which wires `UART2-4 → lines 32-34` and `TIMER4-8 → 35-39` —
-**above** the G3's single 32-bit bank, so those raise `raw` bits the guest can
-never read. On the faithful single-bank G3 VIC the vendor firmware then stalls and
-the WDT reboots it.
+`TYPE_ASPEED_2050_VIC`. Result: with the G3 VIC, C4 boots to BusyBox `rcS`
+(line 151) then **hangs — the main thread stops progressing and the watchdog
+resets it at ~16 s** (WDT installed mid-boot, 10 s, `nowayout=1`). What the
+investigation **ruled OUT** (each tested, not inferred):
 
-**So the model is right; the wiring is incomplete.** Completing the G3 VIC needs
-(a) its **own Table-36 irqmap** (device→line per §10, e.g. UART1/2=9/10, timers
-16/17/18) with matching **DTS interrupt numbers** for our kernel, and (b) the
-**legacy SMC** model (to kill the div0 / let the vendor flash probe succeed).
-Until both land, the machine keeps the AST2400 VIC so every legacy boot stays green
-(C4 re-verified PASS after reverting the wiring). The G3 VIC register model +
-combinational-level fix remain in-tree, hardware-confirmed and ready. This
-supersedes the earlier "G3 VIC breaks C4 via div0" conclusion — the div0 was never
-the VIC.
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| div0 in `aess_write_spi_nor_flash` is the VIC | ruled out | it's the **unmodelled legacy SMC** (`SPI Flash ID: 0x0`); fires on the AST2400 VIC too, non-fatal — boot continues past it |
+| the combinational-level fix causes it | ruled out | disabling the reeval gave **identical** behaviour (line 151, exit 16.6 s) |
+| `0x14`/`0x38` read aliases enable / edge-status | ruled out | **JTAG-confirmed**: both read `0` on silicon (the model already matches) |
+| irqmap hides a vendor IRQ (lines 32-39 > G3 bank) | ruled out | the AST2400 irqmap maps **every vendor-used device** to Table-36 lines ≤31 (console=10, ETH=2/3, timers=16/17/18, WDT=27, I2C=12); UART2-4/TIMER4-8 on 32-39 exist but the vendor never uses them |
+| timer interrupt storm | ruled out | the timer ticks at a **normal** rate; the *main thread* blocks, not an IRQ flood |
+
+**Honest status:** the G3 VIC presents **identical vendor-visible register state**
+to the AST2400 VIC (the vendor programs `sense/dual/event = 0xfff8ffff`, matching
+the AST2400 hardwired values), yet the vendor's main thread blocks after line 151
+(around `waitforaim` / network bring-up) **only** on the G3 VIC. The remaining
+difference is internal to the two VIC types (the 51-line `TYPE_ASPEED_VIC` vs the
+G3 variant); finding it needs a **trace-diff of AST2400 vs G3 VIC events aligned to
+the block point, or gdb into the 2.6.23 vendor kernel** — deeper than a register
+cross-check. Until then the machine keeps the AST2400 VIC (all legacy boots green;
+C4 PASS). The G3 register model is hardware-confirmed faithful and the
+combinational-level fix (a genuine improvement) stays in-tree. **This corrects the
+two earlier wrong conclusions in this file's history — the div0 (SMC, not VIC) and
+the irqmap-visibility theory.**
 
 ## Provenance
 
