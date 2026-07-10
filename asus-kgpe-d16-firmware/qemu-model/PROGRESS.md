@@ -286,6 +286,16 @@ prioritised backlog of where QEMU diverges from real silicon.
   (unmodelled), Video (unmodelled), USB (unmodelled + phantom EHCI), SMC (unmodelled),
   DDR2-SDMC, RTL8201CP-PHY, SCU-reset-table, P2A (host endpoint).
 
+### DEPTH begun — PWM/tach device authored + wired (first faithful new device)
+- New QEMU device **`aspeed.pwm-ast2050`** (`hw/misc/aspeed_pwm_ast2050.c` + header +
+  meson + SoC struct field + realize wiring, keyed on the G3 silicon-rev so AST2400/2500
+  are untouched). Mainline QEMU left 0x1E786000 unmapped. Register-accurate (PTCR00 ctrl
+  + duty RW, PTCR2C tach result RO, INT28).
+- Result: `pwm` fwtest **3/3 PASS** (was all-fail unmodelled); smoke still green; **suite
+  46 passed, 26 xfailed**. Pushed to mithro/qemu (`655d31b6`). OpenBMC fan hwmon can now
+  bind. Tach RPM synthesis deferred. CI-validating the C1–C4 boots stay green.
+- Pattern established for the remaining new devices (Video, USB UDC, LPC, RTC).
+
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).
 - **Depth** (oracle-safe, highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan

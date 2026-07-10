@@ -16,27 +16,24 @@ uses this for fan speed control and RPM monitoring (hwmon). Full detail:
 **Tach → RPM** = `(24e6 × 60) / (2 × TachoValue × TachoClkDiv)`. Nothing exists at or
 above 0x40. Single level IRQ (VIC INT28).
 
-## 2. QEMU faithfulness — UNMODELLED
+## 2. QEMU faithfulness — MODELLED (`aspeed.pwm-ast2050`)
 
-`peripherals/pwm/fwtest.c` vs the current model — **all checks FAIL**: PTCR00 reads 0,
-writes are ignored, the duty register doesn't hold. The AST2050 PWM/tach block is **not
-modelled** on this machine (the `-M kgpe-d16-bmc` "tolerate unmodelled MMIO → 0" flag
-returns 0 for `0x1E786000`). **OpenBMC fan control/monitor cannot be verified** until a
-faithful model exists.
+`peripherals/pwm/fwtest.c` vs the model — **all checks PASS**: PTCR00 general control
+(master-clock enable, PWM-A enable) and the duty register are RW. Implemented as a new
+**`aspeed.pwm-ast2050`** device (`hw/misc/aspeed_pwm_ast2050.c`): a register-accurate 4
+PWM + 16 tach model, register window 0x00–0x3C, PTCR2C tach result read-only, INT28.
+Mapped at 0x1E786000 (mainline QEMU leaves it unmapped), keyed on the G3 silicon-rev so
+AST2400/2500 are unchanged. **OpenBMC fan hwmon can now bind + drive PWM/duty.**
 
-## 3. Faithful-model plan (oracle-safe — new device at an unmodelled address)
+*Refinement (deferred):* compute the tach RPM result (PTCR2C) from the programmed duty
++ a synthetic fan model, so `hwmon-fan` reads a plausible RPM. The register interface is
+faithful; the RPM synthesis is a behavioural add-on.
 
-Add an `aspeed.pwm-ast2050` device: 4 PWM channels (enable + duty), 16 tach inputs
-(programmable RPM result), PTCR00-3C register layout, INT28. Mapping it at 0x1E786000
-(currently returning 0) is low oracle-risk — the legacy boots don't depend on the block
-being absent — but must be CI-validated to keep C1–C4 green. This unblocks OpenBMC hwmon
-fan verification.
-
-## 4. Deliverable status
+## 3. Deliverable status
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ☑ (documents the unmodelled block) |
+| 1 | firmware test (`fwtest.c`) | ☑ 3 checks (PTCR00 + duty RW) |
 | 2 | doc (this + `DATASHEET-PWM.md`) | ☑ |
-| 3 | QEMU model | ☐ new `aspeed.pwm-ast2050` device (§3) |
-| 4 | integration test (`../../integration/test_pwm.py`) | ◐ checks xfail until §3 |
+| 3 | QEMU model | ☑ `aspeed.pwm-ast2050` (register-accurate; tach RPM synthesis deferred) |
+| 4 | integration test (`../../integration/test_pwm.py`) | ☑ passes |
