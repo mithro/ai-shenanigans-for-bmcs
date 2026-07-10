@@ -315,6 +315,21 @@ prioritised backlog of where QEMU diverges from real silicon.
 - **3 new devices shipped + boot-validated green: PWM, Video, RTC.** 8 fully-faithful
   devices total (Timer/WDT/UART/GPIO/PWM/Video/RTC + SCU rev-id).
 
+### PHASE 6 begun — OpenBMC over TFTP+NFS (groundwork; full boot is a CI integration)
+- Plan: `qemu-model/PHASE6-OPENBMC-TFTP-NFS.md` — U-Boot tftp (slirp built-in TFTP) loads
+  the kernel; kernel `ip=dhcp` + `root=/dev/nfs nfsroot=10.0.2.2:/export/...,vers=3,tcp`
+  mounts root over the FTGMAC100; rides the modern-kernel path (oracle-safe, new boot job).
+- Added `kernel/kgpe-d16-nfsroot.config` (IP_PNP/DHCP, NFS_FS, NFS_V3, ROOT_NFS, SUNRPC,
+  LOCKD) — merged on top of `kgpe-d16.config`.
+- **Environment blocker (documented):** the dev sandbox has **no NFS server tooling**
+  (no unfsd/rpcbind/nfsd), so the NFS boot is a **CI job** (ubuntu-latest apt-installs the
+  server), same shape as the C1–C4 boot jobs. The rootfs reuses `initramfs/build.py`'s
+  BusyBox+dropbear tree as the NFS export (6a transport proof); a native **OpenBMC AST2050
+  image needs a Yocto machine layer** (6b — large separate effort; modern OpenBMC ran on
+  romulus/AST2500 in PR #22).
+- Next 6a steps: TFTP-boot verify (slirp `tftp=`), rootfs-export mode in build.py, the
+  `boot-nfsroot` CI job.
+
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).
 - **Depth** (oracle-safe, highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan
