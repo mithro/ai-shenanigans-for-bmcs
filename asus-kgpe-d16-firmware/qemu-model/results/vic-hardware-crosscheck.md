@@ -121,12 +121,19 @@ investigation **ruled OUT** (each tested, not inferred):
 **Honest status:** the G3 VIC presents **identical vendor-visible register state**
 to the AST2400 VIC (the vendor programs `sense/dual/event = 0xfff8ffff`, matching
 the AST2400 hardwired values), yet the vendor's main thread blocks after line 151
-(around `waitforaim` / network bring-up) **only** on the G3 VIC. The remaining
-difference is internal to the two VIC types (the 51-line `TYPE_ASPEED_VIC` vs the
-G3 variant); finding it needs a **trace-diff of AST2400 vs G3 VIC events aligned to
-the block point, or gdb into the 2.6.23 vendor kernel** — deeper than a register
-cross-check. Until then the machine keeps the AST2400 VIC (all legacy boots green;
-C4 PASS). The G3 register model is hardware-confirmed faithful and the
+(around `waitforaim` / network bring-up) **only** on the G3 VIC.
+
+**gdb probe (fresh datum):** attaching QEMU's gdbstub at the ~13 s hang caught the
+CPU at `0xc002f018` — inside an ARM926 **cache-flush / Wait-For-Interrupt idle
+helper** (`0xc002f014 = mcr p15,0,r0,c7,c0,4` is WFI; the caught insn writes SCTLR
+back). Single-stepping shows it **returning to its caller and advancing**, not
+tight-spinning. So the CPU is **idle-blocked (WFI/idle path), not crashed** — the
+signature of a **lost wakeup**: a sleeping task waits for an interrupt/event that
+never arrives on the G3 VIC. That strongly implicates a single dropped interrupt in
+the G3 VIC path, but pinning *which* needs the 2.6.23 kernel's symbols (kallsyms is
+in the image; not yet extracted) or a trace-diff of AST2400-vs-G3 VIC delivery
+aligned to the block. Until then the machine keeps the AST2400 VIC (all legacy boots
+green; C4 PASS). The G3 register model is hardware-confirmed faithful and the
 combinational-level fix (a genuine improvement) stays in-tree. **This corrects the
 two earlier wrong conclusions in this file's history — the div0 (SMC, not VIC) and
 the irqmap-visibility theory.**
