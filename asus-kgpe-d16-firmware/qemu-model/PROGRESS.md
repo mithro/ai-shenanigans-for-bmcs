@@ -508,3 +508,26 @@ WDT reload=0x03ef1480.
 **Net:** models confirmed faithful where checkable; wrong conclusions corrected; the two deep
 remaining faithfulness gaps (VIC wiring #57, PLL #55) precisely scoped as co-evolution tasks.
 All legacy boots stay green (AST2400 VIC kept; C4 PASS). OpenBMC-over-NFS still boots (Phase 6b).
+
+### VIC deep-dive + SMC groundwork (2026-07-11, cont.) — three deep tasks, diagnosed not fixed
+User asked to pursue all three remaining faithfulness gaps (VIC wiring / PLL / legacy SMC).
+Recovered the **vendor kernel symbols** (`vmlinux-to-elf` from kallsyms → 20 318 syms,
+`tmp/c4work/vendor-vmlinux.elf`) and drove the G3-VIC C4 boot under gdb + differential QEMU traces:
+- **Timer path healthy** on the G3 VIC (asm_do_IRQ→aspeed_timer_interrupt→timer_tick all fire).
+- Blocks in the **aess driver-init / module-load phase** (~9th module aess_pecisensordrv, whose
+  init just request_irq(15)s and returns — the block is the module-load uevent/usermodehelper
+  machinery; note /sbin/hotplug doesn't exist so those waits are transient).
+- **THE CRUX (task #57):** IRQ **15(PECI)/12(I2C)/20(GPIO)** fire on the AST2400 VIC but **never**
+  on the G3 VIC — yet both present identical vendor-visible register state and the same devices
+  assert the same lines early in boot. A subtle **delivery/dispatch/timing** difference, unsolved.
+  Next: differential dispatched-IRQ trace from early boot to find the FIRST divergence.
+- **Legacy SMC groundwork (task #58):** found the vendor flash driver (`ast2050_smc_*`,
+  `aess_spi_init`), base 0x16000000, UMA command path (cs_low → 0x9F + read 3 ID bytes via the
+  0x14000000 window → cs_high). Plan: model it wired to an m25p80 (JEDEC mx25l12805d=0xC22018) so
+  the ID read succeeds and the (non-fatal) div0 disappears. Additive/low-risk; not yet built.
+- **PLL (task #55):** hardware value 0x4291 captured; fix needs a G3 calc_pll + U-Boot re-tune
+  (risks the AST2400-tuned legacy boots) — not started.
+
+**Honest status:** none of the three fixes is complete; each is a substantial focused effort with
+(for PLL/VIC) real legacy-boot risk. Deep diagnosis + groundwork done and precisely scoped; all
+diagnosis committed/pushed; diagnostic scripts in `tmp/c4work/*_diag.py`. Oracle stays green.
