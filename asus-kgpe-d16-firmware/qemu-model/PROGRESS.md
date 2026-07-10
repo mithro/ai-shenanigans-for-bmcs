@@ -227,15 +227,21 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   AST2400 model exposes more banks/bits than the G3's A–H (G3 firmware never touches
   them; stricter masking is oracle-gated). Suite: 30 passed, 16 xfailed.
 
-### Progress: 8 peripherals with full 4-deliverable coverage
-SCU, VIC, Timer, WDT, UART, MAC, GPIO + SDRAM(test/doc). Timer/WDT/UART/GPIO fully
-faithful (no model change); SCU rev-id wired; VIC/SCU-reset/DDR2/PHY are opt-in gaps
-(oracle-gated). All C1–C4 boots green throughout.
+### I2C: register interface + master-engine faithful (device readback deferred)
+- `peripherals/i2c/{DATASHEET-I2C,DOC}.md` + `fwtest.c` + `test_i2c.py`. 7 engines, bus N
+  at 0x1E78A000+0x40*(N+1). function-control resets 0 + MASTER_EN RW; the master engine
+  executes a START (auto-clears START, advances the CMD status field `0x00480000`).
+  Deferred (xfail): full ACK/NAK + smbus_eeprom readback need the exact CMD-status-field +
+  SMBus command protocol. Gap: AST2400 model exposes up to 14 buses vs the G3's 7.
+
+### Progress: 9 peripherals covered (all C1–C4 boots green throughout)
+SCU, VIC, Timer, WDT, UART, MAC, GPIO, I2C + SDRAM(test/doc). Fully faithful (no model
+change): Timer, WDT, UART, GPIO. Register+engine faithful w/ documented depth gaps:
+MAC(PHY id), I2C(readback). rev-id wired. Opt-in/gated: G3 SCU reset table, G3 VIC, DDR2,
+RTL8201CP PHY. Suite: 32 passed, 17 xfailed — every xfail has a datasheet cite + task.
 
 ### Next
 - Regularly `git merge origin/main` (user directive).
-- Continue: I2C (sensors), RTC, PWM/tach, LPC/KCS, SMC, AHB remap. Then oracle-gated depth
-  work: per-board RTL8201CP PHY, G3 kernel VIC driver, reduce C4 RE-patch debt so the
-  opt-in G3 SCU/VIC/PHY wire in without breaking legacy.
-- DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
-  faithful SCU).
+- Continue: RTC, PWM/tach, LPC/KCS, SMC, AHB remap, Video, USB. Then oracle-gated depth:
+  per-board RTL8201CP PHY, G3 kernel VIC driver, reduce C4 RE-patch debt so the opt-in G3
+  models wire in without breaking legacy. Then Phase 6: OpenBMC over TFTP+NFS.
