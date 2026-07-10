@@ -22,11 +22,13 @@ def test_reaches_halt(usb):
     assert usb.halted, f"usb fwtest did not reach the halt sentinel:\n{usb.raw}"
 
 
-@pytest.mark.xfail(reason="USB device/vhub unmodelled + phantom EHCI present (DOC.md §3)",
-                   strict=False)
 def test_udc_modelled(usb):
+    """The G3 USB device/vhub controller (0x1E6A0000) is modelled by the G3-only
+    aspeed.udc-ast2050 register block: HUB00 root control is RW. Fixed 2026-07-10
+    (DOC.md §3). Full USB device semantics (enumeration, EP DMA, media transport)
+    are refinements."""
     c = next((c for c in usb.checks if c[0] == "hub00.rw"), None)
-    assert c is not None and c[1]
+    assert c is not None and c[1], "UDC HUB00 not RW at 0x1E6A0000"
 
 
 def test_no_phantom_ehci(usb):

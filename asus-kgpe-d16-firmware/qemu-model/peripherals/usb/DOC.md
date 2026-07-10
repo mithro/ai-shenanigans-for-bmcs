@@ -13,7 +13,11 @@ for BMC **virtual media / virtual keyboard/mouse** (OpenBMC). Full detail:
 ## 2. QEMU faithfulness — phantom EHCI REMOVED; device/vhub still unmodelled
 
 `peripherals/usb/fwtest.c`:
-- ✗ the device/vhub at **0x1E6A0000 reads 0** and is not writable — **not modelled**.
+- ☑ the device/vhub at **0x1E6A0000 is modelled** (2026-07-10): a G3-only
+  `aspeed.udc-ast2050` register block (HUB00 root control + device blocks + EP
+  pool), created in the SoC realize for `silicon_rev == AST2050_A1_SILICON_REV`.
+  HUB00 is RW; `test_udc_modelled` now PASSES. Full USB device semantics
+  (enumeration, endpoint DMA, virtual-media transport) are refinements.
 - ☑ **0x1E6A1000 now reads 0** — the **phantom EHCI has been removed** (2026-07-10):
   `hw/arm/aspeed_ast2400.c` gates EHCI creation off when `silicon_rev ==
   AST2050_A1_SILICON_REV`, so the faithful G3 SoC no longer instantiates the
@@ -36,5 +40,5 @@ firmware pokes the UDC once at init — AST2050-PERIPHERAL-MODELING §1) — ora
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ (documents unmodelled UDC + phantom EHCI) |
 | 2 | doc (this + `DATASHEET-USB.md`) | ☑ |
-| 3 | QEMU model | ◐ **phantom EHCI removed** (☑); UDC/vhub at 0x1E6A0000 still ☐ |
-| 4 | integration test (`../../integration/test_usb.py`) | ◐ `test_no_phantom_ehci` PASS; `test_udc_modelled` xfail until the UDC |
+| 3 | QEMU model | ◐ **phantom EHCI removed + UDC register block modelled** (☑); full USB device semantics ☐ |
+| 4 | integration test (`../../integration/test_usb.py`) | ☑ `test_no_phantom_ehci` + `test_udc_modelled` PASS |
