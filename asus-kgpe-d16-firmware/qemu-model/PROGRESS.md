@@ -196,10 +196,17 @@ SCU (rev-id wired; G3 reset table opt-in); VIC (G3 model opt-in); Timer (done); 
 (test+doc, model gated); datasheet chapters (memory-map, SCU §18, VIC §16/§10, SDRAM §17,
 timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots are the oracle.
 
+### WDT (watchdog): register-faithful, done (no model change → oracle safe)
+- `peripherals/wdt/{fwtest.c,DOC.md}` + `test_wdt.py`: reload reset `0x03EF1480` +
+  control reset 0 match the datasheet; the `0x4755` restart magic reloads the counter.
+  All 4 checks PASS on the current model — no change needed (so the legacy boots are
+  untouched). Rate fidelity (24 vs 66 MHz PCLK) deferred to the SCU post-divider (#55).
+  Suite: 21 passed, 15 xfailed.
+
 ### Next
 - Regularly `git merge origin/main` (user directive) to pick up shared work.
 - Continue faithful models that KEEP the legacy boots green (validate each in CI): UART,
-  WDT, AHB remap; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
+  AHB remap; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
   patch / add OUR modern-kernel G3 VIC driver so they can be wired *and* keep legacy green.
 - DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
   faithful SCU).
