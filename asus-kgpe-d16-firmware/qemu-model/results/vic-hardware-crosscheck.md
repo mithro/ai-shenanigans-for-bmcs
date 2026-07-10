@@ -102,13 +102,29 @@ never latched into `raw` → its IRQ is lost → the vendor's ftgmac100/SPI-NOR 
 waits on that IRQ, times out with a 0 geometry, and divides by zero (`__div0` in
 `aess_write_spi_nor_flash` during `ftgmac100_open`).
 
-**Faithful fix (planned + being verified):** make level sensitivity
-**combinational** in the G3 model — on a write to `sense(0x24)` or `event(0x2c)`,
-re-evaluate `raw` for the level-sensitive sources from the tracked line level
-(`s->level`). This matches real silicon (level detection is combinational, not
-edge-latched) and removes the transient. Then wire `TYPE_ASPEED_2050_VIC` and
-re-validate C2 (our kernel) **and** C4 (vendor) boot together. Verified-result
-status recorded below once the rebuild + boot test completes.
+**Fix applied + tested — and it exposed the *real* blocker.** Made level
+sensitivity **combinational** in the G3 model (on a write to `sense(0x24)`/
+`event(0x2c)`, re-derive `raw` for level sources from `s->level`) and wired
+`TYPE_ASPEED_2050_VIC`. Result: C4 now boots **past** the div0 and reaches BusyBox
+`rcS` (further than before), but then **hangs and the watchdog resets it at ~16 s**
+(the vendor installs the WDT at 10 s, `nowayout=1`). Root cause, found by tracing
+`aspeed_vic_set_irq`: **the div0 is a red herring** — it comes from the *unmodelled
+legacy SMC/SPI-NOR* (`SPI Flash ID: 0x0 … doesn't support`) and fires on the
+AST2400 VIC too (non-fatal). The G3-specific hang is **IRQ routing**: this SoC uses
+the AST2400 irqmap, which wires `UART2-4 → lines 32-34` and `TIMER4-8 → 35-39` —
+**above** the G3's single 32-bit bank, so those raise `raw` bits the guest can
+never read. On the faithful single-bank G3 VIC the vendor firmware then stalls and
+the WDT reboots it.
+
+**So the model is right; the wiring is incomplete.** Completing the G3 VIC needs
+(a) its **own Table-36 irqmap** (device→line per §10, e.g. UART1/2=9/10, timers
+16/17/18) with matching **DTS interrupt numbers** for our kernel, and (b) the
+**legacy SMC** model (to kill the div0 / let the vendor flash probe succeed).
+Until both land, the machine keeps the AST2400 VIC so every legacy boot stays green
+(C4 re-verified PASS after reverting the wiring). The G3 VIC register model +
+combinational-level fix remain in-tree, hardware-confirmed and ready. This
+supersedes the earlier "G3 VIC breaks C4 via div0" conclusion — the div0 was never
+the VIC.
 
 ## Provenance
 

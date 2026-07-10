@@ -27,11 +27,20 @@ skip_reason = runner.preconditions()
 pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "")
 
 # fwtest check label -> xfail reason (None = must pass). The six G3 trigger-config
-# checks need the G3 VIC wired, which breaks the C4 vendor-firmware oracle -> xfail.
-C4 = ("wiring the faithful G3 VIC (TYPE_ASPEED_2050_VIC) boots our kernel but "
-      "breaks the proprietary C410X firmware (C4 oops's in the vendor SPI-NOR "
-      "path) — C4 is unpatchable, so the machine keeps the AST2400 VIC. The G3 "
-      "VIC model + irq-aspeed-g3-vic driver are in-tree, ready. See DOC.md.")
+# checks need the G3 VIC wired. Its REGISTER model is hardware-confirmed faithful
+# (JTAG: sense/dual/event reset 0 + fully writable — results/vic-hardware-crosscheck.md),
+# but wiring it alone breaks the C4 vendor boot via IRQ *routing*, not the register
+# model: this SoC uses the AST2400 irqmap (UART2-4/TIMER4-8 on lines 32-39, above the
+# G3's single 32-bit bank) so the vendor firmware hangs and the WDT resets it (~16s).
+# The earlier "div0 in the vendor SPI-NOR path" is the UNMODELLED legacy SMC and fires
+# on the AST2400 VIC too (non-fatal) — it was never the VIC. Completing the G3 VIC
+# needs a Table-36 irqmap (+DTS) and the legacy SMC model; until then keep AST2400 VIC.
+C4 = ("the G3 VIC register model is hardware-confirmed faithful, but wiring "
+      "TYPE_ASPEED_2050_VIC needs a G3 Table-36 irqmap (+DTS) and the legacy SMC "
+      "model before the C410X vendor firmware (C4) boots — the AST2400 irqmap "
+      "routes UART2-4/TIMER4-8 above the G3's 32-bit bank, hanging the vendor "
+      "firmware (WDT reset). Machine keeps the AST2400 VIC. See DOC.md + "
+      "results/vic-hardware-crosscheck.md.")
 CHECKS = {
     "irqstat.reset": None, "fiqstat.reset": None, "rawstat.reset": None,
     "select.reset": None, "enable.reset": None, "softint.reset": None,

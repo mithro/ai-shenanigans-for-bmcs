@@ -114,14 +114,25 @@ AST2400 0x80+ aliases (G3 never uses them).
 ## 7b. Real-silicon cross-check reframes the C4 block (2026-07-11)
 
 JTAG reads of the real AST2050 (see [`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md))
-**confirm the G3 model is faithful and the AST2400 model is not**: on silicon,
-`0x24/0x28/0x2c` reset to 0 and are fully writable. So C4 "passing" on the AST2400
-VIC is a **false green** — the vendor firmware only survives because QEMU's AST2400
-VIC hands it non-zero `sensitivity`/`event` reset values that real hardware does
-not have. The faithful resolution is therefore **not** to keep the unfaithful
-AST2400 VIC; it is to keep the G3 model and make the C4 boot harness faithful
-(ensure the vendor's real-hardware VIC-init also runs under QEMU). See §7 below for
-the state at the time of the revert, now superseded by this finding.
+**confirm the G3 register model is faithful and the AST2400 model is not**: on
+silicon, `0x24/0x28/0x2c` reset to 0 and are fully writable.
+
+Tracing the C4 vendor firmware then corrected the *whole* earlier story:
+- The vendor kernel **does** program the trigger config — it writes `sense=0xfff8ffff
+  / dual=0x70000 / event=0xfff8ffff` (the AST2400-style "all level except timers"),
+  so the steady-state config is identical on both VIC models.
+- The **`div0` in `aess_write_spi_nor_flash` is the unmodelled legacy SMC** (flash ID
+  reads 0), **not** the VIC — it fires on the AST2400 VIC too, non-fatal.
+- With the G3 VIC wired (+ a combinational-level fix), C4 boots *past* the div0 to
+  BusyBox, then **the watchdog resets it at ~16 s**. Cause: this SoC uses the AST2400
+  irqmap, which routes `UART2-4 → 32-34` and `TIMER4-8 → 35-39`, **above** the G3's
+  single 32-bit bank — invisible IRQs → vendor firmware hangs.
+
+**Corrected resolution:** the register model is right; wiring the G3 VIC needs two
+more faithful pieces — a **G3 Table-36 irqmap** (+ matching DTS interrupt numbers
+for our kernel) and the **legacy SMC** model. Until both land, keep the AST2400 VIC
+(all legacy boots green; C4 re-verified PASS). §7 below is the pre-hardware state,
+now superseded.
 
 ## 7. End-to-end bring-up: driver ready, but BLOCKED by the C4 oracle (2026-07-10)
 
