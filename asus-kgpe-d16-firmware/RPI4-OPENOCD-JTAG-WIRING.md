@@ -110,6 +110,7 @@ column = GND**, except pins 1–2:
 | TDO  | 13 | GPIO22 | 15 |
 | nTRST | 3 | GPIO17 | 11 |
 | nSRST | 15 | GPIO18 | 12 |
+| RTCK *(optional — Pi INPUT only)* | 11 | GPIO27 | 13 |
 | GND  | 4/6/8/10/12/14/16/18/20 (any, ≥1) | GND | 6, 9, 14, 20, 25, 30, 34, 39 |
 | VTref | 1 | — | **measure only, do not connect** |
 
@@ -122,6 +123,7 @@ column = GND**, except pins 1–2:
    GPIO22  pin15  TDO   <--  pin13  TDO
    GPIO17  pin11  nTRST -->  pin 3  nTRST
    GPIO18  pin12  nSRST -->  pin15  nSRST
+   GPIO27  pin13  RTCK  <--  pin11  RTCK  (optional; Pi INPUT-only monitor)
    GND     pin 6  GND   ---  pin 4  GND
    (meter)        VTref ...  pin 1  VTref (~3.3V, do NOT drive)
 
@@ -147,7 +149,7 @@ pins, so both harnesses coexist on one Pi:
              GPIO4  7  | *8  GPIO14  UART-TX
                GND  9  | *10 GPIO15  UART-RX
      nTRST  GPIO17 11* | *12 GPIO18  nSRST
-            GPIO27 13  | *14 GND     GND*
+      RTCK  GPIO27 13* | *14 GND     GND*
        TDO  GPIO22 15* | *16 GPIO23  TDI
                3V3 17  | *18 GPIO24  TMS
             GPIO10 19  |  20 GND
@@ -164,6 +166,7 @@ pins, so both harnesses coexist on one Pi:
 
    JTAG : TCK GPIO25/p22  TMS GPIO24/p18  TDI GPIO23/p16  TDO GPIO22/p15
           nTRST GPIO17/p11  nSRST GPIO18/p12  GND* p14 (>=1 GND, mandatory)
+          RTCK GPIO27/p13 (optional input-only monitor, see below)
    UART : TX GPIO14/p8 -> BMC RXD   RX GPIO15/p10 <- BMC TXD   GND p6
 ```
 
@@ -186,8 +189,17 @@ discipline — these are not optional:
   see flakiness here, this is the first thing to add 100–470 Ω series resistors
   for.)
 
-> **Note:** `RTCK` (pin 11) = adaptive clocking; not used by bit-bang. `DBGRQ`
-> (17) and the spare supply (2/19) are left unconnected.
+> **Note:** `RTCK` (pin 11) = adaptive clocking. OpenOCD's GPIO bit-bang
+> drivers cannot consume it (`adapter gpio` has no `rtck` signal), and at
+> bit-bang speeds TCK never approaches the ARM9 "TCK < core-clock/6" limit —
+> so it is NOT part of the OpenOCD setup. It IS worth wiring to **GPIO27
+> (phys pin 13, Pi INPUT only — the target drives it)** as a passive
+> diagnostic: ARM926EJ-S RTCK is TCK echoed through the core-clock domain, so
+> [`openocd/rtck-echo-test.py`](openocd/rtck-echo-test.py) can prove the chip
+> is powered and clocked without attempting a scan (§6). `DBGRQ` (17) and the
+> spare supply (2/19) are left unconnected — OpenOCD halts the ARM9 by
+> scanning the DBGRQ bit into the EmbeddedICE-RT control register, not via
+> the sideband pin.
 
 ---
 
@@ -276,6 +288,12 @@ Configs live in [`openocd/`](openocd/), split adapter / SoC / board:
 # On the Pi:
 sudo apt install openocd            # or build a recent (>=0.12) OpenOCD
 cd asus-kgpe-d16-firmware/openocd
+
+# Step 0 (optional but cheap) — TCK->RTCK echo test, no scan involved:
+# proves the AST2050 is powered + core-clocked via the RTCK monitor wire
+# (GPIO27). PASS = 64/64 echoes; stuck-low = board off / RTCK unrouted /
+# wire missing. Never run while OpenOCD is attached (exclusive GPIO claims).
+python3 rtck-echo-test.py          # on the Pi (or: uv run rtck-echo-test.py)
 
 # First contact — discover the real IDCODE (board powered, BMC at reset):
 openocd -f rpi4-jtag.cfg -f ast2050.cfg -c "init; scan_chain; shutdown"

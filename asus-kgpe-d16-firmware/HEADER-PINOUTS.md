@@ -61,6 +61,7 @@ even column = GND (except pins 1–2).
 
    RPi4 map: TDI->GPIO23/p16   TMS->GPIO24/p18    TCK->GPIO25/p22
              TDO->GPIO22/p15   nTRST->GPIO17/p11  nSRST->GPIO18/p12
+             RTCK->GPIO27/p13 (optional, Pi INPUT only - echo diagnostic)
              VTref-> meter only (~3.3V)   GND (even pins)-> any RPi GND (>=1)
 ```
 
