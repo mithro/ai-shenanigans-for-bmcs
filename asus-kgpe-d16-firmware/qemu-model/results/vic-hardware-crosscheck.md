@@ -172,6 +172,40 @@ model is hardware-confirmed faithful and the combinational-level fix stays in-tr
 **This corrects the two earlier wrong conclusions — the div0 (SMC, not VIC) and the
 irqmap-visibility theory.**
 
+## 6. MAJOR REFRAMING (2026-07-11): it's a watchdog-timing issue, NOT a lost interrupt
+
+Recovered the vendor kernel's symbols (`vmlinux-to-elf`) and, at the G3-VIC hang,
+called the kernel's own task dumper from gdb: `set {int}0xc031e7a0 = 8` (raise
+`console_loglevel`, found via `do_syslog`'s CONSOLE_LEVEL store) then
+`call (void)show_state_filter(0)`. It printed **every task's state + symbolized
+backtrace**. Findings that overturn the earlier "blocked in aess driver init":
+
+- **The boot fully PROGRESSES.** All aess modules load; **AIM starts** (pids 400/401),
+  `waitforaim` runs (pid 399), shells/init are alive. **No task is in D-state**
+  (uninterruptible / device-blocked) — every task is in a normal interruptible sleep
+  (`nanosleep`, `sys_poll`, `sys_wait4`). So there is **no dropped-interrupt device
+  hang**. `rsyslogd` was momentarily `R` but had used only 1.78 s of 14 s (not hogging).
+- **The killer is the watchdog.** WDT trace shows it *is* petted (`@0x8 = 0x4755`, the
+  reload magic) a few times, then petting falls behind and the WDT resets at ~16 s.
+- **`/sbin/watchdog` is a trivial daemon** (disassembled): `open(/dev/watchdog);
+  daemon(); loop { write(fd,1); sleep(5); }` — **no health check, no device/VIC
+  access** that could block. It just pets every **5 s** while the WDT heartbeat is
+  **10 s** — which should *never* expire.
+- **Conclusion: the guest's time runs slow on the G3 VIC.** For a 5 s pet loop to miss
+  a 10 s WDT, `sleep(5)` must stretch past 10 s of wall time — i.e. `jiffies` advance
+  too slowly, so the whole boot (and every timeout) is slower and the watchdog daemon
+  starts/pets too late to beat the wall-clock WDT deadline. The AST2400 VIC boots the
+  same firmware because it's slightly faster and the daemon keeps up.
+
+**So the fix is a TIMING/efficiency issue in the G3 VIC interrupt path, not a dropped
+IRQ.** Likely: the vendor ISR hammers `0x14`/`0x38` and the G3 VIC path loses/ delays
+timer ticks vs the AST2400 path. **Next:** measure the timer_tick / jiffies rate over
+fixed wall time on G3 vs AST2400 (confirm the drift), then find what in the G3 VIC
+delivery makes it slower (or whether the WDT/clock model is the real culprit). Tooling
+built: `tmp/c4work/{showstate,logflood,wdt}_diag.py` + the gdb `show_state_filter`
+recipe + `console_loglevel@0xc031e7a0`. This supersedes the "IRQ 15/12/20 dispatch
+cascade" framing — those IRQs simply never happen because the boot is reset first.
+
 ## Provenance
 
 - Rig: bridge Pi `rpi4-asus-aspeed2050-dev`, AST2050 over JTAG, 2026-07-11.
