@@ -209,10 +209,21 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   16550 is register+datapath faithful for the G3 (UART1/UART2 only; no AST2400 UART3-5).
   Baud rate (24 MHz/÷13) ties to the SCU clock-tree. Suite: 24 passed, 15 xfailed.
 
+### MAC (ftgmac100): register-faithful; PHY-identity gap documented (no model change)
+- `peripherals/mac/{DATASHEET-MAC,DOC}.md` + `fwtest.c` + `test_mac.py`. MACCR (0x50)
+  is RW and holds the culvert capture `0x0002D51F`; the descriptor-ring base regs store
+  the full [31:4] address (`RXR_BADR=0x41B10000` reads back — the datasheet [27:4] vs
+  DRAM discrepancy is not present). MDIO/PHYCR works.
+- **Gap (xfail):** the MDIO PHY id is `0x001C_C915` = **RTL8211E (gigabit)**, but the
+  D16 has the **RTL8201CP (10/100)** — the RTL8211E was added for the C410X (C4) vendor
+  path. Fix is a per-board PHY (oracle-gated: must keep C4 green). G3 must not expose
+  gigabit/RGMII/NCSI/RCLK. Full TX/RX DMA is proven by the C2 boot (eth0 up 100M/full).
+- Suite: 27 passed, 16 xfailed.
+
 ### Next
-- Regularly `git merge origin/main` (user directive) to pick up shared work.
-- Continue faithful models that KEEP the legacy boots green (validate each in CI): AHB
-  remap, GPIO; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
-  patch / add OUR modern-kernel G3 VIC driver so they can be wired *and* keep legacy green.
+- Regularly `git merge origin/main` (user directive).
+- Continue faithful models that keep the oracle green: GPIO, I2C, RTC, AHB remap. Then
+  the oracle-gated depth work: per-board RTL8201CP PHY, G3 kernel VIC driver, reduce the
+  C4 RE patch debt (so the opt-in G3 SCU/VIC/PHY can wire in without breaking legacy).
 - DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
   faithful SCU).

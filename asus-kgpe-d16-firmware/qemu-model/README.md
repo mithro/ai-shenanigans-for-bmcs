@@ -100,8 +100,8 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 5 | UART1 / UART2 (16550) | 0x1E783000 / 0x1E784000 | console, SOL | ☑ | ☑ | ☑ | ☑ | 1 |
 | 6 | WDT | 0x1E785000 | watchdog, reset | ☑ | ☑ | ☑ | ☑ | 1 |
 | 7 | AHB controller + remap | 0x1E600000 | boot remap (0x0↔DRAM) | ☐ | ☐ | ◐ | ☐ | 1 |
-| 8 | ftgmac100 MAC1 (RMII + RTL8201CP PHY) | 0x1E660000 | **netboot/NFS**, network | ☐ | ☐ | ◐ | ☐ | 2 |
-| 9 | MDIO / PHY | in MAC | link, autoneg | ☐ | ☐ | ◐ | ☐ | 2 |
+| 8 | ftgmac100 MAC1 (RMII + RTL8201CP PHY) | 0x1E660000 | **netboot/NFS**, network | ☑ | ☑ | ◐ | ◐ | 2 |
+| 9 | MDIO / PHY | in MAC | link, autoneg | ☑ | ☑ | ◐ | ◐ | 2 |
 | 10 | SMC / SPI flash controller (legacy) | 0x16000000 regs · data @0x10000000 | flash probe (we boot from RAM) | ☐ | ☐ | ☐ | ☐ | 2 |
 | 11 | I2C controller (multiple engines) | 0x1E78A000 | sensors, EEPROM, PSU | ☐ | ☐ | ☐ | ☐ | 3 |
 | 12 | GPIO | 0x1E780000 | power ctl, presence, LEDs | ☐ | ☐ | ◐ | ☐ | 3 |
