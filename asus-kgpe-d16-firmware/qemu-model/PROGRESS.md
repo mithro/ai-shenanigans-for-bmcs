@@ -412,3 +412,27 @@ phosphor (user/network/settings/inventory) + ssh; no web UI / IPMI / vKVM / tele
   (nfs-kernel-server + /etc/exports.d) since CI can't host a 57 MB rootfs.
 - Note: the image's do_generate_static (flash .static.mtd) fails (fitImage 91 KB over the
   quanta flash partition) — irrelevant for NFS boot; the squashfs rootfs builds fine.
+
+### DEPTH pass (2026-07-10): 2 clean model fixes + full xfail triage (suite 49→52)
+Closed the cleanest, oracle-safe faithfulness gaps and triaged the rest:
+- **USB phantom EHCI removed** (commit b383987): the AST2050 has no EHCI; gated EHCI
+  creation off for silicon_rev==AST2050 in aspeed_ast2400.c. `test_no_phantom_ehci` PASS.
+- **Legacy SMC control block modelled** (commit 71b2c5d): new `aspeed.smc-ast2050` at
+  0x16000000 (config reset 0x240 + RW control regs); the vendor firmware's SMC pokes now
+  hit a real device. `test_smc_modelled[smc00.reset,smc04.rw]` PASS.
+- Suite now **52 passed / 20 xfailed**; C2 re-verified locally (kernel boots with EHCI
+  gone + SMC added); CI validating C4/C2-full/C5.
+
+**Triage of the 20 remaining xfails — two categories:**
+- **Oracle-BLOCKED (16), correctly deferred per [[qemu-must-model-real-hardware]]:** a
+  faithful G3 version breaks a legacy boot (which MUST stay green), so it waits for
+  G3-aware firmware/kernel:
+  - VIC (6): the mainline ast2400-vic driver can't program the compact G3 VIC → timer IRQ
+    dies → needs an irq-aspeed-g3-vic kernel driver (task #56).
+  - SCU-reset table (6): the G3 reset values break the AST2400 U-Boot + vendor firmware.
+  - SDRAM DDR2 (3): a faithful G3 SDMC changes the DRAM geometry the AST2400 U-Boot probes.
+  - MAC PHY (1): QEMU models RTL8211E because the C410X vendor firmware (C4) reads the
+    RTL8211E PHY-specific status to bring eth0 up; the KGPE-D16's RTL8201CP would break C4.
+- **Achievable-but-larger (4), not oracle-blocked, need substantial models:** USB UDC/vhub
+  (virtual media), LPC KCS/BT state machine + iLPC2AHB, I2C full SMBus read-back (harness),
+  P2A host-side PCI endpoint. Each is a focused multi-step effort.
