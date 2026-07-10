@@ -60,10 +60,20 @@ redirection is enabled and saved, the serial port replaces both.
   driving the USB link, i.e. probably **not in Linux right now**. Next: read the
   Magewell + COM1 to establish the live screen state before doing anything.
 
+### 2026-07-10 00:30 UTC — ASUS is ON, in SystemRescue Linux
+- Magewell frame (720×576 text console) clearly shows **`SystemRescue 13.01
+  (x86_64)` … `sysrescue login: root (autologin)` … `[root@sysrescue ~]#`** on
+  tty6 → the host **is netbooted to Linux** with a root shell.
+- ECM host side `192.168.222.1` still FAILED (host hasn't configured its USB NIC);
+  COM1 silent (redirection not enabled yet). Both expected.
+- Power: Tasmota plug **`au-plug-10`** (cold-cycle). rpi4 has ffmpeg + v4l2-ctl.
+- Next: build reliable rig tooling (keysend on opi, frame-grab + serial logger on
+  rpi4), then do a live keyboard test by typing into the root shell.
+
 ## Plan
 1. [x] Verify SSH access to opi1pc-a + rpi4; set up mux config.
 2. [x] Confirm opi HID gadget is a boot-compatible keyboard on `/dev/hidg0`.
-3. [ ] Determine current ASUS state (Magewell frame + COM1 read).
+3. [x] Determine current ASUS state → ON, in SystemRescue Linux (Magewell).
 4. [ ] Set up daemons/helpers: keysend (opi), screen-grab (rpi4), serial-log (rpi4).
 5. [ ] Ensure ASUS is netbooted to Linux; verify host sees the emulated keyboard
        (lsusb/dmesg over the ECM link) and that keystrokes register.
