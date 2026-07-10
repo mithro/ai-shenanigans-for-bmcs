@@ -256,9 +256,24 @@ Fully faithful: Timer, WDT, UART, GPIO. Register/engine faithful (depth gaps): S
 MAC, I2C, SDRAM. Model gaps documented (opt-in/gated/unmodelled): VIC, RTC, PWM, SMC,
 DDR2-SDMC, RTL8201CP-PHY, SCU-reset-table.
 
+### LPC + Video + USB + AHB: test+doc done; all model gaps (documented, tasked)
+- **LPC** (§; KCS/BT/iLPC2AHB): the region responds but QEMU `aspeed_lpc` uses the **AST2400
+  0x140 layout**, so the G3 KCS(0x24-0x44)/BT(0x48-0x68)/iLPC2AHB(0x80-0x8C) are unmodelled
+  → OpenBMC IPMI KCS/BT + culvert `ilpc` not faithfully addressable. Gap (xfail).
+- **Video** (0x1E700000, KVM): **UNMODELLED** → OpenBMC KVM can't be verified. Needs new device.
+- **USB** (0x1E6A0000, device/vhub): **UNMODELLED** for virtual media; **and QEMU exposes a
+  phantom EHCI @0x1E6A1000 the AST2050 lacks**. Needs UDC model + EHCI removal.
+- **AHB** (0x1E600000): unmodelled but not boot-blocking (QEMU maps DRAM at 0x0 directly).
+
+### Progress: 16 peripherals covered — breadth nearly complete (all C1–C4 boots green)
+Fully faithful: Timer, WDT, UART, GPIO. Register/engine-faithful (depth gaps): SCU rev-id,
+MAC, I2C, SDRAM. Documented model gaps (opt-in/unmodelled/wrong-layout, each tasked): VIC,
+RTC, PWM, SMC, LPC, Video, USB, AHB, DDR2, RTL8201CP-PHY, SCU-reset-table. Suite: 40/28.
+
 ### Next
 - Regularly `git merge origin/main` (user directive).
-- Remaining peripherals: LPC/KCS, AHB remap, Video (KVM), USB (virtual media), P2A (culvert).
-- Then the oracle-safe *depth* work (highest OpenBMC value): new `aspeed.pwm-ast2050`
-  (fan hwmon), per-board RTL8201CP PHY, G3 kernel VIC/RTC drivers, reduce C4 RE-patch debt.
-- Then Phase 6: OpenBMC over TFTP+NFS on the faithful machine (modern-kernel path).
+- Last breadth peripheral: **P2A/PCIe-to-AHB** (culvert p2a).
+- Oracle-safe *depth* work (highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan
+  hwmon), `aspeed.video-ast2050` (KVM), USB UDC + EHCI removal, G3 `aspeed.lpc-ast2050`
+  (KCS/BT/iLPC2AHB), per-board RTL8201CP PHY, G3 kernel VIC/RTC drivers, reduce C4 patch debt.
+- Then **Phase 6**: modern OpenBMC over TFTP+NFS on the faithful machine.
