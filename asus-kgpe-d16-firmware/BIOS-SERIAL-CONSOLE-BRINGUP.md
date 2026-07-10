@@ -90,6 +90,16 @@ redirection is enabled and saved, the serial port replaces both.
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
 9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
 
+### 2026-07-10 00:46 UTC — ✅ **PRIMARY GOAL: boot messages now on the COM port**
+- After F10 Save & Exit (CMOS written, board rebooted), the rpi4 serial logger on
+  `/dev/serial-com1` @115200 immediately captured **live POST output** — VT100
+  escape sequences (`ESC[21;00H`, colour `ESC[1;30;47m`) and the real POST text
+  **`BMC is booting, please wait ...`** + the `3700` code. The Magewell VGA frame
+  shows the identical text → **VGA and COM1 are now mirrored**. Redirection to
+  COM1 works. (Raw sample in the log; `com1.log` 138 → 2557 B on the first POST.)
+- Remaining: drive the **Setup menu over the comm port** (enter Setup + change a
+  value using only serial) to close out "change BIOS settings just via the port".
+
 ### 2026-07-10 00:45 UTC — **entered BIOS via emulated keyboard; fixed redirection to COM1**
 - Soft-rebooted host; POST showed `BMC is booting… / BMC failed …` (BMC being
   worked on separately — BIOS continues past it), then reached Setup. **DEL spam
