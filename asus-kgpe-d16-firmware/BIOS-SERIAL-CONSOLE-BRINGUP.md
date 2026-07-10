@@ -1,0 +1,73 @@
+# Driving the KGP(M)E-D16 BIOS over serial (via emulated USB keyboard)
+
+**Goal:** change the ASUS KGP(M)E-D16 BIOS settings so that (a) all POST/boot
+messages appear on the **COM1 serial port**, and (b) the BIOS Setup menu can be
+navigated **entirely over the comm port** — no Magewell video + no USB keyboard
+needed once redirection is on.
+
+To *make* that change we drive the BIOS the hard way first: an **emulated USB
+keyboard** (opi1pc-a in USB-gadget mode) types into the BIOS while the
+**Magewell** HDMI capture on the rpi4 lets us see the screen. Once console
+redirection is enabled and saved, the serial port replaces both.
+
+## Infrastructure / topology
+
+```
+                 +---------------------- ASUS KGP(M)E-D16 (AST2050 BMC) ---------------------+
+                 |  host x86 (Opteron)                              BMC (AST2050)            |
+   USB kbd  <----+  USB port  <=== emulated HID boot keyboard                                |
+   USB net  <----+  USB port  <=== ECM ethernet (192.168.222.1 host / .2 opi)               |
+   HDMI     ----->  VGA/HDMI  ===> Magewell capture                                          |
+   COM1     ----->  serial    ===> FTDI USB-serial                                           |
+                 +----------------------------------------------------------------------------+
+                        |                    |                         |
+                   opi1pc-a             rpi4-asus-...            rpi4-asus-...
+                 (/dev/hidg0)          (/dev/video0)          (/dev/serial-com1)
+                 USB gadget board       Magewell HDMI            FTDI = ASUS COM1
+```
+
+### Access (SSH multiplex config)
+`tmp/hw-access/ssh_config` — persistent ControlMaster so ssh calls are fast/reliable.
+- `ssh -F tmp/hw-access/ssh_config opi …`  → opi1pc-a (Orange Pi, USB gadget)
+- `ssh -F tmp/hw-access/ssh_config rpi4 …` → rpi4-asus-aspeed2050-dev (Magewell + serial + power)
+
+### opi1pc-a — USB gadget (the emulated keyboard)
+- UDC: `musb-hdrc.4.auto` (Allwinner sunxi MUSB OTG @ `1c19000.usb`), **bound/active**.
+- configfs gadget `gadget`: composite `0x1d6b:0x0104`, functions **hid.usb0 + ecm.usb0**.
+- **hid.usb0 is a BIOS-compatible boot keyboard**: `protocol=1` (keyboard),
+  `subclass=1` (**boot**), `report_length=8`, report descriptor = the standard
+  63-byte boot-keyboard descriptor (8-byte reports: modifiers, reserved, 6 keycodes).
+- Write 8-byte HID reports to **`/dev/hidg0`** to send keystrokes.
+- ECM side: opi `usb0 = 192.168.222.2/24`; ASUS host expected at `192.168.222.1`
+  (gives a network path into the host OS when Linux is up).
+- Passwordless sudo available; packages installable.
+
+### rpi4-asus-aspeed2050-dev — eyes, serial, power
+- `/dev/video0` — Magewell HDMI capture (the screen).
+- `/dev/serial-com1` → `ttyUSB1` — **ASUS host COM1** (target for redirection).
+- `/dev/serial-bmc-console` → `ttyAMA0` — AST2050 BMC UART.
+- `/dev/serial-ulx3s`/`spispy` → `ttyUSB0` — SPI flash tooling.
+- Power control over the ASUS (Tasmota plug) + passwordless sudo.
+
+## Progress log
+
+### 2026-07-10 00:21 UTC — baseline / access established
+- SSH mux config created; both bridges reachable (opi1pc-a, rpi4-asus-…), reuse ~0.5s.
+- Confirmed opi1pc-a already exposes a **BIOS-compatible boot-protocol keyboard**
+  on `/dev/hidg0` (+ ECM ethernet), bound to the UDC.
+- Confirmed rpi4 has Magewell `/dev/video0` and ASUS COM1 on `/dev/serial-com1`.
+- ECM neighbour `192.168.222.1` (ASUS host) shows **FAILED** → host not currently
+  driving the USB link, i.e. probably **not in Linux right now**. Next: read the
+  Magewell + COM1 to establish the live screen state before doing anything.
+
+## Plan
+1. [x] Verify SSH access to opi1pc-a + rpi4; set up mux config.
+2. [x] Confirm opi HID gadget is a boot-compatible keyboard on `/dev/hidg0`.
+3. [ ] Determine current ASUS state (Magewell frame + COM1 read).
+4. [ ] Set up daemons/helpers: keysend (opi), screen-grab (rpi4), serial-log (rpi4).
+5. [ ] Ensure ASUS is netbooted to Linux; verify host sees the emulated keyboard
+       (lsusb/dmesg over the ECM link) and that keystrokes register.
+6. [ ] Reboot; enter BIOS Setup using the emulated keyboard, confirmed via Magewell.
+7. [ ] In BIOS: enable Console Redirection, baud/terminal, "Always after POST".
+8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
+9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
