@@ -1,0 +1,8 @@
+NAME  ALIGNMENT ID-LINK ID DISC-ALN DAX DISC-GRAN DISK-SEQ DISC-MAX DISC-ZERO FSAVAIL FSROOTS FSSIZE FSTYPE   FSUSED FSUSE% FSVER GROUP HCTL HOTPLUG KNAME LABEL LOG-SEC MAJ:MIN MAJ MIN MIN-IO MODE       MODEL  MQ OPT-IO OWNER PARTFLAGS PARTLABEL PARTN PARTTYPE PARTTYPENAME PARTUUID PATH       PHY-SEC PKNAME PTTYPE PTUUID  RA RAND REV RM RO ROTA RQ-SIZE SCHED SERIAL SIZE START STATE SUBSYSTEMS MOUNTPOINT                MOUNTPOINTS               TRAN TYPE UUID VENDOR WSAME WWN ZONED ZONE-SZ ZONE-WGRAN ZONE-APP ZONE-NR ZONE-OMAX ZONE-AMAX
+loop0         0                   0   0        4K        2       4G         0       0 /         1.1G squashfs   1.1G   100% 4.0   disk             0 loop0           512   7:0   7   0      512 brw-rw----         1      0 root                                                           /dev/loop0     512                      128    0      0  1    0     128 none         1.1G             block      /run/archiso/sfs/airootfs /run/archiso/sfs/airootfs      loop                0B     none       0B         0B       0B       0         0         0
+===== storage controllers =====
+00:11.0 SATA controller [0106]: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 SATA Controller [IDE mode] [1002:4390]
+00:14.1 IDE interface [0101]: Advanced Micro Devices, Inc. [AMD/ATI] SB7x0/SB8x0/SB9x0 IDE Controller [1002:439c]
+
+ls: cannot access '/dev/sd*': No such file or directory
+ls: cannot access '/dev/nvme*': No such file or directory

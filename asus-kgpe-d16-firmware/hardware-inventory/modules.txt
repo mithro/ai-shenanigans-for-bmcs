@@ -1,0 +1,67 @@
+Module                  Size  Used by
+jc42                   12288  0
+nct6775_core           86016  0
+w83627ehf              40960  0
+hwmon_vid              12288  1 w83627ehf
+w83795                 65536  0
+rfkill                 45056  1
+snd_hda_codec_nvhdmi    16384  4
+snd_hda_codec_hdmi     61440  1 snd_hda_codec_nvhdmi
+snd_hda_intel          69632  0
+kvm_amd               249856  0
+snd_hda_codec         217088  3 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec_nvhdmi
+snd_hda_core          143360  3 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec
+snd_intel_dspcfg       49152  1 snd_hda_intel
+snd_intel_sdw_acpi     16384  1 snd_intel_dspcfg
+snd_hwdep              24576  1 snd_hda_codec
+snd_pcm               212992  4 snd_hda_codec_hdmi,snd_hda_intel,snd_hda_codec,snd_hda_core
+ccp                   200704  1 kvm_amd
+snd_timer              57344  1 snd_pcm
+snd                   159744  6 snd_hda_codec_hdmi,snd_hwdep,snd_hda_intel,snd_hda_codec,snd_timer,snd_pcm
+kvm                  1425408  1 kvm_amd
+soundcore              16384  1 snd
+sp5100_tco             20480  0
+irqbypass              16384  1 kvm
+ipmi_si                98304  0
+ast                    94208  0
+i2c_piix4              36864  0
+ipmi_devintf           24576  0
+pcspkr                 12288  0
+ipmi_msghandler        94208  2 ipmi_devintf,ipmi_si
+i2c_smbus              20480  1 i2c_piix4
+acpi_cpufreq           32768  1
+fam15h_power           12288  0
+k10temp                12288  0
+mac_hid                12288  0
+sg                     53248  0
+bpf_preload            20480  0
+overlay               245760  1
+squashfs               94208  1
+loop                   45056  2
+dm_crypt               69632  0
+dm_mod                233472  1 dm_crypt
+encrypted_keys         24576  1 dm_crypt
+trusted                45056  2 encrypted_keys,dm_crypt
+asn1_encoder           12288  1 trusted
+tee                    57344  1 trusted
+nouveau              3756032  0
+gpu_sched              69632  1 nouveau
+drm_gpuvm              53248  1 nouveau
+mxm_wmi                12288  1 nouveau
+drm_ttm_helper         16384  2 nouveau
+ttm                   126976  2 drm_ttm_helper,nouveau
+video                  81920  1 nouveau
+wmi                    32768  3 video,mxm_wmi,nouveau
+drm_exec               12288  2 drm_gpuvm,nouveau
+i2c_algo_bit           24576  2 ast,nouveau
+ata_generic            12288  0
+polyval_clmulni        12288  0
+e1000e                376832  0
+drm_display_helper    278528  1 nouveau
+ghash_clmulni_intel    12288  0
+pata_acpi              12288  0
+aesni_intel           102400  0
+ptp                    57344  1 e1000e
+cec                    98304  1 drm_display_helper
+pps_core               32768  1 ptp
+pata_atiixp            12288  0

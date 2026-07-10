@@ -1,0 +1,19 @@
+# systemd unit for the COM1 serial daemon on rpi4-asus-aspeed2050-dev.
+# Install: sudo cp kgpe-seriald.service /etc/systemd/system/ &&
+#          sudo systemctl enable --now kgpe-seriald.service
+# Makes seriald.py the single owner of /dev/serial-com1 (RX->log, TX<-FIFO),
+# surviving reboots and auto-restarting on failure.
+[Unit]
+Description=KGPE-D16 host COM1 serial daemon (single owner of /dev/serial-com1)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=tim
+Group=dialout
+ExecStart=/usr/bin/python3 /home/tim/rig-tools/seriald.py --port /dev/serial-com1 --baud 115200 --log /home/tim/hw-capture/com1.log --tx /home/tim/hw-capture/com1.tx
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+Linux sysrescue 6.18.34-1-lts #1 SMP PREEMPT_DYNAMIC Tue, 02 Jun 2026 14:14:47 +0000 x86_64 GNU/Linux
+
+rescue: SystemRescue 13.01
+
+  Static hostname: sysrescue
+        Icon name: computer-desktop
+          Chassis: desktop 🖥️
+Chassis Asset Tag: Asset-1234567890
+       Machine ID: 0fcee8e198d847bdae6e5f98194444e2
+          Boot ID: dc6b1bc28e134445aca995adcc0d908f
+     Product UUID: 1e0033e0-008c-7200-e263-f07959393e79
+ Operating System: SystemRescue 13.01
+           Kernel: Linux 6.18.34-1-lts
+     Architecture: x86-64
+  Hardware Vendor: ASUSTeK Computer INC.
+   Hardware Model: KGP_M_E-D16
+  Hardware Serial: System Serial Number
+ Hardware Version: System Version
+ Firmware Version: 3309
+    Firmware Date: Thu 2016-06-16
+     Firmware Age: 9y 11month 1w 4d
