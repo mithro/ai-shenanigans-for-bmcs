@@ -89,3 +89,13 @@ redirection is enabled and saved, the serial port replaces both.
 7. [ ] In BIOS: enable Console Redirection, baud/terminal, "Always after POST".
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
 9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
+
+### 2026-07-10 00:37 UTC — **COM1 serial wire validated @115200**
+- Typed (via emulated kbd) `stty -F /dev/ttyS0 115200 && echo SERIALPROOF-XYZ >
+  /dev/ttyS0` on the host; the rpi4 serial logger captured
+  `[10:01:48] SERIALPROOF-XYZ` → host COM1 (`ttyS0`) → rpi4 `/dev/serial-com1`
+  works at **115200** (the baud we'll set for BIOS redirection). Whole path green:
+  keyboard ✅, Magewell ✅, COM1 serial ✅, power = Tasmota `au-plug-10`.
+- Next: reboot host (soft `reboot`, keeps the gadget attached), spam **DEL** to
+  enter AMIBIOS Setup, navigate to Remote Access, enable redirection @115200 +
+  "Always after POST".
