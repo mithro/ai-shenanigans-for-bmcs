@@ -119,10 +119,23 @@ match its own argv. Power: Tasmota plug `au-plug-10` (cold cycle).
 3. [x] Determine current ASUS state → ON, in SystemRescue Linux (Magewell).
 4. [x] Set up daemons/helpers: keysend (opi), screen-grab (rpi4), serial-log (rpi4).
 5. [x] Verify host sees the emulated keyboard + keystrokes register (Magewell).
-6. [ ] Reboot; enter BIOS Setup using the emulated keyboard, confirmed via Magewell.
-7. [ ] In BIOS: enable Console Redirection, baud/terminal, "Always after POST".
-8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
-9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
+6. [x] Reboot; enter BIOS Setup using the emulated keyboard, confirmed via Magewell.
+7. [x] In BIOS: redirection was Enabled/115200/Always; fixed port COM2→COM1 + VT100.
+8. [x] Save + reboot; POST/boot (POST, device table, PXE, boot loader) appear on `/dev/serial-com1`.
+9. [x] Confirm the BIOS menu is fully drivable over the comm port alone (enter via
+       serial DEL, navigate + open change-dialogs + F10 Save via serialkey).
+
+## STATUS: ✅ BOTH GOALS COMPLETE (2026-07-10)
+- **All boot messages on COM1** — POST → BMC-status → memory/device init → PXE
+  (Intel Boot Agent) → PXELINUX → kernel handoff all stream to `/dev/serial-com1`
+  @115200; `serialscreen.py` renders the firmware UI faithfully.
+- **BIOS settings changeable over COM1 alone** — enter Setup by sending DEL over
+  serial during POST, navigate every menu, open change-popups, and F10-Save, with
+  no USB keyboard or Magewell. Demonstrated end-to-end (incl. a serial save+exit).
+- Redirection config persists across reboots (CMOS write durable).
+- Follow-ups (optional, not required by the goal): add `console=ttyS0,115200` to the
+  PXE append so the *OS* console is on serial too (then even reboots are serial-only);
+  set the RTC clock (reads `2099`, cosmetic — settings persist regardless).
 
 ### 2026-07-10 00:57 UTC — ✅ **SECOND GOAL: BIOS Setup fully driven over the comm port**
 - Rebooted; this time entered Setup using **only the serial port**: spammed
