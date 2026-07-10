@@ -102,11 +102,11 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 7 | AHB controller + remap | 0x1E600000 | boot remap (0x0↔DRAM) | ☐ | ☐ | ◐ | ☐ | 1 |
 | 8 | ftgmac100 MAC1 (RMII + RTL8201CP PHY) | 0x1E660000 | **netboot/NFS**, network | ☑ | ☑ | ◐ | ◐ | 2 |
 | 9 | MDIO / PHY | in MAC | link, autoneg | ☑ | ☑ | ◐ | ◐ | 2 |
-| 10 | SMC / SPI flash controller (legacy) | 0x16000000 regs · data @0x10000000 | flash probe (we boot from RAM) | ☐ | ☐ | ☐ | ☐ | 2 |
+| 10 | SMC / SPI flash controller (legacy) | 0x16000000 regs · data @0x10000000 | flash probe (we boot from RAM) | ☑ | ☑ | ☐ | ◐ | 2 |
 | 11 | I2C controller (multiple engines) | 0x1E78A000 | sensors, EEPROM, PSU | ☑ | ☑ | ◐ | ◐ | 3 |
 | 12 | GPIO | 0x1E780000 | power ctl, presence, LEDs | ☑ | ☑ | ◐ | ☑ | 3 |
-| 13 | PWM / tach | 0x1E786000 | fan control/monitor | ☐ | ☐ | ☐ | ☐ | 3 |
-| 14 | RTC | 0x1E781000 | time | ☐ | ☐ | ☐ | ☐ | 3 |
+| 13 | PWM / tach | 0x1E786000 | fan control/monitor | ☑ | ☑ | ☐ | ◐ | 3 |
+| 14 | RTC | 0x1E781000 | time | ☑ | ☑ | ☐ | ◐ | 3 |
 | 15 | LPC (KCS/BT IPMI, SuperIO, iLPC2AHB) | 0x1E789000 | host IPMI, culvert ilpc | ☐ | ☐ | ☐ | ☐ | 3 |
 | 16 | VUART / PUART | 0x1E787000 / TBD | SOL, host serial passthrough | ☐ | ☐ | ☐ | ☐ | 4 |
 | 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☐ | ☐ | ☐ | ☐ | 4 |

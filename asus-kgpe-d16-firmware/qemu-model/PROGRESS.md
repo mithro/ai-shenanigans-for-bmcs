@@ -240,8 +240,25 @@ change): Timer, WDT, UART, GPIO. Register+engine faithful w/ documented depth ga
 MAC(PHY id), I2C(readback). rev-id wired. Opt-in/gated: G3 SCU reset table, G3 VIC, DDR2,
 RTL8201CP PHY. Suite: 32 passed, 17 xfailed — every xfail has a datasheet cite + task.
 
+### RTC + PWM + SMC: test+doc done; models are gaps (documented, oracle-gated)
+- **RTC** (§24, counter-style day/hour/min/sec, reload+restart-magic 0x5A): the machine's
+  AST2400 `aspeed_rtc` uses a different layout → G3-layout checks fail (xfail). Faithful
+  counter-style RTC + G3 kernel driver oracle-gated (co-evolution, like the VIC).
+- **PWM/tach** (§28, 4 PWM + 16 tach): **UNMODELLED** (PTCR00 reads 0). Blocks OpenBMC fan
+  hwmon. Needs a new `aspeed.pwm-ast2050` device (low oracle-risk; CI-validate).
+- **SMC** (§11, legacy flash ctrl @0x16000000, data @0x10000000): **UNMODELLED** (mainline
+  models the FMC @0x1E620000). Boots use the FMC path, so unaffected. Needs a new
+  `aspeed.smc-ast2050` + flash map (oracle-gated).
+- Suite: 35 passed, 24 xfailed.
+
+### Progress: 12 peripherals covered (all C1–C4 boots green throughout)
+Fully faithful: Timer, WDT, UART, GPIO. Register/engine faithful (depth gaps): SCU(rev-id),
+MAC, I2C, SDRAM. Model gaps documented (opt-in/gated/unmodelled): VIC, RTC, PWM, SMC,
+DDR2-SDMC, RTL8201CP-PHY, SCU-reset-table.
+
 ### Next
 - Regularly `git merge origin/main` (user directive).
-- Continue: RTC, PWM/tach, LPC/KCS, SMC, AHB remap, Video, USB. Then oracle-gated depth:
-  per-board RTL8201CP PHY, G3 kernel VIC driver, reduce C4 RE-patch debt so the opt-in G3
-  models wire in without breaking legacy. Then Phase 6: OpenBMC over TFTP+NFS.
+- Remaining peripherals: LPC/KCS, AHB remap, Video (KVM), USB (virtual media), P2A (culvert).
+- Then the oracle-safe *depth* work (highest OpenBMC value): new `aspeed.pwm-ast2050`
+  (fan hwmon), per-board RTL8201CP PHY, G3 kernel VIC/RTC drivers, reduce C4 RE-patch debt.
+- Then Phase 6: OpenBMC over TFTP+NFS on the faithful machine (modern-kernel path).
