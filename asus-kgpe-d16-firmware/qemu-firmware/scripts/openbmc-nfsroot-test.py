@@ -75,7 +75,10 @@ def main():
     ap.add_argument("--https-port", type=int, default=2443)
     ap.add_argument("--http-port", type=int, default=2080)
     ap.add_argument("--ssh-port", type=int, default=2222)
-    ap.add_argument("--mem", type=int, default=256)
+    # 128 MB = the faithful AST2050/KGPE-D16 DRAM size (machine default_ram_size,
+    # matches the DTS memory@40000000 reg 0x08000000). If modern OpenBMC OOMs in
+    # 128 MB that is itself a real faithfulness finding about the AST2050.
+    ap.add_argument("--mem", type=int, default=128)
     ap.add_argument("--boot-timeout", type=int, default=900,
                     help="seconds to wait for bmcweb/Redfish (ARM926 is slow)")
     args = ap.parse_args()
