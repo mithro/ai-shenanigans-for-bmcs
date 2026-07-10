@@ -531,3 +531,14 @@ Recovered the **vendor kernel symbols** (`vmlinux-to-elf` from kallsyms → 20 3
 **Honest status:** none of the three fixes is complete; each is a substantial focused effort with
 (for PLL/VIC) real legacy-boot risk. Deep diagnosis + groundwork done and precisely scoped; all
 diagnosis committed/pushed; diagnostic scripts in `tmp/c4work/*_diag.py`. Oracle stays green.
+
+### ✅ SMC / SPI-NOR (task #58) — DONE (2026-07-11)
+Modelled the legacy SMC's UMA (user-mode) SPI path end-to-end. Reverse-engineered the protocol
+from the vendor kernel (ast2050_smc_cs_low/high, uma_read, get_baddr) via the recovered symbols:
+CE control regs SMC04/08/0C, (reg&0x7)==0x3 selects the flash (user mode + CE# active); the flash
+window 0x10000000..0x16000000 byte-bangs one SPI byte per access. Extended `aspeed_smc_ast2050.c`
+with an SSI bus + m25p80 (mx25l12805d, JEDEC 0xC22018). **Result: C4 reads 'Detect SPI Flash ID :
+MX25L128D', the non-fatal div0 is GONE (2->0), and C4 still boots to the BMC web service
+(web-test PASS).** Added a bare-metal UMA JEDEC fwtest asserting 0xC22018 — suite **56 -> 57 passed
+/ 18 xfailed**. Gated on the G3 SoC; the modern kernel uses the FMC so is unaffected. Commits:
+qemu submodule 69d734ca68 + superproject. **One of the three deep tasks now COMPLETE + tested.**
