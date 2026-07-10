@@ -578,3 +578,14 @@ boots to its BMC web service (HTTP 301 Mbedthis-Appweb) on the G3 VIC — 116→
 WDT reset. The machine is now faithfully G3 (single-bank VIC + one-pulse-per-expiry timer). qemu
 submodule: aspeed_timer.c + aspeed_ast2400.c. **ALL THREE deep tasks (SMC #58, PLL #55, VIC #57)
 COMPLETE; the AST2050 boots both our kernel and the legacy oracle on the faithful interrupt path.**
+
+### 🎉 Phase 6b RE-VALIDATED on the faithful G3 VIC (2026-07-11)
+Now that the machine wires the faithful G3 VIC + one-pulse-per-expiry timer (above), re-ran the
+headline deliverable — **real OpenBMC (bmcweb/Redfish) over NFS** — on the faithful interrupt path
+(not the AST2400 stand-in it was first proven on). Booted the stripped `obmc-phosphor-image-ast2050-
+redfish` rootfs (quanta-q71l/ARMv5TE, already staged at `/export/openbmc-kgpe-d16`) with the NEW
+g3-vic kernel (zImage-kgpe-d16, aspeed,ast2050-vic DTB) on `-M kgpe-d16-bmc -m 64`:
+`Memory: 52376K/65536K`, NFS root mounted, systemd → **bmcweb up, 0 OOM**, `GET /redfish/v1` →
+**HTTP 200, RedfishVersion 1.17.0**. Evidence: `../openbmc/results/redfish-64mb-g3vic-boot.log`.
+**The complete OpenBMC system now boots over NFS inside a QEMU faithfully emulating the AST2050
+(real single-bank G3 VIC + pulse timer + 64 MB DDR), verified end-to-end.**

@@ -11,6 +11,19 @@ This directory holds a **stripped image that fits the real 64 MB**: the Redfish
 API (`bmcweb`) plus only the phosphor services it needs to boot and answer —
 nothing else.
 
+## Status — PASS on the faithful G3 machine
+
+Real OpenBMC (bmcweb/Redfish) boots over NFS at `mem=64M` on `-M kgpe-d16-bmc` and
+answers `GET /redfish/v1` → HTTP 200, `RedfishVersion 1.17.0`. Validated twice:
+- **2026-07-10** on the interim AST2400-VIC machine (`results/redfish-64mb-boot.log`).
+- **2026-07-11** RE-VALIDATED on the **faithful G3 VIC** (`TYPE_ASPEED_2050_VIC` +
+  one-pulse-per-expiry timer) with the `irq-aspeed-g3-vic` kernel driver and the
+  `aspeed,ast2050-vic` DTS — i.e. the real AST2050 interrupt path, not the AST2400
+  stand-in. `Memory: 52376K/65536K available`, systemd → bmcweb, 0 OOM.
+  Evidence: `results/redfish-64mb-g3vic-boot.log`. This is the headline deliverable
+  — the complete OpenBMC system booting over NFS inside a QEMU faithfully emulating
+  the AST2050.
+
 ## `obmc-phosphor-image-ast2050-redfish.bb`
 
 A minimal `obmc-phosphor-image` variant. It `inherit obmc-phosphor-image` (the

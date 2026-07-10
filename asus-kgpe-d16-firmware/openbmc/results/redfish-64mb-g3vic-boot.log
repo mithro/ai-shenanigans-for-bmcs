@@ -1,0 +1,335 @@
+boot: asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 64 -nographic -monitor none -serial stdio -nic user,model=ftgmac100,hostfwd=tcp::2443-:443,hostfwd=tcp::2080-:80,hostfwd=tcp::2222-:22 -kernel asus-kgpe-d16-firmware/qemu-firmware/kernel/out/zImage-kgpe-d16 -dtb asus-kgpe-d16-firmware/qemu-firmware/kernel/out/aspeed-bmc-asus-kgpe-d16.dtb -append console=ttyS4,115200n8 mem=64M root=/dev/nfs rw ip=dhcp nfsroot=10.0.2.2:/export/openbmc-kgpe-d16,vers=3,tcp,nolock
+qemu-system-arm: warning: nic ftgmac100.1 has no peer
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #3 Sat Jul 11 06:51:37 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 mem=64M root=/dev/nfs rw ip=dhcp nfsroot=10.0.2.2:/export/openbmc-kgpe-d16,vers=3,tcp,nolock
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 16256
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 52376K/65536K available (7168K kernel code, 932K rwdata, 1852K rodata, 1024K init, 187K bss, 13160K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 29106 entries in 57 pages
+[    0.000000] ftrace: allocated 57 pages with 4 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000182] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.001875] Switching to timer-based delay loop, resolution 41ns
+[    0.005424] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=240000)
+[    0.005658] CPU: Testing write buffer coherency: ok
+[    0.006899] pid_max: default: 32768 minimum: 301
+[    0.017653] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.017723] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.050697] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.051216] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.052365] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.055123] ASPEED Unknown rev A0 (00000202)
+[    0.062944] devtmpfs: initialized
+[    0.087508] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.087634] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.088814] pinctrl core: initialized pinctrl subsystem
+[    0.100089] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.103853] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.165566] mc: Linux media interface: v0.10
+[    0.165775] videodev: Linux video capture interface: v2.00
+[    0.165945] pps_core: LinuxPPS API ver. 1 registered
+[    0.165967] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.166119] PTP clock support registered
+[    0.166225] EDAC MC: Ver: 3.0.0
+[    0.214635] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.256572] NET: Registered PF_INET protocol family
+[    0.257927] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.261799] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.261898] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.261979] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.262070] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.262229] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.263477] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.263703] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.265622] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.281072] RPC: Registered named UNIX socket transport module.
+[    0.281127] RPC: Registered udp transport module.
+[    0.281148] RPC: Registered tcp transport module.
+[    0.281164] RPC: Registered tcp-with-tls transport module.
+[    0.281178] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.309337] workingset: timestamp_bits=30 max_order=14 bucket_order=0
+[    0.310421] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.313814] NFS: Registering the id_resolver key type
+[    0.315034] Key type id_resolver registered
+[    0.315084] Key type id_legacy registered
+[    0.315430] jffs2: version 2.2. (SUMMARY)  �� 2001-2006 Red Hat, Inc.
+[    0.320921] NET: Registered PF_ALG protocol family
+[    0.321904] io scheduler bfq registered
+[    0.365976] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.410531] printk: console [ttyS4] disabled
+[    0.414444] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 19, base_baud = 1500000) is a 16550A
+[    0.417591] printk: console [ttyS4] enabled
+[    0.464441] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.523644] loop: module loaded
+[    0.636104] random: crng init done
+[    0.657303] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    0.662934] Generic PHY fixed-0:00: attached PHY driver (mii_bus:phy_addr=fixed-0:00, irq=POLL)
+[    0.676702] ftgmac100 1e660000.ethernet eth0: irq 20, mapped at 8bb33ef9
+[    0.678256] i2c_dev: i2c /dev entries driver
+[    0.679187] Driver for 1-wire Dallas network protocol.
+[    0.688704] NET: Registered PF_INET6 protocol family
+[    0.737390] Segment Routing with IPv6
+[    0.737831] In-situ OAM (IOAM) with IPv6
+[    0.739125] NET: Registered PF_PACKET protocol family
+[    0.740062] 8021q: 802.1Q VLAN Support v1.8
+[    0.740725] Key type dns_resolver registered
+[    0.869816] printk: console [netcon0] enabled
+[    0.870291] netconsole: network logging started
+[    0.907631] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control off
+[    0.975682] Sending DHCP requests ., OK
+[    0.980790] IP-Config: Got DHCP answer from 10.0.2.2, my address is 10.0.2.15
+[    0.981353] IP-Config: Complete:
+[    0.981478]      device=eth0, hwaddr=52:54:00:12:34:56, ipaddr=10.0.2.15, mask=255.255.255.0, gw=10.0.2.2
+[    0.981803]      host=10.0.2.15, domain=, nis-domain=(none)
+[    0.981976]      bootserver=10.0.2.2, rootserver=10.0.2.2, rootpath=
+[    0.982025]      nameserver0=10.0.2.3
+[    1.058009] clk: Disabling unused clocks
+[    1.148120] VFS: Mounted root (nfs fil
+[nfs] root mounted over NFS ('VFS: Mounted root')
+esystem) on device 0:13.
+[    1.150454] devtmpfs: mounted
+[    1.178582] Freeing unused kernel image (initmem) memory: 1024K
+[    1.179854] Checked W+X mappings: passed, no W+X pages found
+[    1.180247] Run /sbin/init as init process
+[    2.105380] systemd[1]: System time advanced to timestamp on /var/lib/systemd/timesync/clock: Fri 2026-07-10 12:54:35 UTC
+P+q6E616D65\[6n[32766;32766H[6n[!p]104\[0m[?7h[1G[0J[    3.151114] systemd[1]: systemd 259.5 running in system mode (+PAM -AUDIT -SELINUX -APPARMOR -IMA +IPE -SMACK +SECCOMP -GCRYPT -GNUTLS -OPENSSL -ACL +BLKID -CURL -ELFUTILS -FIDO2 -IDN2 -IDN -KMOD -LIBCRYPTSETUP -LIBCRYPTSETUP_PLUGINS +LIBFDISK -PCRE2 -PWQUALITY -P11KIT -QRENCODE -TPM2 -BZIP2 -LZ4 -XZ -ZLIB +ZSTD -BPF_FRAMEWORK -BTF -XKBCOMMON -UTMP -SYSVINIT -LIBARCHIVE)
+[    3.182640] systemd[1]: Detected architecture arm.
+
+[0;1;39mWelcome to [0m[1mPhosphor OpenBMC (Phosphor OpenBMC Project Reference Distro) None[0m[0;1;39m![0m
+
+[    3.266962] systemd[1]: Hostname set to <quanta-q71l>.
+]3008;start=43c4836a40244dcba6532cc0b51e24d0;user=root;hostname=quanta-q71l;machineid=29d32552ac0c400cabede3e4e37da75c;bootid=a65cda26f04d4b699493fc31eea377c3;pid=1;comm=systemd;type=boot\[    3.429511] systemd[1]: Using hardware watchdog /dev/watchdog0: 'aspeed_wdt', version 0.
+[    3.441039] systemd[1]: Watchdog running with a hardware timeout of 2min.
+[    3.442447] systemd[1]: Watchdog: reading from /sys/dev/char/247:0/pretimeout_governor
+[    3.444285] systemd[1]: Watchdog: failed to read pretimeout governor: No such file or directory
+[    3.445639] systemd[1]: Watchdog: setting pretimeout_governor to 'panic' via '/sys/dev/char/247:0/pretimeout_governor'
+[    3.447079] systemd[1]: Failed to set watchdog pretimeout_governor to 'panic': No such file or directory
+[    3.447672] systemd[1]: Failed to set watchdog pretimeout governor to 'panic', ignoring: No such file or directory
+[    5.584727] systemd[1]: /usr/lib/systemd/system/bmcweb.service:14: StateDirectory= path is absolute
+[redfish] polling ServiceRoot over the slirp hostfwd ...
+  ... not ready yet: <urlopen error [Errno 104] Connection reset by peer>
+, ignoring: /home/root
+[    6.849465] systemd[1]: Queued start job for default target Multi-User System.
+[    6.919090] systemd[1]: Created slice Slice /system/getty.
+[[0;32m  OK  [0m] Created slice [0;1;39mSlice /system/getty[0m.
+[    6.931841] systemd[1]: Created slice Slice /system/modprobe.
+[[0;32m  OK  [0m] Created slice [0;1;39mSlice /system/modprobe[0m.
+[    6.941628] systemd[1]: Created slice Slice /system/phosphor-certificate-manager.
+[[0;32m  OK  [0m] Created slice [0;1;39mSlice /system/phosphor-certificate-manager[0m.
+[    6.951891] systemd[1]: Created slice Slice /system/serial-getty.
+[[0;32m  OK  [0m] Created slice [0;1;39mSlice /system/serial-getty[0m.
+[    6.959450] systemd[1]: Started Dispatch Password Requests to Console Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39mDispatch Password Requests to Console Directory Watch[0m.
+[    6.965353] systemd[1]: Started Forward Password Requests to Wall Directory Watch.
+[[0;32m  OK  [0m] Started [0;1;39mForward Password Requests to Wall Directory Watch[0m.
+[    6.969175] systemd[1]: Expecting device /dev/ttyS4...
+         Expecting device [0;1;39m/dev/ttyS4[0m...
+[    6.972386] systemd[1]: Reached target Path Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mPath Units[0m.
+[    6.976960] systemd[1]: Reached target Remote File Systems.
+[[0;32m  OK  [0m] Reached target [0;1;39mRemote File Systems[0m.
+[    6.980142] systemd[1]: Reached target Slice Units.
+[[0;32m  OK  [0m] Reached target [0;1;39mSlice Units[0m.
+[    6.982931] systemd[1]: Reached target Swaps.
+[[0;32m  OK  [0m] Reached target [0;1;39mSwaps[0m.
+[    6.993983] systemd[1]: Listening on Syslog Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mSyslog Socket[0m.
+[    7.022412] systemd[1]: Listening on Query the User Interactively for a Password.
+[[0;32m  OK  [0m] Listening on [0;1;39mQuery the User Interactively for a Password[0m.
+[    7.056181] systemd[1]: Listening on Process Core Dump Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mProcess Core Dump Socket[0m.
+[    7.080066] systemd[1]: Listening on Credential Encryption/Decryption.
+[[0;32m  OK  [0m] Listening on [0;1;39mCredential Encryption/Decryption[0m.
+[    7.112359] systemd[1]: Listening on Factory Reset Management.
+[[0;32m  OK  [0m] Listening on [0;1;39mFactory Reset Management[0m.
+[    7.119858] systemd[1]: Journal Audit Socket skipped, unmet condition check ConditionSecurity=audit
+[    7.127321] systemd[1]: Listening on Journal Socket (/dev/log).
+[[0;32m  OK  [0m] Listening on [0;1;39mJournal Socket (/dev/log)[0m.
+[    7.133840] systemd[1]: Listening on Journal Sockets.
+[[0;32m  OK  [0m] Listening on [0;1;39mJournal Sockets[0m.
+[    7.165739] systemd[1]: Listening on Console Output Muting Service Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mConsole Output Muting Service Socket[0m.
+[    7.176404] systemd[1]: Listening on Network Management Resolve Hook Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mNetwork Management Resolve Hook Socket[0m.
+[    7.188046] systemd[1]: Listening on Network Management Varlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mNetwork Management Varlink Socket[0m.
+[    7.195738] systemd[1]: Listening on Network Management Netlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mNetwork Management Netlink Socket[0m.
+[    7.202501] systemd[1]: Listening on Resolve Monitor Varlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mResolve Monitor Varlink Socket[0m.
+[    7.207392] systemd[1]: Listening on Resolve Service Varlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mResolve Service Varlink Socket[0m.
+[    7.214461] systemd[1]: Listening on udev Control Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mudev Control Socket[0m.
+[    7.219083] systemd[1]: Listening on udev Kernel Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mudev Kernel Socket[0m.
+[    7.223607] systemd[1]: Listening on udev Varlink Socket.
+[[0;32m  OK  [0m] Listening on [0;1;39mudev Varlink Socket[0m.
+[    7.229902] systemd[1]: Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[    7.233847] systemd[1]: POSIX Message Queue File System skipped, unmet condition check ConditionPathExists=/proc/sys/fs/mqueue
+[    7.302156] systemd[1]: Mounting Kernel Debug File System...
+         Mounting [0;1;39mKernel Debug File System[0m...
+[    7.369988] systemd[1]: Mounting Kernel Trace File System...
+         Mounting [0;1;39mKernel Trace File System[0m...
+[    7.408286] systemd[1]: tmp.mount: x-systemd.graceful-option=usrquota specified, but option is not available, suppressing.
+[    7.471677] systemd[1]: Mounting Temporary Directory /tmp...
+         Mounting [0;1;39mTemporary Directory /tmp[0m...
+[    7.488648] systemd[1]: Load Kernel Module configfs skipped, unmet condition check ConditionKernelModuleLoaded=!configfs
+[    7.596041] systemd[1]: Mounting Kernel Configuration File System...
+         Mounting [0;1;39mKernel Configuration File System[0m...
+[    7.720525] systemd[1]: Starting Load Kernel Module efi_pstore...
+         Starting [0;1;39mLoad Kernel Module efi_pstore[0m...
+[    7.898433] systemd[1]: Starting Load Kernel Module fuse...
+         Starting [0;1;39mLoad Kernel Module fuse[0m...
+[    7.916334] systemd[1]: File System Check on Root Device skipped, unmet condition check ConditionPathIsReadWrite=!/
+[    7.920490] systemd[1]: systemd-journald.service: unit configures an IP firewall, but the local system does not support BPF/cgroup firewalling.
+[    7.921089] systemd[1]: systemd-journald.service: (This warning is only shown for the first unit using IP firewalling.)
+[    8.029222] systemd[1]: Starting Journal Service...
+         Starting [0;1;39mJournal Service[0m...
+[    8.138821] systemd[1]: Starting Generate Network Units from Kernel Command Line...
+         Starting [0;1;39mGenerate Network Units from Kernel Command Line[0m...
+[    8.249166] systemd[1]: Starting Remount Root and Kernel File Systems...
+         Starting [0;1;39mRemount Root and Kernel File Systems[0m...
+[    8.389692] systemd[1]: Starting Apply Kernel Variables...
+         Starting [0;1;39mApply Kernel Variables[0m...
+[    8.550170] systemd[1]: Starting Create Static Device Nodes in /dev gracefully...
+         Starting [0;1;39mCreate Static Device Nodes in /dev gracefully[0m...
+[    8.779286] systemd[1]: Starting Load udev Rules from Credentials...
+         Starting [0;1;39mLoad udev Rules from Credentials[0m...
+[    8.995295] systemd[1]: Starting Coldplug All udev Devices...
+         Starting [0;1;39mColdplug All udev Devices[0m...
+[    9.603697] systemd[1]: Mounted Kernel Debug File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mKernel Debug File System[0m.
+[    9.780107] systemd[1]: Mounted Kernel Trace File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mKernel Trace File System[0m.
+[    9.830723] systemd[1]: Mounted Temporary Directory /tmp.
+[[0;32m  OK  [0m] Mounted [0;1;39mTemporary Directory /tmp[0m.
+[    9.840554] systemd[1]: Mounted Kernel Configuration File System.
+[[0;32m  OK  [0m] Mounted [0;1;39mKernel Configuration File System[0m.
+[    9.933179] systemd[1]: modprobe@efi_pstore.service: Deactivated successfully.
+[   10.016228] systemd[1]: Finished Load Kernel Module efi_pstore.
+[[0;32m  OK  [0m] Finished [0;1;39mLoad Kernel Module efi_pstore[0m.
+[   10.100796] systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[   10.130504] systemd[1]: Finished Load Kernel Module fuse.
+[[0;32m  OK  [0m] Finished [0;1;39mLoad Kernel Module fuse[0m.
+[   10.168672] systemd[1]: Finished Generate Network Units from Kernel Command Line.
+[[0;32m  OK  [0m] Finished [0;1;39mGenerate Network Units from Kernel Command Line[0m.
+[   10.242548] systemd[1]: Finished Remount Root and Kernel File Systems.
+[[0;32m  OK  [0m] Finished [0;1;39mRemount Root and Kernel File Systems[0m.
+[   10.298523] systemd[1]: Finished Apply Kernel Variables.
+[[0;32m  OK  [0m] Finished [0;1;39mApply Kernel Variables[0m.
+[   10.355385] systemd-journald[66]: Collecting audit messages is disabled.
+[   10.380384] systemd[1]: Finished Load udev Rules from Credentials.
+[[0;32m  OK  [0m] Finished [0;1;39mLoad udev Rules from Credentials[0m.
+[   10.458215] systemd[1]: Reached target Preparation for Network.
+[[0;32m  OK  [0m] Reached target [0;1;39mPreparation for Network[0m.
+[   10.479440] systemd[1]: FUSE Control File System skipped, unmet condition check ConditionPathExists=/sys/fs/fuse/connections
+[   10.537134] systemd[1]: Rebuild Hardware Database skipped, unmet condition check ConditionNeedsUpdate=/etc
+[   10.538801] systemd[1]: Platform Persistent Storage Archival skipped, unmet condition check ConditionDirectoryNotEmpty=/sys/fs/pstore
+[   10.757543] systemd[1]: Finished Create Static Device Nodes in /dev gracefully.
+[[0;32m  OK  [0m] Finished [0;1;39mCreate Static Device Nodes in /dev gracefully[0m.
+[   10.789756] systemd[1]: Create System Users skipped, no trigger condition checks were met.
+[   10.882055] systemd[1]: Starting Network Name Resolution...
+         Starting [0;1;39mNetwork Name Resolution[0m...
+[   11.019013] systemd[1]: Starting Network Time Synchronization...
+         Starting [0;1;39mNetwork Time Synchronization[0m...
+[   11.150934] systemd[1]: Starting Create Static Device Nodes in /dev...
+         Starting [0;1;39mCreate Static Device Nodes in /dev[0m...
+[   11.958055] systemd[1]: Started Journal Service.
+[[0;32m  OK  [0m] Started [0;1;39mJournal Service[0m.
+         Starting [0;1;39mFlush Journal to Persistent Storage[0m...
+[[0;32m  OK  [0m] Finished [0;1;39mCreate Static Device Nodes in /dev[0m.
+[   12.985388] systemd-journald[66]: Received client request to flush runtime journal.
+[   13.129176] systemd-journald[66]: File /var/log/journal/29d32552ac0c400cabede3e4e37da75c/system.journal corrupted or uncleanly shut down, renaming and replacing.
+[[0;32m  OK  [0m] Reached target [0;1;39mPreparation for Local File Systems[0m.
+         Mounting [0;1;39m/var/volatile[0m...
+         Starting [0;1;39mRule-based Manager for Device Events and Files[0m...
+[[0;32m  OK  [0m] Mounted [0;1;39m/var/volatile[0m.
+         Starting [0;1;39mLoad/Save OS Random Seed[0m...
+[[0;32m  OK  [0m] Reached target [0;1;39mLocal File Systems[0m.
+[[0;32m  OK  [0m] Started [0;1;39mNetwork Time Synchronization[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mSystem Time Set[0m.
+[[0;32m  OK  [0m] Finished [0;1;39mLoad/Save OS Random Seed[0m.
+[[0;32m  OK  [0m] Started [0;1;39mNetwork Name Resolution[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mHost and Network Name Lookups[0m.
+[[0;32m  OK  [0m] Finished [0;1;39mFlush Journal to Persistent Storage[0m.
+         Starting [0;1;39mCreate System Files and Directories[0m...
+[[0;32m  OK  [0m] Started [0;1;39mRule-based Manager for Device Events and Files[0m.
+         Starting [0;1;39mNetwork Management[0m...
+[[0m[0;31m*     [0m] (1 of 4) A start job is running for…s and Directories (16s / no limit)
+M[K[[0;1;31m*[0m[0;31m*    [0m] (1 of 4) A start job is running for…s and Directories (16s / no limit)
+M[K[[0;32m  OK  [0m] Finished [0;1;39mCreate System Files and Directories[0m.
+[K[[0;32m  OK  [0m] Started [0;1;39mNetwork Management[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mNetwork[0m.
+         Starting [0;1;39mEnable Persistent Storage in systemd-networkd[0m...
+[[0;32m  OK  [0m] Finished [0;1;39mColdplug All udev Devices[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mSystem Initialization[0m.
+[[0;32m  OK  [0m] Started [0;1;39mDaily Cleanup of Temporary Directories[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mTimer Units[0m.
+[[0;32m  OK  [0m] Listening on [0;1;39mBMC Webserver socket[0m.
+[[0;32m  OK  [0m] Listening on [0;1;39mD-Bus System Message Bus Socket[0m.
+[[0;32m  OK  [0m] Listening on [0;1;39mdropbear.socket[0m.
+[[0;32m  OK  [0m] Listening on [0;1;39mHostname Service Socket[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mSocket Units[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mBasic System[0m.
+[[0;32m  OK  [0m] Started [0;1;39mbmcweb server[0m.
+[[0;32m  OK  [0m] Started [0;1;39mKernel Logging Service[0m.
+[[0;32m  OK  [0m] Started [0;1;39mSystem Logging Service[0m.
+         Starting [0;1;39mSSH  ... not ready yet: <urlopen error _ssl.c:993: The handshake operation timed out>
+ Key Generation[0m...
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor certificate manager for authority[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor certificate manager for bmcweb[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor certificate manager for nslcd[0m.
+         Starting [0;1;39mPermit User Sessions[0m...
+         Starting [0;1;39mPhosphor Inventory Manager[0m...
+         Starting [0;1;39mPhosphor Log Manager[0m...
+         Starting [0;1;39mPhosphor Network Manager[0m...
+         Starting [0;1;39mPhosphor DBus Service Discovery Manager[0m...
+         Starting [0;1;39mPhosphor Settings Daemon[0m...
+         Starting [0;1;39mPhosphor User Manager[0m...
+[[0;32m  OK  [0m] Finished [0;1;39mPermit User Sessions[0m.
+         Starting [0;1;39mD-Bus System Message Bus[0m...
+[[0;31m*[0;1;31m*[0m[0;31m*   [0m] (1 of 10) A start job is running fo…phor User Manager (25s / 1min 48s)
+M[K[ [0;31m*[0;1;31m*[0m[0;31m*  [0m] (2 of 10) A start job is running fo…Inventory Manager (26s / 1min 48s)
+M[K[  [0;31m*[0;1;31m*[0m[0;31m* [0m] (2 of 10) A start job is running fo…Inventory Manager (26s / 1min 48s)
+M[K[   [0;31m*[0;1;31m*[0m[0;31m*[0m] (2 of 10) A start job is running fo…Inventory Manager (27s / 1min 48s)
+M[K[[0;32m  OK  [0m] Finished [0;1;39mSSH Key Generation[0m.
+[K[[0;32m  OK  [0m] Finished [0;1;39mEnable Persistent Storage in systemd-networkd[0m.
+[    [0;31m*[0;1;31m*[0m] (3 of 8) A start job is running for…r Settings Daemon (30s / 1min 48s)
+M[K[     [0;31m*[0m] (3 of 8) A start job is running for…r Settings Daemon (30s / 1min 48s)
+M[K[    [0;31m*[0;1;31m*[0m] (3 of 8) A start job is running for…r Settings Daemon (31s / 1min 48s)
+M[K[[0;32m  OK  [0m] Started [0;1;39mD-Bus System Message Bus[0m.
+[K[[0;32m  OK  [0m] Found device [0;1;39m/dev/ttyS4[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor Settings Daemon[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor DBus Service Discovery Manager[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor Log Manager[0m.
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor Inventory Manager[0m.
+[[0;32m  OK  [0m] Started [0;1;39mSerial Getty on ttyS4[0m.
+[[0;32m  OK  [0m] Reached target [0;1;39mLogin Prompts[0m.
+         Starting [0;1;39mHostname Service[0m...
+[[0;32m  OK  [0m] Started [0;1;39mPhosphor User Manager[0m.
+[!p]104\[0m[?7h[1G[0J
+[redfish] HTTP 200 from /redfish/v1:
+{
+  "@odata.id": "/redfish/v1",
+  "RedfishVersion": "1.17.0",
+  "Name": "Root Service"
+}
+
+PHASE 6b RESULT: PASS — real OpenBMC Redfish over NFS on the faithful AST2050 machine
