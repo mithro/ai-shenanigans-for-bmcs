@@ -9,7 +9,10 @@ KGPE-D16, for developing replacement firmware on the ASPEED **AST2050** BMC.
 > *your* board before you trust it. Nothing here is a substitute for buzzing out
 > pin 1 and continuity before applying power.
 
-> **See also (repo docs):** [`JTAG-HEADERS.md`](JTAG-HEADERS.md) — both KGPE-D16
+> **See also (repo docs):** [`JTAG-USAGE-GUIDE.md`](JTAG-USAGE-GUIDE.md) — **how
+> to actually drive the core once wired** (halt/step/reg/mem/GDB, verified on
+> real hardware) ·
+> [`JTAG-HEADERS.md`](JTAG-HEADERS.md) — both KGPE-D16
 > JTAG headers (BMC + AMD HDT) with the HDT+ pinout & scan chain ·
 > [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md) — per-header diagrams ·
 > [`RAPTOR-UBOOT-ANALYSIS.md`](RAPTOR-UBOOT-ANALYSIS.md) — AST2050 U-Boot ·
