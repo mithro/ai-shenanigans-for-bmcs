@@ -32,9 +32,33 @@ Dates are ISO 8601 (YYYY-MM-DD).
 - **Dispatched** a subagent to extract the datasheet-cited authoritative memory map
   into `AST2050-MEMORY-MAP.md` (confirms/corrects the matrix's TBD rows).
 
+### Datasheet map returned — authoritative corrections (fold into matrix)
+From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
+- **SCU7C rev-id = `0x00000202`** for AST2050-A3 (§18.2 p220), matching the culvert
+  HW read. QEMU returns `0x01000303` → confirmed unfaithful.
+- **VIC** is a single 32-bit bank (0x00–0x38), 32 sources; **no** G4 second bank.
+- **Flash** = legacy **SMC regs @`0x16000000`, flash data @`0x10000000`** (not G4 FMC).
+- **Conventional PCI**: A2P bridge `0x1E720000`, arbiter `0x1E78C000`; culvert P2A
+  rides the PCI-slave BAR (not PCIe/XDMA).
+- **ABSENT on AST2050** but present in the reused G4 memmap: **ADC**, SD/eMMC, eSPI,
+  UARTs 3–5, graphics-display controller, USB1.1 host. 16-bit DRAM, ≤128 MB, no ECC.
+  → the faithful machine must *remove/abort* these, not return 0.
+
+### Harness built + first finding (DONE)
+- `fwtest/` harness complete: crt0 + linker (DRAM 0x40000000), console UART
+  `0x1E784000`, deterministic `[FWT]` report protocol, `build.py` (compile + boot
+  under `-M kgpe-d16-bmc`, capture serial). Builds with `arm-none-eabi-gcc` 14.2.
+- **Smoke test ran end-to-end on QEMU.** Console works; identity registers read:
+  `scu.protect=1688a8a8`, `scu.revid=01000303`, `scu.strap=0a08e416`,
+  `scu.clksel=f3f40000`, `scu.hpll=00000291`, `scu.mpll=00030291`,
+  `sdmc.config=00000041`, `vic.irqstat/rawstat=0`.
+- **Finding #1 (rev-id):** `scu.revid.is_ast2050_a3` FAIL got=`01000303`
+  want=`00000202`. The harness mechanically reproduced the datasheet+HW-backed gap.
+
 ### Next
-- Fold the datasheet memory map into the matrix once the subagent returns.
-- Build the shared bare-metal firmware-test harness (`fwtest/`): ARM926EJ-S crt0,
-  linker script, UART2 output, a deterministic register-dump/report protocol.
-- Template the first peripheral end-to-end (SCU — identity/clocks decide whether
-  the machine is really an AST2050): DOC + fwtest + model-diff + integration test.
+- Fold the corrections above into the `README.md` matrix (ADC→absent, SMC data addr,
+  PCI/A2P, rev-id note). *(done in same commit)*
+- Init + build the QEMU fork submodule in this worktree so device models are editable.
+- **Template peripheral #1 = SCU**: DOC.md (datasheet-cited) + a full `scu` fwtest +
+  fix the SoC rev-id (`0x01000303`→`0x00000202`) + straps/PLL faithfulness +
+  `integration/test_scu.py`. Exit: smoke + scu tests PASS on the faithful build.

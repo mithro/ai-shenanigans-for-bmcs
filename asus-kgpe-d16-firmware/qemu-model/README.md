@@ -90,20 +90,27 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 7 | AHB controller + remap | 0x1E600000 | boot remap (0x0↔DRAM) | ☐ | ☐ | ◐ | ☐ | 1 |
 | 8 | ftgmac100 MAC1 (RMII + RTL8201CP PHY) | 0x1E660000 | **netboot/NFS**, network | ☐ | ☐ | ◐ | ☐ | 2 |
 | 9 | MDIO / PHY | in MAC | link, autoneg | ☐ | ☐ | ◐ | ☐ | 2 |
-| 10 | SMC / SPI flash controller | 0x16000000 (regs) | flash probe (we boot from RAM) | ☐ | ☐ | ☐ | ☐ | 2 |
-| 11 | I2C controller (multiple engines) | TBD (≈0x1E78A000) | sensors, EEPROM, PSU | ☐ | ☐ | ☐ | ☐ | 3 |
+| 10 | SMC / SPI flash controller (legacy) | 0x16000000 regs · data @0x10000000 | flash probe (we boot from RAM) | ☐ | ☐ | ☐ | ☐ | 2 |
+| 11 | I2C controller (multiple engines) | 0x1E78A000 | sensors, EEPROM, PSU | ☐ | ☐ | ☐ | ☐ | 3 |
 | 12 | GPIO | 0x1E780000 | power ctl, presence, LEDs | ☐ | ☐ | ◐ | ☐ | 3 |
-| 13 | PWM / tach | TBD (≈0x1E786000) | fan control/monitor | ☐ | ☐ | ☐ | ☐ | 3 |
-| 14 | ADC | TBD (≈0x1E6E9000) | voltage/temp sensors | ☐ | ☐ | ☐ | ☐ | 3 |
-| 15 | RTC | TBD (≈0x1E781000) | time | ☐ | ☐ | ☐ | ☐ | 3 |
-| 16 | LPC (KCS/BT IPMI, SuperIO, iLPC2AHB) | TBD (≈0x1E789000) | host IPMI, culvert ilpc | ☐ | ☐ | ☐ | 3 |
+| 13 | PWM / tach | 0x1E786000 | fan control/monitor | ☐ | ☐ | ☐ | ☐ | 3 |
+| 14 | RTC | 0x1E781000 | time | ☐ | ☐ | ☐ | ☐ | 3 |
+| 15 | LPC (KCS/BT IPMI, SuperIO, iLPC2AHB) | 0x1E789000 | host IPMI, culvert ilpc | ☐ | ☐ | ☐ | ☐ | 3 |
+| 16 | VUART / PUART | 0x1E787000 / TBD | SOL, host serial passthrough | ☐ | ☐ | ☐ | ☐ | 4 |
 | 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☐ | ☐ | ☐ | ☐ | 4 |
 | 18 | USB2.0 UDC / virtual hub | 0x1E6A0000 | virtual media, vkeyboard | ☐ | ☐ | ☐ | ☐ | 4 |
-| 19 | P2A / PCIe-to-AHB bridge | via SCU/PCI | culvert p2a | ☐ | ☐ | ☐ | ☐ | 5 |
-| 20 | Hash/crypto, mailbox, scratch, misc | TBD | as probed | ☐ | ☐ | ☐ | ☐ | 5 |
+| 19 | PCI A2P bridge + arbiter | 0x1E720000 / 0x1E78C000 | culvert p2a (PCI-slave BAR) | ☐ | ☐ | ☐ | ☐ | 5 |
+| 20 | HACE (hash/crypto), MIC, mailbox, scratch | 0x1E6E3000 / … | as probed | ☐ | ☐ | ☐ | ☐ | 5 |
 
-The matrix is authoritative once `AST2050-MEMORY-MAP.md` confirms/corrects the TBD
-rows and the "present on G3?" question for each.
+**Confirmed against the datasheet** (`AST2050-MEMORY-MAP.md`, §9 pp.97–98). G3-vs-G4
+corrections folded in above:
+- **Rev-id** SCU7C = `0x00000202` (real) — QEMU returns `0x01000303` (**Finding #1**).
+- **ABSENT on the AST2050** but exposed by the reused G4 memmap — the faithful machine
+  must *remove* these (ideally abort on access, not return 0): **ADC** (0x1E6E9000),
+  SD/eMMC, eSPI, **UARTs 3–5** (0x1E78D/E/F000), graphics-display controller, USB1.1
+  host. → D16 voltage/temp sensors come via **I2C** hwmon chips (LM75 etc.), not a SoC ADC.
+- **Flash** is the legacy SMC (data window `0x10000000`), not the G4 FMC/SPI.
+- **PCI** is conventional (A2P bridge), not PCIe/XDMA; culvert P2A uses the PCI-slave BAR.
 
 ## 4. The four deliverables per peripheral (definition of done)
 
