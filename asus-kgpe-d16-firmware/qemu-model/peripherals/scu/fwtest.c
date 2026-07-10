@@ -75,5 +75,12 @@ void fwtest_run(void)
     fwt_check("hpll.reset", hpll,   G_HPLL);
     fwt_check("resetflag",  rflags, G_RESETFLAG);
     fwt_check("pinmux1",    pinmux, G_PINMUX1);
-    fwt_check("protect.locked", prot, G_PROTECT);
+    /*
+     * NOTE: SCU00 lock-state is NOT checked here. Real silicon resets locked
+     * (read 0), but QEMU deliberately pre-unlocks the SCU on a `-kernel` boot
+     * (no U-Boot to unlock it) — see aspeed.c. Our harness uses `-kernel`, so
+     * `prot` reads back the key; lock-state faithfulness is validated only via a
+     * flash/U-Boot boot. `prot` is reported above as an observation.
+     */
+    (void)prot;
 }

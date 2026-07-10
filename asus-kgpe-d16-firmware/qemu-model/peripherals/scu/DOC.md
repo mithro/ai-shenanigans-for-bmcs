@@ -47,42 +47,46 @@ From DATASHEET-SCU.md §18 (each is a real divergence, not cosmetic):
 
 ## 3. Golden reset values (datasheet Init) — what the firmware test checks
 
-| Reg | Datasheet Init (real AST2050) | Current QEMU (AST2400 model) | Status |
+| Reg | Datasheet Init (real AST2050) | QEMU (`aspeed.scu-ast2050`) | Status |
 |---|---|---|---|
-| SCU00 protect (read) | `0x00000000` (locked) | `0x1688a8a8` | ✗ gap |
-| SCU04 sysreset | `0x000FFE5C` | `0xffcffedc` | ✗ gap |
-| SCU08 clksel | `0xE3F00070` | `0xf3f40000` | ✗ gap |
-| SCU0C clkstop | `0x000C3E8B` | `0x19fc3e8b` | ✗ gap |
-| SCU20 mpll | `0x00004291` | `0x00030291` | ✗ gap |
-| SCU24 hpll | `0x00004291` | `0x00000291` | ✗ gap |
-| SCU3C resetflags | `0x00000001` | (unmodelled) | ✗ gap |
-| SCU74 pinmux1 | `0x40048000` | (AST2400 value) | check |
-| **SCU7C revid** | **`0x00000202`** | **`0x00000202`** | **✓ FIXED** |
+| SCU04 sysreset | `0x000FFE5C` | `0x000FFE5C` | ✓ FIXED |
+| SCU08 clksel | `0xE3F00070` | `0xE3F00070` | ✓ FIXED |
+| SCU0C clkstop | `0x000C3E8B` | `0x000C3E8B` | ✓ FIXED |
+| SCU20 mpll | `0x00004291` | `0x00004291` | ✓ FIXED |
+| SCU24 hpll | `0x00004291` | `0x00004291` | ✓ FIXED |
+| SCU3C resetflags | `0x00000001` | `0x00000001` | ✓ FIXED |
+| SCU74 pinmux1 | `0x40048000` | `0x40048000` | ✓ FIXED |
+| **SCU7C revid** | **`0x00000202`** | **`0x00000202`** | ✓ FIXED |
+| SCU00 protect (read) | `0x00000000` (locked) | `0x1688a8a8` | ⚠ n/a via `-kernel` |
 
-(QEMU column = values read by `peripherals/scu/fwtest.c` against the current
-build; regenerate after each model change.)
+All reset-value gaps closed by the G3 reset table (`aspeed.scu-ast2050`);
+`peripherals/scu/fwtest.c` → **8/8 checks PASS**. **SCU00 lock-state is not
+testable via this harness** — QEMU pre-unlocks the SCU on a `-kernel` boot (no
+U-Boot to unlock it), so `prot` reads the key back. The model itself is faithful
+(default `hw-prot-key`=0 = locked); validate via a flash/U-Boot boot later.
 
 ## 4. Faithful-model plan (QEMU `mithro/qemu@ast2050-faithful`)
 
 - [x] **Rev-id** SCU7C `0x00000202` — `AST2050_A1_SILICON_REV` fixed; test green.
-- [ ] **G3 reset table** — an `ast2050-scu` device variant whose `resets[]` uses the
-  datasheet Init values above (SCU04/08/0C/20/24/3C/74), instead of reusing the
-  AST2400 table.
+- [x] **G3 reset table** — `aspeed.scu-ast2050` variant with the datasheet Init
+  values (SCU04/08/0C/1C/20/24/30/34/38/3C/74); only the registers the AST2050 has.
+  8/8 fwtest checks pass.
 - [ ] **PLL post-divider** — G3 `calc_hpll`/`calc_mpll` applying `[14:12]`, and
-  `get_apb` using SCU08[25:23]; so the emulated CPU/PCLK (→ timer) is 133 MHz not 264.
-- [ ] **SCU00 read-back** — return `1`/`0` (lock state), not the written key; gate
-  writes on unlocked.
+  `get_apb` using SCU08[25:23]; so the emulated CPU/PCLK (→ timer) is 133 MHz not
+  264. *Deferred to the timer peripheral (needs clock-rate, not register, testing;
+  the reset SCU24[18]=0 strap path is unaffected).*
 - [ ] **Strap (SCU70)** — seed `hw-strap1` with the **G3 bit layout** (clksel[11:9],
-  cpu:ahb[13:12], MAC[8:6], VGA[3:2], boot[1:0]) matching the KGPE-D16.
-
-Each item flips one or more rows in §3 from ✗ to ✓ and turns the corresponding
-`integration/test_scu.py` assertion from xfail to pass.
+  cpu:ahb[13:12], MAC[8:6], VGA[3:2], boot[1:0]) matching the KGPE-D16. *Currently
+  a G4-macro value; decoded in the fwtest but not yet asserted.*
+- [ ] **SCU00 lock-state** — faithful in the model (`hw-prot-key`=0), but not
+  observable through the `-kernel` harness (QEMU pre-unlocks). Validate via
+  flash/U-Boot boot.
 
 ## 5. Deliverable status
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ◐ rev-id + full register dump/decode; golden checks encode §3 |
+| 1 | firmware test (`fwtest.c`) | ☑ dumps+decodes the whole file; 8 golden checks |
 | 2 | doc (this file + `DATASHEET-SCU.md`) | ☑ |
-| 3 | QEMU model | ◐ rev-id done; reset table + post-divider + strap pending (§4) |
-| 4 | integration test (`../../integration/test_scu.py`) | ◐ rev-id green; §3 rows xfail until §4 lands |
+| 3 | QEMU model | ◐ rev-id + G3 reset table done; PLL post-divider + strap layout pending (§4) |
+| 4 | integration test (`../../integration/test_scu.py`) | ☑ 9 passed, 0 xfail |

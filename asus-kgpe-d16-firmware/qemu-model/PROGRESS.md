@@ -72,7 +72,30 @@ From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
   clock-select/PCLK divider faithfulness, and `DOC.md`) pending `DATASHEET-SCU.md`
   (subagent extracting SCU §18 in progress).
 
+### Phase 1 — SCU: full register chapter + G3 reset table (8/8 checks green)
+- Subagent extracted the full SCU §18 chapter → `peripherals/scu/DATASHEET-SCU.md`
+  (every offset/reset value/bitfield cited) and `DOC.md` (driver-grade view). It
+  surfaced **4 more gaps** beyond rev-id: PLL post-divider [14:12], G4 strap layout,
+  whole AST2400 reset table reused, SCU00 read-back.
+- `fwtest.c` expanded to dump+decode the whole SCU file and assert 9 golden values.
+  Baseline: 7 fail (AST2400 reset table).
+- **Fix (model):** new `aspeed.scu-ast2050` SCU variant with the datasheet §18 reset
+  table (only the registers the G3 has), selected by the AST2050 SoC (keyed on
+  silicon-rev; AST2400/2500 untouched). Committed on `ast2050-faithful`, pushed to
+  mithro/qemu (`d74eeb79`).
+- Result: **8/8 fwtest checks PASS** (SCU04/08/0C/20/24/3C/74 + rev-id), **9 pytest
+  passed, 0 xfail**. Insight: SCU00 lock-state is **not** testable via `-kernel`
+  (QEMU pre-unlocks when there's no U-Boot) — a documented harness limitation, not a
+  model gap; needs a flash-boot harness.
+- **Deferred (documented):** PLL post-divider [14:12] (timer clock-rate fidelity —
+  tested with the timer peripheral; reset path unaffected since SCU24[18]=0) and the
+  G3 strap-bit layout for SCU70.
+
+### Regression watch
+- The G3 reset table zeroes G4-only convenience values (e.g. SOC_SCRATCH1 was
+  `0xC0` "DRAM ready"). Faithful per datasheet (Init=0), low-risk for -kernel/U-Boot
+  boots (they don't depend on it), but the C1–C4 full-boot CI jobs should confirm.
+
 ### Next
-- Fold `DATASHEET-SCU.md` into `peripherals/scu/DOC.md` (deliverable 2); add
-  strap/PLL fwtest checks + model fixes as the datasheet pins the bit fields.
-- Then peripheral #2 = **compact G3 VIC** (best HW ground truth; concrete G4 gap).
+- Peripheral #2 = **compact G3 VIC** (best HW ground truth; concrete G4 two-bank gap).
+- Then SDRAM/DDR2, timer (with the SCU PLL post-divider clock-rate check), UART, WDT.

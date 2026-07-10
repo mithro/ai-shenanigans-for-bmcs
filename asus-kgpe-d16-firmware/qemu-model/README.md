@@ -81,7 +81,7 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 
 | # | Peripheral | Base | OpenBMC/board use | T | D | M | I | Phase |
 |--:|---|---|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | SCU (system control: clocks, straps, rev-id, reset, pinmux) | 0x1E6E2000 | clocks/identity gate everything | ◐ | ☐ | ◐ | ◐ | 1 |
+| 1 | SCU (system control: clocks, straps, rev-id, reset, pinmux) | 0x1E6E2000 | clocks/identity gate everything | ☑ | ☑ | ◐ | ☑ | 1 |
 | 2 | SDRAM controller (DDR2) | 0x1E6E0000 | U-Boot DRAM init | ☐ | ☐ | ◐ | ☐ | 1 |
 | 3 | VIC (interrupt controller, compact G3) | 0x1E6C0000 | all IRQs | ☐ | ☐ | ◐ | ☐ | 1 |
 | 4 | Timer (FTTMR010, 3×) | 0x1E782000 | clocksource/clockevent | ☐ | ☐ | ◐ | ☐ | 1 |

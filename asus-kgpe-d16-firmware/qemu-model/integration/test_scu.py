@@ -22,19 +22,19 @@ skip_reason = runner.preconditions()
 pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "")
 
 # Datasheet §18 golden reset values (label -> (expected, xfail_reason_or_None)).
-# label is the fwtest `reg` label. xfail reason set for gaps the ast2050-scu
-# model does not yet close.
-WIP = "ast2050-scu G3 reset table/post-divider WIP (datasheet §18)"
+# label is the fwtest `reg` label. All are now faithful via the aspeed.scu-ast2050
+# G3 reset table. (SCU00 lock-state is not asserted here: QEMU pre-unlocks the SCU
+# on a `-kernel` boot, so our harness can't observe the locked reset value — that
+# needs a flash/U-Boot boot. See peripherals/scu/DOC.md.)
 GOLDEN = {
-    "revid":     (0x00000202, None),          # §18.2 p220 — FIXED
+    "revid":     (0x00000202, None),          # SCU7C §18.2 p220
     "resetflag": (0x00000001, None),          # SCU3C §11 p215
-    "sysreset":  (0x000FFE5C, WIP),           # SCU04 §2 p205
-    "clksel":    (0xE3F00070, WIP),           # SCU08 §3 p207
-    "clkstop":   (0x000C3E8B, WIP),           # SCU0C §4 p209
-    "mpll":      (0x00004291, WIP),           # SCU20 §7 p212
-    "hpll":      (0x00004291, WIP),           # SCU24 §8 p212
-    "pinmux1":   (0x40048000, WIP),           # SCU74 §15 p219
-    "protect":   (0x00000000, WIP),           # SCU00 §1 p205 (locked read-back)
+    "sysreset":  (0x000FFE5C, None),          # SCU04 §2 p205
+    "clksel":    (0xE3F00070, None),          # SCU08 §3 p207
+    "clkstop":   (0x000C3E8B, None),          # SCU0C §4 p209
+    "mpll":      (0x00004291, None),          # SCU20 §7 p212
+    "hpll":      (0x00004291, None),          # SCU24 §8 p212
+    "pinmux1":   (0x40048000, None),          # SCU74 §15 p219
 }
 
 
