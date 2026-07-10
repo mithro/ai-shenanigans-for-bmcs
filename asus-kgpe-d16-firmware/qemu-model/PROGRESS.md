@@ -474,3 +474,37 @@ trigger config RW+reset-0) is now WIRED and boots Linux:
 Remaining 12 xfails: SCU-reset (6) + SDRAM (3) + MAC-PHY (1) [all break the AST2400 U-Boot or
 the C410X vendor firmware — co-evolvable only with more U-Boot/firmware work] + I2C SMBus-read
 (1) + P2A PCI-endpoint (1) [large].
+
+### ⚠️ CORRECTION (2026-07-11): the "G3 VIC end-to-end DONE" above was WRONG and was reverted
+The claim "C4 unaffected (vendor G3 firmware programs the VIC itself)" did not hold: wiring the
+G3 VIC broke the C4 vendor boot, so it was reverted (machine kept the AST2400 VIC; the 6 VIC
+checks went back to xfail → suite 56/18). Confirmed via CI + local repro. Do not trust that entry.
+
+### Real-hardware cross-reference session (2026-07-11) — JTAG access granted
+Got full JTAG control of the real KGPE-D16 AST2050 (RPi4+OpenOCD, IDCODE 0x07926f0f). Used
+silicon as the ultimate faithfulness oracle. Results in `results/vic-hardware-crosscheck.md`
+and `results/soc-registers-hardware-crosscheck.md`.
+
+**VIC — register model HARDWARE-CONFIRMED faithful; two prior conclusions corrected:**
+- Silicon: sense/dual/event (0x24/28/2c) reset to 0 AND writes stick (fully RW); enable(0x10)
+  write-1-set; status(0x00) RO. The G3 model matches on every point; the AST2400 VIC is the
+  unfaithful one. Added a combinational-level fix to aspeed_vic.c (level detect is combinational
+  on silicon), kept in-tree.
+- **Correction 1:** the div0 in aess_write_spi_nor_flash is the UNMODELLED legacy SMC (flash ID
+  reads 0), NOT the VIC — it fires on the AST2400 VIC too, non-fatal.
+- **Correction 2:** the irqmap is NOT the cause either — every vendor-used device maps to
+  Table-36 lines ≤31 on both models. Also ruled out: the combinational fix (disabling it changed
+  nothing), 0x14/0x38 read semantics (JTAG-confirmed 0).
+- **Honest status:** wiring the G3 VIC hangs C4 (main thread blocks after line 151, WDT reset
+  ~16s) for a cause NOT yet pinned — the two VIC types present identical vendor-visible state yet
+  diverge. Next: trace-diff AST2400 vs G3 or gdb into the 2.6.23 vendor kernel (task #57).
+
+**SCU/SDMC/WDT cross-check:** SCU PCI_CTRL1/2=0x20001a03, SYS_RST_STATUS=0x1, rev=0x202 match
+exactly. Found a real discrepancy: M-PLL/H-PLL read 0x00004291 on silicon vs QEMU 0x30291/0x291
+→ feeds task #55 (but the PLL fix is a co-evolution: needs a G3 calc_pll + U-Boot re-tune, so
+deferred to keep legacy boots green). SDMC MCR04=0 confirms DRAM untrained (64MB baseline);
+WDT reload=0x03ef1480.
+
+**Net:** models confirmed faithful where checkable; wrong conclusions corrected; the two deep
+remaining faithfulness gaps (VIC wiring #57, PLL #55) precisely scoped as co-evolution tasks.
+All legacy boots stay green (AST2400 VIC kept; C4 PASS). OpenBMC-over-NFS still boots (Phase 6b).
