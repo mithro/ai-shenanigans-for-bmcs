@@ -44,6 +44,12 @@ The firmware-programmed trigger words (level/edge/polarity) reconstruct
 `sensitivity=0x903897FE`, `both-edge=0x07C00000`, `event=0x983F97FE`. These are
 *programmed* values; the registers **reset to 0**.
 
+> **Hardware-confirmed (JTAG, 2026-07-11).** Read on the real AST2050 over JTAG:
+> `0x1e6c0024/28/2c` all read **0** at reset, and writes to them **stick** (fully
+> RW). `enable(0x10)` is write-1-to-set (clear via `0x14`); `status(0x00)` is
+> read-only. All match the G3 model exactly. Full capture:
+> [`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md).
+
 ## 3. Driver notes (U-Boot / Linux / Zephyr)
 
 - Mainline Linux binds via a G3 VIC irqchip (`aspeed,ast2050-vic`; see the
@@ -104,6 +110,18 @@ AST2400 0x80+ aliases (G3 never uses them).
 | 2 | doc (this + `DATASHEET-VIC.md`) | ☑ |
 | 3 | QEMU model (`aspeed.vic-ast2050`) | ◐ built + drives our kernel; NOT wired (breaks the C4 vendor firmware) |
 | 4 | integration test (`../../integration/test_vic.py`) | ◐ 7 pass, 6 xfail (G3 VIC blocked by the C4 oracle) |
+
+## 7b. Real-silicon cross-check reframes the C4 block (2026-07-11)
+
+JTAG reads of the real AST2050 (see [`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md))
+**confirm the G3 model is faithful and the AST2400 model is not**: on silicon,
+`0x24/0x28/0x2c` reset to 0 and are fully writable. So C4 "passing" on the AST2400
+VIC is a **false green** — the vendor firmware only survives because QEMU's AST2400
+VIC hands it non-zero `sensitivity`/`event` reset values that real hardware does
+not have. The faithful resolution is therefore **not** to keep the unfaithful
+AST2400 VIC; it is to keep the G3 model and make the C4 boot harness faithful
+(ensure the vendor's real-hardware VIC-init also runs under QEMU). See §7 below for
+the state at the time of the revert, now superseded by this finding.
 
 ## 7. End-to-end bring-up: driver ready, but BLOCKED by the C4 oracle (2026-07-10)
 
