@@ -12,6 +12,18 @@ emulation. There must be a comprehensive test suite for **every** device.
 > *not* how a newer AST2400/2500/2600 behaves. Where upstream QEMU models the newer
 > part, we diverge to match the G3.
 
+> **⚑ Guiding principle — QEMU must model the *real* hardware.** The legacy/proprietary
+> firmware (the Dell C410X vendor image, Raptor's U-Boot/Linux) runs on *real* AST2050
+> silicon. So a *correct* emulation **always continues to boot the old setup** — the
+> legacy boots are a hard faithfulness **oracle / regression invariant**. If a QEMU
+> change breaks a legacy boot, **the change is wrong** (it doesn't match real hardware),
+> or it exposes a **stale RE workaround patch** that compensated for a different
+> unfaithfulness — never a reason to change the fixed legacy firmware. The RE workaround
+> patches (`proprietary/patch-c410x-mac.py`, the "tolerate unmodelled MMIO → 0" flag) are
+> unfaithfulness band-aids that must **shrink toward zero** (goal: the *unpatched* firmware
+> boots). Only our *own* modern firmware (OpenBMC kernel/U-Boot) legitimately gets G3
+> drivers/DTS — that makes our firmware match real hardware, not the oracle change.
+
 This directory (`asus-kgpe-d16-firmware/qemu-model/`) is the home of that program.
 The actual device C code lives in the QEMU fork submodule
 (`asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu`, `mithro/qemu` branch

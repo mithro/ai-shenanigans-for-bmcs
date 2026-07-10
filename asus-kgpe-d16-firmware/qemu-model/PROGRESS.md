@@ -167,22 +167,39 @@ AST2400 machine — the OpenBMC **AST2400 U-Boot** and the RE-patched **vendor f
 read AST2400 SCU registers (UART_HPLL_CLK 0x160, SOC_SCRATCH1 DRAM-ready, …) that the
 faithful G3 map zeroes → they hang.
 
-**This reframes the whole program:** "faithful QEMU" and "modern G3 kernel/U-Boot" are
-one coupled problem. The promising signal: the **modern-kernel direct boot works with
-the faithful SCU** — that is the OpenBMC-target path. The legacy AST2400-U-Boot /
-vendor-firmware boots need a G3-aware firmware stack (or stay legacy).
+**CORRECTED FRAMING (user directive — the guiding principle):** QEMU must model the
+*real* AST2050 hardware. The legacy/proprietary firmware (Dell vendor, Raptor) runs on
+real silicon, so a *correct* emulation ALWAYS boots it — the legacy boots are a hard
+faithfulness **oracle / regression invariant**. My earlier "the firmware must co-evolve
+to G3" reasoning was **backwards**: when a faithful change breaks a legacy boot, **my
+model is wrong OR a stale RE workaround patch (tuned to the old unfaithful values) is** —
+never the fixed legacy firmware. The RE patches (patch-c410x-mac.py, "tolerate unmodelled
+MMIO→0") are unfaithfulness band-aids that must **shrink toward zero** (goal: unpatched
+firmware boots). Only OUR *own* modern firmware (OpenBMC kernel/U-Boot) legitimately needs
+G3 drivers/DTS — that is making our firmware match real hardware, not changing the oracle.
 
-**Handled (stabilised to green, faithfulness preserved as opt-in):**
-- VIC: machine keeps `TYPE_ASPEED_VIC`; faithful `aspeed.vic-ast2050` opt-in (task #56).
-- SCU: machine keeps the AST2400 **reset table** but the **faithful rev-id 0x00000202**
-  (boot-safe, the modern path passes with it); `ast2050_a3_resets` is the opt-in G3
-  table. 6 reset-table checks xfail (co-evolution), rev-id + reset-flag pass.
-- Integration: **18 passed, 15 xfailed**. All faithful models + analysis kept; nothing
-  lost — just not wired into the machine until the firmware co-evolves.
+**Stabilised — CI boots GREEN (run 29065108272):** `C2 (direct): success · C2 full-chain
+(U-Boot): success · C4 (vendor web): success` (C3 skipped — unrelated musl build). The
+faithful rev-id `0x00000202` is boot-safe across ALL firmware including the Dell vendor
+image. So the invariant holds: the reverts kept the legacy boots booting (correct per the
+oracle). Faithful models kept as opt-in:
+- VIC: machine keeps `TYPE_ASPEED_VIC`; `aspeed.vic-ast2050` opt-in (task #56 — OUR modern
+  kernel needs the G3 VIC driver; the legacy kernels already program the G3 VIC).
+- SCU: machine keeps the AST2400 reset table + the faithful rev-id; `ast2050_a3_resets`
+  opt-in. The reset table broke C4 → per the oracle, root-cause is a **stale RE patch**
+  (tuned to AST2400 SCU values), to be fixed toward unpatched vendor firmware.
+- Integration: 18 passed / 15 xfailed. Nothing lost.
+
+### Milestone summary (this session)
+Infra (worktree, plan, memory map, fwtest harness, pytest layer, HW-validation checklist);
+SCU (rev-id wired; G3 reset table opt-in); VIC (G3 model opt-in); Timer (done); SDRAM/DDR2
+(test+doc, model gated); datasheet chapters (memory-map, SCU §18, VIC §16/§10, SDRAM §17,
+timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots are the oracle.
 
 ### Next
-- Push → confirm C2 direct green (+ see whether rev-id alone is C4-safe).
-- Add a "co-evolution" section to README + a G3-firmware-stack track (U-Boot + kernel
-  drivers) so the faithful machine has matching faithful firmware. Continue UART/WDT/
-  AHB (low co-evolution risk); DDR2 SDMC stays gated; then Phase 2 (netboot/NFS) on the
-  modern-kernel path.
+- Regularly `git merge origin/main` (user directive) to pick up shared work.
+- Continue faithful models that KEEP the legacy boots green (validate each in CI): UART,
+  WDT, AHB remap; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
+  patch / add OUR modern-kernel G3 VIC driver so they can be wired *and* keep legacy green.
+- DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
+  faithful SCU).
