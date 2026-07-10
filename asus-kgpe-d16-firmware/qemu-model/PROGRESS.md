@@ -220,10 +220,22 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   gigabit/RGMII/NCSI/RCLK. Full TX/RX DMA is proven by the C2 boot (eth0 up 100M/full).
 - Suite: 27 passed, 16 xfailed.
 
+### GPIO: datapath-faithful, done (no model change → oracle safe)
+- `peripherals/gpio/{DATASHEET-GPIO,DOC}.md` + `fwtest.c` + `test_gpio.py`. Banks A–H,
+  window 0x00–0x58. Reset (dir/data/int-en = 0), direction RW, and output-pin latch
+  (banks A–D `0xA5A5A5A5`, E–H `0x5A5A5A5A` read back) all PASS. Cosmetic gap: the
+  AST2400 model exposes more banks/bits than the G3's A–H (G3 firmware never touches
+  them; stricter masking is oracle-gated). Suite: 30 passed, 16 xfailed.
+
+### Progress: 8 peripherals with full 4-deliverable coverage
+SCU, VIC, Timer, WDT, UART, MAC, GPIO + SDRAM(test/doc). Timer/WDT/UART/GPIO fully
+faithful (no model change); SCU rev-id wired; VIC/SCU-reset/DDR2/PHY are opt-in gaps
+(oracle-gated). All C1–C4 boots green throughout.
+
 ### Next
 - Regularly `git merge origin/main` (user directive).
-- Continue faithful models that keep the oracle green: GPIO, I2C, RTC, AHB remap. Then
-  the oracle-gated depth work: per-board RTL8201CP PHY, G3 kernel VIC driver, reduce the
-  C4 RE patch debt (so the opt-in G3 SCU/VIC/PHY can wire in without breaking legacy).
+- Continue: I2C (sensors), RTC, PWM/tach, LPC/KCS, SMC, AHB remap. Then oracle-gated depth
+  work: per-board RTL8201CP PHY, G3 kernel VIC driver, reduce C4 RE-patch debt so the
+  opt-in G3 SCU/VIC/PHY wire in without breaking legacy.
 - DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
   faithful SCU).
