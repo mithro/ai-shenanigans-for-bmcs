@@ -37,8 +37,8 @@ GOLDEN = {
     "sysreset":  (0x000FFE5C, CO_EVO),        # SCU04 §2 p205
     "clksel":    (0xE3F00070, CO_EVO),        # SCU08 §3 p207
     "clkstop":   (0x000C3E8B, CO_EVO),        # SCU0C §4 p209
-    "mpll":      (0x00004291, CO_EVO),        # SCU20 §7 p212
-    "hpll":      (0x00004291, CO_EVO),        # SCU24 §8 p212
+    "mpll":      (0x00004291, None),          # SCU20 §7 p212 — G3 reset (HW-JTAG)
+    "hpll":      (0x00004291, None),          # SCU24 §8 p212 — G3 reset (HW-JTAG)
     "pinmux1":   (0x40048000, CO_EVO),        # SCU74 §15 p219
 }
 

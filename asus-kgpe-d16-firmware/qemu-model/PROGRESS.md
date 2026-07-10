@@ -542,3 +542,15 @@ MX25L128D', the non-fatal div0 is GONE (2->0), and C4 still boots to the BMC web
 (web-test PASS).** Added a bare-metal UMA JEDEC fwtest asserting 0xC22018 — suite **56 -> 57 passed
 / 18 xfailed**. Gated on the G3 SoC; the modern kernel uses the FMC so is unaffected. Commits:
 qemu submodule 69d734ca68 + superproject. **One of the three deep tasks now COMPLETE + tested.**
+
+### ✅ G3 PLL reset value (task #55) — DONE (2026-07-11)
+The G3 SCU now resets M-PLL/H-PLL (SCU20/24) to the silicon-faithful **0x00004291** (datasheet
+p212 'post-div /2 -> 133 MHz'; HW-JTAG-confirmed reset-halt read) instead of the AST2400
+0x30291/0x291. Targeted override in `aspeed_2050_scu_reset` keeps the rest of the AST2400 reset
+table (the full G3 table zeroes UART_HPLL_CLK/SOC_SCRATCH1 the legacy boots need). Safe: 0x4291
+bit18(PROGRAMMED)=0 -> AST2400 U-Boot uses the strap path, QEMU timer rate unchanged; only the
+guest's *read* becomes faithful, and the G3 clock driver now computes the correct 133 MHz.
+**Validated green: fwtest mpll/hpll checks now must-pass (2 xfails closed -> suite 57->59 passed /
+16 xfailed), C4 web-test PASS, C2 SSH PASS.** Optional follow-up: a G3 calc_hpll (post-divider) so
+QEMU's internal timer rate is also 133 MHz (riskier, deferred). **TWO of the three deep tasks
+(SMC #58, PLL #55) now COMPLETE + validated; only the VIC (#57) crux remains.**
