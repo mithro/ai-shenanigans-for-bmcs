@@ -29,7 +29,9 @@ def test_udc_modelled(usb):
     assert c is not None and c[1]
 
 
-@pytest.mark.xfail(reason="AST2050 has no EHCI at 0x1E6A1000; QEMU exposes one (DOC.md §3)",
-                   strict=False)
 def test_no_phantom_ehci(usb):
-    assert usb.regs.get("ehci1000", 0) == 0
+    """The AST2050 (G3) has no EHCI host controller — the faithful SoC gates it
+    off (aspeed_ast2400.c), so 0x1E6A1000 no longer reads the EHCI cap word
+    0x01000020. Fixed 2026-07-10 (DOC.md §3)."""
+    assert usb.regs.get("ehci1000", 0) == 0, \
+        f"phantom EHCI still present: 0x1E6A1000 = {usb.regs.get('ehci1000'):#x}"

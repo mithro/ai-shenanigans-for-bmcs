@@ -10,14 +10,18 @@ for BMC **virtual media / virtual keyboard/mouse** (OpenBMC). Full detail:
 - **The AST2050 has NO EHCI host at 0x1E6A1000** — that is an AST2400+ feature. All
   virtual media/HID goes through the device/vhub controller at 0x1E6A0000.
 
-## 2. QEMU faithfulness — UNMODELLED + a PHANTOM EHCI
+## 2. QEMU faithfulness — phantom EHCI REMOVED; device/vhub still unmodelled
 
 `peripherals/usb/fwtest.c`:
 - ✗ the device/vhub at **0x1E6A0000 reads 0** and is not writable — **not modelled**.
-- ✗ **0x1E6A1000 reads `0x01000020`** — QEMU exposes an **EHCI host controller the
-  AST2050 does not have** (an AST2400 feature leaking through the SoC model).
+- ☑ **0x1E6A1000 now reads 0** — the **phantom EHCI has been removed** (2026-07-10):
+  `hw/arm/aspeed_ast2400.c` gates EHCI creation off when `silicon_rev ==
+  AST2050_A1_SILICON_REV`, so the faithful G3 SoC no longer instantiates the
+  AST2400 EHCI hosts at 0x1E6A1000/0x1E6A3000. `test_no_phantom_ehci` now PASSES
+  (no longer xfail).
 
-So OpenBMC virtual media cannot be verified, and the machine exposes a phantom EHCI.
+Remaining: the device/vhub at 0x1E6A0000 is still unmodelled, so OpenBMC virtual
+media can't yet be exercised.
 
 ## 3. Faithful-model plan (large, oracle-gated)
 
@@ -32,5 +36,5 @@ firmware pokes the UDC once at init — AST2050-PERIPHERAL-MODELING §1) — ora
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ (documents unmodelled UDC + phantom EHCI) |
 | 2 | doc (this + `DATASHEET-USB.md`) | ☑ |
-| 3 | QEMU model | ☐ new UDC/vhub + remove phantom EHCI (§3) |
-| 4 | integration test (`../../integration/test_usb.py`) | ◐ checks xfail until §3 |
+| 3 | QEMU model | ◐ **phantom EHCI removed** (☑); UDC/vhub at 0x1E6A0000 still ☐ |
+| 4 | integration test (`../../integration/test_usb.py`) | ◐ `test_no_phantom_ehci` PASS; `test_udc_modelled` xfail until the UDC |
