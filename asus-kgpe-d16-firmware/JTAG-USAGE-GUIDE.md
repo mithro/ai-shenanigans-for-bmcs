@@ -215,14 +215,22 @@ target halted in ARM state due to debug-request, current mode: Supervisor
 cpsr: 0x000000d3 pc: 0x0005d50c
 ```
 
-> **Combined-reset caveat.** `ast2050.cfg` uses
-> `reset_config trst_and_srst combined` (Raptor's proven topology): asserting
-> `nSRST` also resets the JTAG TAP. OpenOCD therefore **cannot hold the core
-> halted *through* reset** — it resets, then halts as soon as it can, catching
-> the core a little past the reset vector (here `0x0005d50c`, already in
-> Supervisor mode). For a pristine halt at the reset vector you'd need an
-> `srst_only` topology and a board that routes nSRST independently of nTRST —
-> not the case here. For most bring-up work, halt-shortly-after-reset is fine.
+> **Combined-reset caveat — and why independent pins don't help.**
+> `ast2050.cfg` uses `reset_config trst_and_srst combined` (Raptor's topology):
+> OpenOCD cannot hold the core halted *through* reset, so it resets then halts
+> as soon as it can — catching the core a little past the reset vector (here
+> `0x0005d50c`, Supervisor mode). The Pi drives **nTRST and nSRST on separate
+> GPIOs** (GPIO17 / GPIO18), so it's natural to ask whether telling OpenOCD they
+> are `separate` — holding nTRST deasserted while pulsing nSRST — buys a clean
+> reset-vector halt. **Tested on the real board: it does not.** Both
+> `reset_config separate` and `reset_config separate srst_nogate` make
+> `reset halt` **time out** (`Error: timed out while waiting for target
+> halted`). The coupling is **inside the AST2050 silicon** — asserting nSRST
+> also resets the EmbeddedICE debug logic, clearing any armed halt/vector-catch
+> — not in the wiring, so independent GPIO control can't defeat it. `combined`
+> is correct; "reset, then immediate halt" is the best available, and for early
+> bring-up halting a few thousand instructions in is fine. (For DDR2 init and
+> most register work you don't need reset at all — a plain `halt` is enough.)
 
 ---
 
@@ -273,16 +281,38 @@ r1 after write #2 = 0xcafebabe
 ```
 So the write path is fine; it's the *DRAM* that isn't ready.
 
-**To use DRAM over JTAG**, first train it, then use it:
-1. Halt the core.
-2. Drive the SDMC init sequence — the ordered SCU M-PLL + `SDMC` `MCRxx`
-   register writes plus MRS/EMRS from [`platform.S`](platform.S) /
-   [`DDR2-INIT-REVERSE-ENGINEERING.md`](DDR2-INIT-REVERSE-ENGINEERING.md) — as
-   a series of `mww` commands (or an OpenOCD `.tcl` proc). This is the same
-   sequence the P2A path used to bring DRAM up on 2026-07-08.
-3. Verify with a save/write/verify/restore at a mid-DRAM address; a correct
-   `readback` of your pattern means training succeeded.
-4. Now you can load code/data into DRAM and `resume <addr>`.
+**To use DRAM over JTAG, run the DDR2 init script** — it does exactly this:
+
+```sh
+openocd -f rpi4-jtag.cfg -f kgpe-d16-bmc.cfg -f ddr2-init.tcl
+```
+
+[`openocd/ddr2-init.tcl`](openocd/ddr2-init.tcl) is a faithful,
+register-for-register port of Raptor's [`platform.S`](platform.S) DDR2 bring-up
+(the same sequence as the P2A `ddr2-init-p2a.py`, but issued by the ARM926
+core's own AHB — *more* faithful, since the CPU does the writes as real firmware
+would). It halts the core, programs the SCU M-PLL and the SDMC `MCRxx` timing /
+DLL / MRS-EMRS registers (computing `MCR04` from the live `SCU70` strap),
+relocks, and verifies. See [`DDR2-INIT-REVERSE-ENGINEERING.md`](DDR2-INIT-REVERSE-ENGINEERING.md)
+for the per-register provenance.
+
+**Real output (DRAM goes from dead to working):**
+```
+straps: SCU70=0x00819582 SCU40=0x00000000
+MCR04 = 0x00000585 (from SCU70 strap)
+=== DRAM write/read-back verify (0x40000000 native window) ===
+  0x40000000 <- 0xdeadbeef  read=0xdeadbeef  OK
+  0x40000004 <- 0x12345678  read=0x12345678  OK
+  0x40100000 <- 0xa5a5a5a5  read=0xa5a5a5a5  OK
+  0x43f00000 <- 0x5a5a5a5a  read=0x5a5a5a5a  OK
+>>> DDR2 TRAINED: all read-backs match. DRAM is usable.
+```
+
+Training **persists** across OpenOCD sessions (the SDMC stays configured and
+refreshing as long as the board is powered) — verified by a later session with
+**no** re-init writing fresh patterns that stick, while `0x40000000` still held
+`deadbeef` from the init run. After training you can `load_image`/`mww` a
+payload into DRAM and `resume <addr>` (§12).
 
 > **Crash-safety rule (inherited from the P2A work):** never write `0x0` or the
 > SMC flash window `0x14000000` while the DRAM→`0x0` remap is **not** set — it
@@ -362,10 +392,10 @@ openocd -f rpi4-jtag.cfg -f kgpe-d16-bmc.cfg -c init -c "reset halt" \
         -c "reg pc" -c shutdown
 ```
 
-**Bring DRAM up, then load & run code** (see §8 for the training sequence)
-1. `halt` → run the SDMC init `mww` sequence → verify a DRAM write sticks.
-2. `load_image u-boot.bin 0x40000000` (or `mww`-poke a payload).
-3. `reg pc 0x40000000` → `resume`, or `resume 0x40000000`.
+**Bring DRAM up, then load & run code** (see §8)
+1. `openocd -f rpi4-jtag.cfg -f kgpe-d16-bmc.cfg -f ddr2-init.tcl` → DRAM trained.
+2. In an interactive session: `load_image u-boot.bin 0x40000000` (or `mww`-poke).
+3. `resume 0x40000000` (or `reg pc 0x40000000` then `resume`).
 
 **Cross-check a P2A/culvert reading**
 Read the same SoC register both ways; they should agree. `SCU7C` reads `0x202`
@@ -411,7 +441,8 @@ over JTAG *and* over P2A — a good sanity anchor when debugging either path.
 | Privilege | none (`gpio` group; no `sudo`) | §2 |
 | SCU silicon rev (`0x1e6e207c`) | `0x00000202` (JTAG == P2A) | §8 real output |
 | SCU04 / SCU14 | `0x000ffe5c` / `0x00003eff` | §8 real output |
-| DRAM native window | `0x40000000`, 64 MB (needs training) | §8; `ast2050.h` |
+| DRAM native window | `0x40000000`, 64 MB (train with `ddr2-init.tcl`) | §8; `ast2050.h` |
+| Reset-halt topology | `combined` only (SRST resets EmbeddedICE in silicon; `separate`/`srst_nogate` time out) | §7 tested |
 | GDB / telnet ports | 3333 / 4444 | §6 real output |
 | OpenOCD | `0.12.0+dev-snapshot (2026-02-16)` on the bridge Pi | all runs |
 
