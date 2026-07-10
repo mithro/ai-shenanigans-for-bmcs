@@ -60,9 +60,22 @@ runs.
       `*(rw,no_root_squash,insecure)` (insecure: slirp SNATs the guest to a 127.0.0.1
       high port), starts rpcbind+nfsd, then runs the harness. (**6a milestone — validated
       in CI since the dev sandbox has no NFS tooling and external NFS servers can't be built.**)
-- [ ] OpenBMC rootfs over NFS (**6b** — needs the AST2050 Yocto machine or a served subset;
-      note ARMv5 (ARM926) vs the AST2500 `romulus` OpenBMC's ARMv6, so romulus binaries
-      can't be reused directly — a native `kgpe-d16` machine layer is required).
+- [~] **6b — real OpenBMC (bmcweb/Redfish) over NFS. IN PROGRESS, and tractable after all:**
+      OpenBMC already ships an **ARMv5TE** target — the ast2400 `quanta-q71l`/`palmetto`
+      machines are ARM926EJ-S (`tune-arm926ejs.inc`), the *same CPU* as the AST2050. Only the
+      AST2500 `romulus` (built in PR #22) is ARMv6 and non-reusable. So no large port is
+      needed: build `obmc-phosphor-image` for **quanta-q71l** (generic phosphor, x86 host —
+      matches the KGPE-D16's AMD host; avoids palmetto's OpenPOWER `obmc-op-control-host`
+      postinst that breaks do_rootfs), then:
+        1. `scripts/stage-openbmc-nfsroot.sh <image.squashfs-xz>` — unsquashfs → mask the
+           MTD rofs/rwfs overlay + any mtd/ubi mount units → root-owned local NFS export.
+        2. `scripts/openbmc-nfsroot-test.py` — boot the faithful `-M kgpe-d16-bmc` with our
+           modern kernel + the OpenBMC rootfs over NFS, then assert Redfish ServiceRoot
+           (`GET /redfish/v1` → `RedfishVersion`) answers.
+      Demonstrated **locally** on the build machine (has the image + passwordless sudo +
+      `nfs-kernel-server`); CI can't build/host a ~100 MB OpenBMC rootfs. Same faithful
+      machine/kernel/NFS transport proven green in 6a (C5) — 6b only swaps the export
+      contents from BusyBox to OpenBMC.
 
 ## Why 6a is the meaningful milestone
 
