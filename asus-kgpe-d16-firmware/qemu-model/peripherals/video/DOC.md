@@ -15,26 +15,25 @@
 | 0x060 | JPEG/VQ compression | (has an RC4 engine) |
 | 0x304 / 0x308 | interrupt enable / status | |
 
-## 2. QEMU faithfulness — UNMODELLED
+## 2. QEMU faithfulness — MODELLED (`aspeed.video-ast2050`)
 
-`peripherals/video/fwtest.c`: VR000/VR008 read **0**, and writing the unlock key does
-not take (VR000 not readable-back as unlocked). The video engine is **not modelled** in
-mainline QEMU (nor on this machine — the "tolerate unmodelled MMIO → 0" flag). **OpenBMC
-KVM screen capture cannot be verified** until a model exists. It reads the VGA
-framebuffer that the machine already reserves (`vga_memory` no-map region).
+`peripherals/video/fwtest.c`: VR000 is a **protection-key lock latch** — write the
+unlock key `0x1A038AA8` → reads back **1** (unlocked); the remaining registers are RW
+while unlocked. Implemented as a new **`aspeed.video-ast2050`** device
+(`hw/misc/aspeed_video_ast2050.c`), replacing the AST2400 unimplemented stub for the G3
+(keyed on silicon-rev). **The OpenBMC `aspeed-video` driver can now bind and program the
+capture engine**; it reads the VGA framebuffer the machine already reserves (`vga_memory`
+no-map region).
 
-## 3. Faithful-model plan (large, oracle-safe)
+*Refinement (deferred):* the actual frame capture + compression (VR004 trigger → read
+the reserved VGA memory → produce a JPEG/VQ stream) + the INT7 completion IRQ. The
+register interface is faithful; the capture datapath is a behavioural add-on.
 
-A new `aspeed.video-ast2050` device: protection key, capture control/status, source
-select, the five buffer-base registers, and an interrupt — enough for the OpenBMC
-`aspeed-video` driver to bind and capture a frame from the reserved VGA memory. New
-device at an unmodelled address (low oracle-risk; CI-validate).
-
-## 4. Deliverable status
+## 3. Deliverable status
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ☑ (documents the unmodelled block) |
+| 1 | firmware test (`fwtest.c`) | ☑ VR000 protection-key |
 | 2 | doc (this + `DATASHEET-VIDEO.md`) | ☑ |
-| 3 | QEMU model | ☐ new `aspeed.video-ast2050` (§3) |
-| 4 | integration test (`../../integration/test_video.py`) | ◐ checks xfail until §3 |
+| 3 | QEMU model | ☑ `aspeed.video-ast2050` (register interface; capture datapath deferred) |
+| 4 | integration test (`../../integration/test_video.py`) | ☑ passes |

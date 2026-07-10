@@ -1,8 +1,9 @@
 """Integration test: Video engine (KVM) faithfulness on the QEMU model.
 
-The AST2050 video engine (0x1E700000) is not modelled — checks xfail until an
-aspeed.video-ast2050 device is added (see peripherals/video/DOC.md §3). This blocks
-OpenBMC KVM verification. No hardware here.
+The AST2050 video engine (0x1E700000) is now modelled by aspeed.video-ast2050 — VR000
+is a protection-key lock latch (unlock 0x1A038AA8 -> reads 1), the rest RW while
+unlocked, so the OpenBMC aspeed-video driver can bind. Frame capture is deferred. See
+peripherals/video/DOC.md. No hardware here.
 """
 import sys
 from pathlib import Path
@@ -22,8 +23,6 @@ def test_reaches_halt(video):
     assert video.halted, f"video fwtest did not reach the halt sentinel:\n{video.raw}"
 
 
-@pytest.mark.xfail(reason="video engine unmodelled; needs aspeed.video-ast2050 (DOC.md §3)",
-                   strict=False)
-def test_video_modelled(video):
+def test_protection_key_unlock(video):
     c = next((c for c in video.checks if c[0] == "vr000.unlock"), None)
-    assert c is not None and c[1]
+    assert c is not None and c[1], f"video VR000 protection key not modelled:\n{video.raw}"

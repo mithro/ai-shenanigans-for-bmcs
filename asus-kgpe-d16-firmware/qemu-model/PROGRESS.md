@@ -294,7 +294,16 @@ prioritised backlog of where QEMU diverges from real silicon.
 - Result: `pwm` fwtest **3/3 PASS** (was all-fail unmodelled); smoke still green; **suite
   46 passed, 26 xfailed**. Pushed to mithro/qemu (`655d31b6`). OpenBMC fan hwmon can now
   bind. Tach RPM synthesis deferred. CI-validating the C1–C4 boots stay green.
-- Pattern established for the remaining new devices (Video, USB UDC, LPC, RTC).
+- Pattern established for the remaining new devices (USB UDC, LPC, RTC).
+
+### DEPTH #2 — Video engine (KVM) device authored + wired
+- New `aspeed.video-ast2050` (`hw/misc/aspeed_video_ast2050.c`): VR000 protection-key lock
+  latch (unlock 0x1A038AA8 → reads 1) + RW registers; replaces the AST2400 unimplemented
+  stub for the G3 (the G3-only stub is skipped in `_init` to satisfy qdev's realize
+  assertion — a gotcha for replacing unimplemented devices). OpenBMC aspeed-video can bind.
+- Result: `video` fwtest PASS; smoke/pwm green; **suite 47 passed, 25 xfailed**. Pushed
+  to mithro/qemu (`af3997fd`). Frame-capture datapath + INT7 deferred. CI-validating boots
+  (the vendor firmware pokes the video engine, so C4 must confirm green).
 
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).

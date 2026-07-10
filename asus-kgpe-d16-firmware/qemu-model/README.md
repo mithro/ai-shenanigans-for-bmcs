@@ -109,7 +109,7 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 14 | RTC | 0x1E781000 | time | ☑ | ☑ | ☐ | ◐ | 3 |
 | 15 | LPC (KCS/BT IPMI, SuperIO, iLPC2AHB) | 0x1E789000 | host IPMI, culvert ilpc | ☑ | ☑ | ☐ | ◐ | 3 |
 | 16 | VUART / PUART | 0x1E787000 / TBD | SOL, host serial passthrough | ☐ | ☐ | ☐ | ☐ | 4 |
-| 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☑ | ☑ | ☐ | ◐ | 4 |
+| 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☑ | ☑ | ☑ | ☑ | 4 |
 | 18 | USB2.0 UDC / virtual hub | 0x1E6A0000 | virtual media, vkeyboard | ☑ | ☑ | ☐ | ◐ | 4 |
 | 19 | PCI A2P bridge + arbiter (culvert p2a) | 0x1E720000 / 0x1E78C000 | culvert p2a (PCI-slave BAR) | ☑ | ☑ | ☐ | ◐ | 5 |
 | 20 | HACE (hash/crypto), MIC, mailbox, scratch | 0x1E6E3000 / … | as probed | ☐ | ☐ | ☐ | ☐ | 5 |
