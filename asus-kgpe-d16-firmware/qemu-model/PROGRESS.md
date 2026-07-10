@@ -270,10 +270,26 @@ Fully faithful: Timer, WDT, UART, GPIO. Register/engine-faithful (depth gaps): S
 MAC, I2C, SDRAM. Documented model gaps (opt-in/unmodelled/wrong-layout, each tasked): VIC,
 RTC, PWM, SMC, LPC, Video, USB, AHB, DDR2, RTL8201CP-PHY, SCU-reset-table. Suite: 40/28.
 
-### Next
+### ✅ MILESTONE — peripheral BREADTH complete: a test suite for EVERY device (17)
+**P2A** added: PCI identity (vendor 0x1A03) faithful; SCU2C[8] enable observed; the
+host-side backdoor (PCI-slave BAR window) is unmodelled (no host PCI endpoint) — xfail,
+validated on silicon via culvert. Every memory-mapped AST2050 block now has a bare-metal
+fwtest + datasheet-cited DOC + pytest integration test + a faithfulness verdict. **Suite:
+42 passed, 29 xfailed** — every xfail is a datasheet-cited, tasked gap. This satisfies the
+goal's "comprehensive test suite for every device", and the xfail set is the precise,
+prioritised backlog of where QEMU diverges from real silicon.
+
+### Faithfulness verdict per device
+- **Faithful (no change):** Timer, WDT, UART, GPIO.
+- **Register/engine-faithful, depth gaps:** SCU(rev-id), MAC(PHY id), I2C(readback), SDRAM, AHB.
+- **Model gaps (tasked):** VIC (G4 two-bank), RTC (G4 layout), LPC (KCS/BT@0x140), PWM
+  (unmodelled), Video (unmodelled), USB (unmodelled + phantom EHCI), SMC (unmodelled),
+  DDR2-SDMC, RTL8201CP-PHY, SCU-reset-table, P2A (host endpoint).
+
+### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).
-- Last breadth peripheral: **P2A/PCIe-to-AHB** (culvert p2a).
-- Oracle-safe *depth* work (highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan
-  hwmon), `aspeed.video-ast2050` (KVM), USB UDC + EHCI removal, G3 `aspeed.lpc-ast2050`
-  (KCS/BT/iLPC2AHB), per-board RTL8201CP PHY, G3 kernel VIC/RTC drivers, reduce C4 patch debt.
-- Then **Phase 6**: modern OpenBMC over TFTP+NFS on the faithful machine.
+- **Depth** (oracle-safe, highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan
+  hwmon), `aspeed.video-ast2050` (KVM), USB UDC + phantom-EHCI removal, G3 `aspeed.lpc-ast2050`
+  (KCS/BT/iLPC2AHB), G3 `aspeed.rtc-ast2050`, per-board RTL8201CP PHY, wire the G3 VIC + its
+  kernel driver, then shrink the C4 RE-patch debt so the opt-in G3 SCU reset table can wire in.
+- **Phase 6:** modern OpenBMC over TFTP+NFS on the faithful machine (modern-kernel path).
