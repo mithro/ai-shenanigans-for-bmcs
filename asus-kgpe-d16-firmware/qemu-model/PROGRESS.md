@@ -55,10 +55,24 @@ From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
 - **Finding #1 (rev-id):** `scu.revid.is_ast2050_a3` FAIL got=`01000303`
   want=`00000202`. The harness mechanically reproduced the datasheet+HW-backed gap.
 
+### Phase 1 — SCU: rev-id made faithful (model + test + integration all green)
+- QEMU fork submodule initialised in this worktree and **built from source**
+  (`scripts/build-qemu.sh` → `qemu/build/qemu-system-arm`, `-M kgpe-d16-bmc` OK).
+- To avoid disturbing PR #16, the model change is on a **new submodule branch
+  `ast2050-faithful`** (branched from `d16-ast2050-machine` tip); `.gitmodules`
+  repointed to it.
+- **Fix:** `AST2050_A1_SILICON_REV` `0x01000303`→`0x00000202` in `aspeed_scu.h`.
+  Justified: only 3 uses (property, valid-revs table by name, definition); the sole
+  classifier `ASPEED_IS_AST2500` (bits[31:24]==0x04) is unaffected. Datasheet §18.2
+  p220 + culvert HW both give `0x00000202`.
+- **Deliverables done for the rev-id aspect:** `peripherals/scu/fwtest.c` (1),
+  submodule model change (3), `integration/test_scu.py` — 4 pytest cases (4).
+  Verified: `scu` + `smoke` fwtests FAIL→PASS; `pytest integration/test_scu.py` →
+  4 passed. Remaining SCU aspects (strap bit decode, H-PLL/M-PLL clock tree,
+  clock-select/PCLK divider faithfulness, and `DOC.md`) pending `DATASHEET-SCU.md`
+  (subagent extracting SCU §18 in progress).
+
 ### Next
-- Fold the corrections above into the `README.md` matrix (ADC→absent, SMC data addr,
-  PCI/A2P, rev-id note). *(done in same commit)*
-- Init + build the QEMU fork submodule in this worktree so device models are editable.
-- **Template peripheral #1 = SCU**: DOC.md (datasheet-cited) + a full `scu` fwtest +
-  fix the SoC rev-id (`0x01000303`→`0x00000202`) + straps/PLL faithfulness +
-  `integration/test_scu.py`. Exit: smoke + scu tests PASS on the faithful build.
+- Fold `DATASHEET-SCU.md` into `peripherals/scu/DOC.md` (deliverable 2); add
+  strap/PLL fwtest checks + model fixes as the datasheet pins the bit fields.
+- Then peripheral #2 = **compact G3 VIC** (best HW ground truth; concrete G4 gap).
