@@ -157,6 +157,31 @@ def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
     os.chmod(rootfs / "root/.ssh/authorized_keys", 0o600)
 
 
+def tar_rootfs(rootfs: Path, out: Path):
+    """Emit the rootfs tree as a root-owned tar for NFS export (Phase 6).
+
+    The Phase-6 `boot-nfsroot` CI job extracts this into the NFS server's
+    /export as root and serves it to the faithful kgpe-d16-bmc guest, which
+    TFTP/`-kernel`-boots then mounts it over NFS (root=/dev/nfs). Same BusyBox+
+    dropbear userspace as the initramfs — so the same `/init` (via init=/init)
+    brings up eth0+dropbear and prints BMC-READY, proving the netboot+NFS path.
+
+    Every entry is forced to uid/gid 0 because the build runs unprivileged but
+    the export must be owned by root (dropbear also refuses a non-root-owned
+    ~/.ssh/authorized_keys).
+    """
+    tarpath = out / "nfs-rootfs.tar"
+
+    def root_owned(ti):
+        ti.uid = ti.gid = 0
+        ti.uname = ti.gname = "root"
+        return ti
+
+    with tarfile.open(tarpath, "w") as t:
+        t.add(rootfs, arcname=".", filter=root_owned)
+    print("NFS-export rootfs tar:", tarpath)
+
+
 def pack(rootfs: Path, out: Path):
     cpio = out / "initramfs.cpio"
     names = subprocess.run(["find", "."], cwd=rootfs, capture_output=True,
@@ -196,6 +221,7 @@ def main():
         shutil.rmtree(rootfs)
     build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey)
     pack(rootfs, out)
+    tar_rootfs(rootfs, out)
     print("\nInitramfs artifacts in", out)
     run(["ls", "-la", str(out)])
 

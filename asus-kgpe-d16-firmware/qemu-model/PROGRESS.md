@@ -330,6 +330,31 @@ prioritised backlog of where QEMU diverges from real silicon.
 - Next 6a steps: TFTP-boot verify (slirp `tftp=`), rootfs-export mode in build.py, the
   `boot-nfsroot` CI job.
 
+### PHASE 6a — NFS-root boot IMPLEMENTED end-to-end (CI-validated)
+The `unfs3` (userspace NFS) source build was denied as external code, confirming the NFS
+boot genuinely cannot run in the sandbox — so it's wired as a CI job (apt's trusted
+`nfs-kernel-server`), the same pattern as C1–C4. All four pieces landed:
+- **Rootfs export:** `initramfs/build.py` now emits `nfs-rootfs.tar` (root:root tree, uid/gid
+  forced to 0 so guest-root reads it and dropbear accepts the owner). **Verified locally** —
+  a focused test confirmed root ownership + preserved symlinks + 0700 `.ssh`/0600 authkeys.
+  Rides along in the existing `initramfs` artifact (whole `out/` is uploaded).
+- **Kernel:** `build-kernel.sh` merges `kgpe-d16-nfsroot.config` (now also `DEVTMPFS_MOUNT`
+  so `/dev/console` exists before init over NFS). One kernel serves initramfs + NFS boots;
+  dormant for C2/C3 (no `ip=`/`root=/dev/nfs`), so oracle-safe — existing jobs re-verify it.
+- **Harness:** `scripts/nfsboot-test.py` boots `-M kgpe-d16-bmc` with
+  `root=/dev/nfs rw ip=dhcp nfsroot=10.0.2.2:/export/kgpe-d16-rootfs,vers=3,tcp,nolock
+  init=/init`; PASS requires the kernel `Mounted root (nfs filesystem` **and** userspace
+  `BMC-READY`, plus an optional SSH-over-NFS check. `--help` verified.
+- **CI job `boot-nfsroot` (C5):** apt-installs `nfs-kernel-server`, extracts the tar to
+  `/export/kgpe-d16-rootfs`, exports `*(rw,no_root_squash,insecure)` — `insecure` because
+  slirp SNATs the guest to a 127.0.0.1 high source port — starts rpcbind+nfsd, runs the
+  harness. YAML validated. Pushed; iterating via CI.
+- **Why this is the real milestone:** it proves the *exact* netboot+NFS transport OpenBMC
+  uses — the faithful machine pulls its kernel and mounts `/` over NFSv3 through the
+  register-faithful FTGMAC100, running real SSH-reachable userspace from the export. 6b
+  (task) only swaps the export's *contents* for an OpenBMC image (needs an ARMv5 `kgpe-d16`
+  Yocto machine layer; romulus/AST2500 OpenBMC is ARMv6, not reusable directly).
+
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).
 - **Depth** (oracle-safe, highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan

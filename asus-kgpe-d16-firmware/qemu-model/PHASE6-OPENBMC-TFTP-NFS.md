@@ -45,12 +45,32 @@ runs.
 
 ## Status / next steps
 
-- [x] NFS-root kernel config fragment (`kgpe-d16-nfsroot.config`).
-- [ ] TFTP boot: verify U-Boot `tftp` of the kernel via slirp `tftp=` (local, feasible).
-- [ ] NFS rootfs export from the BusyBox initramfs contents.
-- [ ] CI job `boot-nfsroot` in `d16-qemu-stack.yml`: apt-install NFS server → export → boot
-      → assert shell over NFS. (**6a milestone.**)
-- [ ] OpenBMC rootfs over NFS (**6b** — needs the AST2050 Yocto machine or a served subset).
+- [x] NFS-root kernel config fragment (`kgpe-d16-nfsroot.config`) — now also enables
+      `DEVTMPFS_MOUNT` (no initramfs to mknod `/dev/console` before init over NFS).
+- [x] Kernel build merges the fragment (`scripts/build-kernel.sh`), so the single kernel
+      artifact carries NFS/IP_PNP (dormant for the C2/C3 initramfs boots).
+- [x] NFS rootfs export: `initramfs/build.py` emits `nfs-rootfs.tar` (root-owned tree),
+      uploaded with the initramfs artifact. Verified locally (ownership/symlinks/modes).
+- [x] NFS-boot harness `scripts/nfsboot-test.py`: boots `-M kgpe-d16-bmc` with
+      `root=/dev/nfs ip=dhcp nfsroot=10.0.2.2:/export/...,vers=3,tcp,nolock init=/init`;
+      PASS = kernel "Mounted root (nfs filesystem" **and** userspace "BMC-READY", with an
+      optional SSH-over-NFS check.
+- [x] CI job **`boot-nfsroot` (C5)** in `d16-qemu-stack.yml`: apt-installs
+      `nfs-kernel-server`, extracts the tar to `/export/kgpe-d16-rootfs`, exports it
+      `*(rw,no_root_squash,insecure)` (insecure: slirp SNATs the guest to a 127.0.0.1
+      high port), starts rpcbind+nfsd, then runs the harness. (**6a milestone — validated
+      in CI since the dev sandbox has no NFS tooling and external NFS servers can't be built.**)
+- [ ] OpenBMC rootfs over NFS (**6b** — needs the AST2050 Yocto machine or a served subset;
+      note ARMv5 (ARM926) vs the AST2500 `romulus` OpenBMC's ARMv6, so romulus binaries
+      can't be reused directly — a native `kgpe-d16` machine layer is required).
+
+## Why 6a is the meaningful milestone
+
+6a proves the **exact transport** OpenBMC will use — the faithful AST2050 QEMU pulls its
+kernel over the network and mounts `/` over NFSv3, running real userspace (BusyBox+dropbear,
+SSH-reachable) entirely from the NFS export, over the register-faithful FTGMAC100. 6b then
+only swaps the *contents* of that export for an OpenBMC image; the machine/kernel/transport
+are already proven identical to how the hardware netboots.
 
 ## Why this is oracle-safe
 

@@ -33,9 +33,13 @@ if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
         >> arch/arm/boot/dts/aspeed/Makefile
 fi
 
-# Config: aspeed_g4_defconfig + D16 fragment.
+# Config: aspeed_g4_defconfig + D16 fragment + NFS-root fragment.
+# The NFS-root fragment (IP_PNP/DHCP + NFS client + ROOT_NFS + devtmpfs auto-
+# mount) is dormant for the initramfs boots (C2/C3 carry no ip=/root=/dev/nfs on
+# the cmdline) and enables the Phase-6 boot-nfsroot path from the same kernel.
 make aspeed_g4_defconfig
-scripts/kconfig/merge_config.sh -m .config "$ROOT/kernel/kgpe-d16.config"
+scripts/kconfig/merge_config.sh -m .config \
+    "$ROOT/kernel/kgpe-d16.config" "$ROOT/kernel/kgpe-d16-nfsroot.config"
 make olddefconfig
 
 # Build.

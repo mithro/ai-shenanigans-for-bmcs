@@ -3,7 +3,10 @@ name: D16 QEMU firmware stack
 # Builds the custom kgpe-d16-bmc (AST2050) QEMU + the new firmware stack from
 # source (C1) and boots it to an SSH login (C2). Also builds Raptor
 # Engineering's 2.6.28 AST2050 kernel + a musl userspace from source and boots
-# it on the same machine via ATAGS (C3). Proprietary (C4) lands later.
+# it on the same machine via ATAGS (C3). Proprietary Dell firmware boots to its
+# BMC web service (C4). Phase-6 boot-nfsroot (C5) boots the same modern kernel
+# with its root filesystem served over NFS (root=/dev/nfs, ip=dhcp) through QEMU
+# slirp to a host nfs-kernel-server — the netboot+NFS transport OpenBMC uses.
 on:
   push:
     paths:
@@ -114,6 +117,54 @@ jobs:
             --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240
+
+  boot-nfsroot:
+    name: Boot faithful machine with root over NFS (C5 / Phase 6a)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Export the BusyBox rootfs over NFS (localhost, insecure for slirp)
+        run: |
+          sudo mkdir -p /export/kgpe-d16-rootfs
+          sudo tar -C /export/kgpe-d16-rootfs -xf initramfs-out/nfs-rootfs.tar
+          echo "=== extracted NFS rootfs ==="; sudo ls -la /export/kgpe-d16-rootfs
+          # NFSv3 over QEMU slirp: the guest reaches the server as 127.0.0.1 with
+          # a high source port, so the export must be 'insecure'; no_root_squash
+          # lets guest-root read the root-owned tree.
+          echo '/export/kgpe-d16-rootfs *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+          echo "=== rpc services ==="; rpcinfo -p 127.0.0.1
+      - name: Boot kgpe-d16-bmc with root over NFS + SSH check
+        run: |
+          chmod 600 initramfs-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/nfsboot-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/kgpe-d16-rootfs \
+            --key initramfs-out/id_kgpe_d16_test \
+            --boot-timeout 300
 
   build-uboot:
     name: Build new U-Boot (OpenBMC AST2400)
