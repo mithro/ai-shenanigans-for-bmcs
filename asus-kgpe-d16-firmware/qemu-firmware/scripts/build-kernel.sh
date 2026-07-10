@@ -33,6 +33,16 @@ if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
         >> arch/arm/boot/dts/aspeed/Makefile
 fi
 
+# AST2050 (G3) compact VIC irqchip driver. The mainline irq-aspeed-vic only
+# handles the AST2400/2500 two-bank layout and assumes hardwired trigger config;
+# the G3 is single-bank and firmware must program SENSE/DUAL/EVENT. See
+# kernel/drivers/irq-aspeed-g3-vic.c and qemu-model/peripherals/vic.
+cp "$ROOT/kernel/drivers/irq-aspeed-g3-vic.c" drivers/irqchip/
+if ! grep -q irq-aspeed-g3-vic drivers/irqchip/Makefile; then
+    echo 'obj-$(CONFIG_ARCH_ASPEED) += irq-aspeed-g3-vic.o' \
+        >> drivers/irqchip/Makefile
+fi
+
 # Config: aspeed_g4_defconfig + D16 fragment + NFS-root fragment.
 # The NFS-root fragment (IP_PNP/DHCP + NFS client + ROOT_NFS + devtmpfs auto-
 # mount) is dormant for the initramfs boots (C2/C3 carry no ip=/root=/dev/nfs on

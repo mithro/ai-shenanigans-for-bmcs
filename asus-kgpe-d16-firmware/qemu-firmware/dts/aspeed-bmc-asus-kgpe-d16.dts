@@ -46,6 +46,17 @@
 		     "syscon", "simple-mfd";
 };
 
+&vic {
+	/*
+	 * AST2050 (G3) compact VIC: a single 32-bit bank at 0x1e6c0000, register
+	 * window 0x00-0x38 (NOT the AST2400 two-bank layout at 0x1e6c0080). Bound
+	 * by irq-aspeed-g3-vic, which programs the trigger config (SENSE/DUAL/
+	 * EVENT) the AST2400 hardwires. See qemu-model/peripherals/vic.
+	 */
+	compatible = "aspeed,ast2050-vic";
+	reg = <0x1e6c0000 0x40>;
+};
+
 &uart5 {
 	status = "okay";
 };

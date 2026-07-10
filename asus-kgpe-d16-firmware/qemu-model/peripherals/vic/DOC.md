@@ -102,5 +102,19 @@ AST2400 0x80+ aliases (G3 never uses them).
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ 13 checks |
 | 2 | doc (this + `DATASHEET-VIC.md`) | ☑ |
-| 3 | QEMU model (`aspeed.vic-ast2050`) | ◐ built + passes when wired; not wired to the machine pending the G3 kernel driver (§5) |
-| 4 | integration test (`../../integration/test_vic.py`) | ◐ 7 pass, 6 xfail until end-to-end |
+| 3 | QEMU model (`aspeed.vic-ast2050`) | ☑ **wired end-to-end** (TYPE_ASPEED_2050_VIC for the AST2050 SoC) |
+| 4 | integration test (`../../integration/test_vic.py`) | ☑ all 13 checks PASS |
+
+## 7. End-to-end bring-up DONE (2026-07-10)
+
+The faithful G3 VIC is now wired to the machine and boots Linux:
+- **QEMU:** the AST2050 SoC uses `TYPE_ASPEED_2050_VIC` (trigger config RW, reset 0;
+  edge latching already correct). `hw/arm/aspeed_ast2400.c`, gated on silicon_rev.
+- **Kernel:** a dedicated `irq-aspeed-g3-vic` irqchip driver (single 32-bit bank,
+  4-byte register spacing at 0x1e6c0000) that **programs** SENSE=0x903897fe /
+  DUAL=0x07c00000 / EVENT=0x983f97fe at init (the AST2400 hardwires these; the G3
+  resets them to 0). `asus-kgpe-d16-firmware/qemu-firmware/kernel/drivers/`.
+- **DTS:** the `&vic` node → `compatible = "aspeed,ast2050-vic"`, `reg = <0x1e6c0000 0x40>`.
+- **Verified:** C2 (direct), C2-full (U-Boot chain), C5 (NFS root) all boot to a
+  shell over SSH — the timer IRQ works. C4 (vendor G3 firmware) is unaffected (it
+  programs the VIC itself). All 6 previously-xfail G3 VIC checks now PASS.
