@@ -278,21 +278,31 @@ sudo apt install openocd            # or build a recent (>=0.12) OpenOCD
 cd asus-kgpe-d16-firmware/openocd
 
 # First contact — discover the real IDCODE (board powered, BMC at reset):
-sudo openocd -f rpi4-jtag.cfg -f ast2050.cfg -c "init; scan_chain; shutdown"
+openocd -f rpi4-jtag.cfg -f ast2050.cfg -c "init; scan_chain; shutdown"
 ```
 
-Then paste the printed IDCODE into `ast2050.cfg` (`-expected-id`), and run the
-full stack:
+Expect IDCODE `0x07926f0f` (Raptor-confirmed on this AST2050). A scan of
+**"all ones"** with IR capture `0x0f` means the harness/target is not
+connected (TDO floating high) — that exact output on an *unwired* Pi is the
+adapter-side smoke test passing. Then run the full board stack:
 
 ```bash
-sudo openocd -f rpi4-jtag.cfg -f ast2050.cfg -f kgpe-d16-bmc.cfg
+openocd -f rpi4-jtag.cfg -f kgpe-d16-bmc.cfg
+# (kgpe-d16-bmc.cfg sources ast2050.cfg — do NOT also pass -f ast2050.cfg,
+#  or OpenOCD aborts with "Command/target: ast2050.cpu Exists".)
 # in another terminal:
 telnet localhost 4444      # OpenOCD console → halt, reg, mdw, etc.
 ```
 
+No `sudo` needed when the user is in the `gpio` group (the `claude`/`tim`
+users on the bridge Pi are — verified: `linuxgpiod` claims the lines fine).
+
 **Driver choice:** the configs use **`linuxgpiod`** (libgpiod char-dev) — the
-robust choice on RPi4, no peripheral-base juggling. A `bcm2835gpio` fallback is
-commented in `rpi4-jtag.cfg`; if you use it, the BCM2711 peripheral base is
+robust choice on RPi4, no peripheral-base juggling. Note `linuxgpiod`
+**ignores `adapter speed`** ("doesn't support configurable speed"); its
+syscall-bound bit-bang is inherently slow, which is safe for bring-up. A
+`bcm2835gpio` fallback is commented in `rpi4-jtag.cfg` (that one does honour
+speed settings); if you use it, the BCM2711 peripheral base is
 **`0xFE000000`** (vs `0x3F000000` on Pi2/3).
 
 **Do NOT** set `enable_jtag_gpio=1` in `/boot/config.txt` — that exposes the
