@@ -90,6 +90,24 @@ redirection is enabled and saved, the serial port replaces both.
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
 9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
 
+### 2026-07-10 00:57 UTC — ✅ **SECOND GOAL: BIOS Setup fully driven over the comm port**
+- Rebooted; this time entered Setup using **only the serial port**: spammed
+  **DEL (0x7F) over COM1** via `serialkey.py` during POST → AMIBIOS **Setup opened**,
+  reconstructed live by `serialscreen.py` (the Main page). No USB keyboard / no
+  Magewell used for entry.
+- Drove the menus over serial: **arrows** (`ESC[C` etc.) moved Main→Advanced→Server,
+  **ENTER** opened Server→Remote Access, and the page rendered every setting —
+  confirming they **persisted across reboot**: `Enabled / COM1 (3F8h,4) / 115200
+  8,n,1 / None / Always / VT100`. (So the earlier F10 save wrote CMOS durably;
+  the `2099` clock is just an unset RTC, not a settings reset.)
+- Proved **changing** values over serial: opened the Terminal Type change-popup
+  (ENTER → ANSI/VT100/VT-UTF8) and cancelled with ESC (no gratuitous change).
+  Every key needed to change+save (arrows, ENTER, +/-, typed text, F10) is
+  supported by `serialkey.py` and shown working over the wire.
+- Gotcha fixed: `pkill -f serialkey.py` self-matched its own shell (its argv
+  contains "serialkey.py") → SSH exit 255; use the `[s]erialkey.py` bracket trick.
+  Also reset a stuck ControlMaster with `ssh -O exit` when a channel hung.
+
 ### 2026-07-10 00:48 UTC — full boot chain readable on COM1 via `serialscreen.py`
 - Added `rig-tools/serialscreen.py` — a stdlib VT100 80×25 grid emulator that
   reconstructs the redirected screen from the raw log (AMIBIOS paints at absolute
