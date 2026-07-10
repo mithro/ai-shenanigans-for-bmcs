@@ -31,6 +31,21 @@ an **ARM926EJ-S / ARMv5TE** BMC, the same CPU as the AST2050 (the AST2500
 ```sh
 cd ~/openbmc
 . setup quanta-q71l build/quanta-q71l
+
+# Two required build-config lines (build/quanta-q71l/conf/local.conf):
+
+# (1) Redfish-only, no web UI. The base packagegroup-obmc-apps still RDEPENDS
+#     webui-vue via its -webui subpackage even when obmc-webui isn't a feature;
+#     webui-vue drags in a multi-hour nodejs-native/V8 build. OpenBMC's
+#     df-phosphor-no-webui override empties that RDEPENDS. (NB: it's driven by
+#     DISTROOVERRIDES, not DISTRO_FEATURES.)
+echo 'DISTROOVERRIDES .= ":df-phosphor-no-webui"' >> build/quanta-q71l/conf/local.conf
+
+# (2) ARMv5 prerequisite: boost::context's context-switch asm is position-
+#     dependent on ARM926, so libboost_context.so has text relocations that
+#     Yocto's QA fails on. Harmless for bmcweb, so skip that one QA check.
+echo 'INSANE_SKIP:boost-context += "textrel"' >> build/quanta-q71l/conf/local.conf
+
 bitbake obmc-phosphor-image-ast2050-redfish
 # -> build/quanta-q71l/tmp/deploy/images/quanta-q71l/
 #      obmc-phosphor-image-ast2050-redfish-quanta-q71l.squashfs-xz

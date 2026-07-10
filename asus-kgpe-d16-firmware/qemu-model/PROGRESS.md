@@ -392,3 +392,23 @@ boot genuinely cannot run in the sandbox — so it's wired as a CI job (apt's tr
   (KCS/BT/iLPC2AHB), G3 `aspeed.rtc-ast2050`, per-board RTL8201CP PHY, wire the G3 VIC + its
   kernel driver, then shrink the C4 RE-patch debt so the opt-in G3 SCU reset table can wire in.
 - **Phase 6:** modern OpenBMC over TFTP+NFS on the faithful machine (modern-kernel path).
+
+### 🎉 PHASE 6b DONE (2026-07-10): real OpenBMC Redfish over NFS on the faithful AST2050 @ 64 MB
+User caught a faithfulness bug: the AST2050 has **64 MB** DDR (HW-verified), not the 128 MB
+my model claimed. Fixed QEMU `default_ram_size` + the DTS to 64 MB. Modern *full* OpenBMC
+does not fit 64 MB, so per user direction built a **stripped Redfish-only image**
+(`asus-kgpe-d16-firmware/openbmc/obmc-phosphor-image-ast2050-redfish.bb`): bmcweb + minimal
+phosphor (user/network/settings/inventory) + ssh; no web UI / IPMI / vKVM / telemetry.
+- Key config: `DISTROOVERRIDES .= ":df-phosphor-no-webui"` (drops webui-vue + its multi-hour
+  nodejs/V8 build — the base packagegroup-obmc-apps pulls webui even without the feature) +
+  `INSANE_SKIP:boost-context += "textrel"` (ARM926 boost::context asm text relocations).
+- Built for quanta-q71l (ast2400 = ARM926/ARMv5TE, same CPU as the AST2050); rootfs
+  `Tag_CPU_arch: v5TE`, 57 MB, bmcweb present.
+- **Boot PASS** (`openbmc/results/redfish-64mb-boot.log`): `-M kgpe-d16-bmc -m 64`, NFS root
+  over FTGMAC100, systemd → Started bmcweb → login prompt, **0 OOM**; `GET /redfish/v1` →
+  **HTTP 200, RedfishVersion 1.17.0**. Booted our 6.6.70 kernel with `mem=64M`.
+- New tooling: `scripts/stage-openbmc-nfsroot.sh` (unsquashfs → mask MTD overlay → NFS export),
+  `scripts/openbmc-nfsroot-test.py` (boot faithful machine + assert Redfish). Local NFS
+  (nfs-kernel-server + /etc/exports.d) since CI can't host a 57 MB rootfs.
+- Note: the image's do_generate_static (flash .static.mtd) fails (fitImage 91 KB over the
+  quanta flash partition) — irrelevant for NFS boot; the squashfs rootfs builds fine.

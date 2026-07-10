@@ -85,6 +85,10 @@ def main():
 
     append = (
         "console=ttyS4,115200n8 "
+        # Cap the kernel to the faithful DRAM size regardless of the DTB's memory
+        # node (mem= overrides it), so booting at --mem 64 truly exercises the
+        # real AST2050 64 MB even with a pre-64MB-fix kernel/DTB artifact.
+        f"mem={args.mem}M "
         "root=/dev/nfs rw ip=dhcp "
         f"nfsroot={args.nfsroot},vers=3,tcp,nolock"
     )
