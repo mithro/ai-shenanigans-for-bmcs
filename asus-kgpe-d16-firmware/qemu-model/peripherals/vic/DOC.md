@@ -72,16 +72,29 @@ change `event`). The AST2050 registers are 32-bit, reset 0, fully RW.
 
 ## 5. Faithful-model plan (QEMU `mithro/qemu@ast2050-faithful`)
 
-Implemented as the **`aspeed.vic-ast2050`** type (`TYPE_ASPEED_2050_VIC`), a
-variant of the existing device gated by a `bool ast2050`:
-- [x] `sensitivity`/`both-edge`/`event` **reset 0, fully writable** (32-bit) — the
-  6 failing checks are now green (fwtest 13/13 PASS). Selected by the AST2050 SoC
-  (keyed on silicon-rev), leaving AST2400/2500 untouched.
-- [x] The existing IRQ/FIQ raise logic and 32 source lines are reused unchanged, so
-  the interrupt path the C1–C4 boots depend on is undisturbed (re-validated by CI).
-- [ ] *Refinement (deferred):* decode strictly 0x00–0x38 and drop the AST2400
-  0x80+ second-bank aliases. G3 firmware never touches 0x80+, so this is cosmetic
-  faithfulness; the observable single-bank register behaviour is already correct.
+The **`aspeed.vic-ast2050`** type (`TYPE_ASPEED_2050_VIC`, a `bool ast2050`
+variant) is implemented and **passes 13/13 fwtest checks when wired** — trigger
+config resets 0 and is fully writable. **It is NOT wired to the machine by
+default**, for a reason CI proved:
+
+> **Faithful VIC ⟹ needs a faithful kernel driver.** With the G3 VIC wired, the
+> C2 kernel boots to userspace and then **hangs — the timer IRQ dies at ~0.83 s**.
+> The mainline `aspeed,ast2400-vic` driver treats the VIC trigger config as *fixed
+> AST2400 hardware defaults* (its writes go to the read-only 0x80+ bank), so on a
+> faithful G3 VIC (reset 0) the timer's rising-edge config is never programmed and
+> the IRQ never fires. The "working" C1–C4 boots worked *because* the AST2400 VIC
+> was unfaithful.
+
+### End-to-end G3 VIC bring-up (the real fix — tracked as a task)
+1. Kernel: add `irq-aspeed-g3-vic` (the compact-VIC irqchip from the culvert HW
+   work) that programs sensitivity/both-edge/event at 0x24/0x28/0x2C per the DTS.
+2. DTS: the kgpe-d16 interrupt-controller node → `compatible = "aspeed,ast2050-vic"`.
+3. QEMU: re-wire the SoC to `TYPE_ASPEED_2050_VIC` (one line in aspeed_ast2400.c).
+4. Re-validate: fwtest 13/13 **and** C1–C4 boots green together.
+
+Until (1)+(2) land, the machine keeps `TYPE_ASPEED_VIC` (boots stay green) and the
+six G3 fwtest checks are xfail. *Deferred refinement:* also stop decoding the
+AST2400 0x80+ aliases (G3 never uses them).
 
 ## 6. Deliverable status
 
@@ -89,5 +102,5 @@ variant of the existing device gated by a `bool ast2050`:
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ 13 checks |
 | 2 | doc (this + `DATASHEET-VIC.md`) | ☑ |
-| 3 | QEMU model (`aspeed.vic-ast2050`) | ☑ observable behaviour faithful (0x80+ decode a deferred refinement) |
-| 4 | integration test (`../../integration/test_vic.py`) | ☑ 8 passed |
+| 3 | QEMU model (`aspeed.vic-ast2050`) | ◐ built + passes when wired; not wired to the machine pending the G3 kernel driver (§5) |
+| 4 | integration test (`../../integration/test_vic.py`) | ◐ 7 pass, 6 xfail until end-to-end |

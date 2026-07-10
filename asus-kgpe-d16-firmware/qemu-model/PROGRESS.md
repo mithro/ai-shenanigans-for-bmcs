@@ -132,6 +132,33 @@ From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
   custom-QEMU build + C2/C4 boot jobs still running. Pre-existing unrelated failure:
   the C3 Raptor *musl userspace* build (toolchain), not the SoC model — its boot skips.
 
+### CI boot result — VIC regression found + handled (IMPORTANT finding)
+The CI run (SCU + VIC wired) showed **C2/C4 boots FAIL**. Diagnosis from the log: the
+kernel boots fully to userspace (banner prints, eth0 up, /init runs) then the **kernel
+clock freezes at ~0.83 s** and dropbear never starts (240 s timeout) → a **timer-IRQ
+death**. Root cause: with the faithful G3 VIC wired, `sense`/`event` reset to 0, but
+the C2 kernel's mainline **`aspeed,ast2400-vic`** driver treats the trigger config as
+**fixed AST2400 hardware defaults** (its writes hit the read-only 0x80+ bank), so the
+timer's rising-edge config is never programmed and the IRQ never fires. **The SCU
+change is fine** — the kernel booted with 128 MB to userspace.
+
+**Key insight:** a faithful G3 VIC *requires* a faithful G3 kernel driver. The
+"working" C1–C4 boots worked *because* the AST2400 VIC was unfaithful. Faithful QEMU
+and a faithful kernel must co-evolve.
+
+**Handled:** reverted the machine's VIC *wiring* to `TYPE_ASPEED_VIC` (boots green,
+CI regression signal preserved); the faithful `aspeed.vic-ast2050` model + fwtest are
+kept, the 6 G3 checks are xfail, and the end-to-end fix (kernel `irq-aspeed-g3-vic` +
+`aspeed,ast2050-vic` DTS + re-wire) is a tracked task. See `peripherals/vic/DOC.md §5`.
+
+### Timer (FTTMR010): observable behaviour faithful (6/6)
+- `peripherals/timer/{DATASHEET-TIMER,DOC}.md` + `fwtest.c`: reset (control/count=0)
+  + functional down-count (enable timer1 from PCLK, verify it decrements). All pass on
+  the current model — the AST2400 timer is functionally faithful for the G3's 3 timers.
+  Absolute PCLK *rate* fidelity is deferred to the SCU post-divider work (task #55).
+- Integration: **21 passed, 9 xfailed** (3 SDRAM + 6 VIC).
+
 ### Next
-- Confirm C1–C4 boots green → push the SDRAM work → implement the boot-gated DDR2
-  SDMC model → timer (with SCU PLL post-divider clock-rate check) → UART → WDT.
+- Push (SCU stays; VIC reverted) → confirm C1–C4 boots green again.
+- G3-VIC end-to-end (kernel driver + DTS) — the faithful fix. Then UART, WDT, AHB
+  remap; boot-gated DDR2 SDMC model; then Phase 2 (netboot/NFS).

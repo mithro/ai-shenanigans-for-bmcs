@@ -83,8 +83,8 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 |--:|---|---|---|:-:|:-:|:-:|:-:|:-:|
 | 1 | SCU (system control: clocks, straps, rev-id, reset, pinmux) | 0x1E6E2000 | clocks/identity gate everything | ☑ | ☑ | ◐ | ☑ | 1 |
 | 2 | SDRAM controller (DDR2) | 0x1E6E0000 | U-Boot DRAM init | ☑ | ☑ | ◐ | ◐ | 1 |
-| 3 | VIC (interrupt controller, compact G3) | 0x1E6C0000 | all IRQs | ☑ | ☑ | ☑ | ☑ | 1 |
-| 4 | Timer (FTTMR010, 3×) | 0x1E782000 | clocksource/clockevent | ☐ | ☐ | ◐ | ☐ | 1 |
+| 3 | VIC (interrupt controller, compact G3) | 0x1E6C0000 | all IRQs | ☑ | ☑ | ◐ | ◐ | 1 |
+| 4 | Timer (FTTMR010, 3×) | 0x1E782000 | clocksource/clockevent | ☑ | ☑ | ☑ | ☑ | 1 |
 | 5 | UART1 / UART2 (16550) | 0x1E783000 / 0x1E784000 | console, SOL | ☐ | ☐ | ◐ | ☐ | 1 |
 | 6 | WDT | 0x1E785000 | watchdog, reset | ☐ | ☐ | ◐ | ☐ | 1 |
 | 7 | AHB controller + remap | 0x1E600000 | boot remap (0x0↔DRAM) | ☐ | ☐ | ◐ | ☐ | 1 |
