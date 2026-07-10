@@ -49,6 +49,40 @@ redirection is enabled and saved, the serial port replaces both.
 - `/dev/serial-ulx3s`/`spispy` → `ttyUSB0` — SPI flash tooling.
 - Power control over the ASUS (Tasmota plug) + passwordless sudo.
 
+## Quick reference — driving the rig
+
+All via the SSH mux config `tmp/hw-access/ssh_config` (`opi` = USB-gadget board,
+`rpi4` = Magewell + serial + power). Tools live in `~/rig-tools/` on each device.
+
+**Type on the host as a USB keyboard** (works in Linux *and* BIOS):
+```sh
+ssh -F ssh_config opi "sudo python3 ~/rig-tools/keysend.py type 'text'"
+ssh -F ssh_config opi "sudo python3 ~/rig-tools/keysend.py press DEL"      # e.g. enter Setup
+ssh -F ssh_config opi "sudo python3 ~/rig-tools/keysend.py script 'type:reboot|press:ENTER'"
+```
+**See the screen** (Magewell → PNG, pull + view):
+```sh
+ssh -F ssh_config rpi4 '~/rig-tools/grabframe.sh ~/hw-capture/frame.png'
+```
+**Serial console (COM1 @115200)** — one logger daemon owns the port; render it:
+```sh
+# logger daemon (start once): writes ~/hw-capture/com1.log
+ssh -F ssh_config rpi4 'setsid nohup python3 ~/rig-tools/seriallog.py --baud 115200 \
+    --out ~/hw-capture/com1.log >~/hw-capture/seriallog.out 2>&1 </dev/null &'
+# reconstruct the BIOS screen from the log (VT100 grid emulator):
+ssh -F ssh_config rpi4 'python3 ~/rig-tools/serialscreen.py ~/hw-capture/com1.log --from-last-clear'
+```
+**Drive the BIOS *over serial*** (no keyboard/Magewell) with `serialkey.py`:
+```sh
+ssh -F ssh_config rpi4 'python3 ~/rig-tools/serialkey.py press DEL'          # enter Setup (spam during POST)
+ssh -F ssh_config rpi4 'python3 ~/rig-tools/serialkey.py press RIGHT ENTER'  # navigate / open submenu
+ssh -F ssh_config rpi4 'python3 ~/rig-tools/serialkey.py press F10 ENTER'    # Save & Exit  (F10 = AMI ESC-0 combo)
+```
+Notes: to enter Setup you must **spam the key during the POST window** (the board
+first waits on the BMC ~100s, prints `BMC failed`, then reaches the prompt).
+`pkill`-ing a spammer: use the `[s]erialkey.py` bracket trick so pkill doesn't
+match its own argv. Power: Tasmota plug `au-plug-10` (cold cycle).
+
 ## Progress log
 
 ### 2026-07-10 00:21 UTC — baseline / access established
