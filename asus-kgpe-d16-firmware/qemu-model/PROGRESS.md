@@ -96,6 +96,23 @@ From `AST2050-MEMORY-MAP.md` (datasheet A3 V1.05 §9, pp.97–98):
   `0xC0` "DRAM ready"). Faithful per datasheet (Init=0), low-risk for -kernel/U-Boot
   boots (they don't depend on it), but the C1–C4 full-boot CI jobs should confirm.
 
+### Phase 1 — VIC: compact G3 interrupt controller (13/13 checks green)
+- Subagent extracted §16 + source Table 36 → `peripherals/vic/DATASHEET-VIC.md`:
+  single 32-bit bank, 13 regs (0x00–0x38), all reset 0; IRQ map (timers 16/17/18
+  rising-edge, UART1/2 9/10 level, MAC1=2, I2C=12, WDT=27, RTC 22–26 both-edge).
+  The firmware trigger words reconstruct bit-for-bit from Table 36 and match the
+  culvert HW capture: sense=0x903897FE, dual=0x07C00000, event=0x983F97FE.
+- `fwtest.c`: dumps the file + checks reset (all 0) + writes the firmware words and
+  checks read-back. Baseline: 6 fail — the AST2400 model hardwires
+  sense/dual/event (0xfff8ffff etc.) and treats 0x24/0x28/0x2C as read-only.
+- **Fix (model):** `aspeed.vic-ast2050` variant (`bool ast2050`): trigger-config
+  regs reset 0 + fully writable; IRQ-raise logic and 32 source lines reused
+  unchanged (boot IRQ path undisturbed). Selected by the AST2050 SoC. Pushed to
+  mithro/qemu.
+- Result: **13/13 fwtest checks PASS; integration suite 17 passed** (SCU 9 + VIC 8).
+  Deferred refinement (documented): stop decoding the AST2400 0x80+ aliases (G3
+  firmware never touches them — cosmetic only).
+
 ### Next
-- Peripheral #2 = **compact G3 VIC** (best HW ground truth; concrete G4 two-bank gap).
-- Then SDRAM/DDR2, timer (with the SCU PLL post-divider clock-rate check), UART, WDT.
+- SDRAM/DDR2 controller (U-Boot DRAM init), then timer (with the SCU PLL
+  post-divider clock-rate check), UART, WDT → completes the Phase-1 boot foundation.
