@@ -454,3 +454,23 @@ Two more G3 device models (QEMU-only, locally iterated, oracle-safe — C2 re-ve
 + 2 deeper efforts: I2C EEPROM read-back (a bare-metal fwtest/aspeed_i2c OLD-mode ACK-reporting
 mismatch — the I2C engine itself is proven faithful, OpenBMC reads the 0x50 MAC EEPROM at boot)
 and P2A host-side PCI endpoint (a large model; the culvert P2A path is silicon-validated).
+
+### 🎉 G3 VIC end-to-end DONE (2026-07-10) — the biggest oracle-blocked gap, resolved
+Via kernel/QEMU co-evolution (commit bad00d4). The compact G3 VIC (single 32-bit bank,
+trigger config RW+reset-0) is now WIRED and boots Linux:
+- Root cause pinned down: the mainline irq-aspeed-vic driver uses 8-byte-spaced offsets for
+  the AST2400 two-bank window at 0x1e6c0080 and *reads* SENSE (assumes hardwired); the G3 is
+  a single bank at 0x1e6c0000 (4-byte spacing) whose SENSE/DUAL/EVENT reset to 0 and must be
+  *programmed*. So a G3 driver was genuinely required.
+- Wrote `kernel/drivers/irq-aspeed-g3-vic.c` (programs SENSE=0x903897fe/DUAL=0x07c00000/
+  EVENT=0x983f97fe), wired via build-kernel.sh + a `&vic` DTS override (`aspeed,ast2050-vic`,
+  reg 0x1e6c0000); QEMU AST2050 SoC now uses TYPE_ASPEED_2050_VIC. Cloned+built the kernel
+  locally for fast iteration.
+- **Verified LOCALLY: C2, C2-full (U-Boot chain), C5 (NFS root) all boot to a shell (timer IRQ
+  works); C4 unaffected (vendor G3 firmware programs the VIC itself).** All 6 VIC fwtest checks
+  PASS. **Suite: 62 passed / 12 xfailed** (was 56/18).
+
+**Depth session grand total: 49→62 passed, 11 xfails closed — EHCI, SMC×2, LPC, UDC, VIC×6.**
+Remaining 12 xfails: SCU-reset (6) + SDRAM (3) + MAC-PHY (1) [all break the AST2400 U-Boot or
+the C410X vendor firmware — co-evolvable only with more U-Boot/firmware work] + I2C SMBus-read
+(1) + P2A PCI-endpoint (1) [large].
