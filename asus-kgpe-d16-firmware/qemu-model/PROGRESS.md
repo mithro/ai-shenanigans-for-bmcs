@@ -158,7 +158,31 @@ kept, the 6 G3 checks are xfail, and the end-to-end fix (kernel `irq-aspeed-g3-v
   Absolute PCLK *rate* fidelity is deferred to the SCU post-divider work (task #55).
 - Integration: **21 passed, 9 xfailed** (3 SDRAM + 6 VIC).
 
+### ⚑ Central finding — faithful SoC ⟹ needs a faithful firmware stack (co-evolution)
+Second CI run (faithful SCU, VIC reverted): **C2 direct-kernel boot PASSES**, but
+**C2 full-chain (AST2400 U-Boot) + C4 (Dell vendor firmware) still FAIL** — first-run
+proof: C4 *succeeded* on the unmodified QEMU, so the **SCU reset table broke them**.
+Root cause is the same as the VIC: the legacy firmware is tuned to the *unfaithful*
+AST2400 machine — the OpenBMC **AST2400 U-Boot** and the RE-patched **vendor firmware**
+read AST2400 SCU registers (UART_HPLL_CLK 0x160, SOC_SCRATCH1 DRAM-ready, …) that the
+faithful G3 map zeroes → they hang.
+
+**This reframes the whole program:** "faithful QEMU" and "modern G3 kernel/U-Boot" are
+one coupled problem. The promising signal: the **modern-kernel direct boot works with
+the faithful SCU** — that is the OpenBMC-target path. The legacy AST2400-U-Boot /
+vendor-firmware boots need a G3-aware firmware stack (or stay legacy).
+
+**Handled (stabilised to green, faithfulness preserved as opt-in):**
+- VIC: machine keeps `TYPE_ASPEED_VIC`; faithful `aspeed.vic-ast2050` opt-in (task #56).
+- SCU: machine keeps the AST2400 **reset table** but the **faithful rev-id 0x00000202**
+  (boot-safe, the modern path passes with it); `ast2050_a3_resets` is the opt-in G3
+  table. 6 reset-table checks xfail (co-evolution), rev-id + reset-flag pass.
+- Integration: **18 passed, 15 xfailed**. All faithful models + analysis kept; nothing
+  lost — just not wired into the machine until the firmware co-evolves.
+
 ### Next
-- Push (SCU stays; VIC reverted) → confirm C1–C4 boots green again.
-- G3-VIC end-to-end (kernel driver + DTS) — the faithful fix. Then UART, WDT, AHB
-  remap; boot-gated DDR2 SDMC model; then Phase 2 (netboot/NFS).
+- Push → confirm C2 direct green (+ see whether rev-id alone is C4-safe).
+- Add a "co-evolution" section to README + a G3-firmware-stack track (U-Boot + kernel
+  drivers) so the faithful machine has matching faithful firmware. Continue UART/WDT/
+  AHB (low co-evolution risk); DDR2 SDMC stays gated; then Phase 2 (netboot/NFS) on the
+  modern-kernel path.

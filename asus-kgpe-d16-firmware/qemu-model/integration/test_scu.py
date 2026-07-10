@@ -22,19 +22,24 @@ skip_reason = runner.preconditions()
 pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "")
 
 # Datasheet §18 golden reset values (label -> (expected, xfail_reason_or_None)).
-# label is the fwtest `reg` label. All are now faithful via the aspeed.scu-ast2050
-# G3 reset table. (SCU00 lock-state is not asserted here: QEMU pre-unlocks the SCU
-# on a `-kernel` boot, so our harness can't observe the locked reset value — that
-# needs a flash/U-Boot boot. See peripherals/scu/DOC.md.)
+# The rev-id is faithful (set from silicon_rev). The full G3 reset TABLE is not
+# applied by default: CI showed it breaks the legacy boots tuned for the AST2400
+# machine (the OpenBMC AST2400 U-Boot + the RE-patched Dell vendor firmware read
+# AST2400 SCU values the G3 map zeroes). It is the opt-in `ast2050_a3_resets` table
+# pending a G3-aware U-Boot/firmware -- see peripherals/scu/DOC.md §4 + the
+# co-evolution task. (SCU00 lock-state is not asserted: QEMU pre-unlocks on a
+# `-kernel` boot.)
+CO_EVO = ("G3 reset table breaks the AST2400-U-Boot + vendor-firmware boots; "
+          "applied opt-in pending G3-aware firmware (DOC.md §4)")
 GOLDEN = {
-    "revid":     (0x00000202, None),          # SCU7C §18.2 p220
-    "resetflag": (0x00000001, None),          # SCU3C §11 p215
-    "sysreset":  (0x000FFE5C, None),          # SCU04 §2 p205
-    "clksel":    (0xE3F00070, None),          # SCU08 §3 p207
-    "clkstop":   (0x000C3E8B, None),          # SCU0C §4 p209
-    "mpll":      (0x00004291, None),          # SCU20 §7 p212
-    "hpll":      (0x00004291, None),          # SCU24 §8 p212
-    "pinmux1":   (0x40048000, None),          # SCU74 §15 p219
+    "revid":     (0x00000202, None),          # SCU7C §18.2 p220 — faithful
+    "resetflag": (0x00000001, None),          # SCU3C §11 p215 (matches AST2400 too)
+    "sysreset":  (0x000FFE5C, CO_EVO),        # SCU04 §2 p205
+    "clksel":    (0xE3F00070, CO_EVO),        # SCU08 §3 p207
+    "clkstop":   (0x000C3E8B, CO_EVO),        # SCU0C §4 p209
+    "mpll":      (0x00004291, CO_EVO),        # SCU20 §7 p212
+    "hpll":      (0x00004291, CO_EVO),        # SCU24 §8 p212
+    "pinmux1":   (0x40048000, CO_EVO),        # SCU74 §15 p219
 }
 
 
