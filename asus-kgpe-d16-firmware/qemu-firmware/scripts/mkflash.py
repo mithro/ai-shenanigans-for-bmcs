@@ -20,10 +20,16 @@ import argparse
 import subprocess
 from pathlib import Path
 
+# The kernel copy must span the whole 4 MB kernel slot (0x100000..0x500000):
+# the NFS-root kernel config (NFS v3/v4 + IP_PNP + SUNRPC + LOCKD + DEVTMPFS,
+# built-in) grew the uImage past 3 MB, so a 0x300000 (3 MB) copy truncated it and
+# bootm got a corrupt kernel (C2-full-chain regression). Copying 0x400000 reads
+# exactly the kernel slot; the tail padding past the uImage is harmless (bootm
+# uses the uImage header length). Direct -kernel boots (C2/C5) never hit this.
 ENV_TEXT = (
     "bootdelay=0\n"
     "bootargs=console=ttyS4,115200n8 earlyprintk\n"
-    "bootcmd=cp.b 0x20100000 0x41000000 0x300000; "
+    "bootcmd=cp.b 0x20100000 0x41000000 0x400000; "
     "cp.b 0x20500000 0x45000000 0x200000; "
     "cp.b 0x20080000 0x44000000 0x10000; "
     "bootm 0x41000000 0x45000000 0x44000000\n"

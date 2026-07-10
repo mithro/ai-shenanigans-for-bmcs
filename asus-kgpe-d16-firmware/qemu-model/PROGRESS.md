@@ -355,6 +355,36 @@ boot genuinely cannot run in the sandbox — so it's wired as a CI job (apt's tr
   (task) only swaps the export's *contents* for an OpenBMC image (needs an ARMv5 `kgpe-d16`
   Yocto machine layer; romulus/AST2500 OpenBMC is ARMv6, not reusable directly).
 
+### PHASE 6a RESULT (CI run 29073391978): boot-nfsroot (C5) GREEN + oracle bug fixed
+- **C5 boot-nfsroot PASS** — the faithful kgpe-d16-bmc mounts root over NFSv3 and runs
+  userspace from it. Also GREEN: build-kernel (NFS config merge), build-initramfs (tar),
+  C2 (boot-ssh), C4 (vendor firmware → BMC web). (C3 musl userspace = pre-existing baseline
+  failure, unrelated.)
+- **Oracle regression caught + fixed:** C2-full-chain (U-Boot→Linux→SSH) went red because
+  the NFS-root kernel config grew the uImage to 3.11 MB, past the `mkflash.py` bootcmd's
+  hardcoded **3 MB** kernel copy (`cp.b ... 0x300000`) → truncated kernel → bad bootm.
+  Fixed by copying the full 4 MB kernel slot (`0x400000`). **Validated LOCALLY** on the
+  faithful QEMU: U-Boot→Linux→SSH `C2 RESULT: PASS` (uname `armv5tejl`). Textbook
+  legacy-oracle catch: my wiring was wrong (silent 3 MB truncation), not the firmware.
+- Direct-`-kernel` boots (C2, C5) never hit the flash-copy path, which masked the bug until
+  the full U-Boot chain exercised it.
+
+### PHASE 6b UNBLOCKED — real OpenBMC (bmcweb/Redfish) for the AST2050 CPU IS tractable
+- Key correction (Explore agent, evidence-cited): **OpenBMC already ships an ARMv5TE target.**
+  The AST2400 `palmetto`/`quanta-q71l` machines are ARM926EJ-S = ARMv5TE — the *same CPU* as
+  the AST2050 — via `conf/machine/include/arm/armv5/tune-arm926ejs.inc`. Only the AST2500
+  `romulus` (already built, PR #22) is ARMv6 and non-reusable. So the OpenBMC *payload* is a
+  solved problem, not a large port.
+- This IS the OpenBMC build machine (`/home/tim/openbmc`, 618 GB free, romulus image already
+  built). Building `obmc-phosphor-image` for **quanta-q71l** (ast2400/ARMv5e, *generic
+  phosphor* BMC with an x86 host — matches the KGPE-D16's AMD host; avoids palmetto's
+  OpenPOWER `obmc-op-control-host` whose template-unit postinst breaks do_rootfs). Reuses the
+  cached armv5e sstate. Build running in background.
+- Plan: unsquashfs the quanta rootfs → neutralize the MTD rofs/rwfs overlay units → export
+  over NFS → boot the faithful kgpe-d16-bmc with our modern kernel + this OpenBMC rootfs over
+  NFS → curl Redfish. This machine has passwordless sudo + nfs-kernel-server, so 6b can be
+  demonstrated end-to-end locally (CI can't build/host a ~100 MB OpenBMC rootfs).
+
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).
 - **Depth** (oracle-safe, highest OpenBMC value first): new `aspeed.pwm-ast2050` (fan
