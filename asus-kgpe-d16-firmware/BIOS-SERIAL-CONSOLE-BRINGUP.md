@@ -70,13 +70,21 @@ redirection is enabled and saved, the serial port replaces both.
 - Next: build reliable rig tooling (keysend on opi, frame-grab + serial logger on
   rpi4), then do a live keyboard test by typing into the root shell.
 
+### 2026-07-10 00:35 UTC — rig tooling up; **emulated keyboard verified working**
+- Deployed `keysend.py` (opi), `grabframe.sh` + `seriallog.py` (rpi4). Serial
+  logger daemon running on `/dev/serial-com1` @115200.
+- **Live keyboard test PASSED**: `keysend script 'press:ENTER|type:echo
+  HID-KB-OK-1234|press:ENTER'` → Magewell frame shows `[root@sysrescue ~]# echo
+  HID-KB-OK-1234`, the command output, and a fresh prompt. Host receives + acts
+  on the emulated keystrokes. Boot-protocol descriptor already confirmed
+  BIOS-compatible; functional BIOS test to follow at reboot.
+
 ## Plan
 1. [x] Verify SSH access to opi1pc-a + rpi4; set up mux config.
 2. [x] Confirm opi HID gadget is a boot-compatible keyboard on `/dev/hidg0`.
 3. [x] Determine current ASUS state → ON, in SystemRescue Linux (Magewell).
-4. [ ] Set up daemons/helpers: keysend (opi), screen-grab (rpi4), serial-log (rpi4).
-5. [ ] Ensure ASUS is netbooted to Linux; verify host sees the emulated keyboard
-       (lsusb/dmesg over the ECM link) and that keystrokes register.
+4. [x] Set up daemons/helpers: keysend (opi), screen-grab (rpi4), serial-log (rpi4).
+5. [x] Verify host sees the emulated keyboard + keystrokes register (Magewell).
 6. [ ] Reboot; enter BIOS Setup using the emulated keyboard, confirmed via Magewell.
 7. [ ] In BIOS: enable Console Redirection, baud/terminal, "Always after POST".
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
