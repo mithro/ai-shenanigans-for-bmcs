@@ -46,16 +46,14 @@
 		     "syscon", "simple-mfd";
 };
 
-&vic {
-	/*
-	 * AST2050 (G3) compact VIC: a single 32-bit bank at 0x1e6c0000, register
-	 * window 0x00-0x38 (NOT the AST2400 two-bank layout at 0x1e6c0080). Bound
-	 * by irq-aspeed-g3-vic, which programs the trigger config (SENSE/DUAL/
-	 * EVENT) the AST2400 hardwires. See qemu-model/peripherals/vic.
-	 */
-	compatible = "aspeed,ast2050-vic";
-	reg = <0x1e6c0000 0x40>;
-};
+/*
+ * NB: the faithful compact G3 VIC (`&vic { compatible = "aspeed,ast2050-vic";
+ * reg = <0x1e6c0000 0x40>; }` + the irq-aspeed-g3-vic driver) boots our modern
+ * kernel fine, but the QEMU AST2050 SoC keeps the AST2400 VIC because switching
+ * to the G3 VIC breaks the proprietary C410X firmware boot (C4 — an unpatchable
+ * oracle). So we keep the AST2400 VIC node here too. See qemu-model/peripherals/vic
+ * and hw/arm/aspeed_ast2400.c for the co-evolution that is ready but gated on C4.
+ */
 
 &uart5 {
 	status = "okay";

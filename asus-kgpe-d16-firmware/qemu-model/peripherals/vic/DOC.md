@@ -102,10 +102,10 @@ AST2400 0x80+ aliases (G3 never uses them).
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ 13 checks |
 | 2 | doc (this + `DATASHEET-VIC.md`) | ☑ |
-| 3 | QEMU model (`aspeed.vic-ast2050`) | ☑ **wired end-to-end** (TYPE_ASPEED_2050_VIC for the AST2050 SoC) |
-| 4 | integration test (`../../integration/test_vic.py`) | ☑ all 13 checks PASS |
+| 3 | QEMU model (`aspeed.vic-ast2050`) | ◐ built + drives our kernel; NOT wired (breaks the C4 vendor firmware) |
+| 4 | integration test (`../../integration/test_vic.py`) | ◐ 7 pass, 6 xfail (G3 VIC blocked by the C4 oracle) |
 
-## 7. End-to-end bring-up DONE (2026-07-10)
+## 7. End-to-end bring-up: driver ready, but BLOCKED by the C4 oracle (2026-07-10)
 
 The faithful G3 VIC is now wired to the machine and boots Linux:
 - **QEMU:** the AST2050 SoC uses `TYPE_ASPEED_2050_VIC` (trigger config RW, reset 0;
@@ -115,6 +115,12 @@ The faithful G3 VIC is now wired to the machine and boots Linux:
   DUAL=0x07c00000 / EVENT=0x983f97fe at init (the AST2400 hardwires these; the G3
   resets them to 0). `asus-kgpe-d16-firmware/qemu-firmware/kernel/drivers/`.
 - **DTS:** the `&vic` node → `compatible = "aspeed,ast2050-vic"`, `reg = <0x1e6c0000 0x40>`.
-- **Verified:** C2 (direct), C2-full (U-Boot chain), C5 (NFS root) all boot to a
-  shell over SSH — the timer IRQ works. C4 (vendor G3 firmware) is unaffected (it
-  programs the VIC itself). All 6 previously-xfail G3 VIC checks now PASS.
+- **Result:** C2, C2-full, C5 (our modern kernel + G3 driver) all boot to a shell —
+  the timer IRQ works. **BUT C4 (proprietary C410X firmware) breaks**: the vendor
+  kernel oops's (div0 in aess_write_spi_nor_flash during ftgmac100_open) and reboots
+  (confirmed locally + CI run 29099450053). C4 is an UNPATCHABLE legacy-boot oracle,
+  so per qemu-must-model-real-hardware the machine KEEPS the AST2400 VIC and the 6
+  G3 checks stay xfail. The G3 VIC model + irq-aspeed-g3-vic driver + DTS snippet
+  remain in-tree, ready to re-wire once validated against the KGPE-D16's own
+  firmware (Raptor/C3). To re-enable: TYPE_ASPEED_2050_VIC in aspeed_ast2400.c +
+  the `&vic` DTS override + the build-kernel.sh driver cp (all commented in place).
