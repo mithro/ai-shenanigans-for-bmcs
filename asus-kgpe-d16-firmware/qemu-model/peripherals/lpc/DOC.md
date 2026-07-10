@@ -16,13 +16,21 @@ the BMC AHB — the culvert `ilpc` path). Full detail: **[`DATASHEET-LPC.md`](DA
 
 OpenBMC: IPMI KCS/BT drivers + port-80h POST-code snoop.
 
-## 2. QEMU faithfulness — WRONG LAYOUT
+## 2. QEMU faithfulness — G3 LAYOUT MODELLED (register-accurate)
 
-`peripherals/lpc/fwtest.c` observations: the G3 KCS/BT/iLPC2AHB offsets (0x24–0x8C)
-read **0**. The LPC MMIO region *does* respond (QEMU `aspeed_lpc`), but that model puts
-**KCS/iBT at the AST2400 `0x140` offsets**, so the G3 KCS/BT are **not** at 0x24–0x68,
-and `0x80` is an AST2400 HICR (not the G3 iLPC2AHB `ENL2H`). So OpenBMC's IPMI KCS/BT and
-the culvert `ilpc` bridge are **not faithfully addressable** on this machine.
+**Fixed 2026-07-10.** A G3-only `aspeed.lpc-ast2050` device replaces the AST2400
+`aspeed_lpc` for the AST2050 SoC (gated on `silicon_rev == AST2050_A1_SILICON_REV`,
+mapped at 0x1E789000). It presents the **G3 register layout** — HICR0-4, LADR,
+KCS IDR/ODR/STR (0x24-0x44), BT (0x48-0x68), SERIRQ, iLPC2AHB HICR5-8 (0x80-0x8C),
+snoop — with datasheet resets. Config registers (HICR/…) are RW; KCS status
+registers (STR1-3) are read-only (reset 0). `test_g3_lpc_layout` now PASSES
+(`str1.reset`, `hicr0.rw`, the iLPC2AHB `hicr5.rw`), proving the KCS/BT/iLPC2AHB
+registers are addressable at the G3 offsets, **not** the AST2400 0x140.
+
+Refinements (documented, not yet modelled): the full KCS/BT OBF/IBF state machines
+and the iLPC2AHB→AHB bridging (the culvert `ilpc` data path). There is no LPC host
+in this machine, so the registers are the observable surface. C1–C5 boots stay
+green (C2 re-verified; the vendor firmware's KCS pokes hit the register model).
 
 ## 3. Faithful-model plan (oracle-gated)
 
@@ -37,5 +45,5 @@ green — oracle-gated.
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ observes the G3 offsets (unmodelled) |
 | 2 | doc (this + `DATASHEET-LPC.md`) | ☑ |
-| 3 | QEMU model | ☐ G3 KCS/BT/iLPC2AHB layout (aspeed_lpc uses AST2400 0x140) |
-| 4 | integration test (`../../integration/test_lpc.py`) | ◐ region present; G3-layout xfail |
+| 3 | QEMU model | ◐ **G3 register layout modelled** (`aspeed.lpc-ast2050`, ☑); KCS/BT state machines + iLPC2AHB bridging still ☐ |
+| 4 | integration test (`../../integration/test_lpc.py`) | ☑ `str1.reset` + `hicr0.rw` + `hicr5.rw` PASS |

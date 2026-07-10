@@ -1,8 +1,10 @@
 """Integration test: LPC host-interface faithfulness on the QEMU model.
 
-The G3 KCS/BT/iLPC2AHB layout (0x24-0x8C) is not modelled — QEMU's aspeed_lpc puts
-KCS/iBT at the AST2400 0x140 offsets. So the G3 offsets read 0 (observed); a faithful
-G3 aspeed.lpc-ast2050 is oracle-gated (see peripherals/lpc/DOC.md). No hardware here.
+The G3 KCS/BT/iLPC2AHB register block lives at 0x24-0x8C — NOT the AST2400 0x140
+that mainline aspeed_lpc uses. Fixed 2026-07-10 by aspeed.lpc-ast2050 (a G3-only
+register-accurate model that replaces aspeed_lpc for the AST2050): config
+registers (HICR) are RW at the G3 offsets and KCS status (STR) is read-only,
+reset 0. See peripherals/lpc/DOC.md. No hardware here.
 """
 import sys
 from pathlib import Path
@@ -22,8 +24,11 @@ def test_reaches_halt(lpc):
     assert lpc.halted, f"lpc fwtest did not reach the halt sentinel:\n{lpc.raw}"
 
 
-@pytest.mark.xfail(reason="G3 KCS/BT/iLPC2AHB at 0x24-0x8C not modelled; aspeed_lpc uses "
-                          "the AST2400 0x140 layout (DOC.md §2)", strict=False)
-def test_g3_kcs_present(lpc):
-    # A G3 KCS status register at 0x3C would not read 0 once modelled.
-    assert lpc.regs.get("kcs.str1", 0) != 0
+@pytest.mark.parametrize("label", ["str1.reset", "hicr0.rw", "hicr5.rw"])
+def test_g3_lpc_layout(lpc, label):
+    """The G3 LPC registers are addressable at the G3 offsets: HICR0 (0x00) and
+    the iLPC2AHB HICR5 (0x80) are RW config registers, and KCS STR1 (0x3C) is a
+    read-only status register that resets to 0 — proving the model uses the G3
+    layout, not the AST2400 0x140."""
+    c = next((c for c in lpc.checks if c[0] == label), None)
+    assert c is not None and c[1], f"LPC G3-layout check {label} failed"
