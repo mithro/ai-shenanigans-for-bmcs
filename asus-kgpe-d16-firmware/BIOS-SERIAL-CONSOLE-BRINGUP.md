@@ -90,6 +90,18 @@ redirection is enabled and saved, the serial port replaces both.
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
 9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
 
+### 2026-07-10 00:48 UTC — full boot chain readable on COM1 via `serialscreen.py`
+- Added `rig-tools/serialscreen.py` — a stdlib VT100 80×25 grid emulator that
+  reconstructs the redirected screen from the raw log (AMIBIOS paints at absolute
+  cursor positions, so a plain escape-strip is garbled; this renders it faithfully).
+- Rendering `com1.log` shows the **entire boot** on the comm port: BIOS POST →
+  **Intel(R) Boot Agent GE v1.3.24** (PXE OptROM) → **PXELINUX 4.07** →
+  `Loading vmlinuz / sysresccd.img … ready` (CLIENT IP 192.168.77.138). So
+  redirection carries through POST *and* the boot loader (the "Always" setting),
+  and the board **network-boots SystemRescue** (PXE works too). This is exactly
+  "see the BIOS/boot on the comm port without the Magewell".
+- Next: build a serial *sender* (`serialkey.py`) and enter/drive Setup over COM1.
+
 ### 2026-07-10 00:46 UTC — ✅ **PRIMARY GOAL: boot messages now on the COM port**
 - After F10 Save & Exit (CMOS written, board rebooted), the rpi4 serial logger on
   `/dev/serial-com1` @115200 immediately captured **live POST output** — VT100
