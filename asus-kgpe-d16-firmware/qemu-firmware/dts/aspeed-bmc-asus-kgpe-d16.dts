@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: GPL-2.0+
+/dts-v1/;
+
+#include "aspeed-g4.dtsi"
+
+/*
+ * ASUS KGPE-D16 server-board BMC.
+ *
+ * The BMC SoC is an ASPEED AST2050 (G3 generation, ARM926EJ-S). It is
+ * register-compatible with the AST2400 (G4) for the blocks we use, so this
+ * device tree is built on aspeed-g4.dtsi and only overrides the SCU compatible
+ * so the AST2050 clock driver matches (see kernel/patches/0001-clk-aspeed-...).
+ *
+ * Targets the `kgpe-d16-bmc` QEMU machine: console on UART5 (0x1e784000, the
+ * AST2050's "UART2"), 128 MB DDR2, one FTGMAC100 NIC.
+ */
+
+/ {
+	model = "ASUS KGPE-D16 BMC";
+	compatible = "asus,kgpe-d16-bmc", "aspeed,ast2400";
+
+	aliases {
+		serial4 = &uart5;
+	};
+
+	chosen {
+		stdout-path = &uart5;
+		bootargs = "console=ttyS4,115200n8 earlyprintk";
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x40000000 0x08000000>;	/* 128 MB */
+	};
+};
+
+&syscon {
+	/* AST2050 clock driver matches first, AST2400 for everything else. */
+	compatible = "aspeed,ast2050-scu", "aspeed,ast2400-scu",
+		     "syscon", "simple-mfd";
+};
+
+&uart5 {
+	status = "okay";
+};
+
+&mac0 {
+	status = "okay";
+	phy-mode = "rmii";
+	/* fixed-link avoids PHY negotiation under QEMU's ftgmac100 model. */
+	fixed-link {
+		speed = <100>;
+		full-duplex;
+	};
+};
+
+&wdt1 {
+	status = "okay";
+};
