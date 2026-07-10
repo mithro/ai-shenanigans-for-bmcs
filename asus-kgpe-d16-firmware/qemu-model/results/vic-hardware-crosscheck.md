@@ -76,8 +76,44 @@ i.e. ensure the vendor VIC-init that runs on real hardware also runs under QEMU
 (next: inspect the C4 boot harness to see whether it skips the stage that
 programs `0x24/0x28/0x2c`). Tracked under the HW-cross-reference task.
 
+## 5. Why C4 crashed on the G3 VIC — vendor-firmware trace (QEMU, 2026-07-11)
+
+Booted the C4 vendor firmware on the **current AST2400-VIC** model with
+`-trace aspeed_vic_write`/`aspeed_vic_read` to see exactly how the vendor C410X
+kernel drives the VIC. Over 60 s it:
+
+- **writes the trigger config** — `0x24 sense = 0xfff8ffff` (×10), `0x28 dual =
+  0x00070000` (×1), `0x2c event = 0xfff8ffff` (×11). These are the **AST2400
+  hardwired values** ("all level except timers 16–18"), *not* the precise AST2050
+  Table-36 words (`0x903897fe/0x07c00000/0x983f97fe`). So the vendor kernel *does*
+  program the VIC — it just programs the coarse AST2400-style config.
+- **hammers the ack path** — reads `0x14` (enable-clear) 28 190×, reads `0x38`
+  (edge-clear) 13 341×, writes `0x14` 16 483× and `0x38` 7 492× (hot IRQ handler).
+
+**Consequence.** Because the vendor writes the same values the AST2400 hardwires,
+the **steady-state** `sense/dual/event` are identical on both models — so the C4
+crash on the faithful G3 VIC is **not** a steady-state trigger-config difference.
+The only difference is the **reset transient**: on the G3 model `sense` resets to
+`0` (edge) until the vendor programs it, whereas the AST2400 model has `sense`
+non-zero (level) from t=0. QEMU's `aspeed_vic_set_irq` only updates `s->raw` on
+*line transitions*; it does **not** re-evaluate `raw` when `sense`/`event` change.
+So a level-high source asserted-and-static across the `sense: 0→level` write is
+never latched into `raw` → its IRQ is lost → the vendor's ftgmac100/SPI-NOR path
+waits on that IRQ, times out with a 0 geometry, and divides by zero (`__div0` in
+`aess_write_spi_nor_flash` during `ftgmac100_open`).
+
+**Faithful fix (planned + being verified):** make level sensitivity
+**combinational** in the G3 model — on a write to `sense(0x24)` or `event(0x2c)`,
+re-evaluate `raw` for the level-sensitive sources from the tracked line level
+(`s->level`). This matches real silicon (level detection is combinational, not
+edge-latched) and removes the transient. Then wire `TYPE_ASPEED_2050_VIC` and
+re-validate C2 (our kernel) **and** C4 (vendor) boot together. Verified-result
+status recorded below once the rebuild + boot test completes.
+
 ## Provenance
 
 - Rig: bridge Pi `rpi4-asus-aspeed2050-dev`, AST2050 over JTAG, 2026-07-11.
 - All fenced blocks are verbatim OpenOCD `-c "mdw …/mww …"` output.
+- §5 trace blocks are verbatim `-trace aspeed_vic_write` histograms from the C4
+  vendor-firmware boot on the AST2400-VIC model.
 - Board left in its as-found state (VIC region all-zero; enable cleared via 0x14).
