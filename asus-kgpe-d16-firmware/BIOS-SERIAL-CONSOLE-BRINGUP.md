@@ -90,6 +90,27 @@ redirection is enabled and saved, the serial port replaces both.
 8. [ ] Save + reboot; verify POST/boot + Setup menu appear on `/dev/serial-com1`.
 9. [ ] Confirm the BIOS menu is fully drivable over the comm port alone.
 
+### 2026-07-10 00:45 UTC — **entered BIOS via emulated keyboard; fixed redirection to COM1**
+- Soft-rebooted host; POST showed `BMC is booting… / BMC failed …` (BMC being
+  worked on separately — BIOS continues past it), then reached Setup. **DEL spam
+  via the emulated keyboard entered AMIBIOS Setup** → the keyboard is
+  **BIOS-compatible in the pre-OS environment** (not just in Linux). ✅
+- Menu tabs: Main / Advanced / **Server** / Power / Boot / Tools / Exit. Remote
+  Access lives under **Server → Remote Access Configuration** (not Advanced).
+- **Found the root cause of the silent serial**: redirection was already
+  `Enabled / 115200 8,n,1 / Flow=None / After-POST=Always`, but **Serial port
+  number = COM2 (2F8h/IRQ3)** — while the FTDI capture is on **COM1 (3F8h/IRQ4)**
+  (proved by the earlier `ttyS0` SERIALPROOF test). Redirection was working the
+  whole time into an unmonitored port.
+- **Changes made** (via emulated kbd + Magewell, ENTER-popup selection):
+  - Serial port number: **COM2 → COM1** (now Base Address `3F8h, 4`).
+  - Terminal Type: **VT-UTF8 → VT100** (cleanest for driving over serial).
+- ⚠️ RTC read `Thu 11/12/2099`, time counting from `00:00:xx` → CMOS looks like it
+  reset this boot (checksum-default?) despite the 2026-07-08 battery. Persistence
+  across a *cold* cycle must be re-checked after this works.
+- Next: **F10 Save & Exit**; the reboot's POST should now stream to COM1 @115200
+  → the rpi4 serial logger. Then drive Setup over the comm port to prove the goal.
+
 ### 2026-07-10 00:37 UTC — **COM1 serial wire validated @115200**
 - Typed (via emulated kbd) `stty -F /dev/ttyS0 115200 && echo SERIALPROOF-XYZ >
   /dev/ttyS0` on the host; the rpi4 serial logger captured
