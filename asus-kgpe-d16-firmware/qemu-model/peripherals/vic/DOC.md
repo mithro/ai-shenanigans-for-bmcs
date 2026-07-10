@@ -79,28 +79,33 @@ change `event`). The AST2050 registers are 32-bit, reset 0, fully RW.
 ## 5. Faithful-model plan (QEMU `mithro/qemu@ast2050-faithful`)
 
 The **`aspeed.vic-ast2050`** type (`TYPE_ASPEED_2050_VIC`, a `bool ast2050`
-variant) is implemented and **passes 13/13 fwtest checks when wired** — trigger
-config resets 0 and is fully writable. **It is NOT wired to the machine by
-default**, for a reason CI proved:
+variant) is implemented and **passes 13/13 fwtest checks** — trigger config resets
+0 and is fully writable. It is now **WIRED to the machine by default** for the
+AST2050 silicon rev. Getting there required a matching kernel driver *and* a timer
+fix, both now landed:
 
 > **Faithful VIC ⟹ needs a faithful kernel driver.** With the G3 VIC wired, the
-> C2 kernel boots to userspace and then **hangs — the timer IRQ dies at ~0.83 s**.
-> The mainline `aspeed,ast2400-vic` driver treats the VIC trigger config as *fixed
-> AST2400 hardware defaults* (its writes go to the read-only 0x80+ bank), so on a
-> faithful G3 VIC (reset 0) the timer's rising-edge config is never programmed and
-> the IRQ never fires. The "working" C1–C4 boots worked *because* the AST2400 VIC
-> was unfaithful.
+> mainline `aspeed,ast2400-vic` driver treats the VIC trigger config as *fixed
+> AST2400 hardware defaults* (it only reads the trigger config, assuming firmware /
+> hardwiring set it), so on a faithful G3 VIC (reset 0) every source is treated as
+> edge and level IRQs (MAC/UART/I2C) are lost — the modern kernel stalls in
+> `ip link set eth0 up`. The `irq-aspeed-g3-vic` driver *programs* sense/dual/event
+> and fixes this.
 
-### End-to-end G3 VIC bring-up (the real fix — tracked as a task)
-1. Kernel: add `irq-aspeed-g3-vic` (the compact-VIC irqchip from the culvert HW
-   work) that programs sensitivity/both-edge/event at 0x24/0x28/0x2C per the DTS.
-2. DTS: the kgpe-d16 interrupt-controller node → `compatible = "aspeed,ast2050-vic"`.
-3. QEMU: re-wire the SoC to `TYPE_ASPEED_2050_VIC` (one line in aspeed_ast2400.c).
-4. Re-validate: fwtest 13/13 **and** C1–C4 boots green together.
-
-Until (1)+(2) land, the machine keeps `TYPE_ASPEED_VIC` (boots stay green) and the
-six G3 fwtest checks are xfail. *Deferred refinement:* also stop decoding the
-AST2400 0x80+ aliases (G3 never uses them).
+### End-to-end G3 VIC bring-up — DONE
+1. ☑ Kernel: `irq-aspeed-g3-vic` (compact-VIC irqchip from the culvert HW work)
+   programs sensitivity/both-edge/event at 0x24/0x28/0x2C. Built by `build-kernel.sh`.
+2. ☑ DTS: the kgpe-d16 interrupt-controller node → `compatible = "aspeed,ast2050-vic";
+   reg = <0x1e6c0000 0x40>`.
+3. ☑ QEMU: SoC wires `TYPE_ASPEED_2050_VIC` for `AST2050_A1_SILICON_REV`.
+4. ☑ Timer: the last blocker was NOT the VIC — QEMU's `aspeed_timer` *toggled* its
+   IRQ line each expiry, which needs a dual-edge VIC (AST2400 hardwires it) to yield
+   one IRQ per expiry. On the G3 VIC's single rising-edge timer config the toggle
+   delivered only every other expiry → HZ/2 → the C4 vendor watchdog reset the boot.
+   `aspeed_timer.c` now emits one rising-edge pulse per expiry on the AST2050. See
+   [`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md) §7.
+5. ☑ Re-validated: fwtest **13/13**, **C2** (our kernel → SSH) and **C4** (vendor →
+   BMC web service) both boot on the faithful G3 VIC.
 
 ## 6. Deliverable status
 
@@ -108,8 +113,8 @@ AST2400 0x80+ aliases (G3 never uses them).
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ 13 checks |
 | 2 | doc (this + `DATASHEET-VIC.md`) | ☑ |
-| 3 | QEMU model (`aspeed.vic-ast2050`) | ◐ built + drives our kernel; NOT wired (breaks the C4 vendor firmware) |
-| 4 | integration test (`../../integration/test_vic.py`) | ◐ 7 pass, 6 xfail (G3 VIC blocked by the C4 oracle) |
+| 3 | QEMU model (`aspeed.vic-ast2050`) | ☑ built + **wired** (`TYPE_ASPEED_2050_VIC`); C2 + C4 boot on it |
+| 4 | integration test (`../../integration/test_vic.py`) | ☑ 13/13 pass (G3 VIC wired) |
 
 ## 7b. Real-silicon cross-check reframes the C4 block (2026-07-11)
 
@@ -131,12 +136,17 @@ Tracing the C4 vendor firmware then corrected the *whole* earlier story:
   Table-36 lines ≤31 on both models). The two VIC types present identical
   vendor-visible state yet diverge.
 
-**Resolution for now:** the register model is hardware-confirmed faithful; wiring
-the G3 VIC hangs C4 for a subtle, still-unidentified reason (needs a trace-diff of
-AST2400-vs-G3 VIC events or gdb into the 2.6.23 vendor kernel). Keep the AST2400
-VIC (all legacy boots green; C4 PASS). See the ruled-out table in
-[`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md) §5.
-§7 below is the pre-hardware state, superseded.
+**RESOLVED (2026-07-11):** the C4 hang was **not a VIC bug** — it was QEMU's
+**timer** model. `aspeed_timer` toggled its IRQ line each expiry, which only yields
+one interrupt per expiry when the VIC is dual-edge (the AST2400 hardwires that for
+timers 16-18). The faithful G3 VIC resets dual-edge to 0 and both the vendor and our
+`irq-aspeed-g3-vic` driver program the timer as a single rising-edge source, so the
+toggle latched every *other* expiry → guest clock at HZ/2 → the vendor watchdog
+daemon lost its race with the wall-clock WDT (reset ~17 s). Fixed by emitting one
+rising-edge pulse per expiry on the AST2050 (`hw/timer/aspeed_timer.c`). The G3 VIC
+is now **wired by default**; C4 boots its BMC web service and C2 boots to SSH. See
+[`../../results/vic-hardware-crosscheck.md`](../../results/vic-hardware-crosscheck.md) §7.
+§7 below is the pre-fix state, retained for the bring-up detail.
 
 ## 7. End-to-end bring-up: driver ready, but BLOCKED by the C4 oracle (2026-07-10)
 

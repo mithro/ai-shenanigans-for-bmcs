@@ -554,3 +554,27 @@ guest's *read* becomes faithful, and the G3 clock driver now computes the correc
 16 xfailed), C4 web-test PASS, C2 SSH PASS.** Optional follow-up: a G3 calc_hpll (post-divider) so
 QEMU's internal timer rate is also 133 MHz (riskier, deferred). **TWO of the three deep tasks
 (SMC #58, PLL #55) now COMPLETE + validated; only the VIC (#57) crux remains.**
+
+### 🎉 G3 VIC wired end-to-end (tasks #57 + #56) — DONE + validated (2026-07-11)
+**The last deep task, and it was not the VIC.** Wiring the faithful G3 VIC hung the C4 vendor
+firmware (WDT reset ~17 s); root-caused it to QEMU's **timer** model. Method: instrumented
+`aspeed_vic_update()` to log the delivered IRQ bit-set and diffed a C4 boot on the G3 vs AST2400
+VIC. Findings: (1) both deliver the *identical* IRQ set {2,10,16} — no dropped/phantom IRQ, the VIC
+is faithful; (2) `show_state_filter(0)` at the hang shows the guest at 4.8 s while 12 s wall passed
+— clock at ~40 %; (3) counting IRQ-16 *deliveries*: G3 = 41.8/vsec vs AST2400 = 86.8/vsec — exactly
+half. **Cause:** `aspeed_timer` TOGGLES its IRQ line each expiry, which needs a dual-edge VIC to
+give one IRQ/expiry (AST2400 hardwires both-edge = 0x00070000 for timers 16-18). The G3 VIC resets
+both-edge to 0 and the vendor programs the timer single rising-edge (sense16=0/dual16=0/event16=1,
+captured live), so the toggle latched every *other* expiry → HZ/2 → `/sbin/watchdog`'s 5-guest-sec
+pet loop overshoots the 10 s wall WDT. **Fix** (`hw/timer/aspeed_timer.c`, `aspeed_timer_raise_irq`):
+emit one rising-edge PULSE per expiry on the AST2050 (gated on silicon_rev); AST2400+ keep the
+toggle. A pulse carries both edges so it satisfies any single-edge config (one IRQ/expiry) yet a
+dual-edge config still sees one IRQ/toggle. Then re-landed the full G3 VIC stack (reverting
+d2f28f3): SoC wires `TYPE_ASPEED_2050_VIC`, DTS `&vic` → `aspeed,ast2050-vic` (reg 0x1e6c0000 0x40),
+`build-kernel.sh` builds the `irq-aspeed-g3-vic` driver (programs SENSE=0x903897fe/DUAL=0x07c00000/
+EVENT=0x983f97fe). **Validated:** VIC fwtest 6 G3 checks xfail→PASS (13/13; suite 65 passed / 10
+xfailed, 0 fail); **C2** our modern kernel boots to SSH on the G3 VIC; **C4** Dell vendor firmware
+boots to its BMC web service (HTTP 301 Mbedthis-Appweb) on the G3 VIC — 116→369 serial lines, no
+WDT reset. The machine is now faithfully G3 (single-bank VIC + one-pulse-per-expiry timer). qemu
+submodule: aspeed_timer.c + aspeed_ast2400.c. **ALL THREE deep tasks (SMC #58, PLL #55, VIC #57)
+COMPLETE; the AST2050 boots both our kernel and the legacy oracle on the faithful interrupt path.**

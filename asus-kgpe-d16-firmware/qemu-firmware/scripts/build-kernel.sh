@@ -33,12 +33,17 @@ if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
         >> arch/arm/boot/dts/aspeed/Makefile
 fi
 
-# NB: the AST2050 (G3) compact VIC irqchip driver
-# (kernel/drivers/irq-aspeed-g3-vic.c) is NOT built in: the faithful G3 VIC it
-# targets is not wired in QEMU because switching to it breaks the proprietary
-# C410X firmware boot (C4). The driver is kept in-tree as the ready co-evolution;
-# re-enable the cp + Makefile line together with TYPE_ASPEED_2050_VIC once the
-# G3 VIC is validated against the KGPE-D16's own firmware. See peripherals/vic.
+# AST2050 (G3) compact VIC irqchip driver. The mainline irq-aspeed-vic only
+# handles the AST2400/2500 two-bank layout and assumes hardwired trigger config;
+# the G3 is single-bank and firmware must program SENSE/DUAL/EVENT. See
+# kernel/drivers/irq-aspeed-g3-vic.c and qemu-model/peripherals/vic. Wired again
+# now that the faithful G3 VIC (TYPE_ASPEED_2050_VIC) + one-pulse-per-expiry timer
+# boot the C410X vendor firmware (C4 oracle) as well as our own kernel.
+cp "$ROOT/kernel/drivers/irq-aspeed-g3-vic.c" drivers/irqchip/
+if ! grep -q irq-aspeed-g3-vic drivers/irqchip/Makefile; then
+    echo 'obj-$(CONFIG_ARCH_ASPEED) += irq-aspeed-g3-vic.o' \
+        >> drivers/irqchip/Makefile
+fi
 
 # Config: aspeed_g4_defconfig + D16 fragment + NFS-root fragment.
 # The NFS-root fragment (IP_PNP/DHCP + NFS client + ROOT_NFS + devtmpfs auto-

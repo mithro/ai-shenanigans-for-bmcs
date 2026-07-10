@@ -221,6 +221,60 @@ is superseded (those IRQs never happen only because the boot is WDT-reset first)
 Tooling: `tmp/c4work/{showstate,logflood,wdt}_diag.py` + the gdb `show_state_filter`
 recipe + `console_loglevel@0xc031e7a0`.
 
+## 7. ROOT-CAUSED + FIXED (2026-07-11): the QEMU timer toggle-model, not the VIC
+
+The watchdog-timing race in §6 is a **symptom**. The root cause is in the QEMU
+**timer**, and the VIC is faithful. Method: instrument `aspeed_vic_update()` to log
+the delivered IRQ bit-set on every change, boot C4 on the G3 VIC vs the AST2400 VIC,
+and diff.
+
+- **No dropped/phantom IRQs.** Both models deliver the *identical* set {2 (ETH1),
+  10 (UART5), 16 (TIMER1)} with identical edge/level config. The G3 VIC (and its
+  combinational-level `reeval`) inject nothing spurious — the register model is
+  faithful, confirming §1-2.
+- **The guest clock runs at half speed on the G3 VIC.** `show_state_filter(0)` at
+  the hang prints the vendor scheduler debug: `now at 4821377000 nsecs`,
+  `nr_load_updates: 481` — only **4.8 guest-seconds at ~12 s wall**. Counting IRQ-16
+  *deliveries* directly: **G3 = 41.8 /vsec, AST2400 = 86.8 /vsec** — exactly half
+  (HZ=100). The earlier "926 vs 932 timer IRQs" count in §6 was wrong (it counted
+  raw `set_irq` line toggles, not CPU-delivered interrupts).
+- **Why half.** QEMU's `aspeed_timer` **toggles** its IRQ line each expiry
+  (`t->level = !t->level`; see the `AspeedTimer::level` comment "signalling with
+  both the rising and falling edge"). That yields one interrupt per expiry **only if
+  the VIC is dual-edge** — which the AST2400 VIC *hardwires* for the timers
+  (`both-edge = 0x00070000`, bits 16-18). The faithful G3 VIC resets both-edge to 0
+  and the vendor programs the timer as a **single rising-edge** source
+  (`sense16=0, dual16=0, event16=1`, captured live), so the toggle latches only on
+  every *other* expiry → HZ/2. With HZ halved, `/sbin/watchdog`'s 5-**guest**-second
+  pet loop stretches past the 10 s **wall** WDT deadline → reset at ~17 s. Every §6
+  symptom (daemon alive but under-petting, only-timer-IRQ tail) follows from this.
+- **This is a QEMU faithfulness bug, not vendor-specific.** Real AST2050 silicon
+  delivers one rising edge per expiry with exactly this single-edge config (the
+  vendor — and our own `irq-aspeed-g3-vic` driver, which programs the same
+  `event16=1` single-edge timer — boot on hardware). The toggle-model is an AST2400
+  shortcut that leans on that chip's hardwired dual-edge.
+
+**Fix (`hw/timer/aspeed_timer.c`, `aspeed_timer_raise_irq`):** on the AST2050
+(`silicon_rev == AST2050_A1_SILICON_REV`) emit **one rising-edge pulse per expiry**
+(`set_irq 1` then `0`) instead of toggling; AST2400+ keep the toggle. A pulse carries
+both a rising and a falling edge, so it satisfies *any* single-edge config (the
+vendor's rising, our kernel's rising, a falling-programmed source) — one interrupt
+per expiry, full HZ — while a dual-edge config would (correctly, for AST2400) still
+see one interrupt per toggle.
+
+**Validated end-to-end.** With the fix the guest clock returns to full rate
+(IRQ-16 pulse every ~10.3 ms) and:
+- **C4** (Dell C410X vendor firmware) boots its full BMC application on the faithful
+  G3 VIC — `waitforaim`/DHCP/`aim_config`/video-config reached, **no WDT reset** (was
+  116 serial lines → reset; now 369 lines and running).
+- **C2** (our modern kernel + `irq-aspeed-g3-vic`) boots to an SSH login on the G3 VIC.
+- The VIC fwtest's 6 G3 trigger-config checks move xfail → **PASS** (13/13).
+
+So the machine now wires `TYPE_ASPEED_2050_VIC` by default (the faithful G3 VIC),
+the DTS uses `aspeed,ast2050-vic` + the `irq-aspeed-g3-vic` driver, and both our
+kernel and the C4 oracle are green. Tooling: `tmp/c4work/{vicdiag_run,timer_rate}.py`
++ the transient `VICDIAG`/`T16`/`CFG` fprintf probes in `aspeed_vic.c` (removed).
+
 ## Provenance
 
 - Rig: bridge Pi `rpi4-asus-aspeed2050-dev`, AST2050 over JTAG, 2026-07-11.
