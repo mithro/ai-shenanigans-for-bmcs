@@ -203,10 +203,16 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   untouched). Rate fidelity (24 vs 66 MHz PCLK) deferred to the SCU post-divider (#55).
   Suite: 21 passed, 15 xfailed.
 
+### UART: 16550-faithful, done (no model change → oracle safe)
+- `peripherals/uart/{fwtest.c,DOC.md}` + `test_uart.py`: scratch reg RW, LSR THRE, and
+  an MCR[4] internal loopback echo (THR->RBR = 0x42) all PASS on the current model. The
+  16550 is register+datapath faithful for the G3 (UART1/UART2 only; no AST2400 UART3-5).
+  Baud rate (24 MHz/÷13) ties to the SCU clock-tree. Suite: 24 passed, 15 xfailed.
+
 ### Next
 - Regularly `git merge origin/main` (user directive) to pick up shared work.
-- Continue faithful models that KEEP the legacy boots green (validate each in CI): UART,
-  AHB remap; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
+- Continue faithful models that KEEP the legacy boots green (validate each in CI): AHB
+  remap, GPIO; then MAC (netboot). For the opt-in G3 SCU/VIC, root-cause the stale RE
   patch / add OUR modern-kernel G3 VIC driver so they can be wired *and* keep legacy green.
 - DDR2 SDMC stays gated; OpenBMC-over-TFTP/NFS rides the modern-kernel path (tolerates
   faithful SCU).
