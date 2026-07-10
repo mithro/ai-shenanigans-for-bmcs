@@ -436,3 +436,21 @@ Closed the cleanest, oracle-safe faithfulness gaps and triaged the rest:
 - **Achievable-but-larger (4), not oracle-blocked, need substantial models:** USB UDC/vhub
   (virtual media), LPC KCS/BT state machine + iLPC2AHB, I2C full SMBus read-back (harness),
   P2A host-side PCI endpoint. Each is a focused multi-step effort.
+
+### DEPTH pass cont. (2026-07-10): +LPC +UDC → suite 49→56 passed / 18 xfailed
+Two more G3 device models (QEMU-only, locally iterated, oracle-safe — C2 re-verified each):
+- **LPC G3 layout** (commit 21c41c8): new `aspeed.lpc-ast2050` replacing aspeed_lpc for the
+  G3 — KCS/BT/iLPC2AHB registers at the G3 offsets 0x24-0x8C (not the AST2400 0x140). Config
+  registers RW, KCS status (STR) read-only. `test_g3_lpc_layout` (str1.reset/hicr0.rw/hicr5.rw)
+  PASS. KCS/BT OBF/IBF state machines + iLPC2AHB bridging = documented refinements.
+- **USB UDC/vhub** (commit 60fa15a): new `aspeed.udc-ast2050` register block at 0x1E6A0000
+  (HUB00 RW), sized so 0x1E6A1000 stays unmapped (no phantom EHCI). `test_udc_modelled` PASS.
+  Full USB device semantics = documented refinement.
+- **5 xfails closed this depth session: EHCI removal, SMC×2, LPC, UDC.** Suite 56 passed / 18
+  xfailed; all C1-C5 legacy boots green (C2 local + CI).
+
+**Remaining 18 xfails (honest):** 16 oracle-blocked (VIC 6 + SCU-reset 6 + SDRAM 3 + MAC-PHY 1
+— a faithful G3 version breaks a legacy boot, deferred per [[qemu-must-model-real-hardware]]),
++ 2 deeper efforts: I2C EEPROM read-back (a bare-metal fwtest/aspeed_i2c OLD-mode ACK-reporting
+mismatch — the I2C engine itself is proven faithful, OpenBMC reads the 0x50 MAC EEPROM at boot)
+and P2A host-side PCI endpoint (a large model; the culvert P2A path is silicon-validated).
