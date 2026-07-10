@@ -21,8 +21,12 @@ Usage:
     serialkey.py press DOWN DOWN ENTER
     serialkey.py raw 1b 5b 41            # raw hex bytes (ESC [ A)
     serialkey.py script 'press:DEL|sleep:200|press:DOWN'
+By default it writes into **seriald**'s TX FIFO (`~/hw-capture/com1.tx`) so the
+serial port keeps a single owner (the daemon) and there are no writer races; pass
+`--direct` to open the tty itself when no daemon is running.
+
 Options: --port, --baud (default 115200), --delay MS between keys (default 60),
-         --app (use ESC O x application-mode arrows instead of ESC [ x).
+         --app (ESC O x application-mode arrows), --tx FIFO, --direct.
 """
 import argparse
 import os
@@ -63,11 +67,23 @@ def configure(fd, baud):
 
 
 class Sender:
-    def __init__(self, port, baud, delay_ms, app=False):
-        self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
-        configure(self.fd, baud)
+    def __init__(self, port, baud, delay_ms, app=False, tx=None, direct=False):
         self.delay = delay_ms / 1000.0
         self.app = app
+        # Preferred path: write into seriald's TX FIFO so the port has exactly
+        # one owner (the daemon).  Falls back to opening the tty directly only
+        # when asked (--direct) or when no daemon FIFO exists.
+        if not direct and tx and os.path.exists(tx):
+            try:
+                self.fd = os.open(tx, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError as e:
+                sys.exit(f"serialkey: TX FIFO {tx} has no reader ({e}); "
+                         f"is seriald running?  (or pass --direct)")
+            self.mode = "fifo"
+        else:
+            self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+            configure(self.fd, baud)
+            self.mode = "direct"
 
     def send(self, data):
         os.write(self.fd, data)
@@ -118,6 +134,10 @@ def main():
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--delay", type=int, default=60)
     ap.add_argument("--app", action="store_true")
+    ap.add_argument("--tx", default=os.path.expanduser("~/hw-capture/com1.tx"),
+                    help="seriald TX FIFO (preferred; avoids opening the tty)")
+    ap.add_argument("--direct", action="store_true",
+                    help="open the serial port directly instead of the daemon FIFO")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("type"); p.add_argument("text")
     p = sub.add_parser("press"); p.add_argument("keys", nargs="+")
@@ -125,7 +145,7 @@ def main():
     p = sub.add_parser("script"); p.add_argument("src")
     a = ap.parse_args()
 
-    s = Sender(a.port, a.baud, a.delay, a.app)
+    s = Sender(a.port, a.baud, a.delay, a.app, tx=a.tx, direct=a.direct)
     try:
         if a.cmd == "type":
             s.type_text(a.text)

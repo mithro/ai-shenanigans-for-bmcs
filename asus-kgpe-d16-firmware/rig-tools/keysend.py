@@ -25,10 +25,13 @@ bump --delay/--hold if keys are missed.  Never assume the hardware dropped a key
 before ruling out too-fast timing.
 """
 import argparse
+import fcntl
+import os
 import sys
 import time
 
 DEV_DEFAULT = "/dev/hidg0"
+LOCK_DEFAULT = "/run/hidg0.lock"  # serialise HID writers (single shared lock)
 
 MOD = {"CTRL": 0x01, "LCTRL": 0x01, "SHIFT": 0x02, "LSHIFT": 0x02,
        "ALT": 0x04, "LALT": 0x04, "GUI": 0x08, "WIN": 0x08, "META": 0x08,
@@ -84,6 +87,11 @@ class Keyboard:
         self.dev = dev
         self.hold = hold_ms / 1000.0
         self.delay = delay_ms / 1000.0
+        # Serialise writers on the single HID gadget: two concurrent keysend
+        # runs must not interleave 8-byte reports on /dev/hidg0.  Hold an
+        # exclusive flock for the whole run (blocks until any other run finishes).
+        self._lock = open(LOCK_DEFAULT, "w")
+        fcntl.flock(self._lock, fcntl.LOCK_EX)
         # Open unbuffered binary; keep fd for the whole run.
         self.fd = open(dev, "wb", buffering=0)
 
@@ -152,6 +160,7 @@ class Keyboard:
             self._write(0, [])
         finally:
             self.fd.close()
+            self._lock.close()   # releases the flock
 
 
 def run_script(kb, text):
