@@ -82,12 +82,19 @@ void fwtest_run(void)
      * status-reporting (CMD state field) + SMBus command protocol — deferred. */
 
     /* --- OBSERVATION: scan all 7 engine blocks for a device ACK at 0x50 (the
-     *     machine seeds an smbus EEPROM there). The bare address probe does not
-     *     ACK the smbus_eeprom model (it expects the SMBus command protocol, not
-     *     a plain I2C address probe) — full device readback is deferred; see
-     *     DOC.md. Recorded here to diff QEMU vs silicon. --- */
-    u32 e;
+     *     machine seeds an EEPROM — the BMC MAC — on bus 0). Record a per-bus
+     *     bitmask (bit e set if engine e's master gets an address ACK) so no
+     *     result is lost. Confirmed (2026-07-10): the mask is 0 — the QEMU
+     *     smbus_eeprom is an SMBus device that does NOT ACK a bare I2C address
+     *     probe; it needs the SMBus command protocol (addr+W, offset, repeated
+     *     START, addr+R, read). Full device read-back is therefore deferred; the
+     *     I2C *engine* is faithful (OpenBMC reads this EEPROM at boot). See
+     *     DOC.md §2. --- */
+    u32 e, mask = 0;
     for (e = 0; e < 7u; e++) {
-        fwt_kv("ack50.bus", (e << 8) | i2c_addr_acks(BUS(e), 0x50));
+        if (i2c_addr_acks(BUS(e), 0x50)) {
+            mask |= (1u << e);
+        }
     }
+    fwt_kv("ack50.mask", mask);
 }

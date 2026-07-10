@@ -35,10 +35,13 @@ def test_register_and_engine(i2c):
     assert i2c.fails == 0, f"I2C register/engine checks failed: {failed}\n{i2c.raw}"
 
 
-@pytest.mark.xfail(reason="full I2C transaction ACK/NAK + smbus_eeprom device readback "
-                          "needs the exact status-field + SMBus command protocol "
-                          "(DOC.md §2)", strict=False)
+@pytest.mark.xfail(reason="QEMU's smbus_eeprom is an SMBus device that does NOT ACK a bare "
+                          "I2C address probe — a device read-back needs the full SMBus command "
+                          "sequence (addr+W, offset, repeated START, addr+R, read). The I2C "
+                          "engine itself is faithful (OpenBMC reads this EEPROM at boot). "
+                          "DOC.md §2", strict=False)
 def test_eeprom_readback(i2c):
-    # The machine seeds an EEPROM at 0x50; a bus should ACK it (bit0 of the kv).
-    acks = [v for v in [i2c.kvs.get("ack50.bus")] if v is not None]
-    assert acks and (acks[0] & 1), f"no EEPROM ACK observed:\n{i2c.raw}"
+    # bus 0 seeds the EEPROM; bit0 of ack50.mask would be set once a full SMBus
+    # read is implemented (the bare address probe does not ACK the SMBus device).
+    mask = i2c.kvs.get("ack50.mask")
+    assert mask is not None and (mask & 1), f"no EEPROM ACK observed:\n{i2c.raw}"
