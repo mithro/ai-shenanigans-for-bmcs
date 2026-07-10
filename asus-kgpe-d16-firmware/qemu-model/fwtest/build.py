@@ -36,11 +36,12 @@ HALT_SENTINEL = "[FWT] halt"
 # Prebuilt custom QEMU with the kgpe-d16-bmc machine (from the d16-qemu stack).
 # Override with --qemu or $QEMU_AST2050. The reproducible build is the fork's
 # scripts/build-qemu.sh; this default just enables fast local iteration.
-# Sibling worktree: MODEL.parents[2] is the .worktrees/ dir; d16-qemu lives beside
-# ast2050-qemu and carries a prebuilt qemu-system-arm with the kgpe-d16-bmc machine.
-PREBUILT_QEMU = (
-    MODEL.parents[2] / "d16-qemu/tmp/qemu-dev/build/qemu-system-arm"
-)
+# Where to find a qemu-system-arm carrying the kgpe-d16-bmc machine, in order:
+#  1. this worktree's own build (the one we edit + rebuild) -- preferred;
+#  2. the sibling d16-qemu worktree's prebuilt (fast bootstrap before we build).
+LOCAL_QEMU = MODEL.parent / "qemu-firmware/qemu/build/qemu-system-arm"
+SIBLING_QEMU = MODEL.parents[2] / "d16-qemu/tmp/qemu-dev/build/qemu-system-arm"
+PREBUILT_QEMU = LOCAL_QEMU if LOCAL_QEMU.exists() else SIBLING_QEMU
 
 CC = "arm-none-eabi-gcc"
 OBJCOPY = "arm-none-eabi-objcopy"
