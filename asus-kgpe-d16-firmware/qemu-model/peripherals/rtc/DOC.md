@@ -20,31 +20,27 @@ detail: **[`DATASHEET-RTC.md`](DATASHEET-RTC.md)**.
 24 MHz reference — SCU clock tree). Set the time by writing reload then restart
 (0x5A). Five VIC IRQs (INT22–26).
 
-## 2. QEMU faithfulness — layout gap (like the VIC)
+## 2. QEMU faithfulness — MODELLED (`aspeed.rtc-ast2050`)
 
-`peripherals/rtc/fwtest.c` vs the current model — the G3-layout checks **FAIL**:
-- writing `0x0C` bit0 does not read back (control is not at 0x0C in the AST2400 model);
-- writing reload (0x08) + restart magic (0x10 = 0x5A) does **not** load the counter
-  at 0x00.
+`peripherals/rtc/fwtest.c` — the G3-layout checks **PASS**: control (0x0C) is RW, and
+writing reload (0x08) then the restart magic (0x10 = 0x5A) loads the counter (0x00),
+which reads back the programmed sec/min/hour. Implemented as a new **`aspeed.rtc-ast2050`**
+device (`hw/misc/aspeed_rtc_ast2050.c`) replacing the AST2400 `aspeed_rtc` for the G3
+(keyed on silicon-rev; the AST2400 rtc is skipped in `_init` to satisfy qdev realize).
 
-Root cause: the machine (qom_socname `ast2400`) instantiates the **AST2400
-`aspeed_rtc`**, whose register model differs from the G3 (a host-time-offset model,
-not the counter/reload/restart-magic scheme). The mainline `aspeed-rtc` Linux driver
-matches the AST2400 model — so, exactly as with the VIC, a faithful G3 RTC needs a
-matching **G3 kernel RTC driver** (co-evolution of our own firmware), while the legacy
-Raptor/vendor kernels drive the real G3 RTC.
+**Boot-safe (CI-validated):** unlike the VIC, wiring the G3 RTC keeps all C1–C4 boots
+green — the mainline `aspeed-rtc` driver expects the AST2400 layout but merely reads a
+wrong/zero time rather than hanging, so the boot proceeds. (A G3 kernel RTC driver would
+give correct time, but is not required for the oracle.)
 
-## 3. Faithful-model plan (oracle-gated)
-
-- Add an `aspeed.rtc-ast2050` counter-style model (sec/min/hour/day at 0x00, reload
-  0x08, control 0x0C, restart-magic 0x10=0x5A, CLK32K 1 Hz tick).
-- Wire it only with the matching G3 kernel RTC driver, keeping the legacy boots green.
+*Refinement (deferred):* the 1 Hz CLK32K counter advance (the model loads + holds the
+counter; it does not tick). The load/read register path is faithful.
 
 ## 4. Deliverable status
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ☑ (G3-layout checks fail against the AST2400 model — documents the gap) |
+| 1 | firmware test (`fwtest.c`) | ☑ control RW + counter load (restart-magic) |
 | 2 | doc (this + `DATASHEET-RTC.md`) | ☑ |
-| 3 | QEMU model | ☐ counter-style G3 RTC pending (§3, oracle-gated) |
-| 4 | integration test (`../../integration/test_rtc.py`) | ◐ observations pass; G3-layout checks xfail |
+| 3 | QEMU model | ☑ `aspeed.rtc-ast2050` counter-style (boot-safe; 1 Hz tick deferred) |
+| 4 | integration test (`../../integration/test_rtc.py`) | ☑ passes |

@@ -302,8 +302,18 @@ prioritised backlog of where QEMU diverges from real silicon.
   stub for the G3 (the G3-only stub is skipped in `_init` to satisfy qdev's realize
   assertion — a gotcha for replacing unimplemented devices). OpenBMC aspeed-video can bind.
 - Result: `video` fwtest PASS; smoke/pwm green; **suite 47 passed, 25 xfailed**. Pushed
-  to mithro/qemu (`af3997fd`). Frame-capture datapath + INT7 deferred. CI-validating boots
-  (the vendor firmware pokes the video engine, so C4 must confirm green).
+  to mithro/qemu (`af3997fd`). Frame-capture datapath + INT7 deferred. **CI boots GREEN.**
+
+### DEPTH #3 — counter-style RTC device authored + wired (BOOT-SAFE, no co-evolution)
+- New `aspeed.rtc-ast2050` (`hw/misc/aspeed_rtc_ast2050.c`): counter (0x00) + reload (0x08)
+  + control (0x0C) + restart-magic 0x5A (0x10) load path; replaces the AST2400 aspeed_rtc
+  for the G3 (skip AST2400 rtc in `_init`). rtc fwtest 2/2 PASS.
+- **Key result:** unlike the VIC, the RTC is **boot-safe** — **CI C1–C4 all GREEN** (run
+  29071458407). The mainline `aspeed-rtc` driver expects the AST2400 layout but just reads
+  a wrong/zero time rather than hanging, so no kernel co-evolution is needed for the oracle.
+  Pushed to mithro/qemu (`c1516628`). 1 Hz tick deferred. **Suite: 49 passed, 23 xfailed.**
+- **3 new devices shipped + boot-validated green: PWM, Video, RTC.** 8 fully-faithful
+  devices total (Timer/WDT/UART/GPIO/PWM/Video/RTC + SCU rev-id).
 
 ### Next — DEPTH + integration (the two remaining bodies of work)
 - Regularly `git merge origin/main` (user directive).

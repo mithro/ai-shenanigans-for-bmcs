@@ -106,7 +106,7 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 11 | I2C controller (multiple engines) | 0x1E78A000 | sensors, EEPROM, PSU | ☑ | ☑ | ◐ | ◐ | 3 |
 | 12 | GPIO | 0x1E780000 | power ctl, presence, LEDs | ☑ | ☑ | ◐ | ☑ | 3 |
 | 13 | PWM / tach | 0x1E786000 | fan control/monitor | ☑ | ☑ | ☑ | ☑ | 3 |
-| 14 | RTC | 0x1E781000 | time | ☑ | ☑ | ☐ | ◐ | 3 |
+| 14 | RTC | 0x1E781000 | time | ☑ | ☑ | ☑ | ☑ | 3 |
 | 15 | LPC (KCS/BT IPMI, SuperIO, iLPC2AHB) | 0x1E789000 | host IPMI, culvert ilpc | ☑ | ☑ | ☐ | ◐ | 3 |
 | 16 | VUART / PUART | 0x1E787000 / TBD | SOL, host serial passthrough | ☐ | ☐ | ☐ | ☐ | 4 |
 | 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☑ | ☑ | ☑ | ☑ | 4 |
