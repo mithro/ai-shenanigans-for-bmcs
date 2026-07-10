@@ -1,0 +1,23 @@
+=== dmidecode -t 38 (IPMI Device Information) ===
+# dmidecode 3.7
+Getting SMBIOS data from sysfs.
+SMBIOS 2.6 present.
+
+Handle 0x0062, DMI type 38, 18 bytes
+IPMI Device Information
+	Interface Type: KCS (Keyboard Control Style)
+	Specification Version: 2.0
+	I2C Slave Address: 0x00
+	NV Storage Device: Not Present
+	Base Address: 0x0000000000000CA2 (Memory-mapped)
+	Register Spacing: Successive Byte Boundaries
+
+=== dmesg ipmi ===
+[   52.675799] IPMI message handler: version 39.2
+[   52.688339] ipmi device interface
+[   52.772285] ipmi_si: IPMI System Interface driver
+[   52.772313] ipmi_si dmi-ipmi-si.0: ipmi_platform: probing via SMBIOS
+[   52.772318] ipmi_platform: ipmi_si: SMBIOS: mem 0xca2 regsize 1 spacing 1 irq 0
+[   52.772323] ipmi_si: Adding SMBIOS-specified kcs state machine
+[   52.772402] ipmi_si: Trying SMBIOS-specified kcs state machine at mem address 0xca2, slave address 0x20, irq 0
+[   52.772409] ipmi_si dmi-ipmi-si.0: Could not set up I/O space
