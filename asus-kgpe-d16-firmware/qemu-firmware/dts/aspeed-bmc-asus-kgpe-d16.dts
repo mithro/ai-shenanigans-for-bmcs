@@ -12,7 +12,7 @@
  * so the AST2050 clock driver matches (see kernel/patches/0001-clk-aspeed-...).
  *
  * Targets the `kgpe-d16-bmc` QEMU machine: console on UART5 (0x1e784000, the
- * AST2050's "UART2"), 128 MB DDR2, one FTGMAC100 NIC.
+ * AST2050's "UART2"), 64 MB DDR2, one FTGMAC100 NIC.
  */
 
 / {
@@ -30,7 +30,13 @@
 
 	memory@40000000 {
 		device_type = "memory";
-		reg = <0x40000000 0x08000000>;	/* 128 MB */
+		/*
+		 * 64 MB DDR2, hardware-verified on the real KGPE-D16 BMC
+		 * (2026-07-08, culvert P2A: real size aliases mod 64 MB; the
+		 * chip is 4-bank/64 MB, MCR04=0x00000585). See ast2050.h
+		 * PHYS_SDRAM_1_SIZE and RAPTOR_ENGINEERING_AST2050_ANALYSIS.md.
+		 */
+		reg = <0x40000000 0x04000000>;	/* 64 MB */
 	};
 };
 
