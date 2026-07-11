@@ -8,11 +8,8 @@ BusyBox v1.38.0 () multi-call binary.
 Usage: head [OPTIONS] [FILE]...
 
 ## journal
-Jul 11 17:10:54 quanta-q71l systemd[1]: Starting Populate KGPE-D16 motherboard FRU inventory from the shipped blob...
-Jul 11 17:10:59 quanta-q71l systemd[1]: Finished Populate KGPE-D16 motherboard FRU inventory from the shipped blob.
--- Boot 6729dbef01ef4e35978a45d401542341 --
-Jul 11 17:18:28 quanta-q71l systemd[1]: Starting Populate KGPE-D16 motherboard FRU inventory from the shipped blob...
-Jul 11 17:18:33 quanta-q71l systemd[1]: Finished Populate KGPE-D16 motherboard FRU inventory from the shipped blob.
+Jul 11 17:48:16 quanta-q71l systemd[1]: Starting Populate KGPE-D16 motherboard FRU inventory from the shipped blob...
+Jul 11 17:48:22 quanta-q71l systemd[1]: Finished Populate KGPE-D16 motherboard FRU inventory from the shipped blob.
 
 ## motherboard inventory
 xyz.openbmc_project.Inventory.Decorator.Asset interface -         -                           -
