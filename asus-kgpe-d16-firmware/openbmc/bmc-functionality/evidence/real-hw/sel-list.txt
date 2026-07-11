@@ -1,0 +1,4 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> sel list
+# exit code: 0
+
+SEL has no entries
