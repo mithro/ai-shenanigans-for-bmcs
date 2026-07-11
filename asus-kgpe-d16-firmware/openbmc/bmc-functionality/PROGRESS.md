@@ -486,3 +486,25 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
     proven-vs-designed caveat to `OPENBMC-POWER-INTEGRATION.md` §(b). GPIOH2/QMP +
     the CI fwtest are named as the authoritative signal. Forward path left intact
     (it IS proven). No PRs.
+- 2026-07-12: **Final consolidation** — merged the three remaining completed
+  branches into `claude/bmc-functionality` with real `--no-ff` merge commits
+  (no PRs, no force-push), in least- to most-conflicting order. All three touch
+  **disjoint file sets**, so every merge was clean (no conflict markers):
+  * `claude/bmc-review` (merge `2a58516`) — additive audit docs only:
+    `REVIEW-FINDINGS.md` + `evidence/review-rerun/` spot-check logs.
+  * `claude/bmc-review-fix` (merge `aa0814b`) — CI: ungate `f5-ipmi-lan` /
+    `f4-sol` / `fw-update` (drop the per-job `workflow_dispatch` gate) + fetch the
+    staged rootfs from the GitHub Release asset `openbmc-full-rootfs.tar` with an
+    honest run-vs-SKIP guard; new `build-openbmc-rootfs.yml` + `CI-README.md`. The
+    other feature jobs (boot-usb / host-kcs / f7-ncsi-dedicated-phy / boot-nfsroot
+    / …) are untouched. Also the F2 prose softening (forward-path-only) here, in
+    `evidence/qemu/F2-README.md`, and `OPENBMC-POWER-INTEGRATION.md` §(b).
+  * `claude/bmc-hwpass` (merge `67b9a2d`) — image ships **kcsbridge** (host-IPMI
+    KCS), not btbridged: `obmc-phosphor-image-ast2050-full.bb` installs
+    `phosphor-ipmi-kcs` and `IMAGE_INSTALL:remove = "phosphor-ipmi-bt"`, the
+    authoritative host-IPMI provider choice (supersedes/completes F-IMG3). Plus
+    real-HW evidence under `evidence/real-hw-hwpass/`, `hwpass-boot-and-demo.sh`,
+    `hwpass-realhw-capture.py`, and `HWPASS-PROGRESS.md`.
+  * Verified: working tree clean, no conflict markers; the image config selects
+    `phosphor-ipmi-kcs` (bt dropped); all 6 workflow YAML files parse; the QEMU
+    gitlink stays `a010d69` (none of the three touch QEMU source). No PRs.
