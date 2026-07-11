@@ -80,14 +80,47 @@ coordinated session. **No unrecoverable changes; no real flash write.**
 power-state GPIO wired, so this is a default, not a real STA_LINE_POWER read;
 the combined DTB fixes that).
 
-## Rig-access hiccup (2026-07-12, mid-session)
-The Pi's FQDN `rpi4-asus-aspeed2050-dev.iot.welland.mithis.com` (welland zone)
-began **intermittently failing DNS resolution** from the workstation (it resolved
-fine for the earlier mc-info/scp/staging steps; the workstation's own net + the
-8.8.8.8/192.168.22.1 path are up). This blocks new `ssh asus-bmc` calls — hence
-the P2A boot (which drives ~20 sequential Pi ssh calls in `linux-boot.py`) is
-paused until DNS recovers or a stable Pi IP is obtained. Everything is staged so
-the boot is a one-command trigger once the Pi is reachable again.
+## Rig-access outage (2026-07-12, mid-session) — the boot blocker
+The rig is reached over a **WireGuard tunnel** (`wg-desktop`, workstation
+10.98.5.2/30 → peer 10.98.5.1; WG endpoint `87.121.95.37:51821`). It worked for
+the first ~part of the session (live-board mc-info/lan-print capture, the 22 MB
+squashfs + 29 MB rootfs push, the Pi-side untar/exportfs/mask staging all
+succeeded over it). Then the tunnel went **stale/flapping**: `sudo wg show`
+reported *"latest handshake: 18 minutes ago"* (WG re-handshakes every ~2 min
+under traffic, so ≥18 min = the rig-side WG endpoint stopped answering). Symptoms:
+`ssh asus-bmc` hangs; the FQDN's public A/AAAA (`87.121.95.37`, `2404:e80:…::222/3`)
+are firewalled/unreachable on :22; the WG peer `10.98.5.1` = 100% packet loss;
+brief up-windows appear then drop. This is a **rig-side infrastructure outage**,
+not a workstation problem (8.8.8.8 + the local gateway are up).
+
+**Decision (safety):** a clean P2A NFS-root boot drives ~20 sequential Pi ssh
+calls over ~4 min in `linux-boot.py`; over a flapping tunnel a mid-sequence drop
+could leave the **shared board hung mid-boot with no recovery channel**. Per the
+task's hard safety rule ("STOP if unsure; nothing unrecoverable") the
+state-mutating P2A boot was **NOT attempted** over the unstable link. Everything
+is staged so it is a single command once the tunnel is stable again:
+
+    bash asus-kgpe-d16-firmware/openbmc/bmc-functionality/hwpass-boot-and-demo.sh
+
+That runbook: stages the kernel+DTB to Pi TFTP, (idempotently) applies the realhw
+masks, logs intent to the Pi coordination log, P2A-boots the new stack (retry ×3),
+then captures system-id (populated), sensors (host on → live W83795), host-KCS
+(host at an OS → `ipmitool -I open`), power status, and SOL — and documents the
+F5-config fallback if the boot doesn't come up.
+
+## What was proven on real silicon this session (honest)
+* **Rig reached** (`ssh asus-bmc`, board `192.168.66.2` over RMCP+, KGPE-D16 x86
+  host `192.168.77.138` powered ON) — real, captured.
+* **Live board IPMI** (F5's image): `mc info` (all-zero IDs), `lan print` (real
+  MAC 96:0e:ce:b9:5d:8d), `chassis (power) status` — `evidence/real-hw-hwpass/`.
+* **New image built + staged on the rig**: kcsbridge wired to /dev/ipmi-kcs3 +
+  populated ASUSTeK 2623 / 0x0D16 IDs, at `Pi:/srv/nfs/openbmc-hwpass` (verified
+  on the Pi; F5's export untouched).
+NOT proven on silicon this session (tunnel outage, honest): booting the new image
+→ so populated-`mc info`, `sdr elist` W83795 values, host-KCS round-trip, SOL, and
+any host-power action remain STAGED-but-unbooted. Host-power *drive* is separately
+bounded by the SCU-pinmux-on-shared-pins hazard (and moot: the host is already on
+and is the P2A peer, so turning it off would strand the boot channel).
 
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
