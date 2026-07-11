@@ -72,8 +72,13 @@ fi
 # mount) is dormant for the initramfs boots (C2/C3 carry no ip=/root=/dev/nfs on
 # the cmdline) and enables the Phase-6 boot-nfsroot path from the same kernel.
 make aspeed_g4_defconfig
+# kgpe-d16-usb.config + kgpe-d16-kvm.config MUST come last: they re-enable USB
+# (kgpe-d16.config sets CONFIG_USB_SUPPORT=n) for the AST2050 USB2.0 device/vhub
+# gadget path (F6) and add the V4L2 + aspeed-video KVM screen-capture stack and the
+# host-side HID/input layers (F8). See F6-USB.md and F8-KVM.md.
 scripts/kconfig/merge_config.sh -m .config \
-    "$ROOT/kernel/kgpe-d16.config" "$ROOT/kernel/kgpe-d16-nfsroot.config"
+    "$ROOT/kernel/kgpe-d16.config" "$ROOT/kernel/kgpe-d16-nfsroot.config" \
+    "$ROOT/kernel/kgpe-d16-usb.config" "$ROOT/kernel/kgpe-d16-kvm.config"
 make olddefconfig
 
 # Build.

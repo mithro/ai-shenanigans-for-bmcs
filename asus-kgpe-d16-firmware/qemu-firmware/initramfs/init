@@ -41,5 +41,121 @@ ip addr show eth0 2>&1
 netstat -tln 2>&1 || true
 echo "dropbear: listening on :22 (ssh in via the QEMU hostfwd port)"
 
+# --- F8 KVM-over-IP demo (only when 'f8kvm' is on the kernel cmdline) ---
+# KVM-over-IP on the AST2050 is three cooperating blocks (see F8-KVM.md):
+#   1. VIDEO ENGINE @0x1e700000 (VIC INT#7): the aspeed-video V4L2 driver captures
+#      the host VGA framebuffer -> /dev/video0. The BMC-only QEMU machine has no VGA
+#      host source, so this proves "driver probes the modeled engine + opens the
+#      capture device" (the achievable QEMU bar; the host-VGA source is the boundary).
+#   2. USB2.0 vhub @0x1e6a0000 (VIC INT#5): a virtual HID keyboard+mouse gadget the
+#      BMC presents TO THE SERVER HOST. QEMU does not emulate that host, so we bind
+#      the gadget to the in-guest dummy_hcd (a software UDC+host loopback) and show
+#      the exact keypress byte-stream reaching a host-side input (evdev) device.
+# The real host-facing path (vhub -> real server host) needs a dedicated G3 UDC
+# driver + a functional QEMU vhub datapath (F6/F8 boundary).
+if grep -q f8kvm /proc/cmdline; then
+	echo "=== F8-KVM-DEMO-BEGIN ==="
+
+	echo "--- [1] VIDEO ENGINE: aspeed-video probe (dmesg) ---"
+	dmesg | grep -iE 'aspeed.?video|video-engine|1e700000' || echo "(no aspeed-video dmesg)"
+	echo "--- video capture device nodes ---"
+	ls -l /dev/video* 2>&1 || echo "(no /dev/video*)"
+	for d in /sys/class/video4linux/video*; do
+		[ -e "$d" ] && echo "$d/name = $(cat "$d/name" 2>&1)"
+	done 2>&1
+	if [ -e /dev/video0 ]; then
+		echo "F8-VIDEO: /dev/video0 present (aspeed-video bound the AST2050 video engine)"
+	else
+		echo "F8-VIDEO-FAIL: no /dev/video0"
+	fi
+
+	echo "--- [2] USB2.0 vhub probe (dmesg) ---"
+	dmesg | grep -iE 'aspeed_vhub|Initialized virtual hub|dummy_hcd' || echo "(none)"
+	echo "--- UDCs found (/sys/class/udc) ---"
+	ls -1 /sys/class/udc/ 2>&1 || echo "(none)"
+
+	echo "--- [3] build a virtual HID keyboard+mouse gadget via configfs ---"
+	mount -t configfs none /sys/kernel/config 2>&1 || echo "(configfs already mounted)"
+	G=/sys/kernel/config/usb_gadget/vkvm
+	mkdir -p "$G"
+	echo 0x1d6b > "$G/idVendor"     # Linux Foundation
+	echo 0x0104 > "$G/idProduct"    # Multifunction Composite Gadget
+	mkdir -p "$G/strings/0x409"
+	echo "ASUS-KGPE-D16-BMC"                        > "$G/strings/0x409/manufacturer"
+	echo "AST2050 vKVM keyboard+mouse (obmc-ikvm)"  > "$G/strings/0x409/product"
+	echo "0000A5T2050"                              > "$G/strings/0x409/serialnumber"
+	mkdir -p "$G/configs/c.1/strings/0x409"
+	echo "vkvm-hid-config" > "$G/configs/c.1/strings/0x409/configuration"
+
+	# --- HID keyboard function (hid.usb0): boot keyboard, 8-byte reports ---
+	mkdir -p "$G/functions/hid.usb0"
+	echo 1 > "$G/functions/hid.usb0/protocol"      # 1 = keyboard
+	echo 1 > "$G/functions/hid.usb0/subclass"      # 1 = boot interface
+	echo 8 > "$G/functions/hid.usb0/report_length" # 8-byte boot-keyboard report
+	# Standard 63-byte USB HID boot-keyboard report descriptor.
+	printf '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x03\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x03\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0' \
+		> "$G/functions/hid.usb0/report_desc"
+
+	# --- HID mouse function (hid.usb1): boot mouse, 3-byte reports ---
+	mkdir -p "$G/functions/hid.usb1"
+	echo 2 > "$G/functions/hid.usb1/protocol"      # 2 = mouse
+	echo 1 > "$G/functions/hid.usb1/subclass"      # 1 = boot interface
+	echo 3 > "$G/functions/hid.usb1/report_length" # 3-byte boot-mouse report
+	# Standard 52-byte USB HID boot-mouse report descriptor.
+	printf '\x05\x01\x09\x02\xa1\x01\x09\x01\xa1\x00\x05\x09\x19\x01\x29\x03\x15\x00\x25\x01\x95\x03\x75\x01\x81\x02\x95\x01\x75\x05\x81\x03\x05\x01\x09\x30\x09\x31\x15\x81\x25\x7f\x75\x08\x95\x02\x81\x06\xc0\xc0' \
+		> "$G/functions/hid.usb1/report_desc"
+
+	echo "--- report descriptors the gadget will expose to the host ---"
+	echo "keyboard report_desc ($(wc -c < "$G/functions/hid.usb0/report_desc") bytes):"
+	hexdump -C "$G/functions/hid.usb0/report_desc" 2>&1 | head -5
+	echo "mouse report_desc ($(wc -c < "$G/functions/hid.usb1/report_desc") bytes):"
+	hexdump -C "$G/functions/hid.usb1/report_desc" 2>&1 | head -4
+
+	ln -s "$G/functions/hid.usb0" "$G/configs/c.1/"
+	ln -s "$G/functions/hid.usb1" "$G/configs/c.1/"
+
+	# Bind to the software dummy UDC so the paired dummy HOST enumerates the HID
+	# keyboard+mouse in-guest (stands in for the real server host).
+	UDC=$(ls /sys/class/udc | grep -i dummy | head -1)
+	echo "binding vkvm HID gadget -> UDC '$UDC'"
+	echo "$UDC" > "$G/UDC"
+	sleep 3
+
+	echo "--- host-side enumeration of the virtual keyboard+mouse (dmesg) ---"
+	dmesg | grep -iE 'new .*USB device|hid-generic|input:|Product: AST2050' | tail -12
+	echo "--- gadget HID endpoints (/dev/hidgN = the report streams to the host) ---"
+	ls -l /dev/hidg* 2>&1 || echo "(no /dev/hidg*)"
+	echo "--- host input devices bound to the enumerated HID (evdev) ---"
+	ls -l /sys/class/input/ 2>&1 | grep -iE 'event|input' || true
+
+	# --- [4] SEND A KEYBOARD EVENT: press 'a' (HID usage 0x04) then release ---
+	# Start a background reader on the host-side evdev so we capture the delivered
+	# input_event (16 bytes on 32-bit: {tv_sec,tv_usec,type,code,value}); EV_KEY=1,
+	# KEY_A=30(0x1e), value=1 press / 0 release.
+	EV=$(ls /dev/input/event* 2>&1 | head -1)
+	echo "host evdev node: ${EV:-<none>}"
+	if [ -n "$EV" ] && [ -e "$EV" ]; then
+		( hexdump -C "$EV" > /tmp/kbd_event.hex 2>&1 ) &
+		READER=$!
+		sleep 1
+	fi
+	echo "--- writing keyboard report to /dev/hidg0: press 'a' then release ---"
+	# 8-byte boot-keyboard report: [modifiers][reserved][k1..k6]; k1=0x04 = 'a'.
+	printf '\x00\x00\x04\x00\x00\x00\x00\x00' > /dev/hidg0 && \
+		echo "F8-HID: wrote press report (a) to /dev/hidg0" || echo "F8-HID-FAIL: hidg0 write failed"
+	sleep 1
+	printf '\x00\x00\x00\x00\x00\x00\x00\x00' > /dev/hidg0   # release
+	sleep 1
+	echo "--- mouse report to /dev/hidg1: move +10,+5, left button ---"
+	printf '\x01\x0a\x05' > /dev/hidg1 && echo "F8-HID: wrote mouse report to /dev/hidg1" || echo "(mouse write failed)"
+	sleep 1
+	if [ -n "${READER:-}" ]; then kill "$READER" 2>&1 || true; fi
+	echo "--- host received these input_event bytes on $EV (the keypress crossing to the host) ---"
+	cat /tmp/kbd_event.hex 2>&1 | head -8 || echo "(no evdev capture)"
+	dmesg | grep -iE 'input:|hid-generic|Keyboard|Mouse' | tail -6
+
+	echo "=== F8-KVM-DEMO-END ==="
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh
