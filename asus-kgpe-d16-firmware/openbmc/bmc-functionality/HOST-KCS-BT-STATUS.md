@@ -1,5 +1,13 @@
 # F5 goal 2 — host-side IPMI (KCS/BT over LPC): status + remaining work
 
+> **UPDATE (F5b, task `claude/bmc-f5b-hostkcs`): M1 below is DONE for KCS.** The
+> DTS now has `&lpc/kcs@2c` + the kernel builds `CONFIG_IPMI_KCS_BMC_CDEV_IPMI`, so
+> `/dev/ipmi-kcs3` is created and `ast-kcs-bmc` binds it in QEMU at 64 MB (PASS).
+> **KCS, not BT**, is the faithful host channel: mainline BT (`ibt@140`) is at the
+> wrong offset for the G3 (BT block is at 0x48-0x68). See `F5B-HOST-KCS-STATUS.md`
+> for the full write-up, the daemon-layer gap (image ships `btbridged`, needs
+> `kcsbridge` — F-IMG2), and the M2 host-peer boundary.
+
 **LAN IPMI (goal 1) is complete** (QEMU + real AST2050, see `PROGRESS.md`). This
 document is the precise remaining-work map for **host-side IPMI** — a host OS
 talking IPMI to the BMC over the AST2050 **LPC** KCS or BT channel — as the task

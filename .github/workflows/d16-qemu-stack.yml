@@ -140,6 +140,48 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240
 
+  host-kcs:
+    name: F5b — host-side IPMI KCS channel alive (M1)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS openssh-client
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      # Boots the same kernel/DTB as C2 but asserts the host-side IPMI KCS channel:
+      # the DTS &lpc/kcs@2c node + CONFIG_IPMI_KCS_BMC_CDEV_IPMI make the kernel
+      # create /dev/ipmi-kcs3, bind ast-kcs-bmc, and drive the faithful G3 LPC
+      # model (HICR0.LPC3E / HICR4.KCSENBL / LADR3=0xca2), plus a BMC-side ODR3
+      # poke. At the real 64 MB DRAM size. (Full host<->BMC round-trip needs a
+      # host peer — see F5B-HOST-KCS-STATUS.md M2.)
+      - name: Boot kgpe-d16-bmc + prove /dev/ipmi-kcs3 alive, driver bound, model poked
+        run: |
+          chmod 600 initramfs-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f5b-host-kcs-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test \
+            --mem 64 --boot-timeout 300 \
+            --evidence-dir host-kcs-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f5b-host-kcs-evidence
+          path: host-kcs-evidence/
+
   boot-nfsroot:
     name: Boot faithful machine with root over NFS (C5 / Phase 6a)
     runs-on: ubuntu-latest
