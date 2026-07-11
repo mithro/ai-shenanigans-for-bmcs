@@ -80,3 +80,16 @@ Leave ≥8 GB headroom; watch `free -g`.
   Chassis + EthernetInterfaces in QEMU AND on the real board; add a CI test.
   (F-UPSTREAM kernel/QEMU bump deferred — OpenBMC already latest master; features
   proceed on the proven 6.6.70+faithful-QEMU stack first, simplest-first.)
+- 2026-07-11: **USER GUIDANCE — only the API + IPMI functionality is needed, NOT
+  the web interface.** Combined with F1's real-HW finding (the fuller image with
+  bmcweb doesn't fit real 64MB): strategy pivot ->
+  * **IPMI is the lean, real-HW path** (ipmid host KCS/BT + netipmid LAN are far
+    lighter than bmcweb's Boost/SSL). Real-HW feature demos go IPMI-first
+    (ipmitool over LAN + from the host) so they fit 64MB.
+  * **Redfish API (bmcweb)** = demonstrated in QEMU (RAM headroom) and on real HW
+    only where it fits alone; it's the "API" the user wants (webui-vue already
+    excluded from F0).
+  * So for the tight real-HW 64MB demos: **mask bmcweb**, run the IPMI stack +
+    backends (state-mgr/sensors/inventory). This is the key 64MB unlock.
+  This reprioritizes F5 (IPMI, esp. netipmid LAN which needs no KCS hardware) as
+  the backbone; system-id/power/sensors/SOL/FRU are all exposed via IPMI on HW.
