@@ -1,0 +1,35 @@
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 848e41a4b..4bcb57950 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -310,10 +310,27 @@ static void ftgmac100_init_hw(struct ftgmac100 *priv)
+ 
+ static void ftgmac100_start_hw(struct ftgmac100 *priv)
+ {
+-	u32 maccr = ioread32(priv->base + FTGMAC100_OFFSET_MACCR);
++	u32 maccr = 0;
+ 
+-	/* Keep the original GMAC and FAST bits */
+-	maccr &= (FTGMAC100_MACCR_FAST_MODE | FTGMAC100_MACCR_GIGA_MODE);
++	/* Set the speed mode from the current link speed rather than only
++	 * preserving whatever MACCR already holds. On the AST2050 (G3) the MAC
++	 * SW_RST done in ftgmac100_reset_and_config_mac() clears MACCR (the
++	 * speed bit included) -- unlike AST2400/2500 where it survives -- so a
++	 * preserve-only approach leaves the MAC in 10M timing while a 100M link
++	 * delivers frames, mangling every RX frame (frame-too-long / CRC error)
++	 * and giving rx=0. HW-verified on the real AST2050: MACCR bit19
++	 * FAST_MODE was clear; setting it restored RX.
++	 */
++	switch (priv->cur_speed) {
++	case SPEED_100:
++		maccr |= FTGMAC100_MACCR_FAST_MODE;
++		break;
++	case SPEED_1000:
++		maccr |= FTGMAC100_MACCR_GIGA_MODE;
++		break;
++	default:
++		break;	/* 10M or no link: leave both speed bits clear */
++	}
+ 
+ 	/* Add all the main enable bits */
+ 	maccr |= FTGMAC100_MACCR_TXDMA_EN	|

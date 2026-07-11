@@ -26,11 +26,15 @@ if ! grep -q ast2050 drivers/clk/clk-aspeed.c; then
     git apply "$ROOT/kernel/patches/0001-clk-aspeed-add-ast2050-support.patch"
 fi
 
-# AST2050 ftgmac100 RMII RX bring-up: reset the RMII PHY for the G3 so the MAC
-# RX engine actually pulls frames off the wire (without this, eth0 TX works but
-# RX=0 on the real AST2050 / the faithful QEMU model). Idempotent guard.
-if ! grep -q is_ast2050 drivers/net/ethernet/faraday/ftgmac100.c; then
-    git apply "$ROOT/kernel/patches/0002-ftgmac100-ast2050-rmii-rx.patch"
+# AST2050 ftgmac100 speed-mode fix: ftgmac100_start_hw() must re-derive the MAC
+# speed bits (FAST_MODE/GIGA_MODE) from priv->cur_speed rather than only
+# preserving them. On the G3 a MAC SW_RST clears MACCR (speed bit included), so
+# preserve-only leaves the MAC in 10M timing on a 100M link -> every RX frame is
+# mangled -> rx=0 (HW-verified: setting MACCR bit19 FAST_MODE restored RX).
+# Idempotent guard on a unique string from the patched comment.
+if ! grep -q "Set the speed mode from the current link speed" \
+        drivers/net/ethernet/faraday/ftgmac100.c; then
+    git apply "$ROOT/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch"
 fi
 
 # Device tree.

@@ -71,17 +71,15 @@
 &mac0 {
 	status = "okay";
 	/*
-	 * AST2050 (G3) MAC. The most-specific "aspeed,ast2050-mac" compatible is
-	 * listed first so the ftgmac100 driver applies the G3 RMII RX bring-up
-	 * (reset the RMII PHY in mii_probe to (re)establish the RX datapath);
-	 * "aspeed,ast2400-mac" stays as the register-compatible fallback. NO
-	 * fixed-link: the driver must run the real MDIO/PHY probe path, which is
-	 * where the RMII RX reset happens on the G3. Without that reset the MAC
-	 * RX engine pulls zero frames off the RMII interface (the real-silicon
-	 * eth0 RX=0 bug, now faithfully modelled by the kgpe-d16-bmc QEMU MAC).
+	 * AST2050 (G3) MAC, register-compatible with the AST2400. phy-mode=rmii
+	 * with the real RTL8201CP PHY (no fixed-link) -- matching the real board.
+	 * The eth0 RX=0 bug is NOT a PHY/RMII issue: on the G3 a MAC SW_RST clears
+	 * the MACCR speed bit, and the mainline driver's preserve-only start_hw()
+	 * leaves the MAC in 10M timing on the 100M link -> rx=0. The kgpe-d16-bmc
+	 * QEMU MAC models that; the kernel cur_speed patch fixes it. The fix is
+	 * FAST_MODE alone -- it does not depend on this DTS, which is why no
+	 * fixed-link workaround is needed here.
 	 */
-	compatible = "aspeed,ast2050-mac", "aspeed,ast2400-mac",
-		     "faraday,ftgmac100";
 	phy-mode = "rmii";
 };
 
