@@ -70,12 +70,24 @@ emulation. **That is the faithfulness gap.**
 
 ## Plan (N2–N5)
 
-- **N2 (faithful QEMU):** model the RMII RX-clock dependency so RX is delivered
-  only after the driver enables it. Reset it to "off" (matching real HW after the
-  MAC SW_RST); gate `ftgmac100_can_receive` on it. An unfixed driver then gets
-  `rx=0` in QEMU too. Add an fwtest/integration check. Pin the exact silicon
-  enable (candidate: RMII RCLK gate / MAC RMII-RX enable) via a U-Boot-`aspeednic`
-  vs Linux register diff or a P2A poke-and-observe experiment.
+- **Pin the exact silicon RX-enable (prereq for a faithful N2).** Ruled OUT so far:
+  - *SoC RMII RCLK output* — `clk-aspeed.c:517` puts the "RMII1 50 MHz (RCLK)
+    output enable" at **SCU48 bit 29**; the prior dump shows **SCU48=0x0 in BOTH**
+    working-U-Boot and broken-Linux. So the SoC does not drive the refclk (bit29=0)
+    yet U-Boot RXes — the RCLK-not-enabled theory is **wrong for this board** (the
+    refclk is external/PHY-sourced). *(Checked the real bit instead of assuming.)*
+  - *SCU/pinmux/clock* — byte-identical U-Boot vs Linux (`NIC-MAC-REGISTER-COMPARISON.md`).
+  - *Driver RX ring / coherency* — ring is valid, MAC never touches it.
+
+  Remaining suspects: (a) a **MAC-internal RMII-RX state cleared by the driver's
+  `ftgmac100_reset_mac` `SW_RST`** and not restored (the "Unsupported PHY mode rmii"
+  path does no RMII re-init); (b) the **RTL8201CP PHY config** (RMII mode / RXC) that
+  U-Boot's `aspeednic` sets over MDIO and Linux's phylib doesn't. Next experiments:
+  diff the RTL8201CP MDIO registers U-Boot-working vs Linux-broken (via MAC
+  PHYCR/PHYDATA over P2A); and a `SW_RST`-skip driver build to test suspect (a).
+- **N2 (faithful QEMU):** once the real enable is pinned, gate
+  `ftgmac100_can_receive` on it (reset "off" to match real HW post-`SW_RST`); an
+  unfixed driver then gets `rx=0` in QEMU too. Add an fwtest/integration check.
 - **N3 (driver fix):** enable the RMII RX path for `aspeed,ast2050-mac` in
   `ftgmac100`; confirm `rx>0` in the now-faithful QEMU.
 - **N4:** boot OpenBMC over NFS in QEMU → Redfish (regression-free legacy boots).
