@@ -39,6 +39,15 @@ Strategy: batch the OpenBMC feature packages into ONE fuller image build (amorti
 the multi-hour Yocto build), then enable/demonstrate features one-by-one on it.
 QEMU HW models + DTS wiring proceed in parallel.
 
+## Resource limits (user-directed)
+Run all heavy builds at reduced nice + capped memory so they can't OOM the box
+(31 GB RAM / 12 cores). Recipe: `nice -n 15 ionice -c3` + `systemd-run --user
+--scope -p MemoryMax=20G -p MemoryHigh=18G` + low `BB_NUMBER_THREADS=4`/`PARALLEL_MAKE=-j4`.
+Leave ≥8 GB headroom; watch `free -g`.
+
 ## Log
-- 2026-07-11: worktree+branch created; recon done (above); starting F0 setup +
-  kicking off the fuller-image build.
+- 2026-07-11: worktree+branch created; recon done (above).
+- 2026-07-11: F0 OpenBMC fuller-image build dispatched to a sub-agent (branch
+  `claude/bmc-f0-openbmc-image`, latest-upstream master, capped resources). Long
+  pole (hours). Adds IPMI/SOL/sensors/state-mgmt; staged to /export/openbmc-full +
+  Pi /srv/nfs/openbmc-full (keeps the proven redfish image as fallback).
