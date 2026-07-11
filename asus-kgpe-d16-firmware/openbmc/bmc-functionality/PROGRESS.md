@@ -93,3 +93,18 @@ Leave ≥8 GB headroom; watch `free -g`.
     backends (state-mgr/sensors/inventory). This is the key 64MB unlock.
   This reprioritizes F5 (IPMI, esp. netipmid LAN which needs no KCS hardware) as
   the backbone; system-id/power/sensors/SOL/FRU are all exposed via IPMI on HW.
+- 2026-07-12: **F5 IPMI backbone DONE — LAN IPMI PASSES in QEMU AND on the real
+  AST2050 at 64MB** (bmcweb-masked lean image). Identical ipmitool -I lanplus rc=0
+  for: mc info, chassis status/power status, lan print (real MAC on HW), sel
+  info/list, sdr list (28 SDRs), user list. fru print enumerates 12 devices but
+  data absent (no I2C EEPROM). Evidence under bmc-functionality/evidence/{qemu,real-hw}/.
+  This carries F1 (system-id: mc info/lan print/fru), F2 (power: chassis power/status),
+  F3 (sensors: sdr list) on REAL HW via IPMI — the strategy the user's API+IPMI
+  guidance enabled. realhw mask profile (24 masks) documented. Board left ON serving
+  IPMI @192.168.66.2; NFS export reverted pristine; rig released.
+  REMAINING: (a) host-side KCS/BT IPMI (DTB has no kcs/bt child node; QEMU G3 LPC
+  model exists — needs M1 DTS node + M2 emulated LPC host peer) = "IPMI local on the
+  motherboard"; (b) DATA population — mc info IDs zeroed (dev_id.json) + FRU empty
+  (populate in recipe/HW); (c) actual host power on/off via the GPIO (F2 config) on
+  real HW (status works; drive-loop to verify); (d) F4 SOL; (e) CI job needs the
+  rootfs artifact published.
