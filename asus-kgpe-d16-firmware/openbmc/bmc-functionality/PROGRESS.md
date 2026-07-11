@@ -127,3 +127,25 @@ Leave ≥8 GB headroom; watch `free -g`.
     checksums verified) loaded into the motherboard inventory via phosphor-read-eeprom.
   Capped rebuild launched (systemd-run MemoryMax=20G + nice/ionice + BB -j4); recipes
   parse clean, build progressing, RAM healthy. QEMU demos next.
+- 2026-07-12: **F-IMG2 built + DEMONSTRATED in QEMU.** Rebuilt image (OpenBMC master,
+  22.7MB squashfs) staged to a NEW export `/export/openbmc-img2` (does NOT touch F5's
+  live `/export/openbmc-full`). Booted on the faithful kgpe-d16-bmc QEMU (F3's
+  W83795G QEMU + g3vic kernel + vuart DTB, mem=256). Evidence under
+  bmc-functionality/evidence/img2/:
+  * (a) SOL: busctl -> settingsd owns /xyz/openbmc_project/ipmi/sol/eth0 (full
+    Ipmi.SOL property set); `ipmitool sol info 1` rc=0 reads it end-to-end
+    (Privilege ADMINISTRATOR, RetryCount 7, Payload Port 623) -- the ResourceNotFound
+    cause is fixed. (sol *activate* intermittently hits netipmid's socket-activation
+    RMCP+ race, F5's pre-existing issue, not the config-object fix.)  **PASS**
+  * (b) SDR: `ipmitool sdr elist` -> all 18 KGPE-D16 rails w/ correct W83795G values
+    (CPU_DIODE 41.9C, CPU0/1_DTS, VCORE0/1 0.96V, P12V 11.97V, P5V 4.99V, P3V3 3.26V,
+    P1V5/P1V1/P0V9, VBAT 3.01V, FAN1-6).  **PASS**
+  * (c) Redfish: `/redfish/v1/Chassis` -> 1 member ASUS_KGPE_D16 w/ Manufacturer=
+    ASUSTeK, Model=KGPE-D16, Part/Serial/AssetTag (was empty).  **PASS**
+  * (d) mc info: Manufacturer 2623 (ASUSTek Computer Inc.), Product 0x0d16.  **PASS**
+  * (d) FRU: motherboard inventory populated (ASUSTeK/KGPE-D16/Part/Serial) via
+    phosphor-read-eeprom loading a shipped IPMI FRU blob; two follow-on recipe
+    fixes (0x0 inventory-map device-0 mapping + Item.Present=true extra-property)
+    to surface it in `ipmitool fru print`.  (3 incremental rebuilds total.)
+  Branch pushed; no PRs. Coordination: new NFS export documented; F5's live export
+  untouched.
