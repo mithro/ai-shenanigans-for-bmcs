@@ -134,11 +134,23 @@ Full model plan + register map:
 
 ---
 
-## 5. Real-hardware status
+## 5. Real-hardware status (honest QEMU-only vs HW-proven)
 
-The USB2.0 controller register aperture (0x1E6A0000) is reachable on the real board via
-the existing P2A / JTAG AHB paths (same access used to read SCU7C), so a non-disruptive
-characterization (confirm the region decodes, read HUB00) is possible without a full
-boot slot. **Bringing up the gadget on real silicon (presenting a virtual keyboard or
-media image to the KGPE-D16 host) is F8-KVM and needs the dedicated G3 UDC driver.**
-This document marks clearly what is QEMU-only vs HW-proven; see `PROGRESS.md`.
+**Everything demonstrated in §4 is QEMU-only.** The faithfulness to real silicon rests
+on (a) the datasheet (§1: one USB2.0 device/vhub, no host controller) and (b) the fact
+that the Linux `aspeed-vhub` driver binds cleanly to the datasheet-accurate QEMU
+register block.
+
+**Not exercised on real hardware this session:** the AST2050 rig (its RPi4 bridges and
+the BMC board at 192.168.66.2) was **not reachable from this build environment**, and
+the rig is a contended shared resource whose state-mutating operations must be
+coordinated on the Pi's `HARDWARE-COORDINATION.md` (also unreachable from here). No
+real-HW USB test was run, and nothing state-mutating was done to the board.
+
+**Available non-disruptive path (for a future HW session):** the USB2.0 controller
+register aperture at 0x1E6A0000 is reachable on the real board via the existing P2A /
+JTAG AHB backdoors (the same read path proven for SCU7C — see the JTAG/culvert work),
+so a read of HUB00 to confirm the region decodes is possible without a boot slot.
+**Bringing up the gadget on real silicon (presenting a virtual keyboard/mouse or media
+image to the KGPE-D16 host) is F8-KVM** and needs the dedicated G3 UDC driver + the
+functional QEMU vhub datapath (§4 approximations).

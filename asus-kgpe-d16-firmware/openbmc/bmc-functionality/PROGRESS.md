@@ -108,3 +108,25 @@ Leave ≥8 GB headroom; watch `free -g`.
   (populate in recipe/HW); (c) actual host power on/off via the GPIO (F2 config) on
   real HW (status works; drive-loop to verify); (d) F4 SOL; (e) CI job needs the
   rootfs artifact published.
+- 2026-07-12: **F6 USB DONE in QEMU (branch claude/bmc-f6-usb).** KEY FAITHFULNESS
+  FINDING: the AST2050 has exactly ONE USB block — the USB2.0 *device / virtual-hub*
+  controller @0x1E6A0000 (VIC INT#5); it has NO USB *host* controller (datasheet §9
+  memory map p.97 = one USB region; §10 = only "USB2.0 interrupt" INT#5; §15 = only a
+  device/vhub). So "connect USB devices" here = the USB *gadget* path (present virtual
+  media / HID to the server host during KVM), NOT a host stack; Raptor's astuhci/
+  dev-uhci UHCI *host* driver is dead BSP code (no HW backing). F6 = F8-KVM groundwork.
+  Wrote F6-USB.md (datasheet + Raptor evidence). The kernel had CONFIG_USB_SUPPORT=n;
+  re-enabled USB + the gadget stack (kgpe-d16-usb.config: aspeed-vhub + dummy_hcd +
+  configfs mass-storage/HID) + a &vhub DTS node (0x1e6a0000/IRQ5, faithful 7 ports /
+  21-EP pool). **No QEMU source change needed** — the existing aspeed.udc-ast2050
+  register block already satisfies the driver. DEMO (QEMU, PASS): Linux 6.6.70
+  `aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode`, /sys/class/udc
+  shows the vhub with 7 downstream ports p1-p7 + dummy_udc.0; a virtual mass-storage
+  gadget enumerates in-guest over dummy_hcd (Product 'AST2050 vKVM virtual-media' at
+  /sys/bus/usb/devices/1-1/). Deepened the bare-metal fwtest to the §15.4 HUB/DEV/EPP
+  init map (6 checks) + integration test (8 pass) + CI boot-usb job + scripts/usb-test.py.
+  Evidence under evidence/f6-usb/. REAL-HW: rig unreachable from this build env (not
+  exercised; nothing state-mutating done) — everything is QEMU-only, honest in F6-USB.md
+  §5. REMAINING (F8-KVM): functional vhub datapath (enumeration/EP DMA/media transport
+  presenting a device to the *server host*, not just the dummy_hcd loopback) + likely a
+  dedicated G3 UDC driver (AST2050 vhub register file differs from the ast2400 layout).

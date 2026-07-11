@@ -24,8 +24,22 @@ for BMC **virtual media / virtual keyboard/mouse** (OpenBMC). Full detail:
   AST2400 EHCI hosts at 0x1E6A1000/0x1E6A3000. `test_no_phantom_ehci` now PASSES
   (no longer xfail).
 
-Remaining: the device/vhub at 0x1E6A0000 is still unmodelled, so OpenBMC virtual
-media can't yet be exercised.
+**F6 (2026-07-12): the OpenBMC kernel now probes this controller in QEMU.** With USB
+re-enabled in the kernel (`kernel/kgpe-d16-usb.config`) + the `&vhub` DTS node
+(0x1e6a0000/IRQ5, 7 downstream ports, 21-EP pool), Linux 6.6.70's `aspeed-vhub`
+driver binds the `aspeed.udc-ast2050` register block cleanly —
+`aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode`, and
+`/sys/class/udc` shows the vhub UDC with its 7 downstream ports (`…:p1`…`:p7`).
+**No QEMU source change was needed** — the existing register block satisfies the
+probe. The USB *gadget* stack is proven end-to-end in-guest (a virtual mass-storage
+gadget enumerates over `dummy_hcd`). See
+`openbmc/bmc-functionality/{F6-USB.md,evidence/f6-usb/}` + CI `boot-usb`.
+
+Remaining (F8-KVM): full device semantics on the vhub *itself* — enumeration/EP DMA/
+media transport driven from the register block, and a functional path that presents a
+device to the *server host* — so OpenBMC virtual-media/obmc-ikvm runs over the real
+vhub (not just the dummy_hcd loopback). A dedicated G3 UDC driver may be needed since
+the AST2050 vhub register file differs from the ast2400 layout aspeed-vhub assumes.
 
 ## 3. Faithful-model plan (large, oracle-gated)
 
@@ -38,7 +52,8 @@ firmware pokes the UDC once at init — AST2050-PERIPHERAL-MODELING §1) — ora
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ☑ (documents unmodelled UDC + phantom EHCI) |
-| 2 | doc (this + `DATASHEET-USB.md`) | ☑ |
-| 3 | QEMU model | ◐ **phantom EHCI removed + UDC register block modelled** (☑); full USB device semantics ☐ |
-| 4 | integration test (`../../integration/test_usb.py`) | ☑ `test_no_phantom_ehci` + `test_udc_modelled` PASS |
+| 1 | firmware test (`fwtest.c`) | ☑ walks the §15.4 HUB/DEV/EPP init/register map (6 checks PASS) |
+| 2 | doc (this + `DATASHEET-USB.md` + `F6-USB.md`) | ☑ |
+| 3 | QEMU model | ◐ phantom EHCI removed + UDC register block modelled; **aspeed-vhub probes it** (F6 ☑); full USB device semantics ☐ (F8-KVM) |
+| 4 | integration test (`../../integration/test_usb.py`) | ☑ 8 checks PASS (HUB/DEV/EPP RW + no phantom EHCI) |
+| 5 | OpenBMC kernel probe + gadget enum (F6) | ☑ `scripts/usb-test.py` + CI `boot-usb`; evidence in `bmc-functionality/evidence/f6-usb/` |
