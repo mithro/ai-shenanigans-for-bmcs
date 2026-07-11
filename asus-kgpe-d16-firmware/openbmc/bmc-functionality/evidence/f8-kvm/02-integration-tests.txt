@@ -1,0 +1,12 @@
+# F8: AST2050 video + USB vhub QEMU register-model integration tests
+# (qemu-model/integration/{test_video,test_usb}.py against the built kgpe-d16-bmc QEMU).
+# test_video.py: aspeed.video-ast2050 VR000 protection-key latch (unlock 0x1A038AA8 -> reads 1).
+# test_usb.py:   aspeed.udc-ast2050 USB2.0 device/vhub register block (HUB00 RW; no EHCI @0x1e6a1000).
+
+cachedir: .pytest_cache
+asus-kgpe-d16-firmware/qemu-model/integration/test_video.py::test_reaches_halt PASSED [ 20%]
+asus-kgpe-d16-firmware/qemu-model/integration/test_video.py::test_protection_key_unlock PASSED [ 40%]
+asus-kgpe-d16-firmware/qemu-model/integration/test_usb.py::test_reaches_halt PASSED [ 60%]
+asus-kgpe-d16-firmware/qemu-model/integration/test_usb.py::test_udc_modelled PASSED [ 80%]
+asus-kgpe-d16-firmware/qemu-model/integration/test_usb.py::test_no_phantom_ehci PASSED [100%]
+============================== 5 passed in 0.84s ===============================

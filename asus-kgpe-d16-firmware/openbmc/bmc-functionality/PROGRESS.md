@@ -338,3 +338,43 @@ Leave ≥8 GB headroom; watch `free -g`.
   §5. REMAINING (F8-KVM): functional vhub datapath (enumeration/EP DMA/media transport
   presenting a device to the *server host*, not just the dummy_hcd loopback) + likely a
   dedicated G3 UDC driver (AST2050 vhub register file differs from the ast2400 layout).
+
+## F8 — KVM-over-IP: "see the virtual VGA screen and send keyboard events" (2026-07-12)
+
+Branch `claude/bmc-f8-kvm` off `claude/bmc-functionality` @ ca62eba (QEMU submodule
+a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
+
+- **Ground truth (faithfulness-first):** KVM on the AST2050 = three silicon blocks:
+  the **Video Engine** @`0x1E700000`/INT#7 (datasheet §20 p.232-255; AST2050-only,
+  §1.3.6 p.19) for VGA screen-capture, and the **USB2.0 vhub** @`0x1E6A0000`/INT#5
+  (§15) for the virtual HID keyboard/mouse — both already modelled register-accurately
+  in QEMU submodule a010d69 (`aspeed.video-ast2050` VR000 key latch + RW regs;
+  `aspeed.udc-ast2050`). F8 changed **no QEMU source** — it wired the entire OpenBMC
+  (software) side and demonstrated it.
+- **What F8 wired:** DTS `&video` enabled (`aspeed,ast2400-video-engine`) + `&vhub`
+  enabled with faithful G3 counts (7 ports / 21-EP); kernel `kgpe-d16-kvm.config`
+  (V4L2 + `CONFIG_VIDEO_ASPEED` + host-side HID/input) merged with F6's
+  `kgpe-d16-usb.config` (gadget stack + `f_hid`); `initramfs/init` `f8kvm` demo;
+  runner `scripts/kvm-test.py`; CI `.github/workflows/d16-kvm.yml`.
+- **QEMU demonstration (PASS, `-M kgpe-d16-bmc`, 64 MB; evidence/f8-kvm/):**
+  * **VIDEO:** `aspeed-video 1e700000.video: irq 24` → **`/dev/video0`** (name
+    `aspeed-video`). The mainline V4L2 driver probes the modelled AST2050 engine.
+  * **HID:** `aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub` (7 G3 ports);
+    a **keyboard+mouse gadget** (configfs `f_hid`) enumerates host-side as a real
+    **USB HID Keyboard + Mouse**; `/dev/hidg0`+`/dev/hidg1` created; a **keypress
+    ('a') report** written to `/dev/hidg0` crosses `dummy_hcd` to the host evdev as
+    **`EV_KEY` / `KEY_A`(0x1e) / value=1** (`01 00 1e 00 01 00 00 00`) — the keyboard
+    event the user asked to send.
+  * Register-model integration tests: `test_video.py` + `test_usb.py` — **5 passed**.
+- **obmc-ikvm 64 MB assessment (F8-KVM.md §4):** the daemon+libjpeg footprint fits
+  (<1 MB rootfs), but the real constraint is the **32 MB `video_engine_memory`
+  carve-out** (every mainline Aspeed BMC DTS reserves 32 MB; inventec uses 64 MB) —
+  half the AST2050's 64 MB DRAM. A full capture pipeline (32 MB buffers + VGA
+  framebuffer) does **not** comfortably coexist with OpenBMC in 64 MB; a 64 MB vKVM
+  needs a reduced buffer budget (smaller region + low-res/quality). Not built (the
+  one-Yocto-build rule; F-IMG2 held the slot).
+- **Honest boundary:** BMC-only QEMU has **no host VGA source** (video probes + opens
+  the device; real capture needs a host emitting VGA + the deferred VR004→JPEG→INT#7
+  datapath) and **no real server host** (the keypress is shown over `dummy_hcd`; the
+  host-facing vhub path needs a dedicated G3 UDC driver + a functional QEMU vhub
+  datapath — the F6/F8 gap). **All QEMU-only; nothing run on the shared AST2050 rig.**

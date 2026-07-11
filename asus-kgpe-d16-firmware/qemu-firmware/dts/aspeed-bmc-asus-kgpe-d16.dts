@@ -192,21 +192,47 @@
 	status = "okay";
 };
 
+/*
+ * AST2050 (G3) Video Engine (0x1e700000, VIC INT#7) — the KVM screen-capture
+ * block (F8). It captures the SoC's own VGA/CRT framebuffer (or an external DVO
+ * source) and JPEG/VQ-compresses it for remote KVM; OpenBMC's obmc-ikvm streams
+ * the compressed frames. Datasheet §20 (p.232-255) + §9 memory map (p.97) + §10
+ * IRQ table (p.99). AST2050-only block (the sibling AST1100 lacks the video
+ * compression engine, §1.3.6 p.19). See F8-KVM.md and qemu-model/peripherals/video.
+ *
+ * Bound by mainline drivers/media/platform/aspeed/aspeed-video.c via the
+ * aspeed-g4.dtsi node (compatible "aspeed,ast2400-video-engine"): the driver
+ * ioremaps 0x1e700000, requests INT#7, gets the VCLK/ECLK gates, and registers a
+ * V4L2 device -> /dev/video0. The AST2050 VR-register file differs from the
+ * G4/G5/G6 the driver targets (DATASHEET-VIDEO.md §7), so probe + /dev/video0 is
+ * faithful, but actual frame capture (VR004 trigger -> JPEG stream -> INT#7) is a
+ * deferred behavioural add-on in the QEMU model (aspeed.video-ast2050 is a
+ * register-accurate protection-key + RW model). The kgpe-d16-bmc QEMU machine
+ * maps this block; there is no VGA host source in the BMC-only machine, so capture
+ * reports no-signal — the achievable QEMU bar is "driver probes + opens the
+ * capture device". See F8-KVM.md for the host-VGA-source boundary.
+ */
+&video {
+	status = "okay";
+};
+
+/*
+ * AST2050 (G3) USB2.0 device / virtual-hub controller (0x1e6a0000, VIC INT#5) —
+ * the BMC's ONLY USB block and the vKVM virtual-HID / virtual-media datapath (F6
+ * groundwork; F8 uses it for the HID keyboard/mouse gadget). The AST2050 has NO
+ * USB *host* controller (no EHCI/UHCI/OHCI), so "connect USB devices" means the
+ * BMC presents virtual devices TO THE SERVER HOST. Datasheet §9 (p.97) + §10
+ * (p.99) + §15 (p.154-178). See F6-USB.md + qemu-model/peripherals/usb.
+ *
+ * Bound by mainline drivers/usb/gadget/udc/aspeed-vhub (an AST2400-family driver).
+ * The AST2050 vhub register file differs (7 downstream ports + a 21-endpoint pool
+ * vs the AST2400's 5/15), so the faithful G3 counts are set here; a dedicated G3
+ * UDC driver + a functional QEMU vhub datapath (so the BMC actually presents a
+ * device to the host) are the F8-KVM host-facing follow-ups. QEMU models this
+ * block as aspeed.udc-ast2050 @0x1e6a0000. The HID keyboard/mouse gadget the KVM
+ * client drives is demonstrated in-guest over dummy_hcd (F8-KVM.md §3).
+ */
 &vhub {
-	/*
-	 * AST2050 (G3) USB2.0 device / virtual-hub controller at 0x1e6a0000, VIC
-	 * INT#5 (datasheet §9 memory map p.97 + §10 IRQ p.99 + §15). This is the
-	 * BMC's ONLY USB block — the AST2050 has NO USB *host* controller (no
-	 * EHCI/UHCI/OHCI). It is the virtual-media / virtual-keyboard/mouse (KVM)
-	 * datapath OpenBMC presents TO THE HOST. See F6-USB.md + qemu-model/
-	 * peripherals/usb/DATASHEET-USB.md.
-	 *
-	 * Bound by mainline aspeed-vhub (an AST2400-family driver). The AST2050 vhub
-	 * register file differs (7 downstream ports + a 21-endpoint pool vs the
-	 * AST2400's 5/15), so the faithful G3 counts are set here; a dedicated G3 UDC
-	 * driver + a functional QEMU vhub datapath are F8-KVM follow-ups. The QEMU
-	 * kgpe-d16-bmc machine models this block as aspeed.udc-ast2050 @0x1e6a0000.
-	 */
 	status = "okay";
 	aspeed,vhub-downstream-ports = <7>;
 	aspeed,vhub-generic-endpoints = <21>;
