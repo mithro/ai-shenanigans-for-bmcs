@@ -1,0 +1,26 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> lan print 1
+# exit code: 0
+
+Set in Progress         : Set Complete
+Auth Type Support       : 
+Auth Type Enable        : Callback : 
+                        : User     : 
+                        : Operator : 
+                        : Admin    : 
+                        : OEM      : 
+IP Address Source       : DHCP Address
+IP Address              : 0.0.0.0
+Subnet Mask             : 255.255.255.255
+MAC Address             : 96:0e:ce:b9:5d:8d
+Default Gateway IP      : 192.168.66.1
+Default Gateway MAC     : 00:00:00:00:00:00
+802.1q VLAN ID          : Disabled
+RMCP+ Cipher Suites     : 17
+Cipher Suite Priv Max   : aaaaaaaaaaaaaaa
+                        :     X=Cipher Suite Unused
+                        :     c=CALLBACK
+                        :     u=USER
+                        :     o=OPERATOR
+                        :     a=ADMIN
+                        :     O=OEM
+Bad Password Threshold  : Not Available
