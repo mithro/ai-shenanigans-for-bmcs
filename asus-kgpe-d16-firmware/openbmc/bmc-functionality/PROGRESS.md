@@ -62,3 +62,21 @@ Leave ≥8 GB headroom; watch `free -g`.
   faithful QEMU + g3vic kernel + the new fuller rootfs), then F2 power (DTS gpio +
   QEMU GPIO model + state-mgmt), then F3 sensors, F4 SOL, F5 IPMI. Serialize heavy
   builds (one at a time) to respect the RAM cap.
+- 2026-07-11: F0 DONE + merged. Fuller image (obmc-phosphor-image-ast2050-full,
+  OpenBMC master fc5c298, 20MB squashfs) staged to /export/openbmc-full + Pi
+  /srv/nfs/openbmc-full; auth root/0penBmc. QEMU (583ad3db74) rebuilt; kernel/DTB
+  rebuilt to the REAL-PHY DTB (the stale fixed-link DTB in kernel/out was the first
+  F1 boot failure — DHCP/NFS timed out; real-PHY DTB fixed it: DHCP OK, NFS root
+  mounted, systemd up).
+- 2026-07-11: **KEY 64MB finding** — booting the fuller image at mem=64 with ALL
+  daemons makes bmcweb CRASH-LOOP (SSL handshake resets = memory starvation). The
+  real AST2050 is 64MB, so each feature must run only the daemons it needs
+  (per-feature daemon masking). Maskable non-F1 units identified: IPMI
+  (org.openbmc.HostIpmi, phosphor-ipmi-host, xyz...Ipmi.*, ...Logging.IPMI,
+  netipmid), sensors (adc/fan/hwmontemp, phosphor-hwmon), EntityManager, lpcsnoop,
+  sel-logger, host/chassis state-mgrs. This masked-set pattern is reused by F2-F9.
+- 2026-07-11: F1 (system-id) delegated to sub-agent claude/bmc-f1-system-id: mask
+  non-F1 daemons -> bmcweb serves -> demonstrate Redfish Managers/bmc + Systems +
+  Chassis + EthernetInterfaces in QEMU AND on the real board; add a CI test.
+  (F-UPSTREAM kernel/QEMU bump deferred — OpenBMC already latest master; features
+  proceed on the proven 6.6.70+faithful-QEMU stack first, simplest-first.)
