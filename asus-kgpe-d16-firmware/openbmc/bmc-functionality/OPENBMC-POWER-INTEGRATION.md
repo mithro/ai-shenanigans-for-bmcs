@@ -83,6 +83,14 @@ with no daemon patch. op-pwrctl polls `power_good_in` (GPIOH2) → publishes
 `pgood` → phosphor-chassis-state-manager sets `CurrentPowerState` → Redfish
 `PowerState`.
 
+> **Proven vs. designed.** The *forward* path (a) is proven — each Redfish action
+> returns HTTP 204 and GPIOH2 tracks it over QMP. This op-pwrctl wiring is meant
+> to make the Redfish `PowerState` *readback* track too, **by design**, but in
+> the 64 MB QEMU run bmcweb returned `PowerState: null` for every action (memory
+> pressure — see `evidence/qemu/F2-README.md`), so the readback half of the loop
+> is **not yet demonstrated**. GPIOH2 over QMP + the CI fwtest remain the
+> authoritative power-state signal.
+
 > On **real silicon** use the pulse sequences in `kgpe-power.sh` /
 > `asus_power.sh` (§1.2), not a permanently-held level — the request lines are
 > momentary. The QEMU latch accepts either (it keys on the active-low
