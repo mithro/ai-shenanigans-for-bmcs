@@ -166,6 +166,37 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 300
 
+  boot-usb:
+    name: Boot USB kernel -> AST2050 vhub probe + gadget enum (F6)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot with USB + verify vhub probe + in-guest gadget enumeration
+        run: |
+          # The AST2050's only USB block is the USB2.0 device/vhub @0x1e6a0000
+          # (no host controller). Assert the kernel probes it (aspeed_vhub) and the
+          # gadget stack enumerates a virtual mass-storage device over dummy_hcd.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/usb-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --boot-timeout 300
+
   build-uboot:
     name: Build new U-Boot (OpenBMC AST2400)
     runs-on: ubuntu-latest
