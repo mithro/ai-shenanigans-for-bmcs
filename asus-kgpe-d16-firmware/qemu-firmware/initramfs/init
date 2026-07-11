@@ -171,7 +171,7 @@ if grep -q f8kvm /proc/cmdline; then
 	if [ -s /tmp/kbd_event.bin ]; then
 		hexdump -C /tmp/kbd_event.bin | head -8
 		if hexdump -C /tmp/kbd_event.bin | grep -q '01 00 1e 00 01 00 00 00'; then
-			echo "F8-HID-EVENT: host evdev received EV_KEY KEY_A press (value=1) — keypress crossed to the host"
+			echo "F8-HID-EVENT: host evdev received EV_KEY KEY_A press (value=1) -- keypress crossed to the host"
 		fi
 	else
 		echo "(no evdev capture)"
