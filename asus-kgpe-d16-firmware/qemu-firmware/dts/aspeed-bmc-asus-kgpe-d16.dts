@@ -83,6 +83,28 @@
 	phy-mode = "rmii";
 };
 
+&i2c1 {
+	status = "okay";
+
+	/*
+	 * Nuvoton/Winbond W83795G hardware monitor -- the KGPE-D16's single
+	 * fan/voltage/temperature sensor chip, on the BMC's I2C bus 1 at 0x2f
+	 * (Raptor's AST2050 OpenBMC port taps it exactly there; coreboot's
+	 * devicetree.cb programs its channel map). The AST2050's own PWM/tach
+	 * block is unused on this board -- all sensors come from this chip.
+	 *
+	 * The mainline drivers/hwmon/w83795.c has no of_match_table, but the I2C
+	 * core's DT modalias fallback strips the "winbond," vendor prefix and
+	 * matches the driver's i2c_device_id "w83795g", so this node binds and
+	 * exposes /sys/bus/i2c/devices/1-002f/hwmon for phosphor-hwmon.
+	 * Modelled in QEMU by hw/sensor/w83795.c on the kgpe-d16-bmc machine.
+	 */
+	hwmon@2f {
+		compatible = "winbond,w83795g";
+		reg = <0x2f>;
+	};
+};
+
 &wdt1 {
 	status = "okay";
 };
