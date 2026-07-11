@@ -26,6 +26,17 @@ if ! grep -q ast2050 drivers/clk/clk-aspeed.c; then
     git apply "$ROOT/kernel/patches/0001-clk-aspeed-add-ast2050-support.patch"
 fi
 
+# AST2050 (G3) ftgmac100 eth0-RX fix: re-derive the MAC speed from the link
+# speed in ftgmac100_start_hw(). On the G3 the MAC SW_RST clears MACCR (speed bit
+# included), so mainline's preserve-only logic leaves the MAC at 10M on a 100M
+# link and every RX frame is CRC / frame-too-long errored -> rx=0. HW-verified on
+# the real AST2050 (see qemu-model/results/nic-rx-hardware-SOLVED.md). Guard on
+# the unpatched marker comment so the apply is idempotent.
+if grep -q 'Keep the original GMAC and FAST bits' \
+        drivers/net/ethernet/faraday/ftgmac100.c; then
+    git apply "$ROOT/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
