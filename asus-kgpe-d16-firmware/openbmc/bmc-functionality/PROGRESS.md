@@ -102,3 +102,22 @@ Leave ≥8 GB headroom; watch `free -g`.
   + real-PHY DTB (already staged in Pi TFTP) + rootfs-symlink masking (U-Boot
   cmdline can't carry the 693-char mask fragment reliably). Host culvert + Pi
   bridge confirmed reachable. Attempt logged to HARDWARE-COORDINATION.md.
+- 2026-07-11: **F1 real-HW OUTCOME — fuller image does NOT fit real 64MB over
+  NFS-root.** Two escalating P2A cold-boots (rig claimed + released via
+  HARDWARE-COORDINATION.md; board reset only, flash untouched, fully recoverable):
+  BOTH reached kernel-up + eth0 100Mbps (RX-fix) + IP-Config .2 + **NFS root
+  mounted** (rmtab confirms /srv/nfs/openbmc-full) + systemd reading ~135MB, then
+  attempt-1 (14 masks) hard-FROZE at networkd's eth0 takeover (eth0 down, NFS
+  flat, silent console) and attempt-2 (27 masks) kept the static IP but THRASHED
+  (NFS reads ~250KB/min, no listener). The wall is RAM: the fuller image can't
+  make progress in the real board's effective 64MB with NFS-root memory demands
+  (QEMU's clean 64MB tolerates it — QEMU PASS). This matches the program-level
+  "modern full OpenBMC won't fit 64MB" constraint -> the real-HW path is the lean
+  redfish image / a stripped Redfish-only image, not the fuller image.
+  **Real-HW Redfish IS live** on the lean image (unauth ServiceRoot 200,
+  RedfishVersion) — captured to evidence/real-hw/; authenticated system-id on
+  real HW stays blocked (fuller image doesn't fit; lean image root deliberately
+  locked, must not be force-unlocked). Rig RESTORED to the lean image (as found)
+  + fuller export masks reverted to pristine F0. Deliverable `f1-realhw-capture.py`
+  is ready to grab the full authenticated set the moment a fitting image
+  (stripped Redfish-only, root set) boots on real HW.
