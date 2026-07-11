@@ -143,6 +143,7 @@ Two Raspberry Pi 4B **bridges** put the target boards on the network — each
 carries the JTAG / UART / SPI-flash / Ethernet harnesses to one board and is
 reachable over SSH, so the QEMU-developed firmware can be exercised against real
 silicon remotely. [`HARDWARE-ACCESS.md`](HARDWARE-ACCESS.md) documents the
-bridge hosts, attached adapters (with MACs), SSH access, and the current setup
+bridge hosts, attached adapters (with MACs), SSH access, remote board-power
+control, the live target networks (TFTP/NFS/PXE), and the remaining setup
 gaps. The physical wiring for the AST2050 side is in
 [`asus-kgpe-d16-firmware/RPI4-OPENOCD-JTAG-WIRING.md`](asus-kgpe-d16-firmware/RPI4-OPENOCD-JTAG-WIRING.md).

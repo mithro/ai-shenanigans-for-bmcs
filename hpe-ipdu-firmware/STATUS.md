@@ -198,7 +198,8 @@
   Raspberry Pi 4B carrying the NS9360 JTAG (TUMPA/FT2232H MPSSE), UART console
   (`/dev/ttyUSB0`), and an Ethernet link. See
   [`../HARDWARE-ACCESS.md`](../HARDWARE-ACCESS.md). **Board power is not yet
-  connected**, so the items below still await power before they can be captured.
+  connected** (re-verified 2026-07-11: `eth-pdu` still shows NO-CARRIER), so
+  the items below still await power before they can be captured.
 - Boot log not yet captured (user will provide at a later date)
 - J25 "Digi UART" debug console output not yet captured
 - NOR flash contents not dumped
