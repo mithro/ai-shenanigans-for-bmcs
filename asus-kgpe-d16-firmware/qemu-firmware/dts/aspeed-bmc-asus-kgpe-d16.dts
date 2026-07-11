@@ -191,3 +191,23 @@
 &wdt1 {
 	status = "okay";
 };
+
+&vhub {
+	/*
+	 * AST2050 (G3) USB2.0 device / virtual-hub controller at 0x1e6a0000, VIC
+	 * INT#5 (datasheet §9 memory map p.97 + §10 IRQ p.99 + §15). This is the
+	 * BMC's ONLY USB block — the AST2050 has NO USB *host* controller (no
+	 * EHCI/UHCI/OHCI). It is the virtual-media / virtual-keyboard/mouse (KVM)
+	 * datapath OpenBMC presents TO THE HOST. See F6-USB.md + qemu-model/
+	 * peripherals/usb/DATASHEET-USB.md.
+	 *
+	 * Bound by mainline aspeed-vhub (an AST2400-family driver). The AST2050 vhub
+	 * register file differs (7 downstream ports + a 21-endpoint pool vs the
+	 * AST2400's 5/15), so the faithful G3 counts are set here; a dedicated G3 UDC
+	 * driver + a functional QEMU vhub datapath are F8-KVM follow-ups. The QEMU
+	 * kgpe-d16-bmc machine models this block as aspeed.udc-ast2050 @0x1e6a0000.
+	 */
+	status = "okay";
+	aspeed,vhub-downstream-ports = <7>;
+	aspeed,vhub-generic-endpoints = <21>;
+};

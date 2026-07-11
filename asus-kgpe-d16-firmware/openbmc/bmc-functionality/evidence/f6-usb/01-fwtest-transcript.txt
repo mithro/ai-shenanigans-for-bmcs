@@ -1,0 +1,17 @@
+# F6 USB bare-metal fwtest (qemu-model/peripherals/usb/fwtest.c) on -M kgpe-d16-bmc
+# Walks the datasheet §15.4 USB2.0 device/vhub init/register map. QEMU: base branch build (583ad3db74).
+
+--- transcript ---
+[FWT] begin usb
+[FWT] reg hub00.root 1e6a0000 = 00000000
+[FWT] check hub00.rw PASS got=00000801 want=00000801
+[FWT] check hub08.irq_en.rw PASS got=00000041 want=00000041
+[FWT] check hub20.reset.rw PASS got=00000000 want=00000000
+[FWT] check dev00.enable.rw PASS got=00000301 want=00000301
+[FWT] check epp00.hid_cfg.rw PASS got=00000142 want=00000142
+[FWT] check hub3c.plug.rw PASS got=00000002 want=00000002
+[FWT] reg ehci1000 1e6a1000 = 00000000
+[FWT] end usb checks=00000006 fails=00000000
+[FWT] halt
+--- end ---
+RESULT: PASS (0 failed check(s))

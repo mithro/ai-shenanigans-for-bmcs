@@ -1,0 +1,53 @@
+# F6 USB in-guest gadget-enumeration demo — scripts/usb-test.py on -M kgpe-d16-bmc
+# USB-enabled kernel (Linux 6.6.70) + BusyBox initramfs, cmdline '...f6usb'.
+# 1) aspeed-vhub probes the AST2050 USB2.0 device/vhub @0x1e6a0000 (7 downstream ports p1-p7);
+# 2) a virtual mass-storage gadget enumerates in-guest over dummy_hcd (F8-KVM groundwork).
+# RESULT: PASS. QEMU base build 583ad3db74 (no QEMU source change needed).
+
+=== F6-USB-DEMO-BEGIN ===
+--- USB device controllers the kernel found (/sys/class/udc) ---
+1e6a0000.usb-vhub:p1
+1e6a0000.usb-vhub:p2
+1e6a0000.usb-vhub:p3
+1e6a0000.usb-vhub:p4
+1e6a0000.usb-vhub:p5
+1e6a0000.usb-vhub:p6
+1e6a0000.usb-vhub:p7
+dummy_udc.0
+--- aspeed-vhub / dummy_hcd probe (dmesg) ---
+[    0.900497] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    0.901102] dummy_hcd dummy_hcd.0: Dummy host controller
+[    0.901482] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    0.933466] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    0.933673] usb usb1: SerialNumber: dummy_hcd.0
+[    0.980997] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+--- build a virtual mass-storage gadget via configfs ---
+256+0 records in
+256+0 records out
+1048576 bytes (1.0MB) copied, 0.035085 seconds, 28.5MB/s
+[    4.024552] Mass Storage Function, version: 2009/09/11
+[    4.024911] LUN: removable file: (no medium)
+binding vmedia gadget -> UDC 'dummy_udc.0'
+[    4.366855] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.564655] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.565943] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    4.566661] usb 1-1: Product: AST2050 vKVM virtual-media (F6 groundwork)
+[    4.567262] usb 1-1: Manufacturer: ASUS-KGPE-D16-BMC
+[    4.567708] usb 1-1: SerialNumber: 0000A5T2050
+--- enumeration result (dmesg) ---
+[    0.932786] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    0.933085] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    4.024552] Mass Storage Function, version: 2009/09/11
+[    4.366855] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.564655] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.565943] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    4.566661] usb 1-1: Product: AST2050 vKVM virtual-media (F6 groundwork)
+--- enumerated USB devices (product strings) ---
+/sys/bus/usb/devices/1-1/product = AST2050 vKVM virtual-media (F6 groundwork)
+/sys/bus/usb/devices/usb1/product = Dummy host controller
+=== F6-USB-DEMO-END ===
+--- F6 USB checks ---
+  [PASS] kernel probes the AST2050 USB2.0 device/vhub @0x1e6a0000 (aspeed_vhub 'Initialized virtual hub')
+  [PASS] USB gadget stack enumerates a virtual mass-storage device in-guest (dummy_hcd; F8-KVM groundwork)
+
+F6 USB RESULT: PASS

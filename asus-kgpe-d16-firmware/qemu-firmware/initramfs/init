@@ -41,5 +41,49 @@ ip addr show eth0 2>&1
 netstat -tln 2>&1 || true
 echo "dropbear: listening on :22 (ssh in via the QEMU hostfwd port)"
 
+# --- F6 USB demo (only when 'f6usb' is on the kernel cmdline; a no-op otherwise) ---
+# The AST2050's only USB block is the USB2.0 device/virtual-hub @0x1e6a0000 (bound by
+# aspeed-vhub). It presents virtual devices TO THE SERVER HOST — which QEMU does not
+# emulate — so we demonstrate the USB *gadget* stack enumerating a virtual mass-storage
+# device IN-GUEST over dummy_hcd (a software UDC+host loopback). Groundwork for F8-KVM
+# (obmc-ikvm HID + virtual-media). See openbmc/bmc-functionality/F6-USB.md.
+if grep -q f6usb /proc/cmdline; then
+	echo "=== F6-USB-DEMO-BEGIN ==="
+	echo "--- USB device controllers the kernel found (/sys/class/udc) ---"
+	ls -1 /sys/class/udc/ 2>&1 || echo "(none)"
+	echo "--- aspeed-vhub / dummy_hcd probe (dmesg) ---"
+	dmesg | grep -iE 'aspeed_vhub|dummy_hcd|Initialized virtual hub' || echo "(none)"
+
+	echo "--- build a virtual mass-storage gadget via configfs ---"
+	mount -t configfs none /sys/kernel/config 2>&1 || echo "(configfs already mounted)"
+	G=/sys/kernel/config/usb_gadget/vmedia
+	mkdir -p "$G"
+	echo 0x1d6b > "$G/idVendor"     # Linux Foundation
+	echo 0x0104 > "$G/idProduct"    # Multifunction Composite Gadget
+	mkdir -p "$G/strings/0x409"
+	echo "ASUS-KGPE-D16-BMC"                          > "$G/strings/0x409/manufacturer"
+	echo "AST2050 vKVM virtual-media (F6 groundwork)" > "$G/strings/0x409/product"
+	echo "0000A5T2050"                                > "$G/strings/0x409/serialnumber"
+	mkdir -p "$G/configs/c.1/strings/0x409"
+	echo "vmedia-config" > "$G/configs/c.1/strings/0x409/configuration"
+	# small backing image = the "remote media" the BMC would export to the host
+	dd if=/dev/zero of=/tmp/vmedia.img bs=4096 count=256 2>&1
+	mkdir -p "$G/functions/mass_storage.0"
+	echo /tmp/vmedia.img > "$G/functions/mass_storage.0/lun.0/file"
+	ln -s "$G/functions/mass_storage.0" "$G/configs/c.1/"
+	# Bind to the software dummy UDC so the paired dummy HOST enumerates it in-guest.
+	UDC=$(ls /sys/class/udc | grep -i dummy | head -1)
+	echo "binding vmedia gadget -> UDC '$UDC'"
+	echo "$UDC" > "$G/UDC"
+	sleep 3
+	echo "--- enumeration result (dmesg) ---"
+	dmesg | grep -iE 'new .*USB device|Mass Storage|Product: AST2050|Direct-Access|scsi' | tail -15
+	echo "--- enumerated USB devices (product strings) ---"
+	for p in /sys/bus/usb/devices/*/product; do
+		[ -f "$p" ] && echo "$p = $(cat "$p")"
+	done 2>&1
+	echo "=== F6-USB-DEMO-END ==="
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

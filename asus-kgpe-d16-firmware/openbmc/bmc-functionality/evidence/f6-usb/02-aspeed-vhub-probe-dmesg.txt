@@ -1,0 +1,19 @@
+# F6 USB: OpenBMC kernel (Linux 6.6.70) probing the AST2050 USB on -M kgpe-d16-bmc
+# Boot with no initramfs (kernel driver init only). QEMU base build; USB-enabled kernel+DTB (this branch).
+# KEY: aspeed_vhub binds the real AST2050 USB2.0 device/vhub @0x1e6a0000 (IRQ5).
+
+42:[    0.252107] usbcore: registered new interface driver usbfs
+43:[    0.252792] usbcore: registered new interface driver hub
+44:[    0.253310] usbcore: registered new device driver usb
+86:[    1.044353] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+87:[    1.045487] dummy_hcd dummy_hcd.0: Dummy host controller
+88:[    1.046115] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+89:[    1.097244] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+90:[    1.097850] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+91:[    1.098269] usb usb1: Product: Dummy host controller
+92:[    1.098580] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+93:[    1.098929] usb usb1: SerialNumber: dummy_hcd.0
+94:[    1.119173] hub 1-0:1.0: USB hub found
+96:[    1.162206] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+99:[    1.172483] usbcore: registered new interface driver usbhid
+100:[    1.172923] usbhid: USB HID core driver
