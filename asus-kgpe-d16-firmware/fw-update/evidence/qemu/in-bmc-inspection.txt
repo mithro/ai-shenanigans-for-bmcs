@@ -1,0 +1,40 @@
+# ssh rc=0
+Warning: Permanently added '[127.0.0.1]:2922' (ED25519) to the list of known hosts.
+### uname
+Linux quanta-q71l 6.6.70-dirty #9 Sun Jul 12 01:23:55 ACST 2026 armv5tejl GNU/Linux
+### os-release
+ID=openbmc-phosphor
+NAME="Phosphor OpenBMC (Phosphor OpenBMC Project Reference Distro)"
+VERSION="None"
+VERSION_ID=none
+VERSION_CODENAME="styhead"
+PRETTY_NAME="Phosphor OpenBMC (Phosphor OpenBMC Project Reference Distro) None"
+CPE_NAME="cpe:/o:openembedded:openbmc-phosphor:None"
+BUILD_ID="20260710063321"
+OPENBMC_TARGET_MACHINE="quanta-q71l"
+EXTENDED_VERSION="None"
+### /proc/mtd
+dev:    size   erasesize  name
+### /dev/mtd*
+ls: /dev/mtd*: No such file or directory
+(no /dev/mtd)
+### phosphor-code-mgmt backend binaries
+-rwxr-xr-x    1 root     root        367236 Mar  9  2018 phosphor-image-updater
+-rwxr-xr-x    1 root     root        367256 Mar  9  2018 phosphor-software-manager
+-rwxr-xr-x    1 root     root         75656 Mar  9  2018 phosphor-version-software-manager
+### busctl Software services
+:1.20                                                  165 phosphor-softwa root             :1.20         xyz.openbmc_project.Software.Manager.service     -       -
+xyz.openbmc_project.Software.Manager                   165 phosphor-softwa root             :1.20         xyz.openbmc_project.Software.Manager.service     -       -
+### phosphor-software-manager process
+165 /usr/libexec/phosphor-code-mgmt/phosphor-software-manager
+(software-manager not running)
+### busctl Software.Manager D-Bus tree (Version/Activation objects)
+`- /xyz
+  `- /xyz/openbmc_project
+    `- /xyz/openbmc_project/software
+      |- /xyz/openbmc_project/software/039d44e1
+      `- /xyz/openbmc_project/software/bmc
+### ipmid running?
+222 ipmid
+243 /usr/bin/netipmid
+243 /usr/bin/netipmid
