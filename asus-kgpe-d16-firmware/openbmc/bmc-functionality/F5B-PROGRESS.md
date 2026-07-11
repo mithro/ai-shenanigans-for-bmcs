@@ -58,4 +58,14 @@ Changes on this branch:
 
 ## Status log
 
-- (in progress) DTS KCS node + kernel CDEV_IPMI config added; building kernel.
+- DTS KCS node + kernel `CONFIG_IPMI_KCS_BMC_CDEV_IPMI=y` added; kernel rebuilt.
+- **M1 DONE (QEMU, 64 MB, PASS):** `f5b-host-kcs-test.py` booted the D16 kernel +
+  initramfs on `kgpe-d16-bmc` and confirmed: `/dev/ipmi-kcs3` created, `ast-kcs-bmc`
+  bound to `kcs@2c`, dmesg "Initialised channel 3 at 0xca2", and the faithful G3 LPC
+  model serviced the driver (HICR0.LPC3E=0x80, HICR4.KCSENBL=0x04, LADR3=0x0CA2,
+  STR3 RO=0) + a BMC-side ODR3 poke (wrote 0x5a, read back 0x5a). Evidence in
+  `evidence/host-kcs/host-kcs.txt`. Full write-up: `F5B-HOST-KCS-STATUS.md`.
+- **Daemon layer:** F0 image ships `btbridged` (BT), not `kcsbridge` — documented as
+  an F-IMG2 one-knob rebuild (BT is unfaithful on the G3, see status doc §1/§4).
+- **M2 / real-HW:** honestly bounded (no host peer in the BMC-only machine); real
+  host-side `ipmitool` deferred to F-HWPASS with the host powered.
