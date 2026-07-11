@@ -1,0 +1,4 @@
+fleeting0        | D0h | ns  |  0.0 | Disabled
+temp2_inlet      | F0h | ok  |  0.0 | 44.97 degrees C
+temp1            | F1h | ok  |  0.0 | 41.90 degrees C
+temp3            | F2h | ok  |  0.0 | 0 degrees C

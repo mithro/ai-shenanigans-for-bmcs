@@ -1,0 +1,12 @@
+p3v3_scaled      | E0h | ok  |  0.0 | 3.26 Volts
+p5v_scaled       | E1h | ok  |  0.0 | 4.99 Volts
+p12v_aux_scaled  | E2h | ok  |  0.0 | 11.97 Volts
+p1v1_ssb         | E3h | ok  |  0.0 | 0 Volts
+pvcc_cpu0        | E4h | ok  |  0.0 | 0.96 Volts
+pvcc_cpu1        | E5h | ok  |  0.0 | 0.96 Volts
+p3v3_aux_scaled  | E6h | ok  |  0.0 | 3.26 Volts
+p5v_aux_scaled   | E7h | ok  |  0.0 | 0 Volts
+pvcc_cpu2        | E8h | ok  |  0.0 | 1.47 Volts
+pvcc_cpu3        | E9h | ok  |  0.0 | 1.09 Volts
+p12v_scaled      | EAh | ok  |  0.0 | 11.97 Volts
+p3v_vbat         | EBh | ok  |  0.0 | 3.01 Volts

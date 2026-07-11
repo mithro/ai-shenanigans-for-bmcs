@@ -225,3 +225,43 @@ Leave ≥8 GB headroom; watch `free -g`.
     model to service those registers. LAN IPMI needs none of this and is the
     real-HW path, so host-KCS is documented as the follow-up (see
     `HOST-KCS-BT-STATUS.md`).
+- 2026-07-12: **F3 SENSORS DONE in QEMU — real fan/voltage/temp values over IPMI
+  from a faithful W83795G model** (branch `claude/bmc-f3-sensors`; QEMU submodule
+  branch `claude/w83795-sensor`). Chain proven end-to-end in QEMU:
+  * **QEMU model** — `hw/sensor/w83795.c` (new) on `kgpe-d16-bmc` i2c1@0x2f:
+    faithful bank-switched W83795G (Bank-Select, vendor/chip/device id, coreboot
+    channel-enable regs, measurement regs, the shared VRLSB LSB latch). The
+    mainline `w83795` driver binds (`w83795 1-002f`) and reads the modelled values
+    exactly via sysfs: fan1-6 = 4963/5113/4804/3600/3750/3901 RPM, VCORE 1.00 V,
+    3V3/3VSB 3.30 V, VBAT 3.04 V, CPU diode 42.25 °C, 2 SB-TSI DTS 45/47 °C.
+  * **DTS + kernel** — `&i2c1` `hwmon@2f` node + `CONFIG_SENSORS_W83795[_FANCTRL]`.
+  * **The blocker + fix** — mainline `drivers/hwmon/w83795.c` uses the LEGACY
+    `hwmon_device_register()`, so the sensor files land on the i2c client
+    (`hwmonN/device/`), `hwmonN` is nameless, and phosphor-hwmon (reads
+    `hwmonN/<type>N_input` + `hwmonN/name`) shows every sensor `disabled`. Kernel
+    patch `0003` converts it to `hwmon_device_register_with_info()` exposing the
+    `*_input` channels — the fix applies identically to real HW.
+  * **OpenBMC → IPMI** — `w83795-hwmon.conf` (installed at the OF path
+    `.../i2c-bus@80/hwmon@2f.conf`) maps the channels onto the image's SDR names;
+    phosphor-hwmon then publishes them on D-Bus and **`ipmitool -I lanplus sdr`
+    over LAN reads 23 sensors `ok`** with real values (fan1=4900 RPM …
+    p3v3=3.26 V, p5v=4.99 V, p12v=11.97 V, pvcc_cpu0=0.96 V, vbat=3.01 V,
+    temp1=41.9 °C, temp2_inlet=44.97 °C) vs the committed baseline where all were
+    `disabled`. Evidence: `evidence/qemu-sensors/`.
+  * **Redfish** — sensors are on D-Bus but `/redfish/v1/Chassis` is empty (bmcweb
+    surfaces sensors only via a Chassis inventory, which the q71l-based image does
+    not provide for this board — an entity-manager gap; IPMI is the working path).
+  * **Real HW** — the live board (F5 image, no w83795 node) shows the same
+    `disabled` baseline (`evidence/real-hw-sensors/`); the real W83795G is present
+    (hardware inventory). Full real-HW read = the proven QEMU flow on the F3
+    kernel; **deferred** (rig in active non-disruptive use by F4; reboot would
+    displace F5 evidence). Tool `f3-realhw-sensors.py` ready (deploy/capture/revert).
+  Tests: `f3-sensor-test.py` (CI QEMU). Doc: `F3-SENSORS.md`. Naming caveat: SDR
+  names are the q71l build defaults; kgpe-d16-proper names need an image rebuild.
+  ALL 23 sensor values are CORRECT on D-Bus (`evidence/.../dbus-sensor-values.txt`:
+  fans 4963-3901 RPM, temps 42.25/45/47 °C, volts 12/5/3.3/3.036/1/1.5/1.1 V) —
+  the few `sdr` entries that print 0 are just the q71l static-SDR M/B scaling
+  formulas not matching our rails (an image-build artifact, not a read error).
+  REMAINING: (a) real-HW W83795 read once the rig is free; (b) upstream the
+  hwmon-modernisation patch; (c) Redfish sensors need entity-manager Chassis
+  inventory; (d) a kgpe-d16 sensor YAML (image rebuild) for exact SDR names/scaling.

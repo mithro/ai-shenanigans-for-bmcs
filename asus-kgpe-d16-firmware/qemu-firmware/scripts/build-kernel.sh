@@ -37,6 +37,17 @@ if ! grep -q "Set the speed mode from the current link speed" \
     git apply "$ROOT/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch"
 fi
 
+# W83795G hardware-monitor modern-hwmon registration (F3 sensors): the mainline
+# drivers/hwmon/w83795.c uses the legacy hwmon_device_register(), which puts the
+# sensor attributes on the i2c client device and leaves /sys/class/hwmon/hwmonN
+# nameless and without *_input files -- so OpenBMC phosphor-hwmon (which reads
+# hwmonN/<type>N_input and hwmonN/name directly) can't see the chip. Convert it to
+# hwmon_device_register_with_info() exposing the input channels. Idempotent guard
+# on a symbol the patch adds.
+if ! grep -q "w83795_hwmon_read" drivers/hwmon/w83795.c; then
+    git apply "$ROOT/kernel/patches/0003-hwmon-w83795-modern-hwmon-registration.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
