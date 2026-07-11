@@ -66,4 +66,49 @@ C4 is the QEMU faithfulness oracle (boots the *vendor* kernel, so it is
 kernel-independent — it validates QEMU changes, not kernel changes).
 
 - [DONE] Baseline established: **GREEN** across QEMU + kernel + all boots/oracles.
-- [next] Kernel bump → v6.12.95 (LTS).
+
+### Kernel bump v6.6.70 → v6.12.95 (LTS) — port + build
+
+Rationale for v6.12.95: the current LTS, a genuine +6-minor forward step from the
+6.6 LTS, lowest-risk modern target (the `irq_domain_add_simple` legacy API the
+g3-vic driver uses still exists here; it is removed by 6.19 — see below). This is
+the conservative committed step; v6.19.14 (latest) is attempted afterward.
+
+Patch porting onto a pristine v6.12.95 clone:
+- `0001-clk-aspeed-add-ast2050-support.patch` — applies clean (no change).
+- `0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch` — applies clean (no change).
+- `0003-hwmon-w83795-modern-hwmon-registration.patch` — **needed porting**.
+  `git apply` failed at hunk 3 (`w83795.c:2134`). Cause: upstream migrated the
+  probe from `i2c_match_id(w83795_id, client)->driver_data` to
+  `(uintptr_t)i2c_get_match_data(client)` (the tree-wide `i2c_get_match_data()`
+  cleanup, ~6.7), which also **removed the forward declaration**
+  `static const struct i2c_device_id w83795_id[];` — the exact context line hunk 3
+  keyed on. The patch's five changes are all still semantically valid (verified:
+  fuzzy apply = git-apply of the regenerated patch, byte-identical result).
+  Ported by regenerating the patch against v6.12.95 context (144→144 lines, same
+  semantics); it now `git apply`s cleanly to a pristine v6.12.95 tree.
+- g3-vic driver + DTS + config fragments: unchanged; build clean, 0 dropped
+  Kconfig symbols (only benign merge_config `-m` "redefined by fragment" notes).
+
+**6.12.95 build:** EXIT 0 — uImage+zImage+dtb, `irq-aspeed-g3-vic.o` compiled.
+
+**6.12.95 regression (new kernel on the unchanged QEMU 10.0.7) — GREEN:**
+
+| Check | Result |
+|-------|--------|
+| C2 boot + SSH | PASS — `Linux armv5tejl` |
+| F6 boot-usb | PASS — vhub probe + gadget enum |
+| F5b host-kcs (64 MB) | PASS — `6.12.95-dirty` booted, /dev/ipmi-kcs3, HICR0=0x80, ODR3=0x5a |
+| C5 boot-nfsroot | PASS — NFSv3 root + SSH |
+| F7 ncsi dedicated-PHY | boot invariants 5/5 PASS (same local CONFIG_NET_NCSI artifact as baseline) |
+
+QEMU-model integration suite (76p/10xf), F2 power fwtest (6/6) and C4 web oracle
+are kernel-independent (QEMU unchanged) → still green from baseline; not re-run.
+
+**Committed:** `build-kernel.sh` default `KERNEL_VERSION` v6.6.70 → **v6.12.95**
++ regenerated patch 0003. This is the safe LTS checkpoint on the branch.
+
+### Kernel bump v6.12.95 → v6.19.14 (latest) — attempt
+
+Known blocker to port: g3-vic uses `irq_domain_add_simple(node, …)`, removed
+~6.16 in favour of `irq_domain_create_simple(of_fwnode_handle(node), …)`.

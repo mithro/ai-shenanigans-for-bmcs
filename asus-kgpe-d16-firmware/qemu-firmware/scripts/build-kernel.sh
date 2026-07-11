@@ -3,12 +3,17 @@
 # with the AST2050 clock patch and the kgpe-d16 device tree. Used by CI and for
 # local boots on the kgpe-d16-bmc QEMU machine.
 #
-# Usage: build-kernel.sh [OUT_DIR]   (env: KERNEL_VERSION, default v6.6.70)
+# Usage: build-kernel.sh [OUT_DIR]   (env: KERNEL_VERSION, default v6.12.95)
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT="$HERE/.."                       # asus-kgpe-d16-firmware/qemu-firmware
-KVER="${KERNEL_VERSION:-v6.6.70}"
+# v6.12.95 = current upstream LTS (bumped from v6.6.70). All 4 AST2050 out-of-tree
+# pieces re-verified on it: clk (0001) + ftgmac100 (0002) apply unchanged; the
+# w83795 hwmon patch (0003) was regenerated for the i2c_get_match_data() context
+# shift (see UPSTREAM-STATUS.md); the g3-vic driver + DTS + config fragments build
+# clean (0 dropped Kconfig symbols) and pass the full boot regression subset.
+KVER="${KERNEL_VERSION:-v6.12.95}"
 SRC="$ROOT/kernel/linux"
 OUT="${1:-$ROOT/kernel/out}"
 
