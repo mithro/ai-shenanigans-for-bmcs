@@ -239,6 +239,55 @@ jobs:
           name: f5-ipmi-evidence
           path: f5-evidence/
 
+  f4-sol:
+    name: F4 — Serial-over-LAN on the AST2050 VUART in 64 MB (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    # Same rootfs dependency as f5-ipmi-lan: needs the fuller OpenBMC rootfs
+    # artifact 'openbmc-full-rootfs'. Manual-dispatch until that artifact exists.
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (with the AST2050 VUART model)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: openbmc-full-rootfs, path: obmc-out }
+      - name: Export the OpenBMC fuller rootfs over NFS (localhost, insecure for slirp)
+        run: |
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf obmc-out/openbmc-full-rootfs.tar
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc, feed the host VUART + capture the console over SOL
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f4-sol-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --evidence-dir f4-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f4-sol-evidence
+          path: f4-evidence/
+
   build-uboot:
     name: Build new U-Boot (OpenBMC AST2400)
     runs-on: ubuntu-latest

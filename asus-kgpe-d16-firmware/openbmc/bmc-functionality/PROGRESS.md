@@ -265,3 +265,30 @@ Leave ≥8 GB headroom; watch `free -g`.
   REMAINING: (a) real-HW W83795 read once the rig is free; (b) upstream the
   hwmon-modernisation patch; (c) Redfish sensors need entity-manager Chassis
   inventory; (d) a kgpe-d16 sensor YAML (image rebuild) for exact SDR names/scaling.
+- 2026-07-12: **F4 (Serial-over-LAN) DONE in QEMU + SOL channel verified on real
+  HW.** Branch `claude/bmc-f4-sol` (off F5's backbone). Built on the lean 64-MB
+  image (F4/`sol` mask profile = F5 `realhw`, console stack KEPT).
+  * **Faithful QEMU VUART model** (the real HW contribution): the AST2050 host
+    **VUART @0x1E787000** (datasheet §29; Raptor's SOL block) is now modelled —
+    `aspeed_ast2400.c` SerialMM 16550, `has_vuart` (G3 only), wired to
+    `serial_hd(1)`. Pushed to `mithro/qemu` branch `ast2050-vuart-sol`; submodule
+    bumped. DTS enables `&vuart`.
+  * **QEMU demo (`f4-sol-test.py`, CI-suitable, PASS):** on the fuller image over
+    NFS at mem=64 the kernel binds the VUART ("ttyS5 … is a ASPEED VUART"), the
+    udev rule symlinks `/dev/ttyVUART0` + starts `obmc-console@ttyVUART0`
+    (`@obmc-console.default`), and host bytes fed into the QEMU VUART chardev are
+    **captured over SOL** — 836 bytes / 19 `HOSTLINE` markers via
+    `obmc-console-client`. Raw datapath: 360 bytes off `/dev/ttyVUART0`.
+    **Redfish SerialConsole advertised** (`/redfish/v1/Systems/system`: IPMI +
+    SSH:2200, both ServiceEnabled). Evidence `evidence/qemu-sol/`.
+  * **Real AST2050 (from the Pi, non-disruptive, no reboot):** SOL channel
+    established — `ipmitool -I lanplus mc info` rc=0 + `sol payload status 1 1` =
+    "enabled"; staged `/srv/tftp-bmc/kgpe-g3vic-vuart.dtb` (vuart status=okay),
+    ready for a one-step F4 vuart boot. Evidence `evidence/real-hw-sol/`.
+  * **GAP — `ipmitool sol activate`** (QEMU + real HW): SOL payload is *enabled*
+    but the image ships **no `xyz.openbmc_project.Ipmi.SOL` config-object
+    provider**, so netipmid's Activate-Payload D-Bus read of
+    `/xyz/openbmc_project/ipmi/sol/eth0` returns `ResourceNotFound`. The SOL
+    *bytes* flow regardless (obmc-console-client). Image-recipe follow-up; no
+    model/DTS/kernel change needed. Real host-byte capture is separately bounded
+    by the FTDI-tapped host COM1 (not VUART-wired). See `F4-SOL-STATUS.md`.

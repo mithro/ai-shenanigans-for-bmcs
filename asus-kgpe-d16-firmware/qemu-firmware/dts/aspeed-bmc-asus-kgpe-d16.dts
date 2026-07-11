@@ -137,6 +137,20 @@
 	status = "okay";
 };
 
+/*
+ * Host-facing VUART (0x1e787000) — the AST2050 (G3) Virtual UART the x86 host
+ * reaches over LPC (I/O 0x3F8, SIRQ 4; datasheet §29). It is the Serial-over-LAN
+ * source: obmc-console-server binds it as /dev/ttyVUART0 (udev rule keyed on
+ * iomem_base 0x1E787000) and netipmid exposes it via `ipmitool sol activate`.
+ * Raptor's real AST2050 OpenBMC port uses this same block (dev-vuart.c ->
+ * mainline 8250_aspeed_vuart.c). The kgpe-d16-bmc QEMU machine models it as a
+ * 16550 wired to serial_hd(1). The driver defaults lpc-io-reg=0x3f8 / sirq=4
+ * (COM1), which match this board.
+ */
+&vuart {
+	status = "okay";
+};
+
 &mac0 {
 	status = "okay";
 	/*
