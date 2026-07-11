@@ -150,3 +150,55 @@ bi-compatible) and remains a proven checkpoint in this branch's history (commit
 kernel-facing regression subset (C2/F6/F5b/C5/F7) passes on the latest kernel over
 the unchanged faithful QEMU; the QEMU-model oracles (integration suite, power
 fwtest, C4 vendor web) are kernel-independent and unaffected.
+
+### QEMU bump assessment — DEFERRED (documented, gitlink stays at a010d69)
+
+Fork `mithro/qemu` `ast2050-faithful` @ a010d69 = 30 AST2050 commits (2225 LoC /
+29 files) on top of upstream `561f025` (v10.0.7 stable, which branched from master
+at v10.0.0). Latest upstream is **v11.0.2** (gap: 10.1, 10.2, 11.0).
+
+Empirical rebase-conflict surface — `git merge-tree --merge-base=561f025 a010d69 <tag>`
+(the exact "rebase the AST2050 stack onto upstream" 3-way merge):
+
+| Onto | Textual conflicts | Files |
+|------|------------------:|-------|
+| v10.1.0 | 3 | aspeed.c, aspeed_gpio.c, aspeed_scu.c |
+| v10.2.4 | 4 | + aspeed_ast2400.c |
+| **v11.0.2** | **6** | + include/hw/arm/aspeed_soc.h, include/hw/misc/aspeed_scu.h |
+
+**What upstream changed (the blockers), by evidence:**
+- `12d1a768bd "qom: Have class_init() take a const data argument"` — a **tree-wide
+  signature change** (`class_init(ObjectClass*, void*)` → `const void*`) that hits
+  *every* class the AST2050 stack adds: the SoC class + w83795 + lpc/pwm/rtc/smc/
+  udc/video device models. Present already at v10.1.0.
+- aspeed SoC base-class API refactor in `aspeed_ast2400.c` (v10.2+): `21b3898a69`
+  removes the `get_irq` hook; `448c4502a5`/`68f915b91c`/`15f26071bf`/`bb3219345a`
+  drop the `AspeedSoCState`/`AspeedSoCClass` dependency from `aspeed_mmio_map()`,
+  `aspeed_mmio_map_unimplemented()`, `aspeed_soc_uart_realize()`,
+  `aspeed_soc_cpu_type()` — the exact helpers the AST2050's +310-line interleaved
+  `soc_init`/`soc_realize` calls.
+- `aspeed.c` (52 commits, v11.0): the "split each machine into its own source file"
+  campaign + `aspeed_connect_serial_hds_to_uarts()` rename — the `kgpe-d16-bmc`
+  machine registration must move/adapt.
+
+**Why defer, not force:** the textual conflict count *understates* the work —
+`merge-tree` reports only text conflicts, but the auto-merged new
+`aspeed_*_ast2050.c` model files would still **fail to compile** against the changed
+upstream APIs (const `class_init`, the removed SoC-helper deps). A real bump means
+resolving 6 conflicts **plus** adapting ~15 AST2050 model/SoC files to the new APIs
+**plus** the machine-file-split restructure, then rebuilding and re-validating the
+*entire* faithful stack (C4 vendor-boot oracle + the 76-test integration suite +
+every F-feature boot). That is precisely a "large conflict surface that risks the
+proven models" — forcing it risks regressing the faithfulness oracle. Per the
+overriding rule, deferring with this documentation is the correct outcome. Gitlink
+left at **a010d69**; the kernel now tracks latest over this unchanged, proven QEMU.
+
+**Recommended incremental path (future work):** bump one minor at a time, not
+straight to v11. v10.0.7 → **v10.1.0** is the tractable first step (3 textual
+conflicts, `aspeed_ast2400.c` still auto-merges) and its main real change is the
+mechanical `class_init` const-data adaptation across the AST2050 models. Then
+v10.2 (adapt to the SoC-helper API refactor), then v11.0 (adapt to the machine
+split). Validate C4 + the integration suite + the boots after each step. Prefer
+refactoring the AST2050 SoC additions in `aspeed_ast2400.c` toward *self-contained*
+`aspeed_ast2050.c` functions (fewer interleaved edits) to shrink future conflict
+surface.
