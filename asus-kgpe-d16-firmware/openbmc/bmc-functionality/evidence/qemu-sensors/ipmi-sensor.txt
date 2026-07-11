@@ -1,0 +1,28 @@
+fan1             | 4900.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan2             | 5100.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan3             | 4800.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan4             | 3600.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan5             | 3700.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan6             | 3900.000   | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan7             | 0.000      | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan8             | 0.000      | RPM        | ok    | na        | na        | na        | na        | na        | na        
+fan1             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan2             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan3             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan4             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fleeting0        | na         |            | na    | na        | na        | na        | na        | na        | na        
+p3v3_scaled      | 3.264      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p5v_scaled       | 4.992      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p12v_aux_scaled  | 11.968     | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p1v1_ssb         | 0.000      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+pvcc_cpu0        | 0.960      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+pvcc_cpu1        | 0.960      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p3v3_aux_scaled  | 3.264      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p5v_aux_scaled   | 0.000      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+pvcc_cpu2        | 1.472      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+pvcc_cpu3        | 1.088      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p12v_scaled      | 11.968     | Volts      | ok    | na        | na        | na        | na        | na        | na        
+p3v_vbat         | 3.008      | Volts      | ok    | na        | na        | na        | na        | na        | na        
+temp2_inlet      | 44.968     | degrees C  | ok    | na        | na        | na        | na        | na        | na        
+temp1            | 41.902     | degrees C  | ok    | na        | na        | na        | na        | na        | na        
+temp3            | 0.000      | degrees C  | ok    | na        | na        | na        | na        | na        | na        

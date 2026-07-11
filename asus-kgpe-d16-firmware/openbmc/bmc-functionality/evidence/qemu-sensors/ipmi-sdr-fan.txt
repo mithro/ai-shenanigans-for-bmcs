@@ -1,0 +1,12 @@
+fan1             | B0h | ok  |  0.0 | 4900 RPM
+fan2             | B1h | ok  |  0.0 | 5100 RPM
+fan3             | B2h | ok  |  0.0 | 4800 RPM
+fan4             | B3h | ok  |  0.0 | 3600 RPM
+fan5             | B4h | ok  |  0.0 | 3700 RPM
+fan6             | B5h | ok  |  0.0 | 3900 RPM
+fan7             | B6h | ok  |  0.0 | 0 RPM
+fan8             | B7h | ok  |  0.0 | 0 RPM
+fan1             | C0h | ns  |  0.0 | No Reading
+fan2             | C1h | ns  |  0.0 | No Reading
+fan3             | C2h | ns  |  0.0 | No Reading
+fan4             | C3h | ns  |  0.0 | No Reading
