@@ -48,20 +48,34 @@ def main():
     units = mask_units(args.profile)
     sysd = f"{args.export}/etc/systemd/system"
 
+    # netipmid dual-enablement fix: the q71l image enables BOTH the standalone
+    # `phosphor-ipmi-net@eth0.service` (multi-user.target.wants) AND the
+    # `.socket` (sockets.target.wants).  On the slow real board the standalone
+    # service starts netipmid *before* the network settles, so it runs but never
+    # binds UDP/623, and socket-activation then never re-triggers (the service is
+    # already "active").  Removing the standalone enablement leaves pure
+    # socket-activation: the first RMCP+ packet cleanly spawns a bound netipmid.
+    net_wants = f"{args.export}/etc/systemd/system/multi-user.target.wants/phosphor-ipmi-net@eth0.service"
+    net_tmpl = "/usr/lib/systemd/system/phosphor-ipmi-net@.service"
+
     if args.action == "apply":
         cmds = "\n".join(
             f"sudo ln -sf /dev/null {sysd}/{u}" for u in units)
         script = (f"set -e\n{cmds}\n"
-                  f"echo '--- applied {len(units)} F5 {args.profile} masks ---'\n"
+                  f"sudo rm -f {net_wants}   # netipmid = socket-activation only\n"
+                  f"echo '--- applied {len(units)} F5 {args.profile} masks "
+                  f"+ netipmid socket-only ---'\n"
                   f"ls -l {sysd} | grep -c ' -> /dev/null'\n")
-        print(f"[apply] {len(units)} masks -> {sysd}")
+        print(f"[apply] {len(units)} masks -> {sysd} (+ netipmid socket-only)")
         return pi_sh(args.pi, script)
 
     if args.action == "revert":
         # remove only OUR mask symlinks (leave the shipped obmc-flash-bmc-* ones)
+        # and restore the standalone netipmid enablement to pristine.
         rms = "\n".join(f"sudo rm -f {sysd}/{u}" for u in units)
         script = (f"{rms}\n"
-                  f"echo '--- reverted {len(units)} F5 masks ---'\n"
+                  f"sudo ln -sf {net_tmpl} {net_wants}   # restore pristine enablement\n"
+                  f"echo '--- reverted {len(units)} F5 masks + netipmid enablement ---'\n"
                   f"find {sysd} -maxdepth 1 -type l -lname /dev/null -printf '%f\\n'\n")
         print(f"[revert] removing {len(units)} F5 masks from {sysd}")
         return pi_sh(args.pi, script)

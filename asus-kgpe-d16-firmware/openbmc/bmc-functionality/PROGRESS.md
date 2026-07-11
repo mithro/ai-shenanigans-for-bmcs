@@ -93,3 +93,49 @@ Leave ≥8 GB headroom; watch `free -g`.
     backends (state-mgr/sensors/inventory). This is the key 64MB unlock.
   This reprioritizes F5 (IPMI, esp. netipmid LAN which needs no KCS hardware) as
   the backbone; system-id/power/sensors/SOL/FRU are all exposed via IPMI on HW.
+- 2026-07-12: **F5 (IPMI backbone) — LAN IPMI PASS in QEMU *and* on the real
+  AST2050 in 64 MB.** Branch `claude/bmc-f5-ipmi`. The F5 mask set flips F1's
+  polarity: **mask bmcweb** (F1's RAM hog) + sensors + entity-manager + LPC snoop
+  + desktop extras; **keep** the lightweight IPMI stack (`ipmid` router +
+  `netipmid` RMCP+ LAN + `sel-logger` + FRU + inventory + host/chassis state
+  managers). `f5_masked_daemons.py` profiles: `lan` (14 masks, QEMU), `host`
+  (keep the BT bridge), `realhw` (24 masks — `lan` + RAM-hog extras
+  timesyncd/resolved/Time/Software/cert@{authority,nslcd}/4x eeprom-read).
+  * **QEMU (`f5-ipmi-test.py`, CI-suitable, exit-coded):** boots the fuller image
+    over NFS at `mem=64`, forwards guest UDP/623 via slirp, drives the real
+    `ipmitool -I lanplus` client. PASS — `mc info`, `chassis status`, `chassis
+    power status`, `lan print 1`, `sel info/list`, `sdr list`, `user list 1` all
+    rc=0 over RMCP+ (cipher 17, root=ADMINISTRATOR); `fru print` enumerates 12
+    FRU devices (data absent = no I2C EEPROM in QEMU). Evidence
+    `evidence/qemu/*.txt`.
+  * **Real AST2050 (`f5-realhw-capture.py` from the Pi -> 192.168.66.2):** the
+    **KEY F5 result** — the bmcweb-masked fuller image **boots stably over NFS in
+    the real 64 MB** (where F1's bmcweb-kept image froze) and the SAME IPMI suite
+    answers over RMCP+: `mc info`/`chassis status`/`chassis power status`/`lan
+    print 1` (real MAC 96:0e:ce:b9:5d:8d, gw 192.168.66.1, cipher 17, root=ADMIN)
+    /`sel info/list`/`sdr list`/`user list` all rc=0; `fru print` enumerates
+    devices. Evidence `evidence/real-hw/*.txt`. **Validates the user's 64 MB
+    hypothesis: IPMI is the real-HW path.**
+  * **netipmid socket-activation race (real HW):** the q71l image enables BOTH the
+    standalone `phosphor-ipmi-net@eth0.service` (multi-user.target.wants) AND the
+    `.socket`. On the slow real board the standalone service starts `netipmid`
+    *before* the network settles, so it runs but never binds UDP/623 and
+    socket-activation then never re-triggers (service already "active"). Fix in
+    `f5-realhw-mask.py apply`: remove the standalone `.service` enablement, leaving
+    pure socket-activation (first RMCP+ packet cleanly spawns a bound netipmid;
+    the capture warms it up + retries). QEMU booted fast enough to bind either way.
+    **Verified:** a second fresh P2A boot with the fix auto-activated netipmid with
+    **no** manual restart — the full suite PASSED from the warmup probe alone.
+  * **Data gaps (not mechanism):** `mc info` shows all-zero IDs because the image
+    ships a zeroed `/usr/share/ipmi-providers/dev_id.json`; `fru print` is empty
+    (no populated I2C FRU EEPROMs). The IPMI *command paths* all work; populating
+    dev_id (set manuf/prod/rev) + real FRU EEPROMs is data, done in the image
+    recipe / on real HW, not a daemon fix.
+  * **Host-side KCS/BT (goal 2) — remaining:** the boot DTB has `lpc@1e789000`
+    (lpc-ctrl + lpc-snoop) but **no `kcs`/`bt` child nodes**, so the kernel
+    creates no `/dev/ipmi-kcs*` or `/dev/ipmi-bt`; `btbridged`
+    (`org.openbmc.HostIpmi`) has no device to bind (masked in the lan profile).
+    Enabling it needs (a) a `kcs`/`bt` node in the DTS + (b) the QEMU aspeed LPC
+    model to service those registers. LAN IPMI needs none of this and is the
+    real-HW path, so host-KCS is documented as the follow-up (see
+    `HOST-KCS-BT-STATUS.md`).
