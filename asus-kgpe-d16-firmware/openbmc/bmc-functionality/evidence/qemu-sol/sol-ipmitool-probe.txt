@@ -1,0 +1,33 @@
+$ ipmitool -I lanplus ... mc info      -> warm-up rc=0
+
+$ ipmitool -I lanplus ... sol payload status 1 1
+# rc=0
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+User 1 on channel 1 is enabled
+
+$ ipmitool -I lanplus ... sol activate
+# rc=124
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+> Error: no response from RAKP 1 message
+Get HPM.x Capabilities request failed, compcode = d4
+
+# netipmid journal during activation:
+Jul 11 13:59:54 quanta-q71l netipmid[203]: Executing the IPMI message failed: sd_bus_call: xyz.openbmc_project.Common.Error.ResourceNotFound: The resource is not found.
+Jul 11 13:59:57 quanta-q71l netipmid[203]: Executing the IPMI message failed: sd_bus_call: xyz.openbmc_project.Common.Error.ResourceNotFound: The resource is not found.
+Jul 11 14:00:23 quanta-q71l netipmid[197]: Executing the IPMI message failed: sd_bus_call: xyz.openbmc_project.Common.Error.ResourceNotFound: The resource is not found.
+Jul 11 14:00:24 quanta-q71l netipmid[197]: Executing the IPMI message failed: sd_bus_call: xyz.openbmc_project.Common.Error.ResourceNotFound: The resource is not found.
+Jul 11 14:00:26 quanta-q71l netipmid[197]: Executing the IPMI message failed: sd_bus_call: xyz.openbmc_project.Common.Error.ResourceNotFound: The resource is not found.
+
+
+# NOTE: SOL payload is *enabled* (status above), but this image ships no
+# xyz.openbmc_project.Ipmi.SOL config-object provider, so netipmid's Activate
+# Payload does a D-Bus read of /xyz/openbmc_project/ipmi/sol/eth0 that returns
+# ResourceNotFound -> 'No response activating SOL payload'. The SOL *bytes*
+# flow regardless (proven by capture-A via obmc-console-client); only the IPMI
+# front-end config object is absent (an image-recipe follow-up).

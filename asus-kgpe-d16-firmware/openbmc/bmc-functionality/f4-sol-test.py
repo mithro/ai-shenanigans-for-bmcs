@@ -261,11 +261,14 @@ def main():
             print("   >>", ln.strip())
 
         # ipmitool SOL probe (payload status + activate) — reported, not gating.
-        # Warm up netipmid first: on the slow board its socket-activated instance
-        # binds UDP/623 only on the first RMCP+ packet (F5's finding), so an
-        # un-warmed session can race with "Unexpected Open Session Response".
+        # Restart netipmid with the network up first: its socket-activated
+        # standalone instance can start before DHCP settles and never bind
+        # UDP/623 (F5's finding), which otherwise races the RMCP+ handshake.
         print("\n[capture-B] ipmitool -I lanplus SOL (RMCP+) ...")
-        for _ in range(6):
+        cj = ssh_connect(args.ssh_port, args.user, args.password)
+        cj.exec_command("systemctl restart phosphor-ipmi-net@eth0.service")[1].read()
+        cj.close()
+        for _ in range(8):
             rc_w, _w = ipmi(args.ipmi_port, ["mc", "info"], args.user,
                             args.password, timeout=12)
             if rc_w == 0:
@@ -276,19 +279,35 @@ def main():
                          args.user, args.password)
         rc_act, act = ipmi(args.ipmi_port, ["sol", "activate"],
                            args.user, args.password, timeout=10)
+        # Grab netipmid's own log line for the activation — the genuine gap.
+        cj = ssh_connect(args.ssh_port, args.user, args.password)
+        _, jo, _ = cj.exec_command(
+            "journalctl -u phosphor-ipmi-net@eth0.service --no-pager | "
+            "grep -iE 'ResourceNotFound|sol|console' | tail -5")
+        jtail = jo.read().decode("utf-8", "replace")
+        cj.close()
         with open(os.path.join(args.evidence_dir, "sol-ipmitool-probe.txt"),
                   "w") as f:
+            f.write("$ ipmitool -I lanplus ... mc info      -> warm-up rc="
+                    f"{rc_w}\n\n")
             f.write("$ ipmitool -I lanplus ... sol payload status 1 1\n")
             f.write(f"# rc={rc_ps}\n{ps}\n")
             f.write("$ ipmitool -I lanplus ... sol activate\n")
             f.write(f"# rc={rc_act}\n{act}\n")
-            f.write("\n# NOTE: 'No response activating SOL payload' is the known "
-                    "image gap:\n# this image ships no xyz.openbmc_project.Ipmi.SOL "
-                    "config-object provider,\n# so netipmid's Activate Payload -> "
-                    "ResourceNotFound. The SOL *bytes*\n# flow (proven by "
-                    "capture-A); only the IPMI front-end config object is absent.\n")
+            f.write("# netipmid journal during activation:\n")
+            f.write(jtail + "\n")
+            f.write("\n# NOTE: SOL payload is *enabled* (status above), but this "
+                    "image ships no\n# xyz.openbmc_project.Ipmi.SOL config-object "
+                    "provider, so netipmid's Activate\n# Payload does a D-Bus read "
+                    "of /xyz/openbmc_project/ipmi/sol/eth0 that returns\n# "
+                    "ResourceNotFound -> 'No response activating SOL payload'. The "
+                    "SOL *bytes*\n# flow regardless (proven by capture-A via "
+                    "obmc-console-client); only the IPMI\n# front-end config object "
+                    "is absent (an image-recipe follow-up).\n")
         print(f"[capture-B] sol payload status rc={rc_ps}: {ps.strip()[:80]}")
         print(f"[capture-B] sol activate rc={rc_act}: {act.strip()[:80]}")
+        if jtail.strip():
+            print(f"[capture-B] netipmid: {jtail.strip().splitlines()[-1][:90]}")
 
         ok = len(markers) >= 3 and feeder.sent >= 3
         print("\n=== F4 Serial-over-LAN ===")
