@@ -110,6 +110,37 @@ sudo ln -sf /dev/null /srv/nfs/openbmc-full/etc/systemd/system/<unit>
 sudo rm -f /srv/nfs/openbmc-full/etc/systemd/system/<unit>   # restore pristine F0
 ```
 
+## Real-hardware finding: the fuller image does NOT fit 64 MB over NFS-root
+
+QEMU's `mem=64` gives a clean 64 MB; the **real** AST2050 loses some of its 64 MB
+to the video framebuffer and SoC-reserved regions, so its *effective* free RAM is
+smaller — and NFS-root needs a working set of free memory for socket buffers and
+write-back that competes with the daemons. Two escalating real-HW attempts:
+
+- **Attempt 1 (14-unit `MASK_UNITS`):** cold-boots via P2A, kernel up (`ASPEED
+  rev 0x202`), eth0 link-up 100 Mbps, `IP-Config: Complete` at 192.168.66.2,
+  **NFS root mounts** (`rmtab` shows `/srv/nfs/openbmc-full`), systemd reads
+  ~135 MB — then **hard-freezes** as networkd takes over eth0: NFS-server read
+  counter goes flat, eth0 goes **down** (100 % ping loss), console silent, no
+  listeners.
+- **Attempt 2 (+`MASK_UNITS_REALHW_EXTRA`, 27 units masked):** boots the same way
+  but this time eth0 keeps its kernel-static IP (board keeps pinging .2) — yet
+  userspace **thrashes**: NFS reads crawl at ~250 KB/min and never reach a
+  listener (no 22/80/443). Classic memory-pressure / NFS-reclaim thrash: the
+  image simply cannot make progress in the effective RAM.
+
+**Conclusion:** modern OpenBMC's *fuller* image (`obmc-phosphor-image-ast2050-
+full`) does not run on the real AST2050's 64 MB over NFS-root, even with 27
+daemons masked. This confirms the program-level "64 MB constraint" note — the
+path for real silicon is the **lean redfish image** (which boots and serves
+Redfish on this board) or a purpose-built stripped image, not the fuller image.
+`MASK_UNITS_REALHW_EXTRA` is retained as documentation of how far masking was
+pushed; masking alone was **not** sufficient to fit the fuller image on real HW.
+
+The mask set *is* validated to work in QEMU's 64 MB (F1 QEMU PASS) — the fuller
+image + masks is a good demonstration vehicle there; it just does not fit the
+real board. See `evidence/real-hw/` for the captured real-HW Redfish surface.
+
 **CI wiring:** `f1-system-id-test.py` is exit-coded (0=PASS) and fully
 parameterised, so it drops into a job modelled on C5 `boot-nfsroot` — build QEMU,
 `exportfs` the rootfs, run the script. The one missing CI input is the **fuller

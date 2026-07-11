@@ -49,6 +49,38 @@ MASK_UNITS = [
     "phosphor-discover-system-state@0.service",
 ]
 
+# --- EXTRA masks TRIED on REAL hardware (tighter effective 64 MB) -------------
+# QEMU's `mem=64` gives a clean 64 MB; the real AST2050 loses some to the video
+# framebuffer / SoC-reserved regions, and NFS-root needs free memory for socket
+# buffers / write-back, so its *effective* budget is smaller. With only
+# MASK_UNITS the fuller image boots + mounts NFS root then HARD-FREEZES when
+# networkd takes eth0 (NFS read counter flat @~135 MB, eth0 down, silent
+# console). Adding these 13 further non-system-id daemons (avahi / rsyslog /
+# time / resolver / software-version / service-config / extra-TLS-cert /
+# FRU-EEPROM readers) changed the failure mode but did NOT fix it: the board
+# then keeps its static IP but userspace *thrashes* (NFS reads crawl ~250 KB/min,
+# no listener ever). CONCLUSION: masking alone does not make the fuller image fit
+# the real board's 64 MB over NFS-root — the lean redfish image is the real-HW
+# path. Kept here to document how far masking was pushed. networkd +
+# phosphor-network are deliberately NOT in this list (kept, to preserve the
+# Redfish EthernetInterfaces data + the network path proven on the lean image).
+MASK_UNITS_REALHW_EXTRA = [
+    "avahi-daemon.service",
+    "rsyslog.service",
+    "systemd-timesyncd.service",
+    "systemd-resolved.service",
+    "xyz.openbmc_project.Time.Manager.service",
+    "xyz.openbmc_project.Software.Manager.service",     # loses BMC FirmwareVersion
+    "srvcfg-manager.service",
+    "phosphor-certificate-manager@authority.service",   # keep @bmcweb (TLS)
+    "phosphor-certificate-manager@nslcd.service",
+    "obmc-read-eeprom@system-chassis-bmc.service",
+    "obmc-read-eeprom@system-chassis-motherboard.service",
+    "obmc-read-eeprom@system-chassis-fp.service",
+    "obmc-read-eeprom@system-chassis-pdb.service",
+]
+
+
 # --- daemons KEPT for F1 (system identification needs these) ------------------
 # Documentation only; the boot does not touch these (default-enabled).
 KEEP_UNITS = [
