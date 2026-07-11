@@ -45,6 +45,50 @@ coordinated session. **No unrecoverable changes; no real flash write.**
 
 ### Combined real-HW DTB + rootfs staging — see following commits.
 
+### Combined real-HW kernel + DTB — BUILT
+- `qemu-firmware/scripts/build-kernel.sh` built the full-featured kernel
+  (`uImage-kgpe-d16`, 3.45 MB) + the **combined DTB**
+  (`aspeed-bmc-asus-kgpe-d16.dtb`, 23 645 B) with **all** feature nodes verified
+  present: `kcs@2c` (aspeed,ast2400-kcs-bmc-v2), `winbond,w83795g` hwmon@2f,
+  `serial@1e787000` vuart, power `power-up-req-n` gpio-line-names. Kernel config
+  includes `CONFIG_IPMI_KCS_BMC_CDEV_IPMI` (→ /dev/ipmi-kcs3), `CONFIG_SENSORS_W83795`
+  + the modern-hwmon patch 0003, ftgmac100 rxfix (0002), ast2050 clk (0001),
+  g3-vic. Copied to `tmp/uImage-kgpe-d16-hwpass` + `tmp/kgpe-hwpass-combined.dtb`.
+
+### Host state — KGPE-D16 x86 host is POWERED ON
+- `192.168.77.138` = the KGPE-D16 x86 host, reachable through the Pi, running
+  **`Linux 6.18.34-1-lts` (SystemRescue), uptime ~31 h**. It is the culvert P2A
+  peer (so P2A boot is viable) AND — being powered — means the W83795 rails/fans
+  are LIVE (sensors demo viable) and there is a live host-side KCS peer (host-KCS
+  demo viable). (The earlier "host unreachable" impression was a helper stdin/ssh
+  bug, not the host.)
+
+### New rootfs staged to the Pi (NEW export, non-disruptive) — DONE
+- `stage-openbmc-nfsroot.sh` unpacked build 20260711192615 to `/export/openbmc-hwpass`
+  locally (flash units neutralised), tar'd + pushed to **Pi `/srv/nfs/openbmc-hwpass`**
+  (a NEW export — **F5's `/srv/nfs/openbmc-full` untouched**). Verified on the Pi:
+  `phosphor-ipmi-kcs@ipmi-kcs3.service` enabled in multi-user.target.wants;
+  `dev_id.json` = **manuf_id 2623 (ASUSTeK) / prod_id 3350 (0x0D16 KGPE-D16)**;
+  86 MB rootfs; NFS export added + `exportfs -ra` live. squashfs also at
+  `Pi:/srv/tftp-bmc/openbmc-hwpass.squashfs-xz`.
+
+### Live-board IPMI evidence (F5's running image) — CAPTURED
+`evidence/real-hw-hwpass/board-*.txt` (from the Pi, RMCP+ cipher 17):
+`mc info` rc=0 (all-zero IDs = F5's un-populated image), `lan print 1` rc=0
+(real MAC **96:0e:ce:b9:5d:8d**, gw 192.168.66.1), `chassis status` /
+`chassis power status` rc=0 (reports "off" — but F5's kgpe-g3vic.dtb has no
+power-state GPIO wired, so this is a default, not a real STA_LINE_POWER read;
+the combined DTB fixes that).
+
+## Rig-access hiccup (2026-07-12, mid-session)
+The Pi's FQDN `rpi4-asus-aspeed2050-dev.iot.welland.mithis.com` (welland zone)
+began **intermittently failing DNS resolution** from the workstation (it resolved
+fine for the earlier mc-info/scp/staging steps; the workstation's own net + the
+8.8.8.8/192.168.22.1 path are up). This blocks new `ssh asus-bmc` calls — hence
+the P2A boot (which drives ~20 sequential Pi ssh calls in `linux-boot.py`) is
+paused until DNS recovers or a stable Pi IP is obtained. Everything is staged so
+the boot is a one-command trigger once the Pi is reachable again.
+
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
 request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no

@@ -1,0 +1,5 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> -C 17 chassis power status
+# exit code: 0
+
+Chassis Power is off
+
