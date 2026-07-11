@@ -83,7 +83,21 @@ OBMC_IMAGE_EXTRA_INSTALL:append = " \
         entity-manager \
         kgpe-d16-hwmon-config \
         kgpe-d16-fru-populate \
+        phosphor-skeleton-control-power \
+        phosphor-ipmi-kcs \
         "
+
+# F-HWPASS / F-IMG3 (task #88): ship the host-IPMI **KCS** bridge (kcsbridge),
+# not BT. quanta-q71l's machine conf hardcodes
+# PREFERRED_PROVIDER_virtual/obmc-host-ipmi-hw = phosphor-ipmi-bt (parsed AFTER
+# local.conf, so the local.conf KCS knob never won -> every prior build shipped
+# btbridged, which cannot bind on the G3: BT block at 0x48 vs mainline ast2400
+# 0x140). The build tree's quanta-q71l.conf is switched to phosphor-ipmi-kcs so
+# the virtual builds kcsbridge; here we also install it explicitly and drop BT.
+# kcsbridge's SYSTEMD_SERVICE = phosphor-ipmi-kcs@ipmi-kcs3.service
+# (KCS_DEVICE=ipmi-kcs3) binds /dev/ipmi-kcs3 = the F5b DTS kcs@2c channel; ipmid
+# (phosphor-ipmi-host) is unchanged and shared with the LAN path.
+IMAGE_INSTALL:remove = "phosphor-ipmi-bt"
 
 # F-IMG2 board-specific config packages (see asus-kgpe-d16-firmware/openbmc/recipes):
 #   kgpe-d16-hwmon-config - phosphor-hwmon channel map for the W83795G so the
