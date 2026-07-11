@@ -70,12 +70,17 @@
 
 &mac0 {
 	status = "okay";
+	/*
+	 * AST2050 (G3) MAC, register-compatible with the AST2400. phy-mode=rmii
+	 * with the real RTL8201CP PHY (no fixed-link) -- matching the real board.
+	 * The eth0 RX=0 bug is NOT a PHY/RMII issue: on the G3 a MAC SW_RST clears
+	 * the MACCR speed bit, and the mainline driver's preserve-only start_hw()
+	 * leaves the MAC in 10M timing on the 100M link -> rx=0. The kgpe-d16-bmc
+	 * QEMU MAC models that; the kernel cur_speed patch fixes it. The fix is
+	 * FAST_MODE alone -- it does not depend on this DTS, which is why no
+	 * fixed-link workaround is needed here.
+	 */
 	phy-mode = "rmii";
-	/* fixed-link avoids PHY negotiation under QEMU's ftgmac100 model. */
-	fixed-link {
-		speed = <100>;
-		full-duplex;
-	};
 };
 
 &wdt1 {

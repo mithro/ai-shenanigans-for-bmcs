@@ -26,6 +26,17 @@ if ! grep -q ast2050 drivers/clk/clk-aspeed.c; then
     git apply "$ROOT/kernel/patches/0001-clk-aspeed-add-ast2050-support.patch"
 fi
 
+# AST2050 ftgmac100 speed-mode fix: ftgmac100_start_hw() must re-derive the MAC
+# speed bits (FAST_MODE/GIGA_MODE) from priv->cur_speed rather than only
+# preserving them. On the G3 a MAC SW_RST clears MACCR (speed bit included), so
+# preserve-only leaves the MAC in 10M timing on a 100M link -> every RX frame is
+# mangled -> rx=0 (HW-verified: setting MACCR bit19 FAST_MODE restored RX).
+# Idempotent guard on a unique string from the patched comment.
+if ! grep -q "Set the speed mode from the current link speed" \
+        drivers/net/ethernet/faraday/ftgmac100.c; then
+    git apply "$ROOT/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

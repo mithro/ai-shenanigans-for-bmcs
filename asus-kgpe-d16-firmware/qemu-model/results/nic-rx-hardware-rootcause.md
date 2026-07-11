@@ -96,3 +96,67 @@ emulation. **That is the faithfulness gap.**
 
 Diagnostic tooling: `tmp/mac_rx_probe.py`, `tmp/mac_rx_traffic.py`,
 `tmp/rx_desc_probe.py` (P2A reads via the culvert host bridge).
+
+## N2–N3 DONE (QEMU-first) — the real cause is MACCR FAST_MODE (HW-verified)
+
+Worked on branch `claude/ftgmac100-rx-qemu` (QEMU submodule branch
+`ast2050-ftgmac100-rx`). The hardware agent (branch `claude/ftgmac100-rx-hw`)
+proved the mechanism on the real AST2050 by poke-and-observe with the driver
+unchanged: writing **`MACCR |= 0x80000` (bit19 FAST_MODE)** live, with no reset
+and no PHY/RMII change, gave **600/600 frames received, 0 errors, BMC pingable**.
+So FAST_MODE alone is necessary and sufficient; it is **not** an RMII-datapath
+problem (the RX_pkts counter climbs and RXR_PTR advances — the MAC is not
+RX-dead, it CRC-/frame-length-errors every over-sampled frame).
+
+### Mechanism (why G3-specific)
+
+- The AST2050 (G3) link is 100 Mbps RMII, so the MAC must run 100M timing —
+  `MACCR[19] FAST_MODE` set (`MACCR[9] GIGA_MODE` clear). In 10M timing on a
+  100M link every frame is over-sampled → CRC / frame-too-long → dropped → rx=0.
+- On the G3 a **MAC SW_RST clears MACCR** (the speed bit included), unlike the
+  AST2400/2500 where it survives. The datasheet even notes SPEED_100/GMAC_MODE
+  "cannot be software reset" on later parts — the G3 does not honour that.
+- Mainline `ftgmac100_start_hw()` only **preserves** the speed bits
+  (`maccr &= (FAST_MODE | GIGA_MODE)`, ftgmac100.c:316). Speed is set only in
+  `ftgmac100_reset_and_config_mac()` in the same register write as the SW_RST
+  (ftgmac100.c:141-168), so on the G3 it is lost across the reset and
+  preserve-only can never restore it. Result: `FAST_MODE=0` → rx=0. (This matches
+  the N1 real-silicon capture `MACCR=0x0002d51f`, bit19=0, vs working U-Boot
+  `0x0008050f`, bit19=1.)
+
+### N2 — faithful QEMU model (submodule `hw/net/ftgmac100.c`, `.h`, `hw/arm/aspeed_ast2400.c`)
+
+Scoped to the G3 via a new `aspeed-g3` bool property (set by the AST2050 SoC in
+`aspeed_ast2400.c` when `silicon_rev == AST2050_A1_SILICON_REV`):
+
+- `ftgmac100_do_reset()`: on the G3 a MAC SW_RST **fully clears MACCR** (speed
+  bit lost), instead of the AST2400/2500 behaviour of preserving FAST/GIGA.
+- `ftgmac100_can_receive()` **and** `ftgmac100_receive()`: on the G3, drop RX
+  unless the MAC speed mode matches the 100M RMII link (FAST_MODE set, GIGA
+  clear). can_receive() alone is only a flow-control hint, so the drop must also
+  sit on the delivery path.
+
+AST2400/2500/2600 are untouched (their SW_RST preserves the speed bit).
+
+### N3 — driver fix (`kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch`)
+
+The HW-proven fix, shared verbatim with the hardware branch:
+`ftgmac100_start_hw()` **re-derives** FAST_MODE/GIGA_MODE from `priv->cur_speed`
+instead of preserving them, so the speed bit is restored after the G3 SW_RST.
+The DTS uses the real RTL8201CP PHY (`phy-mode="rmii"`, no `fixed-link`); the fix
+does not depend on the DTS (FAST_MODE alone), verified below with the real-PHY DTB.
+
+### QEMU verification (kgpe-d16-bmc, real-PHY DTB)
+
+- **Reproduces:** unpatched mainline kernel → the G3 SW_RST clears the speed bit,
+  preserve-only `start_hw()` leaves `FAST_MODE=0`, the speed-mismatch drop fires
+  → SSH-over-hostfwd never connects → rx=0 (faithful to real silicon).
+- **Fixed:** cur_speed-patched kernel → `FAST_MODE=1` matches the 100M link → SSH
+  login succeeds → `C2 RESULT: PASS`.
+- **Regression:** the Dell C410X vendor firmware (C4) writes MACCR with FAST_MODE
+  set (`0x000a0d0f`/`0x000a8d0f`), so the speed gate passes and its BMC web
+  service stays reachable; OpenBMC-over-NFS (same cur_speed kernel) answers
+  Redfish.
+
+Convergence: the QEMU model reproduces the FAST_MODE bug and the *same*
+`cur_speed` fix works in QEMU and on the real AST2050.
