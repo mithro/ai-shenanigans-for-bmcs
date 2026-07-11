@@ -1,0 +1,95 @@
+{
+  "@odata.id": "/redfish/v1/Systems/system",
+  "@odata.type": "#ComputerSystem.v1_22_0.ComputerSystem",
+  "Actions": {
+    "#ComputerSystem.Reset": {
+      "@Redfish.ActionInfo": "/redfish/v1/Systems/system/ResetActionInfo",
+      "target": "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset"
+    }
+  },
+  "Bios": {
+    "@odata.id": "/redfish/v1/Systems/system/Bios"
+  },
+  "Boot": {
+    "AutomaticRetryConfig": "RetryAttempts",
+    "AutomaticRetryConfig@Redfish.AllowableValues": [
+      "Disabled",
+      "RetryAttempts"
+    ],
+    "BootSourceOverrideEnabled": "Disabled",
+    "BootSourceOverrideMode": "UEFI",
+    "BootSourceOverrideMode@Redfish.AllowableValues": [
+      "Legacy",
+      "UEFI"
+    ],
+    "BootSourceOverrideTarget": "None",
+    "BootSourceOverrideTarget@Redfish.AllowableValues": [
+      "None",
+      "Pxe",
+      "Hdd",
+      "Cd",
+      "Diags",
+      "BiosSetup",
+      "Usb"
+    ],
+    "StopBootOnFault": "Never",
+    "TrustedModuleRequiredToBoot": "Disabled"
+  },
+  "Description": "Computer System",
+  "FabricAdapters": {
+    "@odata.id": "/redfish/v1/Systems/system/FabricAdapters"
+  },
+  "GraphicalConsole": {
+    "ConnectTypesSupported": [
+      "KVMIP"
+    ],
+    "MaxConcurrentSessions": 4,
+    "ServiceEnabled": true
+  },
+  "Id": "system",
+  "Links": {
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/bmc"
+      }
+    ]
+  },
+  "LogServices": {
+    "@odata.id": "/redfish/v1/Systems/system/LogServices"
+  },
+  "Memory": {
+    "@odata.id": "/redfish/v1/Systems/system/Memory"
+  },
+  "MemorySummary": {
+    "TotalSystemMemoryGiB": 0.0
+  },
+  "Name": "system",
+  "PCIeDevices": [],
+  "PCIeDevices@odata.count": 0,
+  "PowerRestorePolicy": "AlwaysOff",
+  "ProcessorSummary": {
+    "Count": 0
+  },
+  "Processors": {
+    "@odata.id": "/redfish/v1/Systems/system/Processors"
+  },
+  "SerialConsole": {
+    "IPMI": {
+      "ServiceEnabled": false
+    },
+    "MaxConcurrentSessions": 15,
+    "SSH": {
+      "HotKeySequenceDisplay": "Press ~. to exit console",
+      "Port": 2200,
+      "ServiceEnabled": true
+    }
+  },
+  "Status": {
+    "Health": "OK",
+    "State": "Enabled"
+  },
+  "Storage": {
+    "@odata.id": "/redfish/v1/Systems/system/Storage"
+  },
+  "SystemType": "Physical"
+}
