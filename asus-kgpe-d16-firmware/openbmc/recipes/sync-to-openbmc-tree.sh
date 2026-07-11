@@ -32,6 +32,12 @@ install -D -m0644 "$HERE/ipmi/files/dev_id.json" \
 install -D -m0644 "$HERE/ipmi/phosphor-ipmi-config.bbappend" \
     "$PH_IPMI/phosphor-ipmi-config.bbappend"
 
+# (d) motherboard FRU present -> ipmi-fru-parser extra-properties
+install -D -m0644 "$HERE/ipmi/files/extra-properties.yaml" \
+    "$PH_IPMI/files/extra-properties.yaml"
+install -D -m0644 "$HERE/ipmi/phosphor-ipmi-fru-properties-native.bbappend" \
+    "$PH_IPMI/phosphor-ipmi-fru-properties-native.bbappend"
+
 # (d) motherboard FRU blob + loader service
 install -D -m0644 "$HERE/ipmi/files/motherboard-fru.bin" \
     "$PH_IPMI/files/motherboard-fru.bin"
