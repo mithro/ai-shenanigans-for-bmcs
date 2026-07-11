@@ -1,0 +1,12 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> sel info
+# exit code: 0
+
+SEL Information
+Version          : 1.5 (v1.5, v2 compliant)
+Entries          : 0
+Free Space       : 65535 bytes or more
+Percent Used     : unknown
+Last Add Time    : Not Available
+Last Del Time    : Not Available
+Overflow         : false
+Supported Cmds   : 'Delete' 'Reserve' 

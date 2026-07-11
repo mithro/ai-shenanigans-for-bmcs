@@ -108,3 +108,5 @@ Leave ≥8 GB headroom; watch `free -g`.
   (populate in recipe/HW); (c) actual host power on/off via the GPIO (F2 config) on
   real HW (status works; drive-loop to verify); (d) F4 SOL; (e) CI job needs the
   rootfs artifact published.
+  (F5 detail — netipmid socket-activation race + data gaps — in branch
+  `claude/bmc-f5-ipmi`'s PROGRESS + `HOST-KCS-BT-STATUS.md`.)
