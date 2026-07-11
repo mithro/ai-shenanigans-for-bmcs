@@ -1,0 +1,25 @@
+# (a) SOL: busctl introspect /xyz/openbmc_project/ipmi/sol/eth0 (settingsd) + ObjectMapper GetObject
+
+NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
+org.freedesktop.DBus.Introspectable interface -         -            -
+.Introspect                         method    -         s            -
+org.freedesktop.DBus.Peer           interface -         -            -
+.GetMachineId                       method    -         s            -
+.Ping                               method    -         -            -
+org.freedesktop.DBus.Properties     interface -         -            -
+.Get                                method    ss        v            -
+.GetAll                             method    s         a{sv}        -
+.Set                                method    ssv       -            -
+.PropertiesChanged                  signal    sa{sv}as  -            -
+xyz.openbmc_project.Ipmi.SOL        interface -         -            -
+.AccumulateIntervalMS               property  y         20           emits-change writable
+.Enable                             property  b         true         emits-change writable
+.ForceAuthentication                property  b         true         emits-change writable
+.ForceEncryption                    property  b         true         emits-change writable
+.Privilege                          property  y         4            emits-change writable
+.Progress                           property  y         0            emits-change writable
+.RetryCount                         property  y         7            emits-change writable
+.RetryIntervalMS                    property  y         100          emits-change writable
+.Threshold                          property  y         1            emits-change writable
+---OWNER---
+a{sas} 1 "xyz.openbmc_project.Settings" 4 "org.freedesktop.DBus.Introspectable" "org.freedesktop.DBus.Peer" "org.freedesktop.DBus.Properties" "xyz.openbmc_project.Ipmi.SOL"

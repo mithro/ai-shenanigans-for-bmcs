@@ -1,0 +1,14 @@
+$ curl -k /redfish/v1/Chassis
+# rc=0
+
+{
+  "@odata.id": "/redfish/v1/Chassis",
+  "@odata.type": "#ChassisCollection.ChassisCollection",
+  "Members": [
+    {
+      "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16"
+    }
+  ],
+  "Members@odata.count": 1,
+  "Name": "Chassis Collection"
+}

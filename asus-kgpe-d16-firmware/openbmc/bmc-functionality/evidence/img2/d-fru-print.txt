@@ -1,0 +1,42 @@
+$ ipmitool -I lanplus fru print
+# rc=1
+
+FRU Device Description : Builtin FRU Device (ID 0)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 32)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 33)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 34)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 35)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 36)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 37)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 38)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 39)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : bmc (ID 80)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : pdb (ID 82)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : motherboard (ID 86)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : fp (ID 87)
+ Device not present (Requested sensor, data, or record not found)
+

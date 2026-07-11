@@ -1,0 +1,9 @@
+$ ipmitool -I lanplus sdr type Fan
+# rc=0
+
+FAN1             | 30h | ok  |  0.0 | 4900 RPM
+FAN2             | 31h | ok  |  0.0 | 5100 RPM
+FAN3             | 32h | ok  |  0.0 | 4800 RPM
+FAN4             | 33h | ok  |  0.0 | 3600 RPM
+FAN5             | 34h | ok  |  0.0 | 3700 RPM
+FAN6             | 35h | ok  |  0.0 | 3900 RPM
