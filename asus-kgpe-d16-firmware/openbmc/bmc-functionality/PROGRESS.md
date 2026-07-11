@@ -10,6 +10,10 @@ Constraints: small commits + commit this log after every change; ≤4 concurrent
 sub-agents; don't overload RAM; code review + CI(GH Actions/QEMU) + real-HW tests;
 push regularly to all repos; **no PRs**; no unrecoverable changes (no real BIOS
 flash); demonstrate every feature in QEMU AND on hardware; 5-min progress updates.
+**Always work against LATEST UPSTREAM** of everything (Linux kernel, QEMU, OpenBMC,
+…) — the OpenBMC image builds on latest master; kernel + QEMU faithful model get
+rebased onto latest upstream (tracked as F-UPSTREAM; done incrementally so as not
+to break the proven faithful boot).
 
 ## Starting point (recon 2026-07-11)
 Running OpenBMC image (`obmc-phosphor-image-ast2050-redfish`, NFS root
