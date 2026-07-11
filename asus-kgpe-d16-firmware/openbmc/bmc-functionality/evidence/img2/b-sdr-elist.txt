@@ -1,0 +1,21 @@
+$ ipmitool -I lanplus sdr elist
+# rc=0
+
+CPU_DIODE        | 01h | ok  |  0.0 | 41.90 degrees C
+CPU0_DTS         | 02h | ok  |  0.0 | 44.97 degrees C
+CPU1_DTS         | 03h | ok  |  0.0 | 46.50 degrees C
+VCORE0           | 10h | ok  |  0.0 | 0.96 Volts
+VCORE1           | 11h | ok  |  0.0 | 0.96 Volts
+P12V             | 12h | ok  |  0.0 | 11.97 Volts
+P5V              | 13h | ok  |  0.0 | 4.99 Volts
+P3V3             | 14h | ok  |  0.0 | 3.26 Volts
+P1V5             | 15h | ok  |  0.0 | 1.47 Volts
+P1V1             | 16h | ok  |  0.0 | 1.09 Volts
+P0V9             | 17h | ok  |  0.0 | 0.90 Volts
+VBAT             | 18h | ok  |  0.0 | 3.01 Volts
+FAN1             | 30h | ok  |  0.0 | 4900 RPM
+FAN2             | 31h | ok  |  0.0 | 5100 RPM
+FAN3             | 32h | ok  |  0.0 | 4800 RPM
+FAN4             | 33h | ok  |  0.0 | 3600 RPM
+FAN5             | 34h | ok  |  0.0 | 3700 RPM
+FAN6             | 35h | ok  |  0.0 | 3900 RPM

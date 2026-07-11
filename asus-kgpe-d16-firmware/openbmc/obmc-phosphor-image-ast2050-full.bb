@@ -81,7 +81,19 @@ OBMC_IMAGE_EXTRA_INSTALL:append = " \
         phosphor-host-postd \
         dbus-sensors \
         entity-manager \
+        kgpe-d16-hwmon-config \
+        kgpe-d16-fru-populate \
         "
+
+# F-IMG2 board-specific config packages (see asus-kgpe-d16-firmware/openbmc/recipes):
+#   kgpe-d16-hwmon-config - phosphor-hwmon channel map for the W83795G so the
+#                           kgpe-d16 IPMI SDR names (gap b) resolve to real readings
+#   kgpe-d16-fru-populate - loads a shipped IPMI FRU blob into the motherboard
+#                           inventory so `ipmitool fru print` returns data (gap d)
+# The SOL config object (gap a, settingsd), the kgpe-d16 SDR sensor map (gap b,
+# phosphor-ipmi-host), the real Device ID (gap d, phosphor-ipmi-config) and the
+# entity-manager Chassis (gap c) are delivered as meta-layer bbappends and need no
+# image line -- their packages are already pulled in by the features above.
 
 # shadow provides useradd/usermod needed by phosphor-user-manager.
 ROOTFS_RO_UNNEEDED:remove = "shadow"

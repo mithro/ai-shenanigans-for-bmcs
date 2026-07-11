@@ -1,0 +1,17 @@
+[Unit]
+Description=Populate KGPE-D16 motherboard FRU inventory from the shipped blob
+# The inventory D-Bus service must be up so phosphor-read-eeprom can Notify the
+# /system/chassis/motherboard object; run before host-ipmid formats fru print.
+Wants=mapper-wait@-xyz-openbmc_project-inventory.service
+After=mapper-wait@-xyz-openbmc_project-inventory.service
+Before=phosphor-ipmi-host.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# fruid 0x56 (86) == /system/chassis/motherboard in the q71l inventory map, which
+# phosphor-ipmi-host also uses as its fru_config -> `ipmitool fru print` shows it.
+ExecStart=/usr/bin/phosphor-read-eeprom --eeprom /usr/share/kgpe-d16/motherboard-fru.bin --fruid 86
+
+[Install]
+WantedBy=multi-user.target
