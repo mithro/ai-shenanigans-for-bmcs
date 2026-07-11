@@ -112,3 +112,41 @@ are kernel-independent (QEMU unchanged) → still green from baseline; not re-ru
 
 Known blocker to port: g3-vic uses `irq_domain_add_simple(node, …)`, removed
 ~6.16 in favour of `irq_domain_create_simple(of_fwnode_handle(node), …)`.
+
+Port work onto a pristine v6.19.14 clone:
+- All 3 patches (0001 clk, 0002 ftgmac100, 0003 w83795-regenerated) `git apply`
+  **clean** — the 6.12 regeneration of 0003 also fits 6.19 (i2c_get_match_data
+  was already in place by 6.12 and unchanged since).
+- g3-vic driver: confirmed `irq_domain_add_simple` is **gone** from
+  `include/linux/irqdomain.h` in 6.19.14 (`irq_domain_create_simple` + the
+  `of_fwnode_handle()` macro are present, and also in 6.12 → bi-compatible).
+  Ported the one call to `irq_domain_create_simple(of_fwnode_handle(node), …)`.
+  Other driver touchpoints verified still present in 6.19.14: `irq_domain_ops`
+  `.map`/`.xlate`, `irq_domain->host_data`, `irq_domain_xlate_onetwocell`,
+  `generic_handle_domain_irq`.
+
+**6.19.14 build:** EXIT 0 — uImage+zImage+dtb, ported `irq-aspeed-g3-vic.o`
+compiled clean, 0 dropped Kconfig symbols.
+
+**6.19.14 regression (latest kernel on the unchanged QEMU 10.0.7) — GREEN:**
+
+| Check | Result |
+|-------|--------|
+| C2 boot + SSH | PASS — `Linux armv5tejl` |
+| F6 boot-usb | PASS |
+| F5b host-kcs (64 MB) | PASS — `6.19.14-dirty` booted, /dev/ipmi-kcs3, LPC serviced |
+| C5 boot-nfsroot | PASS |
+| F7 ncsi dedicated-PHY | boot invariants 5/5 PASS (same local artifact) |
+
+**Committed:** `build-kernel.sh` default → **v6.19.14** (latest upstream stable),
+g3-vic ported to `irq_domain_create_simple()`. The v6.12.95 LTS build stays
+supported via `KERNEL_VERSION=v6.12.95` (patches + ported driver are
+bi-compatible) and remains a proven checkpoint in this branch's history (commit
+"kernel: bump ... v6.6.70 -> v6.12.95").
+
+### Kernel outcome
+
+**v6.6.70 → v6.19.14 (latest upstream stable): DONE, non-regressing.** The whole
+kernel-facing regression subset (C2/F6/F5b/C5/F7) passes on the latest kernel over
+the unchanged faithful QEMU; the QEMU-model oracles (integration suite, power
+fwtest, C4 vendor web) are kernel-independent and unaffected.

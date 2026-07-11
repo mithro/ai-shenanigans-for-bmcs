@@ -179,8 +179,16 @@ static int __init g3vic_of_init(struct device_node *node,
 	g3_avic = vic;
 	set_handle_irq(g3vic_handle_irq);
 
-	vic->dom = irq_domain_add_simple(node, G3VIC_NUM_IRQS, 0,
-					 &g3vic_dom_ops, vic);
+	/*
+	 * irq_domain_create_simple() (fwnode) rather than the old
+	 * irq_domain_add_simple() (device_node): the legacy of_node wrapper was
+	 * removed upstream (~6.16) in favour of the generic fwnode form. Both
+	 * irq_domain_create_simple() and of_fwnode_handle() have existed for many
+	 * releases, so this builds on the LTS (v6.12) and latest (v6.19) alike.
+	 */
+	vic->dom = irq_domain_create_simple(of_fwnode_handle(node),
+					    G3VIC_NUM_IRQS, 0,
+					    &g3vic_dom_ops, vic);
 	return 0;
 }
 
