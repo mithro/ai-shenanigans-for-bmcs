@@ -14,10 +14,14 @@ POSTing `ComputerSystem.Reset` while reading the **modeled GPIOH2** over QMP
 | `ComputerSystem.Reset ForceOff` | 204 | **`false`** | op-pwrctl drove GPIOF0 low → latch cleared → host off |
 | `ComputerSystem.Reset ForceRestart` | 204 | **`true`** | warm reset → host stays on |
 
-This is the full **Redfish → phosphor-state-manager → op-pwrctl
-(org.openbmc.control.Power) → GPIO request line → modeled power latch → GPIOH2**
-loop, confirmed end to end: the modeled hardware power-state tracks the Redfish
-power actions.
+This proves the **forward path** of the **Redfish → phosphor-state-manager →
+op-pwrctl (org.openbmc.control.Power) → GPIO request line → modeled power latch →
+GPIOH2** loop: each Redfish action returns HTTP 204 and the modeled GPIOH2 tracks
+it (read independently over QMP). It does **not** prove the Redfish `PowerState`
+*readback* — that field read back `null` for every action (see the caveat
+below), so the round-trip is not confirmed. The authoritative power-state signal
+is therefore GPIOH2 over QMP (above) plus the CI fwtest, not a Redfish
+round-trip.
 
 ### Caveat — Redfish `PowerState` field
 

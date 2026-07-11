@@ -173,10 +173,13 @@ Leave ≥8 GB headroom; watch `free -g`.
     held-level drive maps onto the modeled latch; power_good_in=H2). Staged to
     /export/openbmc-f2power.
   * **Demos:** (a) sysfs — kgpe-power.sh drives the request lines through the real
-    gpio-aspeed driver, GPIOH2 confirmed via QMP qom-get; (b) redfish — the fully
+    gpio-aspeed driver, GPIOH2 confirmed via QMP qom-get; (b) redfish — the
     automated Redfish `ComputerSystem.Reset` -> phosphor-state-manager -> op-pwrctl
-    -> GPIO -> pgood -> PowerState loop (`f2-power-control-test.py`). See
-    OPENBMC-POWER-INTEGRATION.md. Real-hardware demo deferred (rig held by another
+    -> GPIO request line -> modeled latch -> GPIOH2 **forward path**
+    (`f2-power-control-test.py`): each action returns HTTP 204 and GPIOH2 tracks it
+    over QMP. The Redfish `PowerState` *readback* is NOT proven (it read back
+    `null` under the 64 MB bmcweb pressure); GPIOH2/QMP + the CI fwtest are the
+    authoritative signal. See OPENBMC-POWER-INTEGRATION.md. Real-hardware demo deferred (rig held by another
     agent); the request lines drive the real board's power — bring up board-OFF,
     verify GPIOH2 read-only first, validate SCU pinmux over P2A/JTAG.
 - 2026-07-12: **F5 (IPMI backbone) — LAN IPMI PASS in QEMU *and* on the real
@@ -460,3 +463,26 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
     aspeed_lpc_ast2050 models). F6 and F-IMG2 predated the a010d69 bump (gitlink
     583ad3d = a010d69's ancestor), so the 3-way merge kept a010d69 (theirs==base);
     no submodule rebuild needed. Working tree clean; no conflict markers. No PRs.
+- 2026-07-12: **F-REVIEW-FIX** (branch `claude/bmc-review-fix` off
+  `claude/bmc-functionality`) — closed two F-REVIEW audit findings.
+  * **Finding 1 (CI coverage gap):** `f5-ipmi-lan` / `f4-sol` / `fw-update` were
+    latent — gated behind `if: workflow_dispatch` **and** downloading an
+    `openbmc-full-rootfs` artifact that was never published, so IPMI-over-LAN (the
+    only silicon-proven capability), SOL, and fw-update had **no** automatic CI
+    guard. Decoupled the multi-hour Yocto rootfs build from the per-push tests:
+    the staged fuller rootfs is published out-of-band as the durable Release asset
+    `openbmc-full-rootfs.tar` (tag `openbmc-rootfs`) by the new
+    `build-openbmc-rootfs.yml` (self-hosted `openbmc-builder`) or by hand
+    (`gh release upload`, documented in `.github/workflows/CI-README.md`). The
+    three jobs now run on **every push/PR**: a `gh release download` fetch step
+    (id=rootfs) runs the test when the asset exists (`::notice::`) or SKIPS with a
+    `::warning::` annotation + `$GITHUB_STEP_SUMMARY` block when it doesn't — green
+    but visibly SKIPPED, never a faked/silent pass. All workflow YAML validated.
+  * **Finding 2 (F2 overclaim):** `f2-power-results.json` shows `PowerState: null`
+    for every action, so only the **forward** path (Redfish action → op-pwrctl →
+    GPIO latch, HTTP 204 + GPIOH2 over QMP) is proven, not the Redfish `PowerState`
+    readback. Softened the "confirmed end to end" summary in `evidence/qemu/
+    F2-README.md`, the "-> pgood -> PowerState loop" line here (above), and added a
+    proven-vs-designed caveat to `OPENBMC-POWER-INTEGRATION.md` §(b). GPIOH2/QMP +
+    the CI fwtest are named as the authoritative signal. Forward path left intact
+    (it IS proven). No PRs.
