@@ -1,0 +1,133 @@
+qemu-system-arm: warning: nic ftgmac100.1 has no peer
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #7 Sat Jul 11 21:52:00 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk ip=dhcp
+[    0.000000] Unknown kernel command line parameters "earlyprintk", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 16256
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 50676K/65536K available (7168K kernel code, 932K rwdata, 1852K rodata, 1024K init, 187K bss, 14860K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 29106 entries in 57 pages
+[    0.000000] ftrace: allocated 57 pages with 4 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000227] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.001977] Switching to timer-based delay loop, resolution 41ns
+[    0.005757] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=240000)
+[    0.006004] CPU: Testing write buffer coherency: ok
+[    0.008104] pid_max: default: 32768 minimum: 301
+[    0.027660] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.027755] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.066863] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.067756] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.069839] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.073982] ASPEED Unknown rev A0 (00000202)
+[    0.083530] devtmpfs: initialized
+[    0.111179] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.111340] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.112628] pinctrl core: initialized pinctrl subsystem
+[    0.124747] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.128450] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.197434] mc: Linux media interface: v0.10
+[    0.197633] videodev: Linux video capture interface: v2.00
+[    0.197854] pps_core: LinuxPPS API ver. 1 registered
+[    0.197877] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.197994] PTP clock support registered
+[    0.198097] EDAC MC: Ver: 3.0.0
+[    0.248052] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.304204] NET: Registered PF_INET protocol family
+[    0.305905] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.310252] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.310374] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.310463] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.310550] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.310707] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.311851] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.312081] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.313861] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.332974] RPC: Registered named UNIX socket transport module.
+[    0.333063] RPC: Registered udp transport module.
+[    0.333088] RPC: Registered tcp transport module.
+[    0.333112] RPC: Registered tcp-with-tls transport module.
+[    0.333135] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.345018] Unpacking initramfs...
+[    0.379845] workingset: timestamp_bits=30 max_order=14 bucket_order=0
+[    0.381100] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.385418] NFS: Registering the id_resolver key type
+[    0.386568] Key type id_resolver registered
+[    0.386614] Key type id_legacy registered
+[    0.386941] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.393050] NET: Registered PF_ALG protocol family
+[    0.394079] io scheduler bfq registered
+[    0.468473] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.542549] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1500000) is a ASPEED VUART
+[    0.571132] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.572462] printk: console [ttyS4] enabled
+[    0.643524] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.735332] loop: module loaded
+[    0.782181] random: crng init done
+[    0.891580] Freeing initrd memory: 1704K
+[    0.992603] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    1.029896] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    1.031110] RTL8211E Gigabit Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    1.044955] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at 6ffd2c71
+[    1.046627] i2c_dev: i2c /dev entries driver
+[    1.047552] Driver for 1-wire Dallas network protocol.
+[    1.057905] NET: Registered PF_INET6 protocol family
+[    1.137286] Segment Routing with IPv6
+[    1.137748] In-situ OAM (IOAM) with IPv6
+[    1.139255] NET: Registered PF_PACKET protocol family
+[    1.140264] 8021q: 802.1Q VLAN Support v1.8
+[    1.141354] Key type dns_resolver registered
+[    1.269450] printk: console [netcon0] enabled
+[    1.269741] netconsole: network logging started
+[    1.321151] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+[    1.388445] Sending DHCP requests ., OK
+[    1.393881] IP-Config: Got DHCP answer from 10.0.2.2, my address is 10.0.2.15
+[    1.394548] IP-Config: Complete:
+[    1.394682]      device=eth0, hwaddr=52:54:00:12:34:56, ipaddr=10.0.2.15, mask=255.255.255.0, gw=10.0.2.2
+[    1.395016]      host=10.0.2.15, domain=, nis-domain=(none)
+[    1.395198]      bootserver=10.0.2.2, rootserver=10.0.2.2, rootpath=
+[    1.395252]      nameserver0=10.0.2.3
+[    1.442294] clk: Disabling unused clocks
+[    1.475487] Freeing unused kernel image (initmem) memory: 1024K
+[    1.477718] Checked W+X mappings: passed, no W+X pages found
+[    1.478413] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+ip: RTNETLINK answers: File exists
+ip: RTNETLINK answers: File exists
+eth0: 10.0.2.15
+Fingerprint: SHA256:B1dNE4wKnxzsCN9oU9nSxLFa0WvCTxUfdeUoAc9/rTQ
+[66] Jan 01 00:00:01 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86400sec preferred_lft 14400sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (ssh in via the QEMU hostfwd port)
+BMC-READY
+/bin/sh: can't access tty; job control turned off
+~ # qemu-system-arm: terminating on signal 15 from pid 319717 (claude)

@@ -31,7 +31,7 @@ runnable set of daemons).
 4. Serial-over-LAN (obmc-console on the host UART, already wired)          — F4
 5. IPMI local + remote (phosphor-ipmi-host KCS + phosphor-ipmi-net RMCP+)  — F5
 6. USB devices                                                            — F6
-7. Host network piggybacking (NC-SI)                                       — F7
+7. Host network piggybacking (NC-SI)                                       — F7 ✅ (finding: NOT NC-SI — dedicated PHY; see F7-NCSI.md)
 8. Virtual VGA + keyboard (video engine + USB HID + obmc-ikvm)             — F8
 9. Firmware/BIOS update path (no real flash)                              — F9
 
@@ -378,3 +378,20 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   datapath) and **no real server host** (the keypress is shown over `dummy_hcd`; the
   host-facing vhub path needs a dedicated G3 UDC driver + a functional QEMU vhub
   datapath — the F6/F8 gap). **All QEMU-only; nothing run on the shared AST2050 rig.**
+- 2026-07-12: **F7 (host network "piggyback" / NC-SI) DONE — honest finding: the
+  KGPE-D16 does NOT use NC-SI** (branch `claude/bmc-f7-ncsi`, off `bmc-functionality`).
+  Faithfulness-first ground truth from datasheet + Raptor + DTS: the BMC has its own
+  **dedicated RTL8201CP PHY on RMII** (DTS `phy-mode="rmii"`, no `use-ncsi`; Raptor
+  `CONFIG_MAC1_PHY_SETTING=0` = "Dedicated PHY (not NC-SI)"), on the same physical
+  Ethernet as the host. The G3 MAC has **no NC-SI hardware/register block** (SCU70[8:6]
+  is MII/RMII-only); NC-SI on this SoC is pure software over RMII gated by the
+  **SCU40[15:14] scratch hint** and is only used by a *different* board (Dell C410X).
+  Our faithful QEMU G3 MAC correctly exposes no NC-SI mode and QEMU has **no NC-SI
+  responder**, so an "NC-SI comes up" demo would be unfaithful AND unsupported — not
+  done, by design. Deliverables: `F7-NCSI.md` (full citations + two-register analysis +
+  the honest path), `evidence/qemu-ncsi/` (QEMU boot log of the REAL path: dedicated-PHY
+  eth0 up + DHCP over slirp, ZERO NC-SI in dmesg), `f7-ncsi-evidence.py` (buildless
+  12-invariant guard + self-contained boot mode; 12/12 pass), and CI job
+  `d16-qemu-stack.yml :: f7-ncsi-dedicated-phy`. "Piggyback" for this board = a dedicated
+  BMC NIC sharing the host's physical net (already proven: OpenBMC Redfish over
+  192.168.66.2). No PR.
