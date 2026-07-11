@@ -1,0 +1,368 @@
+# KGPE-D16 (AST2050) IPMI static-SDR sensor map for phosphor-ipmi-host.
+#
+# phosphor-ipmi-host compiles this into its static SDR repository (sensor-gen.hpp).
+# Each top-level key is the IPMI sensor number; `path` is the D-Bus sensor object
+# phosphor-hwmon publishes for the board's Nuvoton/Winbond W83795G hardware monitor
+# (BMC I2C bus 1 @0x2f). The SDR *name* shown by `ipmitool sdr`/`sensor` is the
+# leaf of `path`, so these give KGPE-D16-proper rail names (VCORE0/1, P12V, P5V,
+# P3V3, P1V5, P1V1, P0V9, VBAT, CPU diode + per-socket DTS) instead of the
+# quanta-q71l defaults (pvcc_cpu*, p3v3_scaled, temp2_inlet ...).
+#
+# The paths MUST match the phosphor-hwmon LABELs in the board hwmon conf
+# (kgpe-d16 hwmon@2f.conf, shipped by kgpe-d16-hwmon-config): LABEL_in0=VCORE0 ->
+# /xyz/openbmc_project/sensors/voltage/VCORE0, etc. Scaling (multiplierM/rExp)
+# mirrors the proven quanta-q71l map (voltage 0.064 V/count, temp 0.511 C/count,
+# fan 100 RPM/count); the 5V/12V rails reach nominal via the divider GAINs in the
+# hwmon conf, exactly as q71l's iio-hwmon does. See F3-SENSORS.md + HW-WIRING-
+# power-sensors.md for the W83795G channel map and the QEMU model's readings.
+
+# ------------------------------------------------------------------ Temperatures
+# sensorType 0x01 (Temperature); unit DegreesC; 0.511 C/count.
+0x01:
+  sensorType: 0x01
+  path: /xyz/openbmc_project/sensors/temperature/CPU_DIODE
+  sensorReadingType: 0x01
+  multiplierM: 511
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.DegreesC
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x02:
+  sensorType: 0x01
+  path: /xyz/openbmc_project/sensors/temperature/CPU0_DTS
+  sensorReadingType: 0x01
+  multiplierM: 511
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.DegreesC
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x03:
+  sensorType: 0x01
+  path: /xyz/openbmc_project/sensors/temperature/CPU1_DTS
+  sensorReadingType: 0x01
+  multiplierM: 511
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.DegreesC
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+# --------------------------------------------------------------------------- Fans
+# sensorType 0x04 (Fan); unit RPMS; 100 RPM/count. FAN1..FAN6 populated
+# (FAN7/FAN8 exist on the W83795G but are unpopulated on this chassis -> 0 RPM).
+0x30:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN1
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x31:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN2
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x32:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN3
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x33:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN4
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x34:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN5
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x35:
+  sensorType: 0x04
+  path: /xyz/openbmc_project/sensors/fan_tach/FAN6
+  sensorReadingType: 0x01
+  multiplierM: 100
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.RPMS
+  rExp: 0
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+# ----------------------------------------------------------------------- Voltages
+# sensorType 0x02 (Voltage); unit Volts; 0.064 V/count. VCORE0/1 are the two
+# per-socket Opteron core rails; P12V/P5V arrive via external dividers (GAIN in
+# the hwmon conf); P3V3/P1V5/P1V1/P0V9 are board rails; VBAT is the RTC coin cell.
+0x10:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/VCORE0
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x11:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/VCORE1
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x12:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P12V
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x13:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P5V
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x14:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P3V3
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x15:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P1V5
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x16:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P1V1
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x17:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/P0V9
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
+
+0x18:
+  sensorType: 0x02
+  path: /xyz/openbmc_project/sensors/voltage/VBAT
+  sensorReadingType: 0x01
+  multiplierM: 64
+  offsetB: 0
+  bExp: 0
+  unit: xyz.openbmc_project.Sensor.Value.Unit.Volts
+  rExp: -3
+  mutability: Mutability::Read
+  serviceInterface: org.freedesktop.DBus.Properties
+  readingType: readingData
+  interfaces:
+    xyz.openbmc_project.Sensor.Value:
+      Value:
+        Offsets:
+          0x0:
+            type: double
