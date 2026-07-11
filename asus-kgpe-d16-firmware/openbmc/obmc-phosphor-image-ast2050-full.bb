@@ -18,6 +18,17 @@ ROOTFS_POSTPROCESS_COMMAND += "remove_etc_version"
 
 IMAGE_LINGUAS = ""
 
+# This image is NFS-root only (staged with stage-openbmc-nfsroot.sh and served to
+# the faithful kgpe-d16-bmc QEMU machine); it is never flashed to the board's 32 MB
+# NOR. The quanta-q71l machine default IMAGE_FSTYPES is the static NOR flash layout
+# ("mtd-static mtd-static-tar mtd-static-alltar"), whose do_generate_static packs a
+# shared kernel+initramfs fitImage into a fixed flash partition. On latest OpenBMC
+# master that fitImage is ~91 KB over the quanta-q71l flash-kernel partition, so the
+# static-NOR assembly fails -- an artefact of that board's small flash, irrelevant
+# to our unlimited NFS root. Emit only the read-only squashfs-xz rootfs that the NFS
+# staging needs; this also skips the multi-artefact NOR packaging entirely.
+IMAGE_FSTYPES = "squashfs-xz"
+
 # quanta-q71l does NOT enable obmc-host-ipmi in MACHINE_FEATURES (it is commented
 # out in meta-quanta/meta-q71l/conf/machine/quanta-q71l.conf), so COMBINED_FEATURES
 # (= DISTRO_FEATURES INTERSECT MACHINE_FEATURES) lacks it and FEATURE_PACKAGES_
