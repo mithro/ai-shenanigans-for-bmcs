@@ -333,7 +333,7 @@ jobs:
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --kernel kernel-out/zImage-kgpe-d16 \
             --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
-            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 128 \
             --out fw-update-evidence --boot-timeout 1200
       - uses: actions/upload-artifact@v4
         if: always()

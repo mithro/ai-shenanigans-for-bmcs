@@ -21,21 +21,30 @@ Two independent SPI-NOR flashes on the board, on two independent buses:
    externally with a SPI clip. The AST2050 has **no** host-SPI master / BIOS mux
    (that is an AST2400+ feature). See `UPDATE-PATHS.md` for datasheet cites.
 
-## Status
+## Status — ALL DELIVERABLES DONE
 
 - [x] Ground-truth analysis: BMC SPI + host BIOS SPI, datasheet cites, QEMU model
       coverage — `UPDATE-PATHS.md`.
-- [ ] QEMU demo: BMC-update mechanism (UpdateService present + staged Software object).
-- [ ] QEMU demo: BMC-side SPI mtd access datapath + chip identity read-back.
-- [ ] IPMI firmware info (`mc info`) + HPM.1 capability characterization.
-- [ ] CI job `fw-update` mirroring `d16-qemu-stack.yml`.
-- [ ] Real-HW characterization (READ-ONLY; explicit "no flash written").
+- [x] QEMU demo: BMC-update mechanism — **UpdateService `ServiceEnabled:true`,
+      dummy image POST → HTTP 202 + Redfish Task, phosphor-software-manager
+      running, D-Bus `Software.Version` objects present** — `DEMO-RESULTS.md`,
+      `evidence/qemu/`.
+- [x] QEMU demo: BMC-side flash datapath characterized — `/proc/mtd` empty +
+      no `/dev/mtd` on NFS boot documented (the MTD write-target gap); emulated
+      16 MB BMC SPI attached. (No faithful *host-BIOS* mtd exists — §2–§3.)
+- [x] IPMI firmware info (`mc info` rc=0) + HPM.1 (`compcode d4` = unsupported)
+      characterized — `evidence/qemu/ipmi-*.txt`.
+- [x] CI job `fw-update` mirroring `f5-ipmi-lan` in `d16-qemu-stack.yml`.
+- [x] Real-HW characterization (READ-ONLY; explicit "no flash written") —
+      `REAL-HW-CHARACTERIZATION.md`.
 
-## Honest boundary (up front)
+## Corrected finding (measured, not assumed)
 
-Neither AST2050 OpenBMC image (`-redfish.bb` lean, `-full.bb`) currently installs
-the update-staging backend **phosphor-bmc-code-mgmt / phosphor-software-manager**,
-and the NFS-root boot path **masks** the `obmc-flash-bmc-*` services (no MTD on that
-path). So a full end-to-end BMC self-update does not run on the current lean image —
-that is an **F-IMG2 image-content follow-up**. This task demonstrates the mechanism
-and the datapaths, and states clearly what a full end-to-end update still needs.
+The **full image DOES ship + run** the update-staging backend
+**phosphor-bmc-code-mgmt** (`/usr/libexec/phosphor-code-mgmt/phosphor-software-manager`,
+running as `xyz.openbmc_project.Software.Manager`; a first-pass `ls /usr/bin` grep
+missed it). bmcweb accepts a firmware POST (HTTP 202 + Task) and the D-Bus software
+tree carries `/xyz/openbmc_project/software/{039d44e1,bmc}`. The **only** end-to-end
+gap is the **MTD write target**: the NFS-root boot masks `obmc-flash-bmc-*` and has
+no `/dev/mtd`, so activation can't write a flash bank. Closing it needs a real MTD
+boot layout (F-IMG2), not a code change. Host-BIOS-via-BMC is absent by hardware.

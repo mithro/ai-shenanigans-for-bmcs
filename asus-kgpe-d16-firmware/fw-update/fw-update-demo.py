@@ -55,6 +55,20 @@ def stream_until(proc, markers, deadline, echo=True):
     return None, buf
 
 
+def try_redfish(port):
+    """One HTTPS GET to /redfish/v1 (unauthenticated ServiceRoot). Returns
+    (status, body) or (None, error-string)."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with urllib.request.urlopen(f"https://127.0.0.1:{port}/redfish/v1",
+                                    timeout=10, context=ctx) as r:
+            return r.status, r.read().decode("utf-8", "replace")
+    except Exception as e:  # noqa: BLE001 - report + keep polling
+        return None, str(e)
+
+
 def curl(args, capture_out):
     """Run curl, return (rc, combined stdout+stderr). We use the system curl so
     TLS/HTTP quirks match a real operator's tooling; -k because bmcweb ships a
@@ -66,13 +80,55 @@ def curl(args, capture_out):
     return p.returncode, out
 
 
-def ssh(host_port, password, remote_cmd):
-    cmd = ["sshpass", "-p", password, "ssh",
-           "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
-           "-o", "ConnectTimeout=20", "-p", str(host_port),
-           "root@127.0.0.1", remote_cmd]
-    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    return p.returncode, p.stdout.decode("utf-8", "replace")
+def curl_retry(args, tries=4, delay=8, want=None):
+    """curl with retries — bmcweb on a 64-128 MB ARM926 drops concurrent TLS
+    connections under load, so a single shot is unreliable. Retry until rc==0
+    and (if given) `want` appears in the body."""
+    last = ""
+    for i in range(tries):
+        p = subprocess.run(["curl", "-ksS", "-m", "40"] + args,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        last = p.stdout.decode("utf-8", "replace")
+        ok = (p.returncode == 0) and (want is None or want in last)
+        if ok:
+            return last
+        if i < tries - 1:
+            time.sleep(delay)
+    return last
+
+
+def get_session_token(https_port, password, out):
+    """Establish a Redfish session and return (token, headers-text). A session
+    token is more load-robust than re-doing basic auth on every request."""
+    url = f"https://127.0.0.1:{https_port}/redfish/v1/SessionService/Sessions"
+    body = json.dumps({"UserName": "root", "Password": password})
+    for _ in range(5):
+        p = subprocess.run(["curl", "-ksS", "-m", "40", "-D", "-", "-o", "/dev/null",
+                            "-H", "Content-Type: application/json",
+                            "-X", "POST", "-d", body, url],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        hdrs = p.stdout.decode("utf-8", "replace")
+        for line in hdrs.splitlines():
+            if line.lower().startswith("x-auth-token:"):
+                return line.split(":", 1)[1].strip(), hdrs
+        time.sleep(8)
+    return None, hdrs
+
+
+def ssh(host_port, password, remote_cmd, tries=4, delay=10):
+    last = ""
+    for i in range(tries):
+        cmd = ["sshpass", "-p", password, "ssh",
+               "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+               "-o", "ConnectTimeout=25", "-p", str(host_port),
+               "root@127.0.0.1", remote_cmd]
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        last = p.stdout.decode("utf-8", "replace")
+        if p.returncode == 0:
+            return p.returncode, last
+        if i < tries - 1:
+            time.sleep(delay)
+    return 255, last
 
 
 def save(outdir, name, text):
@@ -123,77 +179,106 @@ def main():
         # Wait for a userspace-up signal.
         stream_until(qemu, ["Started bmcweb", "bmcweb", "login:",
                             "Startup finished", "Reached target Multi-User"], deadline)
-        # Give bmcweb / ipmid / dropbear a moment to bind.
-        print("\n[settle] letting services bind ...")
-        stream_until(qemu, ["__never__"], min(time.time() + 40, deadline))
+        # Poll for bmcweb readiness: on ARM926/64 MB, "Started bmcweb" fires well
+        # before bmcweb finishes TLS/D-Bus init and actually listens on :443.
+        # Retry the ServiceRoot GET (draining console between tries) until it
+        # answers or the deadline — the proven openbmc-nfsroot-test.py pattern.
+        print("\n[settle] polling for bmcweb readiness on :443 ...")
+        ready = False
+        srv_body = ""
+        while time.time() < deadline:
+            if qemu.poll() is not None:
+                print("  QEMU exited before bmcweb answered")
+                break
+            status, srv_body = try_redfish(args.https_port)
+            if status and "RedfishVersion" in srv_body:
+                ready = True
+                print(f"  bmcweb up: HTTP {status}")
+                break
+            stream_until(qemu, ["__never__"], min(time.time() + 15, deadline))
 
         H = f"https://127.0.0.1:{args.https_port}"
-        auth = ["-u", f"root:{args.password}"]
 
         # --- 1. Redfish ServiceRoot (unauth) ---
         print("\n[redfish] ServiceRoot ...")
-        cap = []
-        rc, body = curl([f"{H}/redfish/v1"], cap)
-        save(args.out, "redfish-serviceroot.json", body)
-        result["steps"]["serviceroot"] = ("RedfishVersion" in body)
-        if "RedfishVersion" in body:
+        save(args.out, "redfish-serviceroot.json", srv_body)
+        result["steps"]["serviceroot"] = ("RedfishVersion" in srv_body)
+        result["steps"]["updateservice_in_serviceroot"] = (
+            '"/redfish/v1/UpdateService"' in srv_body)
+        if ready:
             result["pass"] = True
-            print("  ServiceRoot OK:", body[:120])
+            print("  ServiceRoot OK:", srv_body[:120])
+
+        # A session token is more load-robust than per-request basic auth.
+        print("\n[redfish] establishing a session ...")
+        token, hdrs = get_session_token(args.https_port, args.password, args.out)
+        save(args.out, "redfish-session-headers.txt", hdrs)
+        tok = ["-H", f"X-Auth-Token: {token}"] if token else \
+              ["-u", f"root:{args.password}"]
+        print("  token:", "obtained" if token else "FALLBACK to basic auth")
 
         # --- 2. UpdateService (the BMC self-update endpoint) ---
         print("\n[redfish] UpdateService ...")
-        cap = []
-        rc, body = curl(auth + [f"{H}/redfish/v1/UpdateService"], cap)
+        body = curl_retry(tok + [f"{H}/redfish/v1/UpdateService"],
+                          want="UpdateService")
         save(args.out, "redfish-updateservice.json", body)
-        result["steps"]["updateservice_present"] = (
-            "UpdateService" in body and "@odata.id" in body)
+        result["steps"]["updateservice_get"] = (
+            "@odata.type" in body and "UpdateService" in body)
         print("  UpdateService:", body[:200])
 
         # --- 3. FirmwareInventory (staged/active Software objects) ---
         print("\n[redfish] UpdateService/FirmwareInventory ...")
-        cap = []
-        rc, body = curl(auth + [f"{H}/redfish/v1/UpdateService/FirmwareInventory"], cap)
+        body = curl_retry(tok + [f"{H}/redfish/v1/UpdateService/FirmwareInventory"],
+                          want="Members")
         save(args.out, "redfish-firmwareinventory.json", body)
 
         # --- 4. Managers/bmc FirmwareVersion ---
         print("\n[redfish] Managers/bmc ...")
-        cap = []
-        rc, body = curl(auth + [f"{H}/redfish/v1/Managers/bmc"], cap)
+        body = curl_retry(tok + [f"{H}/redfish/v1/Managers/bmc"],
+                          want="FirmwareVersion")
         save(args.out, "redfish-managers-bmc.json", body)
 
         # --- 5. POST a dummy image (prove the ingest path is live) ---
         dummy = os.path.join(args.out, "dummy-fw.bin")
         with open(dummy, "wb") as f:
-            # A tiny, obviously-not-a-real-image blob. Backend (if present) must
-            # reject it; if absent, bmcweb still shows how the POST is handled.
+            # A tiny, obviously-not-a-real-image blob. A staging backend (if
+            # present) must reject it; if absent, bmcweb still shows how the POST
+            # is handled. Either way NO real flash is written.
             f.write(b"F9-DUMMY-FIRMWARE-IMAGE\n" + b"\x00" * 4096)
         print("\n[redfish] POST dummy image to UpdateService (multipart) ...")
-        cap = []
-        rc, body = curl(auth + ["-w", "\\nHTTP_STATUS=%{http_code}\\n",
-                                "-X", "POST",
-                                "-F", f'UpdateParameters={{"Targets":["/redfish/v1/Managers/bmc"]}};type=application/json',
-                                "-F", f"UpdateFile=@{dummy};type=application/octet-stream",
-                                f"{H}/redfish/v1/UpdateService/update"], cap)
+        # Use the MultipartHttpPushUri the UpdateService object advertises.
+        body = curl_retry(tok + ["-w", "\\nHTTP_STATUS=%{http_code}\\n",
+                                 "-X", "POST",
+                                 "-F", 'UpdateParameters={"Targets":["/redfish/v1/Managers/bmc"]};type=application/json',
+                                 "-F", f"UpdateFile=@{dummy};type=application/octet-stream",
+                                 f"{H}/redfish/v1/UpdateService/update-multipart"],
+                          want="HTTP_STATUS")
         save(args.out, "redfish-post-multipart.txt", body)
         print("  POST(multipart) ->", body[-300:])
         # Also the legacy simple push-update endpoint.
-        cap = []
-        rc, body = curl(auth + ["-w", "\\nHTTP_STATUS=%{http_code}\\n",
-                                "-H", "Content-Type: application/octet-stream",
-                                "-X", "POST", "--data-binary", f"@{dummy}",
-                                f"{H}/redfish/v1/UpdateService/update"], cap)
+        body = curl_retry(tok + ["-w", "\\nHTTP_STATUS=%{http_code}\\n",
+                                 "-H", "Content-Type: application/octet-stream",
+                                 "-X", "POST", "--data-binary", f"@{dummy}",
+                                 f"{H}/redfish/v1/UpdateService/update"],
+                          want="HTTP_STATUS")
         save(args.out, "redfish-post-simple.txt", body)
         print("  POST(simple) ->", body[-300:])
 
         # --- 6. IPMI mc info over LAN (firmware revision) ---
         print("\n[ipmi] mc info over RMCP+ ...")
-        p = subprocess.run(["ipmitool", "-I", "lanplus", "-H", "127.0.0.1",
-                            "-p", str(args.ipmi_port), "-U", "root",
-                            "-P", args.password, "mc", "info"],
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        mcinfo = p.stdout.decode("utf-8", "replace")
-        save(args.out, "ipmi-mc-info.txt", f"# rc={p.returncode}\n{mcinfo}")
-        print("  mc info rc", p.returncode, ":", mcinfo[:160])
+        mcinfo, rc = "", 1
+        for _ in range(4):
+            p = subprocess.run(["ipmitool", "-I", "lanplus", "-H", "127.0.0.1",
+                                "-p", str(args.ipmi_port), "-U", "root",
+                                "-P", args.password, "mc", "info"],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            mcinfo, rc = p.stdout.decode("utf-8", "replace"), p.returncode
+            if rc == 0:
+                break
+            time.sleep(8)
+        save(args.out, "ipmi-mc-info.txt", f"# rc={rc}\n{mcinfo}")
+        print("  mc info rc", rc, ":", mcinfo[:160])
+        result["steps"]["ipmi_mc_info"] = (rc == 0)
         # HPM.1 capabilities
         p = subprocess.run(["ipmitool", "-I", "lanplus", "-H", "127.0.0.1",
                             "-p", str(args.ipmi_port), "-U", "root",
@@ -209,11 +294,11 @@ def main():
             "echo '### os-release'; cat /etc/os-release; "
             "echo '### /proc/mtd'; cat /proc/mtd 2>&1 || echo '(no /proc/mtd)'; "
             "echo '### /dev/mtd*'; ls -l /dev/mtd* 2>&1 || echo '(no /dev/mtd)'; "
-            "echo '### software-manager service?'; ls /usr/bin/phosphor-* 2>&1 | grep -iE 'software|image|updater|version|code' || echo '(no phosphor software-manager binary)'; "
+            "echo '### phosphor-code-mgmt backend binaries'; ls -l /usr/libexec/phosphor-code-mgmt/ 2>&1 || echo '(no phosphor-code-mgmt dir)'; "
             "echo '### busctl Software services'; busctl list 2>&1 | grep -iE 'Software|Updater|Image' || echo '(no Software.* D-Bus service)'; "
-            "echo '### busctl software tree'; busctl --no-pager tree xyz.openbmc_project.Software.BMC.Updater 2>&1 || echo '(no updater tree)'; "
+            "echo '### phosphor-software-manager process'; (pgrep -a phosphor-software; pgrep -a phosphor-version) 2>&1 || echo '(software-manager not running)'; "
+            "echo '### busctl Software.Manager D-Bus tree (Version/Activation objects)'; busctl --no-pager tree xyz.openbmc_project.Software.Manager 2>&1 | head -n 40 || echo '(no Software.Manager tree)'; "
             "echo '### ipmid running?'; (pgrep -a ipmid; pgrep -a netipmid) 2>&1 || echo '(ipmid not found)'; "
-            "echo '### object-mapper software subtree'; busctl --no-pager call xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/object_mapper xyz.openbmc_project.ObjectMapper GetSubTreePaths sias /xyz/openbmc_project/software 0 0 2>&1 | head -20 || echo '(no software subtree)'; "
         )
         rc, out = ssh(args.ssh_port, args.password, remote)
         save(args.out, "in-bmc-inspection.txt", f"# ssh rc={rc}\n{out}")

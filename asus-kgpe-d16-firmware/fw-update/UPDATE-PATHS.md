@@ -144,28 +144,36 @@ Two AST2050 OpenBMC images exist (`../openbmc/`), both built for the ARMv5
 `quanta-q71l` machine (ARM926EJ-S = the AST2050 CPU) and booted **over NFS** on
 `kgpe-d16-bmc`:
 
-| Feature | `-redfish.bb` (lean, 64 MB) | `-full.bb` |
+| Feature | `-redfish.bb` (lean, 64 MB) | `-full.bb` (QEMU-verified) |
 |---|---|---|
-| bmcweb / Redfish `UpdateService` endpoint | ✅ (compiled into bmcweb) | ✅ |
-| IPMI (`mc info`, host KCS + LAN RMCP+, FRU, SEL) | ❌ | ✅ |
-| **phosphor-bmc-code-mgmt / phosphor-software-manager** (the staging backend) | ❌ | ❌ |
-| `obmc-flash-bmc-*` MTD overlay services | **masked** on NFS boot | **masked** on NFS boot |
+| bmcweb / Redfish `UpdateService` endpoint | ✅ (compiled into bmcweb) | ✅ **`ServiceEnabled:true`** |
+| IPMI (`mc info`, host KCS + LAN RMCP+, FRU, SEL) | ❌ | ✅ `mc info` rc=0 |
+| **phosphor-bmc-code-mgmt / phosphor-software-manager** (staging backend) | (base-pulled; untested) | ✅ **running** as `xyz.openbmc_project.Software.Manager` (`/usr/libexec/phosphor-code-mgmt/phosphor-software-manager`, pid 160) |
+| Redfish `FirmwareInventory` populated (a `Software.Version`) | untested | ✅ **1 member** (`FirmwareInventory/039d44e1`) |
+| `obmc-flash-bmc-*` MTD overlay services / `/dev/mtd` write target | **masked** on NFS boot | **masked** on NFS boot — `/proc/mtd` empty, `/dev/mtd*` absent |
 
-Two consequences, stated honestly:
+This was measured by booting `-full` on `-M kgpe-d16-bmc` (see `DEMO-RESULTS.md`
+and `evidence/qemu/`). Corrected finding vs. the first pass: the full image **does**
+ship and run the `phosphor-bmc-code-mgmt` backend (the binary lives under
+`/usr/libexec/phosphor-code-mgmt/`, not `/usr/bin`), and it publishes a running-BMC
+`Software.Version` that Redfish exposes in `FirmwareInventory`. Consequences:
 
-1. **The Redfish `UpdateService` object is present** (bmcweb ships it whenever
-   Redfish is built), so `GET /redfish/v1/UpdateService` answers and a
-   `POST` is *accepted* by the HTTP layer. But because
-   **phosphor-software-manager is not installed** and the flash overlay services
-   are masked (there is no MTD on the NFS-root boot path —
-   `../qemu-firmware/scripts/stage-openbmc-nfsroot.sh:29-35`), there is currently
-   **no backend to validate the image and create a `xyz.openbmc_project.Software.*`
-   D-Bus object** on the AST2050 image. Adding
-   `obmc-bmc-code-mgmt`/`phosphor-software-manager` to the image is an **F-IMG2
-   image-content follow-up** (see §6).
-2. **The full image exposes the IPMI path** (`ipmitool mc info`, and the transport
-   for HPM.1 / OEM firmware transfer). Real-HW `mc info` evidence already exists
-   (`../openbmc/bmc-functionality/evidence/real-hw/mc-info.txt`).
+1. **The Redfish `UpdateService` endpoint is fully live** — `GET` returns
+   `ServiceEnabled:true` with `HttpPushUri=/redfish/v1/UpdateService/update`,
+   `MultipartHttpPushUri=/redfish/v1/UpdateService/update-multipart`, and
+   `MaxImageSizeBytes=31457280` (30 MB). A `POST` of a dummy image to the push URI
+   returns **HTTP 202** and bmcweb spawns a Redfish **Task** (`TaskService/Tasks/0`,
+   `TaskState:Running`) — i.e. the ingest path + async update handler are real. The
+   dummy blob then fails validation / cannot be written (see below), which is the
+   correct behaviour.
+2. **The one genuine end-to-end gap is the MTD write target.** On the NFS-root
+   bring-up path the `obmc-flash-bmc-*` overlay services are deliberately masked
+   (`../qemu-firmware/scripts/stage-openbmc-nfsroot.sh:29-35`) and no `/dev/mtd`
+   exists (confirmed: `/proc/mtd` empty), so an activation cannot write the flash
+   bank. Giving the image a real MTD boot layout (squashfs-on-NOR + UBI rwfs) is an
+   **F-IMG2 image/boot-layout follow-up** — *not* a missing backend. See §6.
+3. **The full image also exposes the IPMI path** (`ipmitool mc info` rc=0 over
+   RMCP+, matching the real-HW `../openbmc/bmc-functionality/evidence/real-hw/mc-info.txt`).
 
 ### How the mechanism works when the backend is present (reference)
 `POST /redfish/v1/UpdateService` (multipart form, or the legacy
@@ -193,21 +201,26 @@ into the new image is *not* required to prove the mechanism.
   IPMI *firmware-info* surface; it is present in the **full** image (IPMI enabled),
   absent in the lean image.
 - **HPM.1** (`ipmitool hpm`) is the PICMG firmware-transfer-over-IPMI mechanism.
-  OpenBMC can expose it via a HPM.1-capable ipmid provider, but the current AST2050
-  images do not include one, so `ipmitool hpm capabilities` would report none. HPM.1
-  is the IPMI counterpart to the Redfish UpdateService path and is a candidate for
-  the same F-IMG2 follow-up.
+  **QEMU-confirmed not supported** by this image's `ipmid`: `ipmitool hpm
+  capabilities` fails with `Get HPM.x Capabilities request failed, compcode = d4`
+  (i.e. the OEM HPM.1 command group is not implemented). HPM.1 is the IPMI
+  counterpart to the Redfish UpdateService path; exposing it would need a
+  HPM.1-capable ipmid provider — a candidate F-IMG2 follow-up. The Redfish
+  `UpdateService` path (§4) is the working firmware-transfer mechanism on this image.
 
 ---
 
 ## 6. Honest boundary — what a full end-to-end update still needs
 
-- **BMC self-update, end-to-end:** add `phosphor-bmc-code-mgmt`
-  (phosphor-software-manager) to the AST2050 image **and** boot from a real MTD
-  layout (squashfs-on-NOR + UBI rwfs), not NFS root — because the update writes
-  `/dev/mtdX`. On the NFS-root bring-up path the flash overlay services are
-  deliberately masked. Both are **image-content / boot-layout** changes owned by
-  the image task (F-IMG2), not QEMU-model changes.
+- **BMC self-update, end-to-end:** the backend (`phosphor-bmc-code-mgmt`) is
+  already present and running in the full image, and bmcweb accepts the image
+  (HTTP 202 + a Task). The remaining gap is only the **MTD write target**: boot
+  from a real MTD layout (squashfs-on-NOR + UBI rwfs) instead of NFS root, because
+  activation writes `/dev/mtdX`, which does not exist on the NFS path (the flash
+  overlay services are deliberately masked there). That is an **image-content /
+  boot-layout** change owned by the image task (F-IMG2), not a QEMU-model change.
+  (A signed/valid image is also needed for the manifest check to pass — the demo's
+  dummy blob is intentionally rejected.)
 - **Faithful flash-window model:** map the legacy SMC data windows
   (`0x10000000`/`0x14000000`) so the BMC-side flash is reachable through the *G3*
   controller rather than the AST2400 FMC stand-in (SMC #58 follow-up). Not required

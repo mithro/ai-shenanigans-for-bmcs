@@ -1,0 +1,30 @@
+{
+  "@odata.id": "/redfish/v1/TaskService/Tasks/1",
+  "@odata.type": "#Task.v1_4_3.Task",
+  "HidePayload": false,
+  "Id": "1",
+  "Messages": [
+    {
+      "@odata.type": "#Message.v1_1_1.Message",
+      "Message": "The task with Id '1' has started.",
+      "MessageArgs": [
+        "1"
+      ],
+      "MessageId": "TaskEvent.1.0.TaskStarted",
+      "MessageSeverity": "OK",
+      "Resolution": "None."
+    }
+  ],
+  "Name": "Task 1",
+  "Payload": {
+    "HttpHeaders": [],
+    "HttpOperation": "POST",
+    "TargetUri": "/redfish/v1/UpdateService/update"
+  },
+  "PercentComplete": 0,
+  "StartTime": "2026-07-11T18:21:45+00:00",
+  "TaskMonitor": "/redfish/v1/TaskService/TaskMonitors/1",
+  "TaskState": "Running",
+  "TaskStatus": "OK"
+}
+HTTP_STATUS=202
