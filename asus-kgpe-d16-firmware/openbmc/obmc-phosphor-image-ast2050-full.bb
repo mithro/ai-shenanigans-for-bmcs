@@ -85,3 +85,15 @@ OBMC_IMAGE_EXTRA_INSTALL:append = " \
 
 # shadow provides useradd/usermod needed by phosphor-user-manager.
 ROOTFS_RO_UNNEEDED:remove = "shadow"
+
+# Set the default OpenBMC root password (0penBmc) so root can authenticate to
+# bmcweb (Redfish) and dropbear (SSH). The phosphor default in
+# phosphor-defaults.inc pins EXTRA_USERS_PARAMS to :pn-obmc-phosphor-image, so a
+# custom-PN image that only *inherits* obmc-phosphor-image gets no password and
+# root ends up locked ("root:*:" in /etc/shadow) -- which blocks all Redfish/SSH
+# auth. Re-apply the documented default (same DEFAULT_OPENBMC_PASSWORD SHA512 hash
+# the phosphor default uses) for this image. NB: the already-staged rootfs at
+# /export/openbmc-full was patched with the identical hash via `usermod --root`
+# (no rebuild); this line keeps a fresh build reproducible.
+inherit extrausers
+EXTRA_USERS_PARAMS = "usermod -p ${DEFAULT_OPENBMC_PASSWORD} root;"
