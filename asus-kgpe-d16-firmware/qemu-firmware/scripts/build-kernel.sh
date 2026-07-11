@@ -26,6 +26,13 @@ if ! grep -q ast2050 drivers/clk/clk-aspeed.c; then
     git apply "$ROOT/kernel/patches/0001-clk-aspeed-add-ast2050-support.patch"
 fi
 
+# AST2050 ftgmac100 RMII RX bring-up: reset the RMII PHY for the G3 so the MAC
+# RX engine actually pulls frames off the wire (without this, eth0 TX works but
+# RX=0 on the real AST2050 / the faithful QEMU model). Idempotent guard.
+if ! grep -q is_ast2050 drivers/net/ethernet/faraday/ftgmac100.c; then
+    git apply "$ROOT/kernel/patches/0002-ftgmac100-ast2050-rmii-rx.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

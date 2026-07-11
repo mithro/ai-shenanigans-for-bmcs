@@ -1,0 +1,77 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Ansell <me@mith.ro>
+Date: Sat, 11 Jul 2026 00:00:00 +0000
+Subject: [PATCH] ftgmac100: reset RMII PHY on AST2050 to enable RX datapath
+
+The Aspeed AST2050 (G3) MAC is register-compatible with the AST2400 but
+its RMII RX datapath is not active after the bootloader handoff: the MAC
+RX engine pulls zero frames off the RMII interface (TX works, link is up
+at 100Mbps, the RX ring is valid and RXDMA_EN|RXMAC_EN are set, yet rx=0)
+until the OS resets and reconfigures the RMII PHY. The generic aspeed path
+does no RMII setup for this SoC -- it only warns "Unsupported PHY mode
+rmii" and assumes firmware configured it -- so mainline never brings eth0
+RX up on the real AST2050.
+
+Recognise the "aspeed,ast2050-mac" compatible and, for it, reset the RMII
+PHY in ftgmac100_mii_probe() to (re)establish the RMII RX clock/datapath.
+
+Signed-off-by: Tim Ansell <me@mith.ro>
+---
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 848e41a4b..bb8cb73cb 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -109,6 +109,7 @@ struct ftgmac100 {
+ 	/* Misc */
+ 	bool need_mac_restart;
+ 	bool is_aspeed;
++	bool is_ast2050;
+ };
+ 
+ static int ftgmac100_reset_mac(struct ftgmac100 *priv, u32 maccr)
+@@ -1484,6 +1485,25 @@ static int ftgmac100_mii_probe(struct net_device *netdev)
+ 	 */
+ 	phy_support_asym_pause(phydev);
+ 
++	/*
++	 * AST2050 (G3) RMII RX bring-up. On the AST2050 the RMII RX datapath is
++	 * not active after the bootloader hands off: the MAC RX engine pulls
++	 * zero frames off the RMII interface (eth0 TX works, link reports up at
++	 * 100Mbps, the RX ring is valid and RXDMA_EN|RXMAC_EN are set, yet
++	 * rx=0) until the OS resets and reconfigures the RMII PHY. The generic
++	 * aspeed path deliberately does no RMII setup for this SoC -- it only
++	 * warns "Unsupported PHY mode rmii" above and assumes firmware left the
++	 * interface configured -- which is why the mainline driver never brings
++	 * RX up on the real AST2050. Reset the PHY here to (re)establish the
++	 * RMII RX clock/datapath. phylib reconfigures speed/duplex on the
++	 * subsequent phy_start(), so this only re-arms the RMII RX side.
++	 */
++	if (priv->is_ast2050 && phy_intf == PHY_INTERFACE_MODE_RMII) {
++		netdev_info(netdev,
++			    "AST2050: resetting RMII PHY to enable RX datapath\n");
++		phy_write(phydev, MII_BMCR, BMCR_RESET);
++	}
++
+ 	/* Display what we found */
+ 	phy_attached_info(phydev);
+ 
+@@ -1864,7 +1884,18 @@ static int ftgmac100_probe(struct platform_device *pdev)
+ 		goto err_phy_connect;
+ 
+ 	np = pdev->dev.of_node;
+-	if (np && (of_device_is_compatible(np, "aspeed,ast2400-mac") ||
++	if (np && of_device_is_compatible(np, "aspeed,ast2050-mac")) {
++		/*
++		 * AST2050 (G3): register-compatible with the AST2400 MAC (same
++		 * BIT(30) EDORR/EDOTR ring-end bits) but its RMII RX datapath
++		 * needs an explicit PHY reset in ftgmac100_mii_probe() -- see
++		 * there. Flagged separately so only the G3 gets that quirk.
++		 */
++		priv->rxdes0_edorr_mask = BIT(30);
++		priv->txdes0_edotr_mask = BIT(30);
++		priv->is_aspeed = true;
++		priv->is_ast2050 = true;
++	} else if (np && (of_device_is_compatible(np, "aspeed,ast2400-mac") ||
+ 		   of_device_is_compatible(np, "aspeed,ast2500-mac") ||
+ 		   of_device_is_compatible(np, "aspeed,ast2600-mac"))) {
+ 		priv->rxdes0_edorr_mask = BIT(30);
