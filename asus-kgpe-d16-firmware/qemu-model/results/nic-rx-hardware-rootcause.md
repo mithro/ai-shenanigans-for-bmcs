@@ -85,87 +85,66 @@ emulation. **That is the faithfulness gap.**
 Diagnostic tooling: `tmp/mac_rx_probe.py`, `tmp/mac_rx_traffic.py`,
 `tmp/rx_desc_probe.py` (P2A reads via the culvert host bridge).
 
-## N2–N3 DONE (QEMU-first): the RMII RX-datapath gate + the driver fix
+## N2–N3 DONE (QEMU-first) — the real cause is MACCR FAST_MODE (HW-verified)
 
 Worked on branch `claude/ftgmac100-rx-qemu` (QEMU submodule branch
-`ast2050-ftgmac100-rx`).
+`ast2050-ftgmac100-rx`). The hardware agent (branch `claude/ftgmac100-rx-hw`)
+proved the mechanism on the real AST2050 by poke-and-observe with the driver
+unchanged: writing **`MACCR |= 0x80000` (bit19 FAST_MODE)** live, with no reset
+and no PHY/RMII change, gave **600/600 frames received, 0 errors, BMC pingable**.
+So FAST_MODE alone is necessary and sufficient; it is **not** an RMII-datapath
+problem (the RX_pkts counter climbs and RXR_PTR advances — the MAC is not
+RX-dead, it CRC-/frame-length-errors every over-sampled frame).
 
-### What the source diff actually shows (Raptor/U-Boot vs mainline)
+### Mechanism (why G3-specific)
 
-The MAC *register* programming is **not** the differentiator. Compared line by
-line (mainline `drivers/net/ethernet/faraday/ftgmac100.c` and `.h` vs U-Boot
-`aspeednic.c` and Raptor `ftgmac100_26.c`/`.h`):
+- The AST2050 (G3) link is 100 Mbps RMII, so the MAC must run 100M timing —
+  `MACCR[19] FAST_MODE` set (`MACCR[9] GIGA_MODE` clear). In 10M timing on a
+  100M link every frame is over-sampled → CRC / frame-too-long → dropped → rx=0.
+- On the G3 a **MAC SW_RST clears MACCR** (the speed bit included), unlike the
+  AST2400/2500 where it survives. The datasheet even notes SPEED_100/GMAC_MODE
+  "cannot be software reset" on later parts — the G3 does not honour that.
+- Mainline `ftgmac100_start_hw()` only **preserves** the speed bits
+  (`maccr &= (FAST_MODE | GIGA_MODE)`, ftgmac100.c:316). Speed is set only in
+  `ftgmac100_reset_and_config_mac()` in the same register write as the SW_RST
+  (ftgmac100.c:141-168), so on the G3 it is lost across the reset and
+  preserve-only can never restore it. Result: `FAST_MODE=0` → rx=0. (This matches
+  the N1 real-silicon capture `MACCR=0x0002d51f`, bit19=0, vs working U-Boot
+  `0x0008050f`, bit19=1.)
 
-- Both enable RX identically: `MACCR RXMAC_EN|RXDMA_EN` (mainline
-  `ftgmac100_start_hw` ftgmac100.c:319-322; U-Boot `START_MAC` aspeednic.c:216-218;
-  Raptor `maccr_val` ftgmac100_26.c:2645). Both set FIFO sizes (FEAR/TPAFCR),
-  RBSR, APTC RX auto-poll, DBLAC, ITC, RXR_BADR — the datasheet "Frame Receiving
-  Procedure" steps 1-14 (AST2050 A3 DS V1.05 p.151-152). Neither writes RXPD.
-- **MACCR bit 11**: mainline calls it `PHY_LINK_LEVEL` (ftgmac100.h:161), Raptor
-  calls it `CRC_CHK` (ftgmac100_26.h:145); the AST2050 datasheet says MAC50[11]
-  is **Reserved(0)** and the real PHY-link control is **bit 6** ("PHY link status
-  detection"). It looked like a candidate, but a live QEMU capture shows **both**
-  the mainline kernel (`MACCR=0x000a9d1f`) and the Dell vendor firmware
-  (`MACCR=0x000a0d0f`/`0x000a8d0f`) set bit 11 — so it is not the differentiator
-  and gating on it would break the vendor (C4).
-- Neither the SDK/U-Boot drivers nor mainline write any RMII-specific PHY vendor
-  register for the board PHY — RMII is strap-selected.
+### N2 — faithful QEMU model (submodule `hw/net/ftgmac100.c`, `.h`, `hw/arm/aspeed_ast2400.c`)
 
-So there is **no single MAC register bit** that mainline sets-and-the-vendor-clears
-(or vice-versa) that gates RX. This confirms N1: the failure is the **RMII RX
-physical datapath**, not the driver's register config.
+Scoped to the G3 via a new `aspeed-g3` bool property (set by the AST2050 SoC in
+`aspeed_ast2400.c` when `silicon_rev == AST2050_A1_SILICON_REV`):
 
-### The one measured, driver-visible difference: PHY reset
+- `ftgmac100_do_reset()`: on the G3 a MAC SW_RST **fully clears MACCR** (speed
+  bit lost), instead of the AST2400/2500 behaviour of preserving FAST/GIGA.
+- `ftgmac100_can_receive()` **and** `ftgmac100_receive()`: on the G3, drop RX
+  unless the MAC speed mode matches the 100M RMII link (FAST_MODE set, GIGA
+  clear). can_receive() alone is only a flow-control hint, so the drop must also
+  sit on the delivery path.
 
-Instrumenting the QEMU ftgmac100 model (PHY BMCR writes) across real boots:
+AST2400/2500/2600 are untouched (their SW_RST preserves the speed bit).
 
-| firmware (kgpe-d16-bmc QEMU) | MII BMCR reset (reg0 bit15) writes | RX |
-|---|---|---|
-| mainline 6.6 ftgmac100 (unpatched) | **0** | dead |
-| Dell C410X vendor firmware (C4) | **4** (`val=0x8000`) | works |
+### N3 — driver fix (`kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch`)
 
-The vendor firmware **resets+reconfigures the RMII PHY**; the mainline driver
-**never resets the PHY** for the G3 (it only warns "Unsupported PHY mode rmii"
-at ftgmac100.c:1462-1466 and, per its own comment 1454-1460, "assumes the SCU
-has been configured properly by pinmux or the firmware"; its only RMII-refclk
-handling, `priv->rclk`, is "AST2500/AST2600 RMII ref clock gate" ftgmac100.c:92-93,
-never populated for the G3). Re-establishing the RMII RX clock/datapath by
-resetting the PHY is exactly the step mainline omits for the AST2050.
+The HW-proven fix, shared verbatim with the hardware branch:
+`ftgmac100_start_hw()` **re-derives** FAST_MODE/GIGA_MODE from `priv->cur_speed`
+instead of preserving them, so the speed bit is restored after the G3 SW_RST.
+The DTS uses the real RTL8201CP PHY (`phy-mode="rmii"`, no `fixed-link`); the fix
+does not depend on the DTS (FAST_MODE alone), verified below with the real-PHY DTB.
 
-### N2 — faithful QEMU model (submodule `hw/net/ftgmac100.c` + `include/.../ftgmac100.h`, `hw/arm/aspeed_ast2400.c`)
+### QEMU verification (kgpe-d16-bmc, real-PHY DTB)
 
-Added a G3-scoped RX gate (new `aspeed-g3` bool property, set by the AST2050 SoC
-in `aspeed_ast2400.c` when `silicon_rev == AST2050_A1_SILICON_REV`):
+- **Reproduces:** unpatched mainline kernel → the G3 SW_RST clears the speed bit,
+  preserve-only `start_hw()` leaves `FAST_MODE=0`, the speed-mismatch drop fires
+  → SSH-over-hostfwd never connects → rx=0 (faithful to real silicon).
+- **Fixed:** cur_speed-patched kernel → `FAST_MODE=1` matches the 100M link → SSH
+  login succeeds → `C2 RESULT: PASS`.
+- **Regression:** the Dell C410X vendor firmware (C4) writes MACCR with FAST_MODE
+  set (`0x000a0d0f`/`0x000a8d0f`), so the speed gate passes and its BMC web
+  service stays reachable; OpenBMC-over-NFS (same cur_speed kernel) answers
+  Redfish.
 
-- `FTGMAC100State::rmii_rx_ready` — the RMII RX datapath state (PHY side).
-- Closed on **power-on/hard reset only** (`ftgmac100_do_reset`, `!sw_reset`); a
-  MACCR SW_RST does **not** close it (a MAC reset does not reset the PHY).
-- **Opened** when the guest issues a PHY BMCR reset (`do_phy_write`, MII_BMCR &
-  MII_BMCR_RESET).
-- Enforced in **both** `ftgmac100_can_receive()` and the `ftgmac100_receive()`
-  delivery path (can_receive alone is only a flow-control hint — a queued frame
-  can still be delivered — so the drop must also sit on the delivery path).
-
-Scoped to the G3, so AST2400/2500/2600 machines are unchanged.
-
-### N3 — driver fix (`kernel/patches/0002-ftgmac100-ast2050-rmii-rx.patch` + DTS)
-
-- Recognise `aspeed,ast2050-mac` (`is_ast2050`) in `ftgmac100_probe`; for it,
-  reset the RMII PHY in `ftgmac100_mii_probe()` (`phy_write(phydev, MII_BMCR,
-  BMCR_RESET)`) to (re)establish the RX datapath. phylib reconfigures speed on
-  the next `phy_start()`, so this only re-arms the RMII RX side.
-- DTS `aspeed-bmc-asus-kgpe-d16.dts`: mac0 compatible now
-  `"aspeed,ast2050-mac", "aspeed,ast2400-mac", "faraday,ftgmac100"` and the
-  `fixed-link` workaround is removed so the driver runs the real MDIO/PHY probe
-  path (where the reset happens). QEMU's ftgmac100 PHY model negotiates 100Mbps
-  fine without fixed-link.
-
-### QEMU verification (kgpe-d16-bmc, gated model)
-
-- **Reproduces:** unpatched mainline kernel + no-fixed-link DTS → `can_receive`
-  returns false (gate closed, 0 PHY resets), SSH-over-hostfwd never connects →
-  `C2 RESULT: FAIL`. Faithful to the real-silicon `rx=0`.
-- **Fixed:** patched kernel → console prints `AST2050: resetting RMII PHY to
-  enable RX datapath`, the gate opens, SSH login succeeds → `C2 RESULT: PASS`.
-- **Regression:** the Dell C410X vendor firmware (C4) resets the PHY on its own,
-  so the gate opens and its BMC web service stays reachable.
+Convergence: the QEMU model reproduces the FAST_MODE bug and the *same*
+`cur_speed` fix works in QEMU and on the real AST2050.
