@@ -1,67 +1,88 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""Single source of truth for the F2 (host power control) 64-MB daemon-mask set.
+"""F2 (host power control) 64-MB daemon-mask profiles.
 
 Same masked-set pattern as F1 (see ``f1_masked_daemons.py``): the fuller image
 ships every BMC daemon, but the real AST2050 has only 64 MB of DDR, so we boot
-with the daemons a feature needs and **mask** the rest so ``bmcweb`` stays up.
+with the daemons a feature needs and **mask** the rest.
 
-For **F2 (power control)** we KEEP what F1 masked away — the host + chassis
-**state managers** (they own ``xyz.openbmc_project.State.Host`` /
-``.State.Chassis`` and drive the ``obmc-chassis-poweron@0`` / ``poweroff@0``
-targets) and ``phosphor-discover-system-state@0`` — plus the
-``org.openbmc.control.Power@0`` power-control provider (op-pwrctl) that drives
-the KGPE-D16 GPIO request lines and senses GPIOH2.  We still mask the big
-non-power RAM users: IPMI, dbus-sensors, entity-manager, and LPC snoop.
+The **backend is identical** for both power-control front-ends: Redfish
+``ComputerSystem.Reset`` (bmcweb) and IPMI ``chassis power on/off/cycle/reset``
+(phosphor-ipmi-host / netipmid) both set the same
+``xyz.openbmc_project.State.Host`` / ``.State.Chassis`` transition, which drives
+``obmc-power-start@0`` / ``obmc-power-stop@0`` -> ``org.openbmc.control.Power``
+(op-pwrctl) -> the AST2050 GPIO request lines -> the modeled power latch ->
+GPIOH2/pgood. Only the front-end daemon differs, so we keep two profiles:
+
+* **qemu** — the *API/Redfish* demo. Keep bmcweb + the host/chassis state
+  managers + op-pwrctl; mask IPMI, sensors, entity-manager, LPC snoop. bmcweb is
+  the RAM hog, but in QEMU slirp this fits and gives the Redfish loop.
+
+* **realhw** — the *real 64-MB board*. F1 found the fuller image with **bmcweb
+  does not fit in the real 64 MB** (its TLS handshakes reset / it crash-loops), so
+  on hardware we **drop bmcweb** and drive power over **IPMI** (netipmid is
+  lightweight and fits): ``ipmitool -I lanplus -H <bmc> chassis power on|off|
+  cycle|reset``. Keep the IPMI host + LAN stack + SEL + the state managers +
+  op-pwrctl; mask bmcweb, sensors, entity-manager, LPC snoop.
 
 Mask mechanism (unchanged from F1): one ``systemd.mask=<unit>`` token per unit on
 the kernel command line — per-boot, does not mutate the shared NFS rootfs.
 """
 
-# --- daemons MASKED for F2 (not needed for host power control) -----------------
-MASK_UNITS = [
-    # -- IPMI (host KCS/BT bridge, LAN RMCP+, SEL logger) -- biggest RAM users
-    "org.openbmc.HostIpmi.service",              # btbridged (host IPMI bridge)
-    "phosphor-ipmi-host.service",                # ipmid (IPMI command router)
-    "phosphor-ipmi-net@eth0.service",            # netipmid (IPMI-over-LAN)
-    "xyz.openbmc_project.Logging.IPMI.service",  # sel-logger (IPMI SEL)
-    # -- Sensors (dbus-sensors) + their config source (entity-manager) --
+# Units that BOTH profiles mask (never needed for power control): sensors +
+# entity-manager + LPC snoop.
+_MASK_COMMON = [
     "xyz.openbmc_project.EntityManager.service",    # runtime HW config (C++/boost)
     "xyz.openbmc_project.adcsensor.service",        # ADC voltage rails
     "xyz.openbmc_project.fansensor.service",        # fan tach
     "xyz.openbmc_project.hwmontempsensor.service",  # hwmon temperatures
     "xyz.openbmc_project.FruDevice.service",        # I2C FRU EEPROM scanner
     "xyz.openbmc_project.gpiopresence.service",     # gpio-presence-sensor
-    # -- POST-code / LPC snoop (host debug) --
-    "lpcsnoop.service",
+    "lpcsnoop.service",                             # LPC port-80 POST snoop
 ]
 
-# --- daemons KEPT for F2 (host power control needs these) ----------------------
-# Documentation only; these are default-enabled (the boot does not touch them).
-KEEP_UNITS = [
-    # everything F1 keeps for a stable authenticated Redfish in 64 MB ...
-    "bmcweb.service / bmcweb.socket",                 # Redfish HTTPS
-    "xyz.openbmc_project.ObjectMapper.service",       # D-Bus object mapper
-    "xyz.openbmc_project.Settings.service",           # settings manager
-    "xyz.openbmc_project.User.Manager.service",       # PAM users -> auth
-    "xyz.openbmc_project.Network.service",            # phosphor-network
-    "xyz.openbmc_project.State.BMC.service",          # BMC state
-    "xyz.openbmc_project.Logging.service",            # phosphor-logging
-    # ... plus the power-control stack F2 adds back (masked in F1):
-    "xyz.openbmc_project.State.Host@0.service",       # host state manager
-    "xyz.openbmc_project.State.Chassis@0.service",    # chassis state manager (pgood)
-    "phosphor-discover-system-state@0.service",       # power-on discovery
-    "org.openbmc.control.Power@0.service",            # op-pwrctl: GPIO power control
+# IPMI stack (host KCS/BT bridge, LAN RMCP+, SEL logger).
+_IPMI_UNITS = [
+    "org.openbmc.HostIpmi.service",              # btbridged (host IPMI bridge)
+    "phosphor-ipmi-host.service",                # ipmid (IPMI command router)
+    "phosphor-ipmi-net@eth0.service",            # netipmid (IPMI-over-LAN)
+    "xyz.openbmc_project.Logging.IPMI.service",  # sel-logger (IPMI SEL)
 ]
 
+# bmcweb (Redfish HTTPS) + its TLS cert manager.
+_BMCWEB_UNITS = [
+    "bmcweb.service",
+    "phosphor-certificate-manager@bmcweb.service",
+]
 
-def mask_cmdline():
-    """Return the `systemd.mask=...` tokens as one space-joined string."""
-    return " ".join(f"systemd.mask={u}" for u in MASK_UNITS)
+# Profile: qemu (Redfish API path) -- mask IPMI, keep bmcweb.
+MASK_UNITS = _MASK_COMMON + _IPMI_UNITS
+
+# Profile: realhw (IPMI path on the tight 64 MB board) -- mask bmcweb, keep IPMI.
+MASK_UNITS_REALHW = _MASK_COMMON + _BMCWEB_UNITS
+
+# Kept by BOTH profiles (documentation only; default-enabled):
+#   xyz.openbmc_project.State.Host@0 / .State.Chassis@0 / phosphor-discover-
+#   system-state@0            -- host + chassis state managers (power targets)
+#   org.openbmc.control.Power@0                 -- op-pwrctl: GPIO power control
+#   xyz.openbmc_project.ObjectMapper / Settings / User.Manager / Network /
+#   State.BMC / Logging                         -- core D-Bus + auth + net
+
+_PROFILES = {"qemu": MASK_UNITS, "realhw": MASK_UNITS_REALHW}
+
+
+def mask_cmdline(profile="qemu"):
+    """Return the `systemd.mask=...` tokens for the given profile."""
+    units = _PROFILES[profile]
+    return " ".join(f"systemd.mask={u}" for u in units)
 
 
 if __name__ == "__main__":
-    frag = mask_cmdline()
-    print(f"# {len(MASK_UNITS)} masked units, cmdline fragment = {len(frag)} chars")
+    import sys
+    prof = sys.argv[1] if len(sys.argv) > 1 else "qemu"
+    frag = mask_cmdline(prof)
+    units = _PROFILES[prof]
+    print(f"# profile={prof}: {len(units)} masked units, "
+          f"cmdline fragment = {len(frag)} chars")
     print(frag)

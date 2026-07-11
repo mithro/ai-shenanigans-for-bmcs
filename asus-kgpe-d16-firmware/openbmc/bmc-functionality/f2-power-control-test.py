@@ -178,12 +178,17 @@ def rf(port, path, user, pw, method="GET", body=None, timeout=20, retries=4):
     return None, last
 
 
-def wait_redfish(port, deadline):
+def wait_redfish(port, deadline, con=None):
     while time.time() < deadline:
         st, doc = rf(port, "/redfish/v1", None, None, timeout=10, retries=1)
         if st == 200 and isinstance(doc, dict) and "RedfishVersion" in doc:
             return doc["RedfishVersion"]
-        time.sleep(5)
+        # Keep draining the serial console so QEMU's stdout pipe never fills and
+        # blocks the guest while we wait for bmcweb.
+        if con is not None:
+            con.expect(["__never__"], min(time.time() + 5, deadline))
+        else:
+            time.sleep(5)
     return None
 
 

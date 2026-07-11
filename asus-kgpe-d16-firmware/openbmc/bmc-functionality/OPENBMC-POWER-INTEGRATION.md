@@ -89,16 +89,60 @@ with no daemon patch. op-pwrctl polls `power_good_in` (GPIOH2) → publishes
 > assertion), which is why the held-level op-pwrctl config is a valid emulation
 > expedient while the pulse form is the hardware-faithful driver.
 
-## 64 MB daemon budget
+### (c) IPMI front-end — `ipmitool chassis power` (real 64-MB board)
 
-F2 keeps what F1 masked — the host + chassis **state managers** +
-`phosphor-discover-system-state@0` + `org.openbmc.control.Power@0` — and masks
-the big non-power daemons (IPMI, dbus-sensors, entity-manager, LPC snoop). See
-[`f2_masked_daemons.py`](f2_masked_daemons.py).
+The Redfish and IPMI front-ends share the **same** backend: `ipmitool chassis
+power on|off|cycle|reset` sets the identical `xyz.openbmc_project.State.Host` /
+`.State.Chassis` transition that bmcweb's `ComputerSystem.Reset` sets, so it
+flows through the same phosphor-state-manager → op-pwrctl → GPIO → GPIOH2 loop.
+
+- **Over LAN (RMCP+, netipmid):**
+  `ipmitool -I lanplus -H <bmc-ip> -U root -P 0penBmc chassis power on|off|cycle|reset|status`
+- **Host-side (in-band, from the managed host's OS/BIOS):** the same commands over
+  the LPC **KCS** or **BT** channel (`ipmitool -I open ...` / `-I bt`); the F0
+  image ships the host-IPMI bridge (`phosphor-ipmi-kcs`/`btbridged` +
+  `phosphor-ipmi-host`). On the KGPE-D16 the host reaches the BMC KCS at LPC
+  I/O `0xCA2` (coreboot `drivers/ipmi device pnp ca2.0`).
+
+`ipmitool chassis power status` maps to the chassis `CurrentPowerState`
+(= GPIOH2/pgood), so the same modeled latch is observable over IPMI.
+
+## 64 MB daemon budget — two profiles
+
+The Redfish (bmcweb) and IPMI (netipmid) front-ends need different daemons, and
+**F1 found the fuller image with bmcweb does not fit the real 64 MB** (its TLS
+handshakes reset and it crash-loops). So `f2_masked_daemons.py` has two profiles:
+
+| profile | front-end | keep | mask |
+|---|---|---|---|
+| **qemu** | Redfish (bmcweb) | bmcweb + state managers + op-pwrctl | IPMI, sensors, EM, LPC snoop |
+| **realhw** | IPMI (netipmid, lightweight) | IPMI host+LAN+SEL + state managers + op-pwrctl | **bmcweb**, sensors, EM, LPC snoop |
+
+Both keep the host + chassis **state managers** +
+`phosphor-discover-system-state@0` + `org.openbmc.control.Power@0`. On the real
+64-MB board use the **realhw** profile (Redfish dropped, power over IPMI); the
+QEMU Redfish loop uses the **qemu** profile.
 
 ## Real-hardware bring-up (deferred — rig held by another agent)
 
-The exact same path runs on the real AST2050, with two cautions:
+On the real 64-MB board boot the **realhw** profile (bmcweb masked) and drive
+power over **IPMI**:
+
+```sh
+ipmitool -I lanplus -H 192.168.66.2 -U root -P 0penBmc chassis power status
+ipmitool -I lanplus -H 192.168.66.2 -U root -P 0penBmc chassis power on
+ipmitool -I lanplus -H 192.168.66.2 -U root -P 0penBmc chassis power off
+ipmitool -I lanplus -H 192.168.66.2 -U root -P 0penBmc chassis power cycle
+```
+
+This exercises exactly the phosphor-state-manager → op-pwrctl → GPIO path proven
+in QEMU. `chassis power status` reflects GPIOH2/pgood. Confirm the modeled loop
+first in QEMU (`f2-power-control-test.py`, both `--driver redfish` and
+`--driver sysfs`), then repeat on hardware over IPMI. The KGPE-D16 `qemu` profile
+Redfish loop is the API-path proof; the `realhw` IPMI path is the one that fits
+the 64-MB board.
+
+Two cautions on the request lines themselves:
 
 - **The GPIO request lines drive the real board's power.** GPIOB1/F0/B6 engage /
   force-off / reset mainboard power; a wrong drive powers the host on or off for
