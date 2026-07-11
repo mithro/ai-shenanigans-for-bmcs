@@ -1,0 +1,32 @@
+# F-IMG2 (d): map IPMI FRU device 0 ("Builtin FRU Device") to the motherboard.
+#
+# `ipmitool fru print` always probes FRU device 0; phosphor-ipmi-host reads its
+# areas from the inventory object configured for key 0x0. The quanta-q71l
+# inventory map starts at 0x56 (motherboard) and has no 0x0 entry, so device 0
+# was "Device not present" even though /system/chassis/motherboard IS populated
+# (by kgpe-d16-fru-populate loading the shipped blob via fruid 0x56). Point device
+# 0 at the SAME inventory path so `ipmitool fru print` shows the board FRU. This
+# block is appended to the q71l inventory config.yaml by the sibling bbappend;
+# the Board-section field mapping mirrors the existing 0x56 motherboard entry.
+0x0:
+  /system/chassis/motherboard:
+    entityID: 7
+    entityInstance: 1
+    interfaces:
+      xyz.openbmc_project.Inventory.Decorator.Asset:
+        BuildDate:
+          IPMIFruProperty: Mfg Date
+          IPMIFruSection: Board
+        PartNumber:
+          IPMIFruProperty: Part Number
+          IPMIFruSection: Board
+        Manufacturer:
+          IPMIFruProperty: Manufacturer
+          IPMIFruSection: Board
+        SerialNumber:
+          IPMIFruProperty: Serial Number
+          IPMIFruSection: Board
+      xyz.openbmc_project.Inventory.Item:
+        PrettyName:
+          IPMIFruProperty: Name
+          IPMIFruSection: Board

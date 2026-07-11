@@ -46,6 +46,12 @@ install -D -m0644 "$HERE/ipmi/files/kgpe-d16-sensor.yaml" \
 install -D -m0644 "$HERE/ipmi/q71l-ipmi-sensor-map-native.bbappend" \
     "$Q71L_IPMI/q71l-ipmi-sensor-map-native.bbappend"
 
+# (d) IPMI FRU device 0 -> motherboard (q71l inventory-map bbappend)
+install -D -m0644 "$HERE/ipmi/files/kgpe-d16-fru0.yaml" \
+    "$Q71L_IPMI/files/kgpe-d16-fru0.yaml"
+install -D -m0644 "$HERE/ipmi/q71l-ipmi-inventory-map-native.bbappend" \
+    "$Q71L_IPMI/q71l-ipmi-inventory-map-native.bbappend"
+
 # (b) matching phosphor-hwmon config recipe
 install -D -m0644 "$HERE/hwmon/files/hwmon@2f.conf" \
     "$PH_HWMON/files/hwmon@2f.conf"
