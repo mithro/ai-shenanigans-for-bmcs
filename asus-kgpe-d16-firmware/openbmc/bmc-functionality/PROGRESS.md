@@ -51,3 +51,14 @@ Leave ≥8 GB headroom; watch `free -g`.
   `claude/bmc-f0-openbmc-image`, latest-upstream master, capped resources). Long
   pole (hours). Adds IPMI/SOL/sensors/state-mgmt; staged to /export/openbmc-full +
   Pi /srv/nfs/openbmc-full (keeps the proven redfish image as fallback).
+- 2026-07-11: F2/F3-PREP DONE + merged — `HW-WIRING-power-sensors.md`: power via a
+  3-request-line GPIO protocol (ON=GPIOB1, OFF=GPIOF0, RST=GPIOB6, state-in=GPIOH2,
+  lockout=GPIOA4; from Raptor's real AST2050 OpenBMC port); sensors = one W83795G
+  hwmon on BMC I2C bus1 @0x2f (8 fan-tach+8 PWM, dual-Vcore, rails, temps). Caveats:
+  SCU polarity + bus-index + PMBus addr need HW confirm; w83795.c needs special
+  instantiation. Feeds F2 + F3.
+- 2026-07-11: F0 fuller-image build ~93% (bitbake 5588/5985), RAM healthy, no errors.
+  NEXT once F0 stages: F1 (system-id — software-only, reuses the already-built
+  faithful QEMU + g3vic kernel + the new fuller rootfs), then F2 power (DTS gpio +
+  QEMU GPIO model + state-mgmt), then F3 sensors, F4 SOL, F5 IPMI. Serialize heavy
+  builds (one at a time) to respect the RAM cap.
