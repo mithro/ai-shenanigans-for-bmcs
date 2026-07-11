@@ -188,6 +188,57 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 300
 
+  f5-ipmi-lan:
+    name: F5 — IPMI over LAN (RMCP+) in 64 MB (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    # Needs the fuller OpenBMC rootfs (obmc-phosphor-image-ast2050-full), whose
+    # Yocto build is multi-hour, so it is NOT built here — it must be published
+    # as an artifact/release named 'openbmc-full-rootfs' (a tar of the rootfs).
+    # Until that artifact exists this job is manual-dispatch only (like build-uboot).
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: openbmc-full-rootfs, path: obmc-out }
+      - name: Export the OpenBMC fuller rootfs over NFS (localhost, insecure for slirp)
+        run: |
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf obmc-out/openbmc-full-rootfs.tar
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc with the IPMI daemon set + drive ipmitool over LAN
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f5-ipmi-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --evidence-dir f5-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f5-ipmi-evidence
+          path: f5-evidence/
+
   build-uboot:
     name: Build new U-Boot (OpenBMC AST2400)
     runs-on: ubuntu-latest
