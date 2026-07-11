@@ -67,6 +67,24 @@ CRC/FTL error into a clean receive, and **the BMC became pingable** (`3/3`,
 0.69 ms). This is conclusive: the RMII datapath honours `MACCR` bit 19 live, and
 its clear state is the entire bug.
 
+### 3. End-to-end proof with the patched kernel (`real-silicon-rxfix-boot.log`)
+
+Built `uImage-kgpe-d16-rxfix` (v6.6.70 + the driver patch below), TFTP-booted it
+on the real AST2050 with the **same** `kgpe-g3vic.dtb` that gave `rx=0` — so the
+**driver patch is the only variable**:
+
+```
+ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+3 packets transmitted, 3 packets received, 0% packet loss   (BMC -> Pi)
+IK-ETH0-STATS tx=10 rx=4 txerr=0 txdrop=0 rxerr=0            (rx>0, was rx=0)
+IK-DROPBEAR-UP listening :22
+```
+
+From the Pi afterwards: `ping 192.168.66.2` = **3/3, 0 % loss**; P2A read
+**`MACCR=0x000ad51f`** (bit 19 `FAST_MODE` **set by the driver itself**, vs the
+`0x0002d51f` broken baseline) and **`RX_CRCER_FTL=0x00000000`** (no RX errors).
+The patched driver sets the speed correctly with no manual poke.
+
 ## The driver fix (minimal, faithful, G3-correct)
 
 `ftgmac100_start_hw()` — derive the speed bits from `priv->cur_speed` instead of
