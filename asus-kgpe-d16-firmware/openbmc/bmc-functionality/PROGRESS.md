@@ -108,3 +108,22 @@ Leave ≥8 GB headroom; watch `free -g`.
   (populate in recipe/HW); (c) actual host power on/off via the GPIO (F2 config) on
   real HW (status works; drive-loop to verify); (d) F4 SOL; (e) CI job needs the
   rootfs artifact published.
+- 2026-07-12: **F-IMG2 started** (branch `claude/bmc-f-img2` off `claude/bmc-functionality`).
+  Batches the four IMAGE-RECIPE gaps F1-F5 found into ONE rebuild, as bbappends /
+  small config recipes under `asus-kgpe-d16-firmware/openbmc/recipes/` (synced into
+  the OpenBMC tree by `recipes/sync-to-openbmc-tree.sh`, additive to F2's in-tree
+  image edits):
+  * (a) SOL: `phosphor-settings-defaults-native.bbappend` + `sol-template.yaml` --
+    settingsd now owns `/xyz/openbmc_project/ipmi/sol/eth0` (xyz.openbmc_project.Ipmi.SOL),
+    the object netipmid's Activate-Payload read (was ResourceNotFound -> sol activate failed).
+  * (b) SDR: `q71l-ipmi-sensor-map-native.bbappend` + `kgpe-d16-sensor.yaml` swap the
+    static SDR map to board rail names (VCORE0/1, P12V/P5V/P3V3/P1V5/P1V1/P0V9/VBAT,
+    CPU diode + CPU0/1 DTS); `kgpe-d16-hwmon-config.bb` ships the matching phosphor-hwmon
+    channel map so the names resolve to real W83795G readings.
+  * (c) Redfish: `entity-manager_%.bbappend` + `kgpe-d16.json` (Probe:TRUE) publishes an
+    Inventory.Item.Chassis + board Asset -> non-empty /redfish/v1/Chassis.
+  * (d) IDs/FRU: `phosphor-ipmi-config.bbappend` real `dev_id.json` (ASUSTeK PEN 2623,
+    prod 0x0D16); `kgpe-d16-fru-populate.bb` ships an IPMI FRU blob (`gen_fru.py`,
+    checksums verified) loaded into the motherboard inventory via phosphor-read-eeprom.
+  Capped rebuild launched (systemd-run MemoryMax=20G + nice/ionice + BB -j4); recipes
+  parse clean, build progressing, RAM healthy. QEMU demos next.
