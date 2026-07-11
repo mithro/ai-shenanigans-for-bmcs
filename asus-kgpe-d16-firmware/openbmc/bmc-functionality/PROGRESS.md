@@ -436,3 +436,27 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
     to surface it in `ipmitool fru print`.  (3 incremental rebuilds total.)
   Branch pushed; no PRs. Coordination: new NFS export documented; F5's live export
   untouched.
+- 2026-07-12: **WAVE-2 CONSOLIDATION — F6/F8/F5b/F7/F9/F-IMG2 integrated into
+  `claude/bmc-functionality`** via six real `--no-ff` merge commits (order:
+  F6-usb, F8-kvm, F5b-hostkcs, F7-ncsi, F9-fwupdate, F-IMG2). Conflicts were all
+  additive-feature UNIONs:
+  * **DTS** (`aspeed-bmc-asus-kgpe-d16.dts`): F6 and F8 both enabled `&vhub` — kept
+    ONE (F8's fuller comment; identical 7-port/21-EP body); added F8 `&video` and
+    F5b `&lpc/kcs@2c`. Final DTS carries all six node-sets (power gpio-line-names +
+    gpio-keys, w83795 hwmon@2f, vuart, vhub, video, kcs@2c) and **compiles clean**
+    (cpp + dtc 1.7.2 against linux v6.6.70 aspeed dtsi → valid dtb; the only dtc
+    warning is the pre-existing G3-VIC `@1e6c0080` unit-address note).
+  * **Kernel config**: F6 `kgpe-d16-usb.config` + F8 `kgpe-d16-kvm.config` (separate
+    fragments) both wired into `build-kernel.sh` merge_config; F5b's KCS lines
+    (`CONFIG_IPMI_KCS_BMC_CDEV_IPMI` + core/aspeed) unioned into shared
+    `kgpe-d16.config`.
+  * **CI**: `d16-qemu-stack.yml` unions jobs boot-usb (F6), host-kcs (F5b),
+    f7-ncsi-dedicated-phy (F7), fw-update (F9) alongside the existing
+    f5-ipmi-lan/f4-sol/…; F8's `d16-kvm.yml` kept as its own workflow. YAML parses.
+  * **initramfs/init**: both the `f6usb` and `f8kvm` demo blocks kept (distinct
+    cmdline gates). **PROGRESS.md**: every feature's entries unioned.
+  * **QEMU submodule**: stays at **a010d69** — F6/F8/F5b/F7/F9 needed no QEMU source
+    change (they use the existing aspeed.udc-ast2050 / aspeed.video-ast2050 /
+    aspeed_lpc_ast2050 models). F6 and F-IMG2 predated the a010d69 bump (gitlink
+    583ad3d = a010d69's ancestor), so the 3-way merge kept a010d69 (theirs==base);
+    no submodule rebuild needed. Working tree clean; no conflict markers. No PRs.
