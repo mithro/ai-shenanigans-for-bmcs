@@ -1,14 +1,6 @@
 $ ipmitool -I lanplus sol payload status 1 1
-# rc=124
+# rc=0
 
 > Error: no response from RAKP 1 message
 Error: Received an Unexpected RAKP 2 message
-> Error: no response from RAKP 1 message
-Error: Received an Unexpected RAKP 2 message
-> Error: no response from RAKP 1 message
-Error: Received an Unexpected RAKP 2 message
-> Error: no response from RAKP 1 message
-Get HPM.x Capabilities request failed, compcode = d4
-Get Device ID command failed
-
-[timeout after 30s]
+User 1 on channel 1 is enabled

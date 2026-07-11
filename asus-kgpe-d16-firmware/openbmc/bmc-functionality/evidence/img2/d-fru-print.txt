@@ -1,6 +1,11 @@
-$ ipmitool -I lanplus fru print
+$ ipmitool -I lanplus fru print  (after populate)
 # rc=1
 
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+Error: Received an Unexpected Open Session Response
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
 FRU Device Description : Builtin FRU Device (ID 0)
  Device not present (Requested sensor, data, or record not found)
 

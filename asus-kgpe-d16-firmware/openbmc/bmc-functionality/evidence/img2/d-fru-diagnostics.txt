@@ -1,0 +1,38 @@
+# FRU population diagnostics (SSH)
+# rc=0
+
+## fru-populate service
+head: invalid option -- '2'
+BusyBox v1.38.0 () multi-call binary.
+
+Usage: head [OPTIONS] [FILE]...
+
+## journal
+Jul 11 17:10:54 quanta-q71l systemd[1]: Starting Populate KGPE-D16 motherboard FRU inventory from the shipped blob...
+Jul 11 17:10:59 quanta-q71l systemd[1]: Finished Populate KGPE-D16 motherboard FRU inventory from the shipped blob.
+-- Boot 6729dbef01ef4e35978a45d401542341 --
+Jul 11 17:18:28 quanta-q71l systemd[1]: Starting Populate KGPE-D16 motherboard FRU inventory from the shipped blob...
+Jul 11 17:18:33 quanta-q71l systemd[1]: Finished Populate KGPE-D16 motherboard FRU inventory from the shipped blob.
+
+## motherboard inventory
+xyz.openbmc_project.Inventory.Decorator.Asset interface -         -                           -
+.Manufacturer                                 property  s         "ASUSTeK Computer Inc."     emits-change writable
+.Model                                        property  s         ""                          emits-change writable
+.PartNumber                                   property  s         "90-MSVDR0-G0UAY0Z"         emits-change writable
+.SerialNumber                                 property  s         "KGPED16-OPENBMC-0001"      emits-change writable
+.SparePartNumber                              property  s         ""                          emits-change writable
+.SubModel                                     property  s         ""                          emits-change writable
+xyz.openbmc_project.Inventory.Item            interface -         -                           -
+.PrettyName                                   property  s         "KGPE-D16"                  emits-change writable
+
+## blob present
+-rw-r--r--    1 root     root           256 Mar  9  2018 /usr/share/kgpe-d16/motherboard-fru.bin
+
+## manual re-run fruid 86
+rc=0
+## motherboard inventory AFTER
+.Manufacturer                                 property  s         "ASUSTeK Computer Inc."     emits-change writable
+.PartNumber                                   property  s         "90-MSVDR0-G0UAY0Z"         emits-change writable
+.SerialNumber                                 property  s         "KGPED16-OPENBMC-0001"      emits-change writable
+.SparePartNumber                              property  s         ""                          emits-change writable
+.PrettyName                                   property  s         "KGPE-D16"                  emits-change writable
