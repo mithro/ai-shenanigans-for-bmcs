@@ -101,7 +101,7 @@ if grep -q f8kvm /proc/cmdline; then
 	echo 2 > "$G/functions/hid.usb1/protocol"      # 2 = mouse
 	echo 1 > "$G/functions/hid.usb1/subclass"      # 1 = boot interface
 	echo 3 > "$G/functions/hid.usb1/report_length" # 3-byte boot-mouse report
-	# Standard 52-byte USB HID boot-mouse report descriptor.
+	# Standard 50-byte USB HID boot-mouse report descriptor.
 	printf '\x05\x01\x09\x02\xa1\x01\x09\x01\xa1\x00\x05\x09\x19\x01\x29\x03\x15\x00\x25\x01\x95\x03\x75\x01\x81\x02\x95\x01\x75\x05\x81\x03\x05\x01\x09\x30\x09\x31\x15\x81\x25\x7f\x75\x08\x95\x02\x81\x06\xc0\xc0' \
 		> "$G/functions/hid.usb1/report_desc"
 
@@ -129,13 +129,29 @@ if grep -q f8kvm /proc/cmdline; then
 	ls -l /sys/class/input/ 2>&1 | grep -iE 'event|input' || true
 
 	# --- [4] SEND A KEYBOARD EVENT: press 'a' (HID usage 0x04) then release ---
-	# Start a background reader on the host-side evdev so we capture the delivered
-	# input_event (16 bytes on 32-bit: {tv_sec,tv_usec,type,code,value}); EV_KEY=1,
-	# KEY_A=30(0x1e), value=1 press / 0 release.
-	EV=$(ls /dev/input/event* 2>&1 | head -1)
-	echo "host evdev node: ${EV:-<none>}"
-	if [ -n "$EV" ] && [ -e "$EV" ]; then
-		( hexdump -C "$EV" > /tmp/kbd_event.hex 2>&1 ) &
+	# Capture the delivered input_event on the *vKVM keyboard* evdev node (NOT the
+	# board gpio-keys button). /proc/bus/input/devices tags the keyboard's handler
+	# line with 'kbd'; pick its eventN. An input_event is 16 bytes on 32-bit ARM:
+	# {tv_sec,tv_usec (8), __u16 type, __u16 code, __s32 value}; a KEY_A press is
+	# type=EV_KEY(0x0001) code=KEY_A(0x001e=30) value=1 -> bytes '01 00 1e 00 01 00 00 00'.
+	# Find the vKVM *keyboard* evdev node via sysfs: it is the input device whose
+	# name contains 'vKVM' and whose REL capability bitmask is 0 (the mouse has
+	# REL_X|REL_Y set); this avoids grabbing the mouse or the board gpio-keys button.
+	KBD_EV=""
+	for e in /sys/class/input/event*; do
+		[ -e "$e/device/name" ] || continue
+		n=$(cat "$e/device/name")
+		rel=$(cat "$e/device/capabilities/rel")
+		case "$n" in
+			*vKVM*) [ "$rel" = "0" ] && KBD_EV=$(basename "$e") && break ;;
+		esac
+	done
+	EV="/dev/input/${KBD_EV}"
+	echo "vKVM keyboard evdev node: ${KBD_EV:-<none>} ($EV)"
+	if [ -n "$KBD_EV" ] && [ -e "$EV" ]; then
+		# cat writes raw bytes to the file as they arrive (more reliable than a
+		# buffered formatter); we hexdump the captured file after the keypress.
+		( cat "$EV" > /tmp/kbd_event.bin ) &
 		READER=$!
 		sleep 1
 	fi
@@ -147,11 +163,19 @@ if grep -q f8kvm /proc/cmdline; then
 	printf '\x00\x00\x00\x00\x00\x00\x00\x00' > /dev/hidg0   # release
 	sleep 1
 	echo "--- mouse report to /dev/hidg1: move +10,+5, left button ---"
+	# 3-byte boot-mouse report: [buttons][dx][dy]; 0x01=left btn, dx=+10, dy=+5.
 	printf '\x01\x0a\x05' > /dev/hidg1 && echo "F8-HID: wrote mouse report to /dev/hidg1" || echo "(mouse write failed)"
 	sleep 1
 	if [ -n "${READER:-}" ]; then kill "$READER" 2>&1 || true; fi
 	echo "--- host received these input_event bytes on $EV (the keypress crossing to the host) ---"
-	cat /tmp/kbd_event.hex 2>&1 | head -8 || echo "(no evdev capture)"
+	if [ -s /tmp/kbd_event.bin ]; then
+		hexdump -C /tmp/kbd_event.bin | head -8
+		if hexdump -C /tmp/kbd_event.bin | grep -q '01 00 1e 00 01 00 00 00'; then
+			echo "F8-HID-EVENT: host evdev received EV_KEY KEY_A press (value=1) — keypress crossed to the host"
+		fi
+	else
+		echo "(no evdev capture)"
+	fi
 	dmesg | grep -iE 'input:|hid-generic|Keyboard|Mouse' | tail -6
 
 	echo "=== F8-KVM-DEMO-END ==="
