@@ -85,6 +85,25 @@ From the Pi afterwards: `ping 192.168.66.2` = **3/3, 0 % loss**; P2A read
 `0x0002d51f` broken baseline) and **`RX_CRCER_FTL=0x00000000`** (no RX errors).
 The patched driver sets the speed correctly with no manual poke.
 
+### 4. Milestone unblocked: OpenBMC-over-NFS + Redfish on real silicon
+
+With the RX fix, the same kernel NFS-root-booted **Phosphor OpenBMC** on the real
+AST2050 (`real-silicon-openbmc-nfs-boot.log`) — the NFS root mount *requires* a
+working eth0 RX, which was the whole blocker:
+
+```
+IP-Config: Complete: device=eth0, ipaddr=192.168.66.2 ...
+VFS: Mounted root (nfs filesystem) on device 0:13.
+systemd 259.5 running in system mode ... Detected architecture arm.
+Welcome to Phosphor OpenBMC ...
+[  OK  ] Started bmcweb server
+quanta-q71l login:
+```
+
+`curl -sk https://192.168.66.2/redfish/v1` from the Pi returns the Redfish
+ServiceRoot (`redfish-v1-real-ast2050.json`, `RedfishVersion 1.17.0`, Systems /
+Chassis / Managers / UpdateService). Redfish is live on real AST2050 silicon.
+
 ## The driver fix (minimal, faithful, G3-correct)
 
 `ftgmac100_start_hw()` — derive the speed bits from `priv->cur_speed` instead of
