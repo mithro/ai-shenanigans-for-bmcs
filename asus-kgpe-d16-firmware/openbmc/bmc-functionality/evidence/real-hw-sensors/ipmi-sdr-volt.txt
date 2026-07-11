@@ -1,0 +1,15 @@
+$ ipmitool -I lanplus -H 192.168.66.2 ... sdr type Voltage
+# rc=0
+
+p3v3_scaled      | E0h | ns  |  0.0 | Disabled
+p5v_scaled       | E1h | ns  |  0.0 | Disabled
+p12v_aux_scaled  | E2h | ns  |  0.0 | Disabled
+p1v1_ssb         | E3h | ns  |  0.0 | Disabled
+pvcc_cpu0        | E4h | ns  |  0.0 | Disabled
+pvcc_cpu1        | E5h | ns  |  0.0 | Disabled
+p3v3_aux_scaled  | E6h | ns  |  0.0 | Disabled
+p5v_aux_scaled   | E7h | ns  |  0.0 | Disabled
+pvcc_cpu2        | E8h | ns  |  0.0 | Disabled
+pvcc_cpu3        | E9h | ns  |  0.0 | Disabled
+p12v_scaled      | EAh | ns  |  0.0 | Disabled
+p3v_vbat         | EBh | ns  |  0.0 | Disabled
