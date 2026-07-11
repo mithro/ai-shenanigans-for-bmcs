@@ -151,6 +151,38 @@
 	status = "okay";
 };
 
+/*
+ * Host-side IPMI over LPC KCS (F5b — local host<->BMC channel). The AST2050 (G3)
+ * LPC controller at 0x1e789000 exposes three H8S/2168-style KCS channels; each is
+ * an IDRn/ODRn/STRn register triple (datasheet §30.3, p.315; DATASHEET-LPC.md):
+ *   ch1 0x24/0x30/0x3c   ch2 0x28/0x34/0x40   ch3 0x2c/0x38/0x44
+ * These offsets are IDENTICAL on the AST2400, so mainline kcs_bmc_aspeed binds
+ * unchanged: drivers/char/ipmi/kcs_bmc_aspeed.c defines LPC_IDR1=0x024 ...
+ * LPC_STR3=0x044, exactly matching the datasheet. The faithful QEMU G3 LPC model
+ * (qemu/hw/misc/aspeed_lpc_ast2050.c) services these registers (RW config/data,
+ * read-only KCS status STR1-3). NB: BT is NOT wired here — on the G3 the BT block
+ * is at 0x48-0x68 (H8S layout), but mainline's aspeed,ast2400-ibt-bmc / bt-bmc.c
+ * hardcode the AST2400 0x140 offset, which is beyond this SoC's LPC register file
+ * (model window 0x00-0x9F) and unimplemented on real AST2050 silicon — so KCS is
+ * the only mainline-drivable host-IPMI channel on this SoC. See HOST-KCS-BT-STATUS.md.
+ *
+ * Channel 3 is the classic IPMI SMS "system interface": host I/O port 0xca2 (data
+ * 0xca2 / status+command 0xca3), the OpenBMC convention. The kernel binds
+ * kcs_bmc_aspeed + the cdev-ipmi client (CONFIG_IPMI_KCS_BMC_CDEV_IPMI) and creates
+ * /dev/ipmi-kcs3, which OpenBMC's host-IPMI bridge (phosphor-ipmi-kcs / kcsbridge)
+ * opens to feed ipmid. LPC IRQ = VIC #8 (datasheet §10 Table 36, p.99; SoC memmap
+ * ASPEED_DEV_LPC=8), the host->BMC IBF completion.
+ */
+&lpc {
+	kcs3: kcs@2c {
+		compatible = "aspeed,ast2400-kcs-bmc-v2";
+		reg = <0x2c 0x1>, <0x38 0x1>, <0x44 0x1>;
+		aspeed,lpc-io-reg = <0xca2>;
+		interrupts = <8>;
+		status = "okay";
+	};
+};
+
 &mac0 {
 	status = "okay";
 	/*
