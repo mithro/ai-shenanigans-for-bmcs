@@ -70,3 +70,50 @@ mask list would overflow 1024 chars, fall back to rootfs symlink masking on a
 Enabling *all* of these at once is exactly the configuration that does not fit
 64 MB — which is why the program demonstrates features one at a time on the real
 board, masking the rest.
+
+## Reproducing F1
+
+**QEMU** (the CI-shaped test — boots the fuller image at `mem=64` with the mask
+set, then asserts the authenticated system-id fields):
+
+```sh
+Q=asus-kgpe-d16-firmware/qemu-firmware
+uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f1-system-id-test.py \
+    --qemu   $Q/qemu/build/qemu-system-arm \
+    --kernel $Q/kernel/out/uImage-kgpe-d16 \
+    --dtb    $Q/kernel/out/aspeed-bmc-asus-kgpe-d16.dtb \
+    --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+    --evidence-dir asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence/qemu
+```
+
+`/export/openbmc-full` must be NFS-exported to the QEMU slirp gateway `10.0.2.2`
+with `insecure,no_root_squash,vers3` (see the C5 `boot-nfsroot` job in
+`.github/workflows/d16-qemu-stack.yml` for the exact `exportfs` incantation).
+
+**Real hardware** (read-only capture off the already-booted board):
+
+```sh
+uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f1-realhw-capture.py \
+    --pi asus-bmc --board 192.168.66.2 \
+    --evidence-dir asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence/real-hw
+```
+
+The board must be booted on the **fuller** image (`/srv/nfs/openbmc-full`, which
+has `root:0penBmc`) with the mask set applied — on real HW the masks are applied
+as rootfs symlinks in the export (U-Boot's command line cannot reliably carry the
+693-char `systemd.mask=` fragment over the serial-driven `setenv bootargs`):
+
+```sh
+# on the Pi, for each unit in f1_masked_daemons.MASK_UNITS:
+sudo ln -sf /dev/null /srv/nfs/openbmc-full/etc/systemd/system/<unit>
+# ... boot via the culvert P2A recipe (linux-boot.py) ..., then revert:
+sudo rm -f /srv/nfs/openbmc-full/etc/systemd/system/<unit>   # restore pristine F0
+```
+
+**CI wiring:** `f1-system-id-test.py` is exit-coded (0=PASS) and fully
+parameterised, so it drops into a job modelled on C5 `boot-nfsroot` — build QEMU,
+`exportfs` the rootfs, run the script. The one missing CI input is the **fuller
+OpenBMC rootfs** (F0's ~20 MB squashfs): its Yocto build is multi-hour, so it
+must be published as a release/artifact and `download-artifact`ed into
+`/export/openbmc-full` rather than rebuilt per push. Until that artifact exists,
+run the test against the locally staged export.
