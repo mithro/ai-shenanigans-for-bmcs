@@ -188,6 +188,51 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 300
 
+  f7-ncsi-dedicated-phy:
+    name: F7 — BMC networking is dedicated PHY, not NC-SI (ground-truth guard)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    # Faithfulness guard for the F7 finding (asus-kgpe-d16-firmware/openbmc/
+    # bmc-functionality/F7-NCSI.md): the KGPE-D16 BMC uses its own dedicated
+    # RTL8201CP PHY (RMII), NOT NC-SI. Step 1 statically asserts that invariant
+    # against the DTS / Raptor U-Boot config / datasheet notes / kernel / QEMU
+    # model. Step 2 boots the faithful machine with a dedicated ftgmac100 NIC over
+    # slirp and proves eth0 comes up + gets a DHCP lease with ZERO NC-SI in dmesg
+    # — the real "share the host's network via the board's own NIC" path.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Static ground-truth invariants (DTS / Raptor / datasheet / kernel / QEMU model)
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f7-ncsi-evidence.py \
+            --boot-log asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence/qemu-ncsi/eth0-dedicated-phy-boot.log
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot faithful machine + assert dedicated-PHY eth0/DHCP with ZERO NC-SI
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f7-ncsi-evidence.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --mem 64 --boot-timeout 300 \
+            --boot-log f7-ncsi-boot.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f7-ncsi-evidence
+          path: f7-ncsi-boot.log
+
   f5-ipmi-lan:
     name: F5 — IPMI over LAN (RMCP+) in 64 MB (OpenBMC NFS root)
     runs-on: ubuntu-latest

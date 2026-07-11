@@ -24,8 +24,12 @@ Run:
 Exit 0 = all invariants hold (dedicated PHY, not NC-SI). Nonzero = a check failed.
 """
 import argparse
+import os
 import re
+import selectors
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -161,12 +165,90 @@ def check_boot_log(path):
     return all_ok
 
 
+MACHINE = "kgpe-d16-bmc"
+# The kernel's built-in IP autoconfig leases from slirp before userspace, so the
+# dedicated-PHY eth0 bring-up + DHCP is visible in dmesg regardless of the rootfs.
+BOOT_APPEND = "console=ttyS4,115200n8 earlyprintk ip=dhcp"
+DHCP_MARKER = "IP-Config: Got DHCP answer"
+
+
+def boot_and_capture(args, out_path):
+    """Boot the faithful kgpe-d16-bmc machine with a dedicated ftgmac100 NIC over
+    slirp, stream+capture serial until the DHCP lease (or timeout), save the log."""
+    cmd = [args.qemu, "-M", MACHINE, "-m", str(args.mem), "-nographic",
+           "-monitor", "none", "-serial", "stdio",
+           "-kernel", args.kernel, "-append", args.append or BOOT_APPEND,
+           "-nic", "user,model=ftgmac100,hostfwd=tcp::2222-:22"]
+    if args.dtb:
+        cmd += ["-dtb", args.dtb]
+    if args.initrd:
+        cmd += ["-initrd", args.initrd]
+    print("boot:", " ".join(cmd), flush=True)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         bufsize=0)
+    sel = selectors.DefaultSelector()
+    sel.register(p.stdout, selectors.EVENT_READ)
+    deadline = time.time() + args.boot_timeout
+    captured = bytearray()
+    saw_dhcp = False
+    while time.time() < deadline and not saw_dhcp:
+        if p.poll() is not None:
+            break
+        for _ in sel.select(timeout=1.0):
+            chunk = os.read(p.stdout.fileno(), 4096)
+            if not chunk:
+                deadline = 0
+                break
+            sys.stdout.write(chunk.decode("utf-8", "replace"))
+            sys.stdout.flush()
+            captured += chunk
+            if DHCP_MARKER.encode() in captured:
+                # Grab a little more so the eth0 summary lines land in the log.
+                saw_dhcp = True
+    # A short drain so the trailing "eth0: 10.0.2.15" lines are captured.
+    drain_end = time.time() + 3
+    while time.time() < drain_end and p.poll() is None:
+        for _ in sel.select(timeout=0.5):
+            chunk = os.read(p.stdout.fileno(), 4096)
+            if not chunk:
+                break
+            sys.stdout.write(chunk.decode("utf-8", "replace"))
+            sys.stdout.flush()
+            captured += chunk
+    p.terminate()
+    try:
+        p.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        p.kill()
+    Path(out_path).write_bytes(bytes(captured))
+    print(f"\n[boot] captured {len(captured)} bytes -> {out_path}", flush=True)
+    if not saw_dhcp:
+        print(f"[boot] WARNING: did not see {DHCP_MARKER!r} within "
+              f"{args.boot_timeout}s", flush=True)
+    return out_path
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--boot-log",
-                    help="optional QEMU boot log to assert dedicated-PHY eth0 + no NC-SI")
+                    help="QEMU boot log to assert dedicated-PHY eth0 + no NC-SI. "
+                         "With --qemu, the boot is run and its log written here.")
+    # Optional: boot QEMU ourselves (self-contained CI test), then assert the log.
+    ap.add_argument("--qemu", help="path to qemu-system-arm (boots the machine)")
+    ap.add_argument("--kernel")
+    ap.add_argument("--dtb")
+    ap.add_argument("--initrd")
+    ap.add_argument("--mem", default=64, type=int)
+    ap.add_argument("--append", help="override kernel cmdline")
+    ap.add_argument("--boot-timeout", default=300, type=int)
     args = ap.parse_args()
+
+    if args.qemu:
+        if not (args.kernel and args.boot_log):
+            print("--qemu requires --kernel and --boot-log", file=sys.stderr)
+            return 2
+        boot_and_capture(args, args.boot_log)
 
     print("=== F7: KGPE-D16 BMC networking = DEDICATED PHY, not NC-SI ===")
     print(f"repo: {REPO}\n")
