@@ -149,3 +149,33 @@ Leave ≥8 GB headroom; watch `free -g`.
   + fuller export masks reverted to pristine F0. Deliverable `f1-realhw-capture.py`
   is ready to grab the full authenticated set the moment a fitting image
   (stripped Redfish-only, root set) boots on real HW.
+- 2026-07-11: **F2 (host power control) — QEMU DONE** (branch claude/bmc-f2-power).
+  * **QEMU model:** faithful KGPE-D16 power-sequencer in the Aspeed GPIO model
+    (`aspeed_gpio_kgpe_d16_pwrseq`, QEMU submodule branch claude/bmc-f2-power):
+    a set/reset host-power latch driven by the 3 active-low request lines
+    (GPIOB1 power-up sets, GPIOF0 power-down clears, GPIOB6 reset = no change),
+    reflected on the GPIOH2 power-state input. Gated behind the `kgpe-d16-pwrseq`
+    qdev property, which only the AST2050 SoC (ast2400.c, keyed on
+    AST2050_A1_SILICON_REV) enables — every other Aspeed board is unchanged, so
+    the legacy C2/C4 boots do not regress.
+  * **fwtest + CI test:** `qemu-model/peripherals/power/fwtest.c` (4 checks:
+    off@reset / on after power-up pulse / on across reset pulse / off after
+    power-down pulse) + `qemu-model/integration/test_power.py` (pytest, 6 cases,
+    all PASS) — the CI-suitable QEMU test asserting the power-control loop.
+  * **DTS:** gpio-line-names (power-up/-down/reset-req-n, power-state-in, lockout,
+    spd-mux) + gpio-leds (bmc-status/identify/cpu1/2-err) + gpio-keys id-button
+    added to aspeed-bmc-asus-kgpe-d16.dts (real-PHY mac0 kept). Boots: kernel
+    logs "input: gpio-keys".
+  * **OpenBMC:** F2 masked-daemon set (`f2_masked_daemons.py`) KEEPs the host +
+    chassis state managers + `org.openbmc.control.Power@0` (op-pwrctl), masks
+    IPMI/sensors/EM/lpcsnoop. op-pwrctl (phosphor-skeleton-control-power) added
+    to the -full image + `gpio_defs.json` (power_up_outs=[B1 pol0, F0 pol1] so its
+    held-level drive maps onto the modeled latch; power_good_in=H2). Staged to
+    /export/openbmc-f2power.
+  * **Demos:** (a) sysfs — kgpe-power.sh drives the request lines through the real
+    gpio-aspeed driver, GPIOH2 confirmed via QMP qom-get; (b) redfish — the fully
+    automated Redfish `ComputerSystem.Reset` -> phosphor-state-manager -> op-pwrctl
+    -> GPIO -> pgood -> PowerState loop (`f2-power-control-test.py`). See
+    OPENBMC-POWER-INTEGRATION.md. Real-hardware demo deferred (rig held by another
+    agent); the request lines drive the real board's power — bring up board-OFF,
+    verify GPIOH2 read-only first, validate SCU pinmux over P2A/JTAG.

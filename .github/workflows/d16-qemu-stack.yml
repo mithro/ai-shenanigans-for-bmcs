@@ -47,6 +47,28 @@ jobs:
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --timeout 15
 
+  power-control-test:
+    name: F2 host power-control loop (fwtest under QEMU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS gcc-arm-none-eabi
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      # Bare-metal fwtest: drive the KGPE-D16 power request lines (GPIOB1/F0/B6)
+      # and read GPIOH2 back — off@reset, on after power-up, on across reset, off
+      # after power-down — asserting the modeled aspeed_gpio_kgpe_d16_pwrseq latch.
+      - name: Run the power-control fwtest (host power on/off/reset loop)
+        run: |
+          cd asus-kgpe-d16-firmware/qemu-model
+          uv run --with pytest python -m pytest integration/test_power.py -v
+
   build-kernel:
     name: Build D16 kernel (uImage + dtb)
     runs-on: ubuntu-latest
