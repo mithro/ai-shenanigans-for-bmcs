@@ -71,6 +71,29 @@ MASK_UNITS = _MASK_COMMON + _HOST_BRIDGE
 # Profile: host (also expose host-side KCS/BT) — keep the host bridge.
 MASK_UNITS_HOST = list(_MASK_COMMON)
 
+# Extra RAM-hog daemons that IPMI does *not* need — masked only on the real
+# board, whose *effective* free RAM is below QEMU's clean 64 MB (video
+# framebuffer + SoC-reserved regions + NFS-root socket/write-back working set).
+# F1 found the fuller image froze on real HW even with bmcweb kept; F5's whole
+# thesis is that dropping bmcweb + these leaves the lightweight IPMI stack able
+# to make progress.  None of these is required for any IPMI command:
+_REALHW_EXTRA = [
+    "systemd-timesyncd.service",
+    "systemd-resolved.service",
+    "xyz.openbmc_project.Time.Manager.service",       # IPMI SEL uses BMC RTC, not this
+    "xyz.openbmc_project.Software.Manager.service",   # BMC firmware-version objects
+    "phosphor-certificate-manager@authority.service",
+    "phosphor-certificate-manager@nslcd.service",
+    "obmc-read-eeprom@system-chassis-bmc.service",
+    "obmc-read-eeprom@system-chassis-motherboard.service",
+    "obmc-read-eeprom@system-chassis-fp.service",
+    "obmc-read-eeprom@system-chassis-pdb.service",
+]
+
+# Profile: realhw — IPMI-over-LAN on the tight 64-MB board. = lan masks (bmcweb
+# + host bridge + sensors + entity-manager) plus the RAM-hog extras above.
+MASK_UNITS_REALHW = MASK_UNITS + _REALHW_EXTRA
+
 # --- daemons KEPT for F5 (documentation only; default-enabled) ----------------
 # The IPMI stack + the backends the standard ipmitool commands read from:
 KEEP_UNITS = [
@@ -95,7 +118,13 @@ KEEP_UNITS = [
     "dropbearkey.service / dropbear.socket",       # SSH (evidence pull / debugging)
 ]
 
-_PROFILES = {"lan": MASK_UNITS, "host": MASK_UNITS_HOST}
+_PROFILES = {"lan": MASK_UNITS, "host": MASK_UNITS_HOST,
+             "realhw": MASK_UNITS_REALHW}
+
+
+def mask_units(profile="lan"):
+    """Return the list of unit names to mask for the given profile."""
+    return _PROFILES[profile]
 
 
 def mask_cmdline(profile="lan"):
