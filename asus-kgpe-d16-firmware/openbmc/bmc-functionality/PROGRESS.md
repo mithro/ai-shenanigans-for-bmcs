@@ -292,3 +292,27 @@ Leave ≥8 GB headroom; watch `free -g`.
     *bytes* flow regardless (obmc-console-client). Image-recipe follow-up; no
     model/DTS/kernel change needed. Real host-byte capture is separately bounded
     by the FTDI-tapped host COM1 (not VUART-wired). See `F4-SOL-STATUS.md`.
+- 2026-07-12: **CONSOLIDATION — all feature branches integrated into
+  `claude/bmc-functionality` via real (`--no-ff`) merge commits.** Merge order
+  (true dependency order): F1 system-id, F2 power, F5 IPMI backbone, F3 sensors,
+  F4 SOL. F5 was merged before F3/F4 because both F3 and F4 branches already
+  contained F5 (each had merged it), so merging F5 first keeps it a distinct,
+  traceable merge point instead of arriving transitively. F0 (image) and
+  research-wiring were already integrated (0 commits ahead) — idempotent no-ops.
+  * **DTS union** (`aspeed-bmc-asus-kgpe-d16.dts`): the three features touch
+    disjoint regions and auto-merged (ort) — F2 power gpio-line-names + gpio-leds
+    + id-button, F3 `&i2c1 hwmon@2f` W83795G node, F4 `&vuart` enable are ALL
+    present in the final file.
+  * **QEMU submodule union:** F2/F3/F4 each advanced `mithro/qemu` on its own
+    single-commit branch off base 583ad3d (power-seq GPIO `8f93ce1`, W83795G
+    `46cb5c4`, VUART/SOL `5283f65`). Merged all three (`--no-ff`) into a single
+    `claude/bmc-functionality` submodule branch = `a010d69`, which unions the
+    three hw/ files on top of the base (ftgmac100 FAST_MODE fix + G3 VIC already
+    present). Built `qemu-system-arm` (arm-softmmu) clean; `kgpe-d16-bmc` machine
+    + `w83795` device register. Pushed to `mithro/qemu`. Superproject gitlink
+    resolved: F2→8f93ce1, F3→7dd9fa6 (F2+F3), F4→a010d69 (full union).
+  * **CI workflow union** (`d16-qemu-stack.yml`): auto-merged — jobs
+    power-control-test (F2), f5-ipmi-lan (F5), f4-sol (F4) all present.
+  * **PROGRESS log:** unioned at every merge (kept all feature entries; dropped
+    two redundant "F5 detail is in branch X" pointers from F3/F4 whose target is
+    now inlined). No PRs opened.
