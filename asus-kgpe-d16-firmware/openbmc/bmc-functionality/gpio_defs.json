@@ -1,0 +1,35 @@
+{
+  "__comment__": [
+    "KGPE-D16 (AST2050) host power-control GPIO config for op-pwrctl",
+    "(phosphor-skeleton-control-power, org.openbmc.control.Power).",
+    "Installed at /etc/default/obmc/gpio/gpio_defs.json in the fuller image.",
+    "op-pwrctl resolves each 'pin' (aspeed port) to a sysfs GPIO via the",
+    "1e780000.gpio chip base; power_up_outs drive the request lines, power_good_in",
+    "polls GPIOH2. See HW-WIRING-power-sensors.md and OPENBMC-POWER-INTEGRATION.md.",
+    "",
+    "Why power_up_outs = [B1 pol LOW, F0 pol HIGH]: op-pwrctl drives each",
+    "power_up_out to (state XOR !polarity). For power ON (state=1): B1 -> 0",
+    "(POWERUP_N asserted) and F0 -> 1 (POWERDOWN_N de-asserted). For power OFF",
+    "(state=0): B1 -> 1 (de-asserted) and F0 -> 0 (POWERDOWN_N asserted). That maps",
+    "exactly onto the modeled set/reset power latch (aspeed_gpio_kgpe_d16_pwrseq):",
+    "B1-low sets host power, F0-low clears it. reset_outs pulses B6 (warm reset)."
+  ],
+  "gpio_configs": {
+    "power_config": {
+      "power_good_in": "PGOOD",
+      "power_up_outs": [
+        { "name": "POWER_UP",   "polarity": 0 },
+        { "name": "POWER_DOWN", "polarity": 1 }
+      ],
+      "reset_outs": [
+        { "name": "RESET_OUT", "polarity": 0 }
+      ]
+    }
+  },
+  "gpio_definitions": [
+    { "name": "PGOOD",      "direction": "in",  "pin": "H2" },
+    { "name": "POWER_UP",   "direction": "out", "pin": "B1" },
+    { "name": "POWER_DOWN", "direction": "out", "pin": "F0" },
+    { "name": "RESET_OUT",  "direction": "out", "pin": "B6" }
+  ]
+}
