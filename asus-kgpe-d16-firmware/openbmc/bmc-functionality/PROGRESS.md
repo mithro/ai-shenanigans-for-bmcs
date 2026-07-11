@@ -108,3 +108,44 @@ Leave ≥8 GB headroom; watch `free -g`.
   (populate in recipe/HW); (c) actual host power on/off via the GPIO (F2 config) on
   real HW (status works; drive-loop to verify); (d) F4 SOL; (e) CI job needs the
   rootfs artifact published.
+- 2026-07-11: **F1 QEMU PASS.** Finalised the 64MB mask set (14 units, single
+  source `f1_masked_daemons.py`; rendered as kernel `systemd.mask=` tokens, 693
+  chars, fits the 1024 ARM cmdline). Boot of the fuller image at mem=64 with the
+  masks -> bmcweb serves Redfish STABLY (was crash-looping with all daemons).
+  Captured authenticated (root/0penBmc) system-id evidence (evidence/qemu/):
+  RedfishVersion 1.17.0; Managers/bmc UUID 50f94dce-8314-4d35-bc4c-00274d6fcb2f,
+  Model OpenBmc, ServiceEntryPointUUID present, FirmwareVersion="none" (F0 build
+  didn't stamp a version — field present, cosmetic); eth0 MAC 52:54:00:12:34:56,
+  IPv4 10.0.2.15, LinkUp/100Mbps. Host ComputerSystem UUID/Serial legitimately
+  empty (entity-manager/FRU inventory masked + no powered host) -> captured but
+  not gated. Deliverables: `f1-system-id-test.py` (CI-ready, boots+asserts, with
+  per-request retry for bmcweb's under-64MB connection drops), `MASKED-DAEMONS.md`
+  (reusable pattern + per-feature adaptation table), `f1-realhw-capture.py`.
+  NOTE for downstream: the F0 build's Manager FirmwareVersion is the literal
+  "none" — a version-stamp gap in the recipe, worth fixing for a nicer demo.
+- 2026-07-11: F1 real-HW: board 192.168.66.2 is up serving the OLDER lean redfish
+  image (root LOCKED -> authenticated Redfish = HTTP 401), so authenticated
+  system-id needs the fuller image (root/0penBmc). Real-HW plan = P2A cold-boot
+  the fuller image over NFS (/srv/nfs/openbmc-full) with the g3vic RX-fixed kernel
+  + real-PHY DTB (already staged in Pi TFTP) + rootfs-symlink masking (U-Boot
+  cmdline can't carry the 693-char mask fragment reliably). Host culvert + Pi
+  bridge confirmed reachable. Attempt logged to HARDWARE-COORDINATION.md.
+- 2026-07-11: **F1 real-HW OUTCOME — fuller image does NOT fit real 64MB over
+  NFS-root.** Two escalating P2A cold-boots (rig claimed + released via
+  HARDWARE-COORDINATION.md; board reset only, flash untouched, fully recoverable):
+  BOTH reached kernel-up + eth0 100Mbps (RX-fix) + IP-Config .2 + **NFS root
+  mounted** (rmtab confirms /srv/nfs/openbmc-full) + systemd reading ~135MB, then
+  attempt-1 (14 masks) hard-FROZE at networkd's eth0 takeover (eth0 down, NFS
+  flat, silent console) and attempt-2 (27 masks) kept the static IP but THRASHED
+  (NFS reads ~250KB/min, no listener). The wall is RAM: the fuller image can't
+  make progress in the real board's effective 64MB with NFS-root memory demands
+  (QEMU's clean 64MB tolerates it — QEMU PASS). This matches the program-level
+  "modern full OpenBMC won't fit 64MB" constraint -> the real-HW path is the lean
+  redfish image / a stripped Redfish-only image, not the fuller image.
+  **Real-HW Redfish IS live** on the lean image (unauth ServiceRoot 200,
+  RedfishVersion) — captured to evidence/real-hw/; authenticated system-id on
+  real HW stays blocked (fuller image doesn't fit; lean image root deliberately
+  locked, must not be force-unlocked). Rig RESTORED to the lean image (as found)
+  + fuller export masks reverted to pristine F0. Deliverable `f1-realhw-capture.py`
+  is ready to grab the full authenticated set the moment a fitting image
+  (stripped Redfish-only, root set) boots on real HW.
