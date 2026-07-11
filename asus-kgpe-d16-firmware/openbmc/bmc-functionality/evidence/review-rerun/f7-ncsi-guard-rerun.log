@@ -1,0 +1,21 @@
+=== F7: KGPE-D16 BMC networking = DEDICATED PHY, not NC-SI ===
+repo: /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-review
+
+-- Static invariants (no build required) --
+[PASS] DTS &mac0 uses phy-mode=rmii (dedicated PHY)
+[PASS] DTS &mac0 has NO use-ncsi property
+[PASS] Raptor ast2050.h: CONFIG_MAC1_PHY_SETTING = 0 (Dedicated PHY)
+[PASS] RAPTOR-UBOOT-ANALYSIS.md states 'Dedicated PHY (not NC-SI)'
+[PASS] Datasheet note: G3 MAC has no NC-SI hardware mode
+[PASS] D16 kernel does NOT enable CONFIG_NET_NCSI
+[SKIP] QEMU ftgmac100.c not checked out (submodule) — skipping model check
+
+-- QEMU boot-log invariants --
+[PASS] boot: ftgmac100 read its own MAC from chip
+[PASS] boot: a dedicated PHY was attached over MDIO
+[PASS] boot: eth0 link came up
+[PASS] boot: eth0 got a DHCP lease (shared L2 with host)
+[PASS] boot: ZERO NC-SI in dmesg (dedicated-PHY path, no sideband)
+
+=== 11 passed, 0 failed ===
+All F7 ground-truth invariants hold: the KGPE-D16 BMC uses a dedicated RTL8201CP PHY (RMII), not NC-SI.

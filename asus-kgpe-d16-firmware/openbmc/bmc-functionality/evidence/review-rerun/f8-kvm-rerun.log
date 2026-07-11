@@ -1,0 +1,240 @@
+boot: /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 64 -nographic -monitor none -serial stdio -nic user,model=ftgmac100 -kernel /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f8-kvm/asus-kgpe-d16-firmware/qemu-firmware/kernel/out/zImage-kgpe-d16 -initrd /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f8-kvm/asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/initramfs.cpio.gz -dtb /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f8-kvm/asus-kgpe-d16-firmware/qemu-firmware/kernel/out/aspeed-bmc-asus-kgpe-d16.dtb -append console=ttyS4,115200n8 earlyprintk f8kvm -no-reboot
+qemu-system-arm: warning: nic ftgmac100.1 has no peer
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #1 Sun Jul 12 02:50:57 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk f8kvm
+[    0.000000] Unknown kernel command line parameters "earlyprintk f8kvm", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 16256
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 50624K/65536K available (7168K kernel code, 969K rwdata, 1968K rodata, 1024K init, 188K bss, 14912K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 30810 entries in 61 pages
+[    0.000000] ftrace: allocated 61 pages with 5 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000195] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.001984] Switching to timer-based delay loop, resolution 41ns
+[    0.005575] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=240000)
+[    0.005804] CPU: Testing write buffer coherency: ok
+[    0.007194] pid_max: default: 32768 minimum: 301
+[    0.018632] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.018702] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.051209] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.051730] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.053077] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.055964] ASPEED Unknown rev A0 (00000202)
+[    0.063744] devtmpfs: initialized
+[    0.088176] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.088303] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.089427] pinctrl core: initialized pinctrl subsystem
+[    0.100213] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.103740] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.172445] usbcore: registered new interface driver usbfs
+[    0.172751] usbcore: registered new interface driver hub
+[    0.172999] usbcore: registered new device driver usb
+[    0.173996] mc: Linux media interface: v0.10
+[    0.174356] videodev: Linux video capture interface: v2.00
+[    0.174542] pps_core: LinuxPPS API ver. 1 registered
+[    0.174564] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.174676] PTP clock support registered
+[    0.174777] EDAC MC: Ver: 3.0.0
+[    0.226939] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.264162] NET: Registered PF_INET protocol family
+[    0.265506] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.269581] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.269682] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.269764] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.269850] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.269973] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.271093] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.271310] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.272967] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.293621] RPC: Registered named UNIX socket transport module.
+[    0.293670] RPC: Registered udp transport module.
+[    0.293688] RPC: Registered tcp transport module.
+[    0.293702] RPC: Registered tcp-with-tls transport module.
+[    0.293717] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.303663] Unpacking initramfs...
+[    0.327764] workingset: timestamp_bits=30 max_order=14 bucket_order=0
+[    0.329315] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.332777] NFS: Registering the id_resolver key type
+[    0.334055] Key type id_resolver registered
+[    0.334096] Key type id_legacy registered
+[    0.334406] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.341780] NET: Registered PF_ALG protocol family
+[    0.343250] io scheduler bfq registered
+[    0.437502] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.471156] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1500000) is a ASPEED VUART
+[    0.509499] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.510798] printk: console [ttyS4] enabled
+[    0.579859] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.654498] loop: module loaded
+[    0.697018] random: crng init done
+[    0.816639] Freeing initrd memory: 1708K
+[    0.877471] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    0.896822] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    0.898502] RTL8211E Gigabit Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    0.912526] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at 62e81ebf
+[    0.917728] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    0.918427] dummy_hcd dummy_hcd.0: Dummy host controller
+[    0.918934] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    0.964418] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    0.964747] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    0.964966] usb usb1: Product: Dummy host controller
+[    0.965129] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    0.965392] usb usb1: SerialNumber: dummy_hcd.0
+[    0.971409] hub 1-0:1.0: USB hub found
+[    0.972675] hub 1-0:1.0: 1 port detected
+[    1.017494] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+[    1.019791] i2c_dev: i2c /dev entries driver
+[    1.049617] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 23
+[    1.063705] aspeed-video 1e700000.video: irq 24
+[    1.064450] aspeed-video 1e700000.video: alloc mem size(24576) at 0x41900000 for jpeg header
+[    1.070429] Driver for 1-wire Dallas network protocol.
+[    1.093260] usbcore: registered new interface driver usbhid
+[    1.093509] usbhid: USB HID core driver
+[    1.100842] NET: Registered PF_INET6 protocol family
+[    1.140507] Segment Routing with IPv6
+[    1.141074] In-situ OAM (IOAM) with IPv6
+[    1.142579] NET: Registered PF_PACKET protocol family
+[    1.143503] 8021q: 802.1Q VLAN Support v1.8
+[    1.144153] Key type dns_resolver registered
+[    1.277625] printk: console [netcon0] enabled
+[    1.277901] netconsole: network logging started
+[    1.282520] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    1.417134] clk: Disabling unused clocks
+[    1.451365] Freeing unused kernel image (initmem) memory: 1024K
+[    1.452738] Checked W+X mappings: passed, no W+X pages found
+[    1.453110] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+[    1.654530] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+eth0: 10.0.2.15
+Fingerprint: SHA256:XwFOuhW/mf2jhESbT9L5xKNj3jBS32SwV/SlsKUQuaY
+[67] Jan 01 00:00:01 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86400sec preferred_lft 14400sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (ssh in via the QEMU hostfwd port)
+=== F8-KVM-DEMO-BEGIN ===
+--- [1] VIDEO ENGINE: aspeed-video probe (dmesg) ---
+[    1.063705] aspeed-video 1e700000.video: irq 24
+[    1.064450] aspeed-video 1e700000.video: alloc mem size(24576) at 0x41900000 for jpeg header
+--- video capture device nodes ---
+crw-------    1 root     root       81,   0 Jan  1 00:00 [1;35m/dev/video0[m
+/sys/class/video4linux/video0/name = aspeed-video
+F8-VIDEO: /dev/video0 present (aspeed-video bound the AST2050 video engine)
+--- [2] USB2.0 vhub probe (dmesg) ---
+[    0.917728] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    0.918427] dummy_hcd dummy_hcd.0: Dummy host controller
+[    0.918934] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    0.965129] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    0.965392] usb usb1: SerialNumber: dummy_hcd.0
+[    1.017494] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+--- UDCs found (/sys/class/udc) ---
+[1;36m1e6a0000.usb-vhub:p1[m
+[1;36m1e6a0000.usb-vhub:p2[m
+[1;36m1e6a0000.usb-vhub:p3[m
+[1;36m1e6a0000.usb-vhub:p4[m
+[1;36m1e6a0000.usb-vhub:p5[m
+[1;36m1e6a0000.usb-vhub:p6[m
+[1;36m1e6a0000.usb-vhub:p7[m
+[1;36mdummy_udc.0[m
+--- [3] build a virtual HID keyboard+mouse gadget via configfs ---
+--- report descriptors the gadget will expose to the host ---
+keyboard report_desc (63 bytes):
+00000000  05 01 09 06 a1 01 05 07  19 e0 29 e7 15 00 25 01  |..........)...%.|
+00000010  75 01 95 08 81 02 95 01  75 08 81 03 95 05 75 01  |u.......u.....u.|
+00000020  05 08 19 01 29 05 91 02  95 01 75 03 91 03 95 06  |....).....u.....|
+00000030  75 08 15 00 25 65 05 07  19 00 29 65 81 00 c0     |u...%e....)e...|
+0000003f
+mouse report_desc (50 bytes):
+00000000  05 01 09 02 a1 01 09 01  a1 00 05 09 19 01 29 03  |..............).|
+00000010  15 00 25 01 95 03 75 01  81 02 95 01 75 05 81 03  |..%...u.....u...|
+00000020  05 01 09 30 09 31 15 81  25 7f 75 08 95 02 81 06  |...0.1..%.u.....|
+00000030  c0 c0                                             |..|
+binding vkvm HID gadget -> UDC 'dummy_udc.0'
+[    4.640205] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.846061] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.846510] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    4.846811] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    4.847317] usb 1-1: Manufacturer: ASUS-KGPE-D16-BMC
+[    4.847707] usb 1-1: SerialNumber: 0000A5T2050
+[    4.872278] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    4.942397] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    4.955561] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    4.957931] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+--- host-side enumeration of the virtual keyboard+mouse (dmesg) ---
+[    0.964418] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    0.964747] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.282520] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    4.640205] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.846061] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.846510] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    4.846811] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    4.872278] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    4.942397] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    4.955561] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    4.957931] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+--- gadget HID endpoints (/dev/hidgN = the report streams to the host) ---
+crw-------    1 root     root      245,   0 Jan  1 00:00 [1;35m/dev/hidg0[m
+crw-------    1 root     root      245,   1 Jan  1 00:00 [1;35m/dev/hidg1[m
+--- host input devices bound to the enumerated HID (evdev) ---
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event0 -> ../../devices/platform/gpio-keys/input/input0/event0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event1 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1/event1
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event2 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2/event2
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input0 -> ../../devices/platform/gpio-keys/input/input0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input1 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input2 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+vKVM keyboard evdev node: event1 (/dev/input/event1)
+--- writing keyboard report to /dev/hidg0: press 'a' then release ---
+F8-HID: wrote press report (a) to /dev/hidg0
+--- mouse report to /dev/hidg1: move +10,+5, left button ---
+F8-HID: wrote mouse report to /dev/hidg1
+--- host received these input_event bytes on /dev/input/event1 (the keypress crossing to the host) ---
+00000000  08 00 00 00 e5 eb 0a 00  04 00 04 00 04 00 07 00  |................|
+00000010  08 00 00 00 e5 eb 0a 00  01 00 1e 00 01 00 00 00  |................|
+00000020  08 00 00 00 e5 eb 0a 00  00 00 00 00 00 00 00 00  |................|
+00000030  08 00 00 00 d9 cd 0e 00  01 00 1e 00 02 00 00 00  |................|
+00000040  08 00 00 00 d9 cd 0e 00  00 00 00 00 01 00 00 00  |................|
+00000050  09 00 00 00 8c 4e 00 00  01 00 1e 00 02 00 00 00  |.....N..........|
+00000060  09 00 00 00 8c 4e 00 00  00 00 00 00 01 00 00 00  |.....N..........|
+00000070  09 00 00 00 f7 11 01 00  01 00 1e 00 02 00 00 00  |................|
+F8-HID-EVENT: host evdev received EV_KEY KEY_A press (value=1) — keypress crossed to the host
+[    1.282520] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    4.846811] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    4.872278] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    4.942397] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    4.955561] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    4.957931] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+=== F8-KVM-DEMO-END ===
+--- F8 KVM checks ---
+  [PASS] VIDEO: aspeed-video probes the AST2050 video engine @0x1e700000 -> /dev/video0
+  [PASS] HID: virtual keyboard gadget created; keypress report written to /dev/hidg0 (the byte-stream a keypress produces)
+  [INFO] HID: keypress delivered to a host-side evdev input device over dummy_hcd (EV_KEY / KEY_A)
+
+F8 KVM RESULT: PASS
