@@ -1,0 +1,35 @@
+# W83795G on kgpe-d16-bmc QEMU: i2c 1-002f, driver=w83795, OF=/ahb/apb/bus@1e78a000/i2c-bus@80/hwmon@2f
+# uname: Linux quanta-q71l 6.6.70-dirty #8 Sun Jul 12 00:56:02 ACST 2026 armv5tejl GNU/Linux
+
+## bound driver
+lrwxrwxrwx    1 root     root             0 Jul 11 15:35 /sys/bus/i2c/drivers/w83795/1-002f -> ../../../../devices/platform/ahb/ahb:apb/ahb:apb:bus@1e78a000/1e78a080.i2c-bus/i2c-1/1-002f
+
+## hwmon channels (raw sysfs = the modelled register values)
+name = w83795g
+fan1_input = 4963
+fan2_input = 5113
+fan3_input = 4804
+fan4_input = 3600
+fan5_input = 3750
+fan6_input = 3901
+fan7_input = 0
+fan8_input = 0
+in0_input = 1000
+in10_input = 1350
+in12_input = 3300
+in13_input = 3300
+in14_input = 3036
+in15_input = 1520
+in16_input = 1620
+in1_input = 1000
+in2_input = 1500
+in3_input = 1100
+in4_input = 1800
+in5_input = 1200
+in6_input = 1050
+in7_input = 1500
+in8_input = 900
+in9_input = 1250
+temp1_input = 42250
+temp7_input = 45000
+temp8_input = 47000
