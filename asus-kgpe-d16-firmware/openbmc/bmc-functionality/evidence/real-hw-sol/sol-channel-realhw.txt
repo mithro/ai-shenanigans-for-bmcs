@@ -1,0 +1,17 @@
+# Real AST2050 @192.168.66.2 -- ipmitool -I lanplus from the Pi (RMCP+ cipher 17)
+# Board runs the F5 IPMI image over NFS (pre-VUART DTB). netipmid is socket-
+# activated and races on the slow board (F5 finding), so RMCP+ sessions are
+# intermittent; retried until clean.
+
+== mc info rc=0 (attempt 1) ==
+Device ID                 : 0
+Firmware Revision         : 0.00
+IPMI Version              : 2.0
+Manufacturer ID           : 0
+
+== sol payload status 1 1 ==
+User 1 on channel 1 is enabled
+
+== staged real-HW VUART DTB (ready for an F4 boot) ==
+-rw-r--r-- 1 root root 22813 Jul 12 01:36 /srv/tftp-bmc/kgpe-g3vic-vuart.dtb
+vuart node status=okay

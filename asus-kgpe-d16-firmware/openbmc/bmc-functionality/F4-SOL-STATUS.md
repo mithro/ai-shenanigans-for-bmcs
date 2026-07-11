@@ -70,20 +70,37 @@ an image change: add a provider of `xyz.openbmc_project.Ipmi.SOL` per network
 interface (in current OpenBMC this is a settings/SOL-config recipe), then rebuild
 and re-stage. No QEMU/DTS/kernel change is needed. Tracked as a follow-up.
 
-## Real hardware (AST2050 on the rig)
+## Real hardware (AST2050 on the rig) — 2026-07-12
 
-The same DTB + image bring `/dev/ttyVUART0` + `obmc-console-server` up on the real
-silicon (the mainline `8250_aspeed_vuart` binds the real `0x1E787000`; the model
-was validated against it). Two caveats specific to the rig:
+Done **non-disruptively** (no reboot; the board was left running F5's IPMI image
+as live evidence). Evidence: `evidence/real-hw-sol/sol-channel-realhw.txt`.
+
+* **SOL channel established on real silicon.** From the Pi,
+  `ipmitool -I lanplus -H 192.168.66.2 … mc info` returns rc=0 (RMCP+ session up)
+  and `… sol payload status 1 1` → **"User 1 on channel 1 is enabled"** — the SOL
+  front-end (`netipmid`) answers on the real AST2050. (`netipmid` is socket-
+  activated and races on the slow board, F5's finding, so RMCP+ sessions are
+  intermittent and were retried until clean.)
+* **VUART DTB staged, ready to boot.** `/srv/tftp-bmc/kgpe-g3vic-vuart.dtb` =
+  the real-HW `kgpe-g3vic.dtb` with the vuart node enabled
+  (`fdtput … /ahb/apb/serial@1e787000 status okay`). Booting the fuller image
+  over NFS with **this DTB** + the F4/`realhw` masks (P2A path, as F5/F1 did) is
+  what brings up `/dev/ttyVUART0` + `obmc-console-server` on real silicon — the
+  same chain proven in QEMU. That boot is a state-mutating P2A reset of the shared
+  board and was **not** performed here (the orchestration is the other agents'
+  tooling and the board was serving F5's live evidence); the artifact is staged so
+  it is a one-step follow-up.
+
+Two constraints bound any real-HW **byte** capture (independent of the above):
 
 1. **Host-byte wiring.** On the current rig the x86 **host COM1 is tapped by an
    external FTDI** (`/dev/serial-com1` on the Pi), *not* routed into the BMC VUART
-   (`HARDWARE-ACCESS.md`). So a real host→BMC→SOL byte capture needs the host's
-   COM1 to be the AST2050 VUART/PUART (BIOS/board-dependent). Absent that, the
-   real-HW demo establishes the **SOL channel** (VUART tty + `obmc-console-server`
-   + RMCP+ reachable) and documents the wiring, rather than streaming live host
-   output.
-2. **The `ipmitool sol activate` gap above applies equally on real HW** until the
-   SOL config-object provider is added to the image.
+   (`HARDWARE-ACCESS.md`). A real host→BMC→SOL byte capture needs the host's COM1
+   to be the AST2050 VUART/PUART (BIOS/board-dependent). Absent that, real HW
+   establishes the **SOL channel** (VUART tty + `obmc-console-server` + RMCP+
+   reachable) rather than streaming live host output — which is what was done.
+2. **The `ipmitool sol activate` config-object gap above applies equally on real
+   HW** until the SOL config provider is added to the image.
 
-See `evidence/qemu-sol/` for the QEMU captures and `PROGRESS.md` for the log.
+See `evidence/qemu-sol/` (QEMU captures), `evidence/real-hw-sol/` (real board),
+and `PROGRESS.md` for the log.
