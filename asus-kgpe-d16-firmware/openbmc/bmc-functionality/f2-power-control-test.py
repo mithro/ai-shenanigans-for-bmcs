@@ -201,12 +201,27 @@ def main():
     ap.add_argument("--password", default="0penBmc")
     ap.add_argument("--power-script", default="/usr/local/bin/kgpe-power.sh",
                     help="path of kgpe-power.sh inside the guest (staged via NFS)")
+    ap.add_argument("--driver", choices=["redfish", "sysfs"], default="redfish",
+                    help="redfish = drive Redfish ComputerSystem.Reset and let "
+                         "op-pwrctl toggle the GPIO (fully-automated loop); "
+                         "sysfs = drive kgpe-power.sh directly (no op-pwrctl)")
     ap.add_argument("--boot-timeout", type=int, default=1500)
     ap.add_argument("--evidence-dir", default="evidence/qemu")
+    ap.add_argument("--qmp-sock", default=None,
+                    help="QMP unix socket path (must be <108 bytes; default: "
+                         "$XDG_RUNTIME_DIR/f2q-<pid>.sock)")
     args = ap.parse_args()
 
     os.makedirs(args.evidence_dir, exist_ok=True)
-    qmp_sock = os.path.abspath(os.path.join(args.evidence_dir, "..", "f2-qmp.sock"))
+    # A QMP unix socket path must be < 108 bytes; the evidence dir is too deep,
+    # so default to the per-user runtime dir (the proper place for a runtime
+    # control socket, and short).
+    qmp_sock = args.qmp_sock or os.path.join(
+        os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
+        f"f2q-{os.getpid()}.sock")
+    if len(qmp_sock) >= 108:
+        print(f"FAIL: QMP socket path too long ({len(qmp_sock)} bytes): {qmp_sock}")
+        return 1
     if os.path.exists(qmp_sock):
         os.remove(qmp_sock)
 
@@ -253,66 +268,93 @@ def main():
             return 1
         print("\n[login] root shell reached")
 
-        # --- GPIO power loop through the real driver, H2 read via QMP ---
-        steps = [
-            ("init", False, "off after init (all request lines de-asserted)"),
-            ("on", True, "on after GPIOB1 power-up pulse"),
-            ("off", False, "off after GPIOF0 power-down pulse"),
-            ("on", True, "on again"),
-            ("reset", True, "still on across GPIOB6 reset pulse"),
-        ]
-        for step, want_on, desc in steps:
-            out = con.run(f"sh {args.power_script} {step}", f"pwr_{step}",
-                          time.time() + 90)
-            time.sleep(1.0)  # let QEMU settle the pin
+        reset_url = ("/redfish/v1/Systems/system/Actions/"
+                     "ComputerSystem.Reset")
+
+        def poll_power(want_on, budget=120):
+            """Poll QMP gpioH2 + Redfish PowerState until they reach want_on."""
+            want_rf = "On" if want_on else "Off"
+            end = time.time() + budget
             modeled = qmp.power_state()
-            guest = None
-            if out:
-                for ln in out.splitlines():
-                    if "POWER_STATE(GPIOH2)=" in ln:
-                        guest = ln.split("=")[-1].strip()
-            results["qmp_power_state"][step] = modeled
-            results["guest_power_state"][step] = guest
-            mark = "PASS" if modeled == want_on else "FAIL"
-            if modeled != want_on:
-                ok = False
-            print(f"[power:{step}] QMP gpioH2={modeled} guest={guest} "
-                  f"want={'on' if want_on else 'off'} [{mark}] — {desc}")
+            pstate = None
+            while time.time() < end:
+                modeled = qmp.power_state()
+                _, sd = rf(args.https_port, "/redfish/v1/Systems/system",
+                           args.user, args.password, timeout=10, retries=1)
+                pstate = sd.get("PowerState") if isinstance(sd, dict) else None
+                if modeled == want_on and pstate == want_rf:
+                    break
+                con.expect(["__never__"], min(time.time() + 4, end))
+            return modeled, pstate
 
-        # leave the modeled host powered on for the Redfish capture
-        con.run(f"sh {args.power_script} on", "pwr_final", time.time() + 90)
+        if args.driver == "sysfs":
+            # Direct sysfs drive (image without op-pwrctl): kgpe-power.sh moves
+            # the request lines; H2 is confirmed over QMP.
+            steps = [("init", False), ("on", True), ("off", False),
+                     ("on", True), ("reset", True)]
+            for step, want_on in steps:
+                out = con.run(f"sh {args.power_script} {step}", f"pwr_{step}",
+                              time.time() + 90)
+                time.sleep(1.0)
+                modeled = qmp.power_state()
+                guest = None
+                if out:
+                    for ln in out.splitlines():
+                        if "POWER_STATE(GPIOH2)=" in ln:
+                            guest = ln.split("=")[-1].strip()
+                results["qmp_power_state"][step] = modeled
+                results["guest_power_state"][step] = guest
+                if modeled != want_on:
+                    ok = False
+                print(f"[power:{step}] QMP gpioH2={modeled} guest={guest} "
+                      f"want={'on' if want_on else 'off'} "
+                      f"[{'PASS' if modeled == want_on else 'FAIL'}]")
 
-        # --- Redfish reachability + power actions ---
-        print("\n[redfish] waiting for bmcweb ...")
-        ver = wait_redfish(args.https_port, min(time.time() + 300, deadline))
+        # --- Fully-automated Redfish -> state-manager -> op-pwrctl -> GPIO loop --
+        print("\n[redfish] waiting for bmcweb + op-pwrctl ...")
+        ver = wait_redfish(args.https_port, min(time.time() + 400, deadline))
         results["redfish"]["service_root_version"] = ver
-        if ver:
+        if not ver:
+            print("FAIL: bmcweb/Redfish did not come up in 64 MB")
+            results["redfish"]["note"] = "bmcweb not up in budget"
+            ok = False
+        else:
             print(f"[redfish] ServiceRoot up: RedfishVersion={ver}")
-            st, sysdoc = rf(args.https_port, "/redfish/v1/Systems/system",
-                            args.user, args.password)
-            results["redfish"]["systems_system_status"] = st
+            # settle op-pwrctl's first pgood poll
+            con.expect(["__never__"], min(time.time() + 8, deadline))
+            m0, p0 = qmp.power_state(), None
+            _, sd = rf(args.https_port, "/redfish/v1/Systems/system",
+                       args.user, args.password)
+            p0 = sd.get("PowerState") if isinstance(sd, dict) else None
+            print(f"[redfish] initial: QMP gpioH2={m0} PowerState={p0}")
+            results["redfish"]["initial"] = {"gpioH2": m0, "PowerState": p0}
+            if args.driver == "redfish":
+                loop = [("On", True), ("ForceOff", False), ("On", True),
+                        ("ForceRestart", True)]
+                for rtype, want_on in loop:
+                    st, _ = rf(args.https_port, reset_url, args.user,
+                               args.password, method="POST",
+                               body={"ResetType": rtype})
+                    accepted = st in (200, 202, 204)
+                    modeled, pstate = poll_power(want_on)
+                    want_rf = "On" if want_on else "Off"
+                    step_ok = accepted and modeled == want_on and pstate == want_rf
+                    if not step_ok:
+                        ok = False
+                    results["redfish"].setdefault("reset_loop", {})[rtype] = {
+                        "http": st, "gpioH2": modeled, "PowerState": pstate,
+                        "expected": want_rf}
+                    print(f"[redfish] Reset {rtype} -> HTTP {st} ; "
+                          f"QMP gpioH2={modeled} PowerState={pstate} "
+                          f"want={want_rf} [{'PASS' if step_ok else 'FAIL'}]")
+            # capture the final ComputerSystem doc
+            _, sysdoc = rf(args.https_port, "/redfish/v1/Systems/system",
+                           args.user, args.password)
             if isinstance(sysdoc, dict):
-                results["redfish"]["PowerState"] = sysdoc.get("PowerState")
+                results["redfish"]["final_PowerState"] = sysdoc.get("PowerState")
                 with open(os.path.join(args.evidence_dir,
                                        "systems-system.json"), "w") as f:
                     json.dump(sysdoc, f, indent=2, sort_keys=True)
-            reset_url = ("/redfish/v1/Systems/system/Actions/"
-                         "ComputerSystem.Reset")
-            for rtype in ["ForceOff", "On", "ForceRestart"]:
-                st, doc = rf(args.https_port, reset_url, args.user,
-                             args.password, method="POST",
-                             body={"ResetType": rtype})
-                results["redfish"].setdefault("reset_actions", {})[rtype] = st
-                accepted = st in (200, 202, 204)
-                print(f"[redfish] ComputerSystem.Reset {rtype} -> HTTP {st} "
-                      f"[{'accepted' if accepted else 'REJECTED'}]")
-                if not accepted:
-                    ok = False
-                time.sleep(3)
-        else:
-            print("[redfish] WARN: bmcweb did not answer in time "
-                  "(GPIO loop already proven over QMP)")
-            results["redfish"]["note"] = "bmcweb not up in budget"
 
         with open(os.path.join(args.evidence_dir, "f2-power-results.json"),
                   "w") as f:
