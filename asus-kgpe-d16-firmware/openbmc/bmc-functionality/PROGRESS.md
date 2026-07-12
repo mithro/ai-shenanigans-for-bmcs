@@ -602,3 +602,34 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
     model.
   * PROGRESS.md merged as a UNION (both 2026-07-12 entries kept); all 6
     workflow YAMLs parse; no conflict markers; DTS node-sets intact.
+- 2026-07-12: **origin/main merged into `claude/bmc-functionality`** (merge
+  `853d6ea`, per user directive to update PR #25) — brings PR #16 (D16
+  custom-QEMU firmware stack), PR #22 (culvert G3 port + on-hardware P2A/TFTP
+  boot + modern-kernel hardware patch series), PR #24 (JTAG over RPi4) and
+  PR #26 (G3 VIC irqchip patch on main) into the program branch.
+  * Only textual conflict: `.gitmodules` (qemu submodule `branch=` line) —
+    kept `ast2050-faithful`; mithro/qemu `ast2050-faithful` fast-forwarded
+    (12 commits, no force) to the pinned gitlink `eda871c48f` so the branch
+    reference stays truthful.
+  * Gitlinks by ancestry: qemu kept OURS (`eda871c48f`; main's `e61dd3461d`
+    is a strict ancestor, 32 behind) — no submodule merge/rebuild needed;
+    culvert took MAIN's (`16b7ce0e78`; ours was 4 commits behind, 0 ahead).
+  * G3 VIC driver reconciliation (main's `kernel/patches/0003` vs our live
+    `qemu-firmware/kernel/drivers/irq-aspeed-g3-vic.c`): folded main's
+    `.irq_mask_ack`, init-time `pr_info` trigger dump and `GPL-2.0-or-later`
+    SPDX into the live copy (`aa14c2a`); kept our `& 0x1f` masking + G3
+    commentary. 0003 stays as the HW-verified format-patch snapshot;
+    relationship documented in `kernel/patches/README.md` (`e5c9197`).
+  * ftgmac100 series union: main's MACCLK fix (`setup_clk`) and our
+    cur_speed/FAST_MODE fix (`start_hw`) are independent; build-kernel.sh
+    now applies BOTH (`d6394bc`; verified both git-apply cleanly in
+    sequence on pristine v6.6.70 ftgmac100.c @1acb10106df3).
+  * CI workflows: ours kept wholesale — main's d16-qemu-stack.yml blob is
+    byte-identical to a state already in our history (PR #16 content is
+    ancestral to the branch).
+  * Post-merge verification: all 6 workflow YAMLs parse; no conflict
+    markers; `git submodule status` clean (qemu checked out at the pinned
+    gitlink); F7 static guard 12/12 PASS on the merged tree; live QEMU
+    smoke on the merged tree's prebuilt qemu-system-arm: `kgpe-d16-bmc`
+    boots to BMC-READY, eth0 DHCP lease, dropbear on :22, F7 boot
+    invariants 12/12 PASS (exit 0).
