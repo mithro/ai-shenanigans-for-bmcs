@@ -1,0 +1,12 @@
+Warning: Permanently added '192.168.77.138' (ED25519) to the list of known hosts.
+VCORE0           | 10h | ok  |  0.0 | 0.96 Volts
+VCORE1           | 11h | ok  |  0.0 | 0 Volts
+P12V             | 12h | ok  |  0.0 | 13.82 Volts
+P5V              | 13h | ok  |  0.0 | 3.26 Volts
+P3V3             | 14h | ok  |  0.0 | 3.26 Volts
+FAN1             | 30h | ok  |  0.0 | 2600 RPM
+FAN2             | 31h | ok  |  0.0 | 0 RPM
+FAN3             | 32h | ok  |  0.0 | 0 RPM
+FAN4             | 33h | ok  |  0.0 | 0 RPM
+FAN5             | 34h | ok  |  0.0 | 0 RPM
+FAN6             | 35h | ok  |  0.0 | 0 RPM
