@@ -204,6 +204,75 @@ chain, re-test F5's proven stack for stability, then run the staged demo.
 - Watching COM1 for the POST sequence (BMC-wait ~100–130 s → PXE →
   SystemRescue) + host ssh liveness.
 
+### C.3 Chain re-established (17:07–17:13 +09:30) — ~6 min host downtime
+- POST proceeded **without any CMOS/F1 halt** straight to PXE (com1 capture:
+  `PXE 2.1 Build 086` → `PXELINUX 4.07` → `vmlinuz` + `sysresccd.img` over
+  TFTP, `airootfs.sfs` over HTTP at 17:09:15).
+- Host back at 192.168.77.138 (SystemRescue, fresh RAM, uptime 1 min).
+- Culvert re-pushed from the snapshot (one untar); **P2A verified read-only:
+  `culvert p2a vga read 0x1e6e207c` → `0x00000202` rc=0** (AST2050 A3 rev,
+  matching all prior sessions).
+- Steady-state power draw back to ~49 W (same as pre-cycle 50 W).
+
+### C.4 Critical stability test — F5's proven stack after the cold cycle
+Boot: `linux-boot.py --kernel uImage-kgpe-d16-rxfix --dtb kgpe-g3vic.dtb
+--no-initrd` → NFS root `/srv/nfs/openbmc-full` (F5's 28 masks in place),
+mem=64M. Soak target: >10 min alive past systemd start (the post-outage
+freezes hit at 2.5–5 min).
+
+**Result (attempt-7): FROZE AGAIN at ~2.5 min (soak: 25 pings OK →
+SOAK-FROZE 17:25:52), after a verified-0W cold AC cycle.** This *kills* the
+"latched DDR2/SoC state" theory — the freeze is environmental, exactly as the
+user's reframe said ("it is some type of change you have made").
+
+### C.5 THE AUDIT (user-directed reframe) — root cause found in OUR changes
+Audit of every rig-side delta between F5's proven boots and the freezing boots:
+- **Masks: NOT the cause.** `f5-realhw-mask.py`/`f5_masked_daemons.py` identical
+  between the F5 and hwpass branches; on-disk `/srv/nfs/openbmc-full` mask set =
+  F5's exact 24 realhw units + 4 shipped flash masks, netipmid `.wants` removal
+  in place. Name-for-name correct.
+- **TFTP artifacts: NOT the cause.** `uImage-kgpe-d16-rxfix` (Jul 11 17:41) and
+  `kgpe-g3vic.dtb` (Jul 10 00:46) mtimes pre-date the F-HWPASS session; never
+  overwritten.
+- **Pi NFS/disk: NOT the cause.** 19 GB free, identical export options for all
+  exports, no nfs-server journal errors.
+- **ROOT CAUSE: `etc/systemd/network/00-bmc-eth0.network`.** phosphor-network
+  wrote it into the **shared rw NFS export** at **2026-07-11 23:44:03** — ~3 min
+  into F5's proven boot (machine-id 22:29, dropbear keys 23:44 = same boot) —
+  containing **`DHCP=true` + `MACAddress=` and NO static `[Address]`**. Writing
+  it mid-run was inert (networkd doesn't re-read without a reload). But
+  **eth-bmc has NO DHCP server** (`bmc-tftp.service` dnsmasq is TFTP-only:
+  `--port=0`, no `dhcp-range`), so on every SUBSEQUENT boot systemd-networkd
+  matches eth0, takes it over, flushes the kernel-`ip=` static 192.168.66.2 and
+  waits forever for DHCP → **the NFS root dies under systemd mid-startup** →
+  every process stalls on page-in: ping dead, serial getty mute, NFS counters
+  flat — indistinguishable from a hard freeze (and NO DHCPDISCOVER ever hits the
+  wire: tcpdump on eth-bmc shows total silence — the address flush kills the
+  rootfs before the DHCP client can page itself in).
+- **Every data point fits:** F5's proven fresh boots (≤23:44 Jul 11) started
+  file-ABSENT → stable for days (the running system kept its address). Every
+  boot after 23:44 started file-PRESENT → froze at the networkd-start mark
+  (attempts 3, 4, 6 on openbmc-full; attempts 2, 3 on openbmc-hwpass after
+  F-HWPASS *seeded the same DHCP file* into it at 15:38:47 believing it helped;
+  attempt-7 post-cold-cycle). Attempt 1 (fresh export, no file) is the
+  first-boot variant: phosphor-network *live-creates* the config under the new
+  image's heavier first-boot load (F1's documented eth0-bounce). "Freezes on
+  both images + survived days before + cold cycle doesn't help" — the exact
+  signature that fooled the bisect into blaming hardware.
+- **Why it appeared "post-outage": coincidence of ordering, not the outage.**
+  The file was born during F5's last boot; nobody fresh-booted between then and
+  the outage. The first post-outage boot was simply the first boot to ever
+  start with the file present.
+- **REMEDY applied:** archived the file
+  (`evidence/real-hw-hwpass/audit-networkd-dhcp-file.txt`) then **deleted it
+  from BOTH exports**, restoring F5's exact proven fresh-boot state. NOTE for
+  every future boot: phosphor-network re-creates the file during each run —
+  **delete it before every fresh boot** (added to the runbook), or land a
+  static-Address seed/image fix later.
+
+### C.6 Corrected control boot (file-absent openbmc-full) — attempt-8
+Same F5 proven stack, byte-accurate environment this time. Result: see below.
+
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
 request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no
