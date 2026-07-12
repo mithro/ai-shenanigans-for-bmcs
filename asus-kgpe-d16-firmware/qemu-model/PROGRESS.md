@@ -236,6 +236,10 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   executes a START (auto-clears START, advances the CMD status field `0x00480000`).
   Deferred (xfail): full ACK/NAK + smbus_eeprom readback need the exact CMD-status-field +
   SMBus command protocol. Gap: AST2400 model exposes up to 14 buses vs the G3's 7.
+  **UPDATE 2026-07-13 (task #63): the ACK/NAK xfail is RESOLVED — see the 2026-07-13 entry
+  at the bottom. Root cause was a missing I2CD0C interrupt-enable in the fwtest (datasheet
+  master-transmit step), not a model gap; no model change. Byte-level readback stays a
+  documented depth gap.**
 
 ### Progress: 9 peripherals covered (all C1–C4 boots green throughout)
 SCU, VIC, Timer, WDT, UART, MAC, GPIO, I2C + SDRAM(test/doc). Fully faithful (no model
@@ -696,3 +700,45 @@ suite **96 passed / 6 xfailed / 0 failed** — incl. `test_phy_is_rtl8201cp_10_1
 `test_phy_bmsr_no_gigabit`, sdram `geom.cap64/w16/bank4`, UART loopback, and all 12 KCS
 handshake checks (kcs-m2 preserved). The 6 xfails are pre-existing documented items
 (i2c smbus_ee, scu sysreset/clksel/clkstop/pinmux1). No regressions.
+
+## 2026-07-13 — I2C EEPROM probe: xfail → PASS, no model change (task #63)
+
+**Flipped the `i2c smbus_ee` xfail (`test_i2c.py::test_eeprom_probe_acks`) to PASS,
+faithfully.** Branch `claude/bmc-i2c-eeprom` off `claude/bmc-functionality` (`0b44e70`);
+qemu submodule branch `claude/i2c-eeprom` off `eb2018b816` (no submodule change needed).
+
+**Root cause (the 2026-07-10 xfail was a test-harness bug, not a missing device).** The
+kgpe-d16-bmc machine *does* seed an `smbus_eeprom` at bus 0 / 0x50 (`kgpe_d16_bmc_i2c_init`).
+QEMU's `smbus_eeprom` genuinely ACKs a bare addr+W probe (`smbus_i2c_event` returns 0 for
+`I2C_START_SEND` from IDLE, `smbus_slave.c:156`), and the AST2050 master latches that ACK
+as `TX_ACK` in I2CD10[0] (`aspeed_i2c_bus_handle_cmd`, non-packet path). The *only* reason
+the earlier probe saw nothing: in old (non-packet) mode `aspeed_i2c_bus_raise_interrupt`
+does `intr_sts &= intr_ctrl_mask` — I2CD10 is masked by the I2CD0C enable, and the old
+fwtest left I2CD0C=0. Enabling the ACK/NAK interrupts first is exactly the **datasheet-
+documented** master-transmit sequence (`DATASHEET-I2C.md` §4.1 init + §4.3 example:
+`I2CD10=0xFFFFFFFF` → `I2CD0C=0x000000BF` → poll I2CD10) and what all real firmware does.
+**No QEMU model change was required.**
+
+**Faithfulness / honest finding (`DOC.md` §2.1).** The device at bus 0 / 0x50 is the **Dell
+C410X** MAC/board-config EEPROM (`dell-c410x-firmware/ANALYSIS.md` §"EEPROM 0x50+ I2C0"),
+seeded on this *shared* machine purely for the **C4** vendor-firmware oracle. It is **not** a
+KGPE-D16 board device. The **KGPE-D16 itself has no attested probe-able master-side BMC I2C
+EEPROM**: its motherboard FRU is *software-populated* (`kgpe-d16-fru-populate.bb`, whose own
+summary reads "…(no EEPROM)"), DIMM SPD sits behind a host-side mux (GPIOF4/F5), and the
+only attested BMC-bus peripheral is the W83795G hwmon at bus 1 / 0x2f. We did **not** invent
+a KGPE-D16 EEPROM — the test proves the shared **AST2050 I2C master-engine** probe-ACK/NAK
+(the SoC fact common to both boards, datasheet §31.5) against the one real device the machine
+carries. The fwtest also exercises the SCU04[2] `g3-i2c-rst` reset-hold (register file inert
+until firmware de-asserts) from the g3-clk work.
+
+**Validated:** i2c fwtest **6/6 checks PASS** (`held_in_reset.inert`, `fun_ctrl.reset`,
+`master_en.rw`, `start.autoclears`, `unused.naks` 0x55→NAK, `eeprom50.acks` mask=0x01);
+`integration/test_i2c.py` **3 passed, 0 xfail** (was 1 xfail). Full model integration suite
+**97 passed / 5 xfailed / 0 failed** (was 96/6) — the resolved item is exactly `i2c
+smbus_ee`; the 5 remaining xfails are the P2A BAR (task #62) + 4 SCU reset-table items. No
+regressions. LOCAL qemu-system-arm rebuilt from this worktree's submodule (`eb2018b816`,
+arm-softmmu, one `make -j4`). This change touches **only** the i2c fwtest comments +
+`test_i2c.py` + docs — **no QEMU model, kernel, or firmware change** (submodule tree
+byte-identical to `eb2018b816`), so the legacy boots cannot regress by construction; C2/C4
+were last verified green on this exact submodule SHA in the 2026-07-12 consolidation above.
+Re-verification on the freshly-built LOCAL qemu recorded below as it completes.
