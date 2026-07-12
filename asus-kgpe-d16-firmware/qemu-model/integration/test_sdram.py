@@ -1,9 +1,12 @@
 """Integration test: SDRAM controller (DDR2) faithfulness on the QEMU model.
 
-Boots `peripherals/sdram/fwtest.c` under `-M kgpe-d16-bmc`. The protection
-lock-latch (unlock 0xFC600309) and refresh reset are already faithful; three
-DDR2-vs-DDR3 gaps remain and are xfail until the boot-gated `aspeed.sdmc-ast2050`
-model lands (see peripherals/sdram/DOC.md §4). No hardware here.
+Boots `peripherals/sdram/fwtest.c` under `-M kgpe-d16-bmc`. The faithful
+`aspeed.sdmc-ast2050` DDR2 model is now wired into the G3 SoC (gated on the
+AST2050 silicon rev), so all checks PASS: MCR04 resets to 0 and stores writes
+verbatim, MCR100 reads 0xA8, and reading MCR04 back after firmware programs the
+real KGPE-D16 value (0x585) reports 4-bank / 64 MB / 16-bit. The three checks
+that were xfail against the old DDR3 model (config.reset, config.rw, compat100)
+now pass. No hardware here (see peripherals/sdram/DOC.md).
 
 Run:  uv run --with pytest python -m pytest integration/test_sdram.py -q
 """
@@ -18,17 +21,18 @@ import runner  # noqa: E402
 skip_reason = runner.preconditions()
 pytestmark = pytest.mark.skipif(skip_reason is not None, reason=skip_reason or "")
 
-# DDR2 model change is gated on the C1-C4 boot check (MCR04 drives DRAM sizing).
-GATED = "aspeed.sdmc-ast2050 DDR2 model gated on the C1-C4 boot check (DOC.md §4)"
-
-# fwtest check label -> xfail reason (None = must pass now).
+# fwtest check label -> xfail reason (None = must pass). The faithful DDR2 model
+# closes the three DDR2-vs-DDR3 gaps that were previously xfail.
 CHECKS = {
     "protect.reset": None,   # MCR00 locked at reset -> reads 0
     "refresh.reset": None,   # MCR0C Init=0
     "unlock":        None,   # 0xFC600309 -> reads 1
-    "config.reset":  GATED,  # MCR04 Init=0 (QEMU synthesises DDR3 0x41)
-    "config.rw":     GATED,  # MCR04 stores verbatim (QEMU recomputes)
-    "compat100":     GATED,  # MCR100 = 0xA8 (unmodelled)
+    "config.reset":  None,   # MCR04 Init=0 (DDR2 model no longer synthesises it)
+    "config.rw":     None,   # MCR04 stores verbatim (no DDR3 recompute)
+    "compat100":     None,   # MCR100 = 0xA8 (AST2000-compat shadow modelled)
+    "geom.cap64":    None,   # MCR04[3:2]=01 -> reports 64 MB total
+    "geom.w16":      None,   # MCR04[9:8]=01 -> reports 16-bit bus
+    "geom.bank4":    None,   # MCR04[11]=0  -> reports 4-bank
 }
 
 

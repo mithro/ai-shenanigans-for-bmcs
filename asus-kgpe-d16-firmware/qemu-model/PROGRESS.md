@@ -640,3 +640,29 @@ phy0.id3=0x8201 phy0.bmsr=0x786d`; `test_mac.py::test_phy_is_rtl8201cp_10_100` +
 then `eth0: Link is Up - 100Mbps/Full` → DHCP 10.0.2.15 → `SSH_OK` (C2 PASS, was
 "RTL8211E Gigabit Ethernet"). **C4** Dell vendor firmware still boots to its BMC web
 service (`HTTP/1.0 301`, `Mbedthis-Appweb/2.4.2`, C4 PASS). Both oracle boots green.
+
+### 🎉 SDRAM (DDR2) SDMC model landed — MCR04/MCR100 xfail→PASS (2026-07-12)
+The Phase-1 SDRAM gate (§ "SDRAM (DDR2): test + doc done; model gated") is retired.
+Implemented the faithful **`aspeed.sdmc-ast2050`** DDR2 model (`hw/misc/aspeed_sdmc.c`,
+`TYPE_ASPEED_2050_SDMC`) and wired it into the G3 SoC in `hw/arm/aspeed_ast2400.c`,
+gated on the AST2050 silicon rev (same pattern as G3 SCU/VIC/RTC). Grounded in the A3
+datasheet §17 (`peripherals/sdram/DATASHEET-SDRAM.md`) + the live JTAG capture
+(MCR04=0x00000585 on the real KGPE-D16):
+- **MCR04 resets 0** (no SPD/strap/probe sizing — firmware writes the geometry) and is
+  **stored verbatim** on write; the DDR3 model synthesised it from ram_size and
+  recomputed on write. Reading MCR04 back after firmware writes 0x585 reports the real
+  board geometry: **4-bank / 64 MB / 16-bit** (bits [11]=0, [3:2]=01, [9:8]=01).
+- **MCR100** reads **0xA8** (AST2000-compat SCU-password shadow, RO); MCR170 RO 0.
+- MCR00 lock-latch (unlock 0xFC600309→reads 1; resets locked→0) preserved.
+- MCR04[6] read-only bus-width status is *not* mirrored (kept a plain latch) so a
+  read-back equals the JTAG-captured 0x585 — flagged in-source (best-effort vs the
+  datasheet's status-mirror note; no HW read-back evidence for bit6/0x5C5).
+
+**Validated:** sdram fwtest **9/9 PASS** (config.reset/config.rw/compat100 + 3 new
+geometry checks); `integration/test_sdram.py` **10 passed, 0 xfail** (was 3 xfail);
+full model integration suite **94 passed / 7 xfailed** (none in sdram, no regressions).
+**Faithful oracles both green on the DDR2 model:** **C4** Dell vendor firmware (writes
+the SDMC during init) boots to its BMC web service (HTTP 301 Mbedthis-Appweb) — the real
+SDMC test; **C2** our from-source kernel (fresh build off this base) boots to an SSH login
+(dropbear listening, SSH_OK, `kgpe-d16-bmc` / `Linux armv5tejl`). qemu submodule branch
+`claude/sdmc-ast2050` (off eda871c48f, mithro/qemu).
