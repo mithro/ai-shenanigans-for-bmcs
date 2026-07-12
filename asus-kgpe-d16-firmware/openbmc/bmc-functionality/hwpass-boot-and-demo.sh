@@ -36,6 +36,16 @@ echo "[2] ensure realhw daemon masks on the new export (idempotent)"
 ( cd "$HW/openbmc/bmc-functionality" && \
   uv run f5-realhw-mask.py apply --pi "$PI" --export "$EXPORT" )
 
+echo "[2b] delete phosphor-network's DHCP config from the export (CRITICAL)"
+# phosphor-network writes etc/systemd/network/00-bmc-eth0.network (DHCP=true,
+# no static Address) into the rw NFS export ~3 min into every run. Writing it
+# is inert for THAT run, but on the NEXT boot networkd takes over eth0, flushes
+# the kernel-ip= static 192.168.66.2 (eth-bmc has NO DHCP server) and the NFS
+# root dies mid-systemd — a perfect hard-freeze mimic (the 2026-07-12 "board
+# regression" root cause; see HWPASS-PROGRESS.md Phase C.5). Delete before
+# EVERY fresh boot, on whichever export is being booted.
+ssh -o BatchMode=yes "$PI" "sudo rm -f $EXPORT/etc/systemd/network/00-bmc-eth0.network && echo '    network-file deleted (or already absent)'"
+
 echo "[3] claim the rig (append intent to the Pi coordination log)"
 ssh -o BatchMode=yes "$PI" "printf '%s\n' '- '\"\$(date -Is)\"'  instance-F-HWPASS: P2A cold-boot the new openbmc-hwpass image (kcsbridge + ASUSTeK/0x0D16 IDs) + full kernel + combined DTB over NFS. STATE-MUTATING (P2A DDR2 init + BMC reset-boot); flash untouched; power-cycle recoverable. Host stays ON. Will capture system-id/sensors/host-KCS/power-status/SOL then leave board ON.' | sudo tee -a /home/claude/HARDWARE-COORDINATION.md >/dev/null"
 
