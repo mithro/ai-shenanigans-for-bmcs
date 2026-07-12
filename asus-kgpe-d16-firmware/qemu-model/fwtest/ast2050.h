@@ -16,7 +16,7 @@ typedef unsigned int u32;
 #define AHBC_BASE         0x1E600000u  /* AHB controller + remap (0x8C)        */
 #define MAC1_BASE         0x1E660000u  /* ftgmac100 MAC1 (RMII)                */
 #define MAC2_BASE         0x1E680000u  /* ftgmac100 MAC2                       */
-#define USB_UDC_BASE      0x1E6A0000u  /* USB2.0 device/vhub (unmodelled)      */
+#define USB_UDC_BASE      0x1E6A0000u  /* USB2.0 device/vhub (aspeed.udc-ast2050)*/
 #define VIC_BASE          0x1E6C0000u  /* interrupt controller (compact G3)    */
 #define SDMC_BASE         0x1E6E0000u  /* SDRAM controller (DDR2)              */
 #define SCU_BASE          0x1E6E2000u  /* system control unit                  */

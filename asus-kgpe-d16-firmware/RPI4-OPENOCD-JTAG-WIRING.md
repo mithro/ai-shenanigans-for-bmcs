@@ -16,6 +16,8 @@ KGPE-D16, for developing replacement firmware on the ASPEED **AST2050** BMC.
 > JTAG headers (BMC + AMD HDT) with the HDT+ pinout & scan chain ·
 > [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md) — per-header diagrams ·
 > [`RAPTOR-UBOOT-ANALYSIS.md`](RAPTOR-UBOOT-ANALYSIS.md) — AST2050 U-Boot ·
+> [`../HARDWARE-ACCESS.md`](../HARDWARE-ACCESS.md) — the network/SSH side: the
+> `rpi4-asus-aspeed2050-dev` bridge this rig runs on, and how to reach it ·
 > [`../hpe-ipdu-firmware/HEADERS-J1-J6.md`](../hpe-ipdu-firmware/HEADERS-J1-J6.md)
 > — JTAG adapter comparison (same ARM926EJ-S debug architecture).
 

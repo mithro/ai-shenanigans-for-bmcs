@@ -1,0 +1,69 @@
+{
+  "@odata.id": "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
+  "@odata.type": "#EthernetInterface.v1_9_0.EthernetInterface",
+  "DHCPv4": {
+    "DHCPEnabled": true,
+    "UseDNSServers": true,
+    "UseDomainName": true,
+    "UseNTPServers": true
+  },
+  "DHCPv6": {
+    "OperatingMode": "Enabled",
+    "UseDNSServers": true,
+    "UseDomainName": true,
+    "UseNTPServers": true
+  },
+  "Description": "Management Network Interface",
+  "EthernetInterfaceType": "Physical",
+  "FQDN": "quanta-q71l",
+  "HostName": "quanta-q71l",
+  "IPv4Addresses": [
+    {
+      "Address": "10.0.2.15",
+      "AddressOrigin": "Static",
+      "Gateway": "10.0.2.2",
+      "SubnetMask": "255.255.255.0"
+    }
+  ],
+  "IPv4StaticAddresses": [
+    {
+      "Address": "10.0.2.15",
+      "AddressOrigin": "Static",
+      "Gateway": "10.0.2.2",
+      "SubnetMask": "255.255.255.0"
+    }
+  ],
+  "IPv6AddressPolicyTable": [],
+  "IPv6Addresses": [
+    {
+      "Address": "fe80::5054:ff:fe12:3456",
+      "AddressOrigin": "LinkLocal",
+      "PrefixLength": 64
+    },
+    {
+      "Address": "fec0::5054:ff:fe12:3456",
+      "AddressOrigin": "DHCPv6",
+      "PrefixLength": 64
+    }
+  ],
+  "IPv6DefaultGateway": "0:0:0:0:0:0:0:0",
+  "IPv6StaticAddresses": [],
+  "IPv6StaticDefaultGateways": [],
+  "Id": "eth0",
+  "InterfaceEnabled": true,
+  "LinkStatus": "LinkUp",
+  "MACAddress": "52:54:00:12:34:56",
+  "MTUSize": 1500,
+  "Name": "Manager Ethernet Interface",
+  "NameServers": [
+    "10.0.2.3"
+  ],
+  "SpeedMbps": 100,
+  "StatelessAddressAutoConfig": {
+    "IPv6AutoConfigEnabled": true
+  },
+  "StaticNameServers": [],
+  "Status": {
+    "State": "Enabled"
+  }
+}

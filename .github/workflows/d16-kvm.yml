@@ -1,0 +1,158 @@
+name: D16 KVM-over-IP (AST2050 video + HID)
+
+# Builds the custom kgpe-d16-bmc (AST2050) QEMU, a KVM-enabled kernel (V4L2 +
+# aspeed-video + USB gadget/HID), and a BusyBox initramfs, then boots them and
+# verifies the KVM-over-IP silicon path (F8):
+#   * VIDEO: the aspeed-video V4L2 driver probes the modelled AST2050 video engine
+#     @0x1e700000 (VIC INT#7) and exposes /dev/video0 (the KVM screen-capture node).
+#   * VIDEO DATAPATH: a colour test pattern written into the VGA carve-out (the
+#     host framebuffer in BMC DRAM @0x43800000) is captured through the modelled
+#     engine (VR004 trigger -> JPEG -> stream buffer -> INT#7) and the dequeued
+#     V4L2 frame is decoded + pixel-verified against the pattern.
+#   * HID:   a virtual keyboard+mouse gadget is built on the USB2.0 vhub @0x1e6a0000
+#     (VIC INT#5) and an actual keypress ('a') HID report is written to /dev/hidg0
+#     and shown crossing the in-guest dummy_hcd loopback to a host-side evdev device.
+# The BMC-only machine has no real server host; the HID layer is the remaining
+# host-facing boundary. See asus-kgpe-d16-firmware/openbmc/bmc-functionality/F8-KVM.md
+# for the honest per-layer boundary and the obmc-ikvm 64 MB assessment.
+on:
+  push:
+    paths:
+      - 'asus-kgpe-d16-firmware/qemu-firmware/**'
+      - 'asus-kgpe-d16-firmware/qemu-model/**'
+      - 'asus-kgpe-d16-firmware/openbmc/bmc-functionality/F8-KVM.md'
+      - '.github/workflows/d16-kvm.yml'
+  pull_request:
+    paths:
+      - 'asus-kgpe-d16-firmware/qemu-firmware/**'
+      - 'asus-kgpe-d16-firmware/qemu-model/**'
+      - '.github/workflows/d16-kvm.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: d16-kvm-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QEMU_DEPS: build-essential ninja-build pkg-config python3 python3-venv libglib2.0-dev libpixman-1-dev libslirp-dev flex bison
+  XC_DEPS: gcc-arm-linux-gnueabi libc6-dev-armel-cross bc flex bison libssl-dev libelf-dev u-boot-tools device-tree-compiler
+
+jobs:
+  build-qemu:
+    name: Build custom QEMU (kgpe-d16-bmc / AST2050)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qemu
+          path: asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm
+          if-no-files-found: error
+
+  build-kernel:
+    name: Build KVM kernel (V4L2 + aspeed-video + USB/HID)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $XC_DEPS
+      - name: Build kernel
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-kernel.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel
+          path: asus-kgpe-d16-firmware/qemu-firmware/kernel/out/
+          if-no-files-found: error
+
+  build-initramfs:
+    name: Build initramfs (BusyBox + dropbear + KVM demo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabi libc6-dev-armel-cross bzip2 cpio \
+            u-boot-tools openssh-client make
+      - uses: astral-sh/setup-uv@v5
+      - name: Build initramfs
+        run: uv run asus-kgpe-d16-firmware/qemu-firmware/initramfs/build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: initramfs
+          path: asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/
+          if-no-files-found: error
+
+  boot-kvm:
+    name: Boot KVM kernel -> video probe + HID keypress (F8)
+    runs-on: ubuntu-latest
+    needs: [build-qemu, build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with: { name: qemu, path: qemu-out }
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot with KVM stack + verify video (/dev/video0) + HID keypress
+        run: |
+          chmod +x qemu-out/qemu-system-arm
+          # 64 MB — the real AST2050 DDR2 size (hardware-verified). The KGPE-D16 DTS
+          # does not reserve the 32 MB video_engine_memory region (see F8-KVM.md §4),
+          # so probe + /dev/video0 fit; full capture buffers are the 64 MB boundary.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/kvm-test.py \
+            --qemu qemu-out/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --mem 64 --boot-timeout 300
+
+  boot-video-capture:
+    name: Capture a real frame through the video engine (F8 datapath)
+    runs-on: ubuntu-latest
+    needs: [build-qemu, build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with: { name: qemu, path: qemu-out }
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot, draw pattern into the VGA carve-out, capture + verify the frame
+        run: |
+          chmod +x qemu-out/qemu-system-arm
+          # "See the virtual VGA screen": the guest draws a colour test pattern
+          # into the vga_memory carve-out (the host framebuffer in BMC DRAM,
+          # 8 MB @0x43800000, HW-verified strap), the modelled AST2050 video
+          # engine captures + JPEG-compresses it (VR004 trigger -> VR054 stream
+          # buffer -> VIC INT#7), and the dequeued /dev/video0 frame is decoded
+          # and pixel-compared against the pattern.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/video-capture-test.py \
+            --qemu qemu-out/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --mem 64 --boot-timeout 300 \
+            --evidence-dir captured-frame
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captured-frame
+          path: captured-frame/
+          if-no-files-found: ignore

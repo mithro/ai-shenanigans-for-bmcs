@@ -2,6 +2,8 @@
 /dts-v1/;
 
 #include "aspeed-g4.dtsi"
+#include <dt-bindings/gpio/aspeed-gpio.h>
+#include <dt-bindings/input/input.h>
 
 /*
  * ASUS KGPE-D16 server-board BMC.
@@ -38,6 +40,97 @@
 		 */
 		reg = <0x40000000 0x04000000>;	/* 64 MB */
 	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * VGA/graphics aperture: the AST2050's integrated VGA controller
+		 * (the host's video adapter on the KGPE-D16) frame-buffers out of
+		 * the top of BMC DRAM. Size is the SCU70[3:2] hardware strap
+		 * (datasheet §18.2 p.217, mirrored into MCR04[5:4] §17 p.185) —
+		 * hardware-verified 8 MB on this board: the live JTAG DDR2 init
+		 * computed "MCR04 = 0x00000585" from the real SCU70 (bits [5:4] =
+		 * 00 = 8 MB; JTAG-USAGE-GUIDE.md). no-map keeps the BMC kernel
+		 * out of the host's framebuffer; the video engine (F8) captures
+		 * from this region. Same pattern as the C410X vga_memory node and
+		 * mainline aspeed boards.
+		 */
+		vga_memory: region@43800000 {
+			no-map;
+			compatible = "shared-dma-pool";
+			reg = <0x43800000 0x00800000>;	/* 8 MB */
+		};
+	};
+
+	/*
+	 * Host power-control LEDs (F2). Active-low, per Raptor's board GPIO CSV
+	 * (HW-WIRING-power-sensors.md §1.1/§1.3). Only the board-authoritative
+	 * LEDs are listed (the Facebook-Wedge power_led/post_led leftovers are
+	 * deliberately ignored).
+	 */
+	leds {
+		compatible = "gpio-leds";
+
+		led-bmc-status {
+			label = "bmc-status";
+			gpios = <&gpio ASPEED_GPIO(E, 1) GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "heartbeat";
+		};
+
+		led-identify {
+			label = "identify";
+			gpios = <&gpio ASPEED_GPIO(G, 0) GPIO_ACTIVE_LOW>;
+		};
+
+		led-cpu1-error {
+			label = "cpu1-error";
+			gpios = <&gpio ASPEED_GPIO(E, 3) GPIO_ACTIVE_LOW>;
+		};
+
+		led-cpu2-error {
+			label = "cpu2-error";
+			gpios = <&gpio ASPEED_GPIO(E, 2) GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	/* Front-panel locator / ID button (GPIOG1, active low). */
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		id-button {
+			label = "id-button";
+			linux,code = <KEY_RESTART>;
+			gpios = <&gpio ASPEED_GPIO(G, 1) GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+&gpio {
+	status = "okay";
+	/*
+	 * Host power control (F2). gpio-line-names is POSITIONAL: entry N names
+	 * line N = bank*8 + pin (A0=0, B0=8, ... H0=56). The 12 board-meaningful
+	 * lines (from Raptor's asus-BMC-GPIO.csv, HW-WIRING-power-sensors.md §1.1)
+	 * are the active-low power-request lines the BMC drives (power-up-req-n
+	 * B1, power-down-req-n F0, reset-req-n B6), the power-state-in input
+	 * (power-state-in H2, 1=on), the BMC-control lockout (A4), the SPD-mux
+	 * selects (F4/F5), the LEDs (E1/E2/E3/G0) and the ID switch (G1). These
+	 * names are what phosphor-gpio / libgpiod resolve against; the modeled
+	 * QEMU power-sequencer (aspeed_gpio_kgpe_d16_pwrseq) latches B1/F0/B6 and
+	 * feeds H2 back so the whole OpenBMC power path is demonstrable.
+	 */
+	gpio-line-names =
+		/*  A0..A7 */ "", "", "", "", "bmc-ctl-lockout-n", "", "", "",
+		/*  B0..B7 */ "", "power-up-req-n", "", "", "", "", "reset-req-n", "",
+		/*  C0..C7 */ "", "", "", "", "", "", "", "",
+		/*  D0..D7 */ "", "", "", "", "", "", "", "",
+		/*  E0..E7 */ "", "led-bmc-status-n", "led-cpu2-err-n", "led-cpu1-err-n", "", "", "", "",
+		/*  F0..F7 */ "power-down-req-n", "", "", "", "spd-mux-s1", "spd-mux-s0", "", "",
+		/*  G0..G7 */ "led-id-n", "sw-id-n", "", "", "", "", "", "",
+		/*  H0..H2 */ "", "", "power-state-in";
 };
 
 &syscon {
@@ -68,6 +161,52 @@
 	status = "okay";
 };
 
+/*
+ * Host-facing VUART (0x1e787000) — the AST2050 (G3) Virtual UART the x86 host
+ * reaches over LPC (I/O 0x3F8, SIRQ 4; datasheet §29). It is the Serial-over-LAN
+ * source: obmc-console-server binds it as /dev/ttyVUART0 (udev rule keyed on
+ * iomem_base 0x1E787000) and netipmid exposes it via `ipmitool sol activate`.
+ * Raptor's real AST2050 OpenBMC port uses this same block (dev-vuart.c ->
+ * mainline 8250_aspeed_vuart.c). The kgpe-d16-bmc QEMU machine models it as a
+ * 16550 wired to serial_hd(1). The driver defaults lpc-io-reg=0x3f8 / sirq=4
+ * (COM1), which match this board.
+ */
+&vuart {
+	status = "okay";
+};
+
+/*
+ * Host-side IPMI over LPC KCS (F5b — local host<->BMC channel). The AST2050 (G3)
+ * LPC controller at 0x1e789000 exposes three H8S/2168-style KCS channels; each is
+ * an IDRn/ODRn/STRn register triple (datasheet §30.3, p.315; DATASHEET-LPC.md):
+ *   ch1 0x24/0x30/0x3c   ch2 0x28/0x34/0x40   ch3 0x2c/0x38/0x44
+ * These offsets are IDENTICAL on the AST2400, so mainline kcs_bmc_aspeed binds
+ * unchanged: drivers/char/ipmi/kcs_bmc_aspeed.c defines LPC_IDR1=0x024 ...
+ * LPC_STR3=0x044, exactly matching the datasheet. The faithful QEMU G3 LPC model
+ * (qemu/hw/misc/aspeed_lpc_ast2050.c) services these registers (RW config/data,
+ * read-only KCS status STR1-3). NB: BT is NOT wired here — on the G3 the BT block
+ * is at 0x48-0x68 (H8S layout), but mainline's aspeed,ast2400-ibt-bmc / bt-bmc.c
+ * hardcode the AST2400 0x140 offset, which is beyond this SoC's LPC register file
+ * (model window 0x00-0x9F) and unimplemented on real AST2050 silicon — so KCS is
+ * the only mainline-drivable host-IPMI channel on this SoC. See HOST-KCS-BT-STATUS.md.
+ *
+ * Channel 3 is the classic IPMI SMS "system interface": host I/O port 0xca2 (data
+ * 0xca2 / status+command 0xca3), the OpenBMC convention. The kernel binds
+ * kcs_bmc_aspeed + the cdev-ipmi client (CONFIG_IPMI_KCS_BMC_CDEV_IPMI) and creates
+ * /dev/ipmi-kcs3, which OpenBMC's host-IPMI bridge (phosphor-ipmi-kcs / kcsbridge)
+ * opens to feed ipmid. LPC IRQ = VIC #8 (datasheet §10 Table 36, p.99; SoC memmap
+ * ASPEED_DEV_LPC=8), the host->BMC IBF completion.
+ */
+&lpc {
+	kcs3: kcs@2c {
+		compatible = "aspeed,ast2400-kcs-bmc-v2";
+		reg = <0x2c 0x1>, <0x38 0x1>, <0x44 0x1>;
+		aspeed,lpc-io-reg = <0xca2>;
+		interrupts = <8>;
+		status = "okay";
+	};
+};
+
 &mac0 {
 	status = "okay";
 	/*
@@ -83,6 +222,74 @@
 	phy-mode = "rmii";
 };
 
+&i2c1 {
+	status = "okay";
+
+	/*
+	 * Nuvoton/Winbond W83795G hardware monitor -- the KGPE-D16's single
+	 * fan/voltage/temperature sensor chip, on the BMC's I2C bus 1 at 0x2f
+	 * (Raptor's AST2050 OpenBMC port taps it exactly there; coreboot's
+	 * devicetree.cb programs its channel map). The AST2050's own PWM/tach
+	 * block is unused on this board -- all sensors come from this chip.
+	 *
+	 * The mainline drivers/hwmon/w83795.c has no of_match_table, but the I2C
+	 * core's DT modalias fallback strips the "winbond," vendor prefix and
+	 * matches the driver's i2c_device_id "w83795g", so this node binds and
+	 * exposes /sys/bus/i2c/devices/1-002f/hwmon for phosphor-hwmon.
+	 * Modelled in QEMU by hw/sensor/w83795.c on the kgpe-d16-bmc machine.
+	 */
+	hwmon@2f {
+		compatible = "winbond,w83795g";
+		reg = <0x2f>;
+	};
+};
+
 &wdt1 {
 	status = "okay";
+};
+
+/*
+ * AST2050 (G3) Video Engine (0x1e700000, VIC INT#7) — the KVM screen-capture
+ * block (F8). It captures the SoC's own VGA/CRT framebuffer (or an external DVO
+ * source) and JPEG/VQ-compresses it for remote KVM; OpenBMC's obmc-ikvm streams
+ * the compressed frames. Datasheet §20 (p.232-255) + §9 memory map (p.97) + §10
+ * IRQ table (p.99). AST2050-only block (the sibling AST1100 lacks the video
+ * compression engine, §1.3.6 p.19). See F8-KVM.md and qemu-model/peripherals/video.
+ *
+ * Bound by mainline drivers/media/platform/aspeed/aspeed-video.c via the
+ * aspeed-g4.dtsi node (compatible "aspeed,ast2400-video-engine"): the driver
+ * ioremaps 0x1e700000, requests INT#7, gets the VCLK/ECLK gates, and registers a
+ * V4L2 device -> /dev/video0. The AST2050 VR-register file differs from the
+ * G4/G5/G6 the driver targets (DATASHEET-VIDEO.md §7), so probe + /dev/video0 is
+ * faithful, but actual frame capture (VR004 trigger -> JPEG stream -> INT#7) is a
+ * deferred behavioural add-on in the QEMU model (aspeed.video-ast2050 is a
+ * register-accurate protection-key + RW model). The kgpe-d16-bmc QEMU machine
+ * maps this block; there is no VGA host source in the BMC-only machine, so capture
+ * reports no-signal — the achievable QEMU bar is "driver probes + opens the
+ * capture device". See F8-KVM.md for the host-VGA-source boundary.
+ */
+&video {
+	status = "okay";
+};
+
+/*
+ * AST2050 (G3) USB2.0 device / virtual-hub controller (0x1e6a0000, VIC INT#5) —
+ * the BMC's ONLY USB block and the vKVM virtual-HID / virtual-media datapath (F6
+ * groundwork; F8 uses it for the HID keyboard/mouse gadget). The AST2050 has NO
+ * USB *host* controller (no EHCI/UHCI/OHCI), so "connect USB devices" means the
+ * BMC presents virtual devices TO THE SERVER HOST. Datasheet §9 (p.97) + §10
+ * (p.99) + §15 (p.154-178). See F6-USB.md + qemu-model/peripherals/usb.
+ *
+ * Bound by mainline drivers/usb/gadget/udc/aspeed-vhub (an AST2400-family driver).
+ * The AST2050 vhub register file differs (7 downstream ports + a 21-endpoint pool
+ * vs the AST2400's 5/15), so the faithful G3 counts are set here; a dedicated G3
+ * UDC driver + a functional QEMU vhub datapath (so the BMC actually presents a
+ * device to the host) are the F8-KVM host-facing follow-ups. QEMU models this
+ * block as aspeed.udc-ast2050 @0x1e6a0000. The HID keyboard/mouse gadget the KVM
+ * client drives is demonstrated in-guest over dummy_hcd (F8-KVM.md §3).
+ */
+&vhub {
+	status = "okay";
+	aspeed,vhub-downstream-ports = <7>;
+	aspeed,vhub-generic-endpoints = <21>;
 };

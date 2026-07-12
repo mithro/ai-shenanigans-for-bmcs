@@ -1,0 +1,4 @@
+$ ipmitool -I lanplus -H <bmc> -U root -P <pw> chassis power status
+# exit code: 0
+
+Chassis Power is off

@@ -1,0 +1,10 @@
+$ ipmitool -I lanplus fru print 0
+# rc=0
+
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+ Board Mfg Date        : Sun 01 Jan 2012 10:30:00 ACDT
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z

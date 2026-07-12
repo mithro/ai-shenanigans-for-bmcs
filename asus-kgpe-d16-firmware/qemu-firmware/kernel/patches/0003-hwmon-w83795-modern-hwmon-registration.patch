@@ -1,0 +1,144 @@
+diff --git a/drivers/hwmon/w83795.c b/drivers/hwmon/w83795.c
+index c446e00db..24c9c9d00 100644
+--- a/drivers/hwmon/w83795.c
++++ b/drivers/hwmon/w83795.c
+@@ -319,6 +319,7 @@ enum chip_types {w83795g, w83795adg};
+ 
+ struct w83795_data {
+ 	struct device *hwmon_dev;
++	struct i2c_client *client;
+ 	struct mutex update_lock;
+ 	unsigned long last_updated;	/* In jiffies */
+ 	enum chip_types chip_type;
+@@ -587,8 +588,8 @@ static struct w83795_data *w83795_update_pwm_config(struct device *dev)
+ 
+ static struct w83795_data *w83795_update_device(struct device *dev)
+ {
+-	struct i2c_client *client = to_i2c_client(dev);
+-	struct w83795_data *data = i2c_get_clientdata(client);
++	struct w83795_data *data = dev_get_drvdata(dev);
++	struct i2c_client *client = data->client;
+ 	u16 tmp;
+ 	u8 intrusion;
+ 	int i;
+@@ -2134,6 +2135,102 @@ static void w83795_apply_temp_config(struct w83795_data *data, u8 config,
+ 	}
+ }
+ 
++/*
++ * Modern hwmon interface (hwmon_device_register_with_info) exposing the sensor
++ * *_input values under /sys/class/hwmon/hwmonN/ with a "name" file. The legacy
++ * hwmon_device_register() this driver used only created the attributes on the
++ * i2c client device (hwmonN/device/) and left hwmonN nameless, which modern
++ * hwmon consumers (e.g. OpenBMC phosphor-hwmon, which reads hwmonN/<type>N_input
++ * and hwmonN/name directly) cannot see. The rich limit/alarm/pwm attributes stay
++ * on the i2c client via w83795_handle_files(); this only adds the input channels
++ * the standard hwmon ABI expects.
++ */
++static umode_t w83795_is_visible(const void *drvdata,
++				 enum hwmon_sensor_types type,
++				 u32 attr, int channel)
++{
++	const struct w83795_data *data = drvdata;
++
++	switch (type) {
++	case hwmon_in:
++		if (data->has_in & (1 << channel))
++			return 0444;
++		break;
++	case hwmon_fan:
++		if (data->has_fan & (1 << channel))
++			return 0444;
++		break;
++	case hwmon_temp:
++		if (channel < 6) {
++			if (data->has_temp & (1 << channel))
++				return 0444;
++		} else {
++			if (data->has_dts & (1 << (channel - 6)))
++				return 0444;
++		}
++		break;
++	default:
++		break;
++	}
++	return 0;
++}
++
++static int w83795_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
++			     u32 attr, int channel, long *val)
++{
++	struct w83795_data *data = w83795_update_device(dev);
++
++	switch (type) {
++	case hwmon_in:
++		*val = in_from_reg(channel, data->in[channel][IN_READ]);
++		return 0;
++	case hwmon_fan:
++		*val = fan_from_reg(data->fan[channel]);
++		return 0;
++	case hwmon_temp:
++		if (channel < 6)
++			*val = temp_from_reg(data->temp[channel][TEMP_READ]) +
++			       (data->temp_read_vrlsb[channel] >> 6) * 250;
++		else
++			*val = temp_from_reg(data->dts[channel - 6]) +
++			       (data->dts_read_vrlsb[channel - 6] >> 6) * 250;
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++static const struct hwmon_channel_info * const w83795_hwmon_info[] = {
++	HWMON_CHANNEL_INFO(in,
++		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
++		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
++		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
++		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
++		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
++		HWMON_I_INPUT),
++	HWMON_CHANNEL_INFO(fan,
++		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
++		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
++		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
++		HWMON_F_INPUT, HWMON_F_INPUT),
++	HWMON_CHANNEL_INFO(temp,
++		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
++		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
++		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
++		HWMON_T_INPUT, HWMON_T_INPUT),
++	NULL
++};
++
++static const struct hwmon_ops w83795_hwmon_ops = {
++	.is_visible = w83795_is_visible,
++	.read = w83795_hwmon_read,
++};
++
++static const struct hwmon_chip_info w83795_chip_info = {
++	.ops = &w83795_hwmon_ops,
++	.info = w83795_hwmon_info,
++};
++
+ static const struct i2c_device_id w83795_id[];
+ 
+ static int w83795_probe(struct i2c_client *client)
+@@ -2149,6 +2246,7 @@ static int w83795_probe(struct i2c_client *client)
+ 		return -ENOMEM;
+ 
+ 	i2c_set_clientdata(client, data);
++	data->client = client;
+ 	data->chip_type = i2c_match_id(w83795_id, client)->driver_data;
+ 	data->bank = i2c_smbus_read_byte_data(client, W83795_REG_BANKSEL);
+ 	mutex_init(&data->update_lock);
+@@ -2222,7 +2320,8 @@ static int w83795_probe(struct i2c_client *client)
+ 	if (data->chip_type == w83795g)
+ 		w83795_check_dynamic_in_limits(client);
+ 
+-	data->hwmon_dev = hwmon_device_register(dev);
++	data->hwmon_dev = hwmon_device_register_with_info(dev, "w83795", data,
++							  &w83795_chip_info, NULL);
+ 	if (IS_ERR(data->hwmon_dev)) {
+ 		err = PTR_ERR(data->hwmon_dev);
+ 		goto exit_remove;

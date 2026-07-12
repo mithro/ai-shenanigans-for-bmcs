@@ -1,0 +1,22 @@
+# HTTP server for the SystemRescue rootfs (paired with host-pxe.service).
+# Install on the ASUS bridge Pi as /etc/systemd/system/host-pxe-http.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now host-pxe-http
+#
+# pxelinux boots vmlinuz + sysresccd.img over TFTP with
+#   archiso_http_srv=http://192.168.77.1:8080/iso/
+# so SystemRescue fetches its airootfs over HTTP from /srv/pxe/http (dir 'iso/').
+# Binds 192.168.77.1 (eth-host); Restart retries until the NM profile brings that
+# address up.
+[Unit]
+Description=KGPE-D16 host PXE HTTP (SystemRescue rootfs)
+After=network-online.target NetworkManager.service host-pxe.service
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/srv/pxe/http
+ExecStart=/usr/bin/python3 -m http.server 8080 --bind 192.168.77.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

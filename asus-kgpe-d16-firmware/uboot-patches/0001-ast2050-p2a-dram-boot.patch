@@ -1,0 +1,94 @@
+diff --git a/board/aspeed/ast2050/flash_spi.c b/board/aspeed/ast2050/flash_spi.c
+index 8eda064..ae438a1 100644
+--- a/board/aspeed/ast2050/flash_spi.c
++++ b/board/aspeed/ast2050/flash_spi.c
+@@ -427,7 +427,17 @@ static ulong flash_get_size (ulong base, int banknum)
+ 
+ 	default:
+ 	    printf("Can't support this SPI Flash!! \n");
+-	    break;
++	    /* No flash chip reachable (e.g. P2A DRAM boot, flash not served over
++	     * P2A). Return a benign single-sector geometry IMMEDIATELY: the rest of
++	     * this function (sector loop with an otherwise-uninitialised count, then
++	     * the SPI-controller clock config that runs on uninitialised WriteClk/
++	     * EraseClk/ReadClk and touches flash hardware) hangs with no chip.
++	     * flash_init()>0 keeps U-Boot's generic wrapper happy -> reaches prompt. */
++	    info->sector_count = 1;
++	    info->size = 0x10000;
++	    info->start[0] = base;
++	    info->protect[0] = 0;
++	    return info->size;
+ 	}
+ 			
+ 	debug ("erase_region_size = %d\n",
+diff --git a/board/aspeed/ast2050/platform.S b/board/aspeed/ast2050/platform.S
+index 05e356c..c3a9f34 100644
+--- a/board/aspeed/ast2050/platform.S
++++ b/board/aspeed/ast2050/platform.S
+@@ -368,7 +368,7 @@ delay1:
+ 
+     ldr r0, =SDRAM_CONFIG_REG               @ MCR04 - Config register
+ #ifdef CONFIG_1G_DDRII
+-    ldr r1, =0x00000d89
++    ldr r1, =0x00000585		@ was 0x00000d89; KGPE-D16 DDR2 = 4-BANK, 64MB
+ #endif
+ #ifdef CONFIG_512M_DDRII
+     ldr r1, =0x00000585
+diff --git a/include/configs/asus.h b/include/configs/asus.h
+index 4d1320b..56962ef 100644
+--- a/include/configs/asus.h
++++ b/include/configs/asus.h
+@@ -237,7 +237,7 @@
+ #define CONFIG_SYS_NS16550_COM2		0x1e784000
+ #define	CONFIG_SYS_LOADS_BAUD_CHANGE
+ #define CONFIG_CONS_INDEX		2
+-#define CONFIG_BAUDRATE			38400
++#define CONFIG_BAUDRATE			1200
+ #define CONFIG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, 115200 }
+ #define CONFIG_ASPEED_COM CONFIG_SYS_NS16550_COM2
+ #define CONFIG_ASPEED_COM_IER (CONFIG_ASPEED_COM + 0x4)
+@@ -346,9 +346,23 @@
+ #define CFG_CMD_SLT		(CFG_CMD_VIDEOTEST | CFG_CMD_MACTEST | CFG_CMD_HACTEST | CFG_CMD_MICTEST)
+ */
+ 
+-#define CONFIG_SYS_INIT_SP_ADDR	(CONFIG_SYS_SDRAM_BASE + 0x1000 - GENERATED_GBL_DATA_SIZE)
++/* Init stack at 16MB into DRAM so it clears the U-Boot image loaded at
++ * SDRAM_BASE (P2A DRAM boot); the stock +0x1000 collides with our own code. */
++#define CONFIG_SYS_INIT_SP_ADDR	(CONFIG_SYS_SDRAM_BASE + 0x1000000 - GENERATED_GBL_DATA_SIZE)
+ 
+ #define CONFIG_ASPEED_ENABLE_WATCHDOG
+ #define CONFIG_ASPEED_WATCHDOG_TIMEOUT (5*60) // 5m
+ 
++/* --- P2A DRAM boot overrides (no usable SPI flash over P2A) --- */
++/* The boot flash is not served over P2A on the dead-firmware rig, so reading the
++ * environment from flash data-aborts after the "Can't support this SPI Flash"
++ * message. Use the compiled-in default environment instead -> reaches an
++ * interactive prompt. */
++#undef  CONFIG_ENV_IS_IN_FLASH
++#undef  CONFIG_ENV_OFFSET
++#undef  CONFIG_ASPEED_WRITE_DEFAULT_ENV
++#define CONFIG_ENV_IS_NOWHERE   1
++#undef  CONFIG_ENV_SIZE
++#define CONFIG_ENV_SIZE         0x2000
++
+ #endif	/* __CONFIG_H */
+diff --git a/tools/Makefile b/tools/Makefile
+index 46159b2..e6193b8 100644
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -172,13 +172,14 @@ NOPEDOBJS := $(addprefix $(obj),$(NOPED_OBJ_FILES-y))
+ # Define __KERNEL_STRICT_NAMES to prevent typedef overlaps
+ #
+ HOSTCPPFLAGS =	-include $(SRCTREE)/include/libfdt_env.h \
+-		-idirafter $(SRCTREE)/include \
++		-I $(SRCTREE)/include \
+ 		-idirafter $(OBJTREE)/include2 \
+ 		-idirafter $(OBJTREE)/include \
+ 	        -I $(SRCTREE)/lib/libfdt \
+ 		-I $(SRCTREE)/tools \
+ 		-DCONFIG_SYS_TEXT_BASE=$(CONFIG_SYS_TEXT_BASE) \
+ 		-DUSE_HOSTCC \
++		-DLIBFDT_H \
+ 		-D__KERNEL_STRICT_NAMES
+ 
+ 

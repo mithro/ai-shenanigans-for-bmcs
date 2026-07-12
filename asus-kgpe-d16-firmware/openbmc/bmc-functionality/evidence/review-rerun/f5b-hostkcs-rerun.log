@@ -1,0 +1,174 @@
+boot: /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 64 -nographic -monitor none -serial stdio -nic user,model=ftgmac100,hostfwd=tcp::2223-:22 -kernel /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f5b-hostkcs/asus-kgpe-d16-firmware/qemu-firmware/kernel/out/zImage-kgpe-d16 -initrd /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f6-usb/asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/initramfs.cpio.gz -dtb /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-f5b-hostkcs/asus-kgpe-d16-firmware/qemu-firmware/kernel/out/aspeed-bmc-asus-kgpe-d16.dtb -append console=ttyS4,115200n8 earlyprintk
+qemu-system-arm: warning: nic ftgmac100.1 has no peer
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #8 Sun Jul 12 02:57:33 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000043ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk
+[    0.000000] Unknown kernel command line parameters "earlyprintk", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 16256
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 50668K/65536K available (7168K kernel code, 934K rwdata, 1868K rodata, 1024K init, 184K bss, 14868K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 29165 entries in 57 pages
+[    0.000000] ftrace: allocated 57 pages with 4 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000191] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.001903] Switching to timer-based delay loop, resolution 41ns
+[    0.005678] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=240000)
+[    0.005932] CPU: Testing write buffer coherency: ok
+[    0.007368] pid_max: default: 32768 minimum: 301
+[    0.019434] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.019539] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.053034] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.053577] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.054663] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.057397] ASPEED Unknown rev A0 (00000202)
+[    0.065279] devtmpfs: initialized
+[    0.091834] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.091978] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.093547] pinctrl core: initialized pinctrl subsystem
+[    0.105403] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.109179] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.171372] mc: Linux media interface: v0.10
+[    0.171555] videodev: Linux video capture interface: v2.00
+[    0.171779] pps_core: LinuxPPS API ver. 1 registered
+[    0.171802] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.171914] PTP clock support registered
+[    0.172024] EDAC MC: Ver: 3.0.0
+[    0.226309] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.275572] NET: Registered PF_INET protocol family
+[    0.277204] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.281159] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.281257] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.281350] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.281446] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.281582] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.282759] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.282981] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.284705] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.308768] RPC: Registered named UNIX socket transport module.
+[    0.308829] RPC: Registered udp transport module.
+[    0.308851] RPC: Registered tcp transport module.
+[    0.308866] RPC: Registered tcp-with-tls transport module.
+[    0.308880] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.318761] Unpacking initramfs...
+[    0.337799] workingset: timestamp_bits=30 max_order=14 bucket_order=0
+[    0.339134] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.342683] NFS: Registering the id_resolver key type
+[    0.343849] Key type id_resolver registered
+[    0.343893] Key type id_legacy registered
+[    0.344226] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.350096] NET: Registered PF_ALG protocol family
+[    0.351110] io scheduler bfq registered
+[    0.427142] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    0.427370] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+[    0.440869] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.491655] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1500000) is a ASPEED VUART
+[    0.531933] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.533241] printk: console [ttyS4] enabled
+[    0.607569] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.683882] loop: module loaded
+[    0.692089] random: crng init done
+[    0.829351] Freeing initrd memory: 1704K
+[    0.858841] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    0.878282] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    0.879513] RTL8211E Gigabit Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    0.893225] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at f75895c7
+[    0.894900] i2c_dev: i2c /dev entries driver
+[    0.939819] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 22
+[    0.940839] Driver for 1-wire Dallas network protocol.
+[    0.965061] NET: Registered PF_INET6 protocol family
+[    1.024244] Segment Routing with IPv6
+[    1.024637] In-situ OAM (IOAM) with IPv6
+[    1.025969] NET: Registered PF_PACKET protocol family
+[    1.027070] 8021q: 802.1Q VLAN Support v1.8
+[    1.027775] Key type dns_resolver registered
+[    1.147220] printk: console [netcon0] enabled
+[    1.147498] netconsole: network logging started
+[    1.152342] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    1.276335] clk: Disabling unused clocks
+[    1.315643] Freeing unused kernel image (initmem) memory: 1024K
+[    1.317983] Checked W+X mappings: passed, no W+X pages found
+[    1.318424] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+[    1.531331] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+eth0: 10.0.2.15
+Fingerprint: SHA256:iRYwFot00G9MU1kBAMcWeYUYkwLoAiF5fvG05QSMTx8
+[66] Jan 01 00:00:01 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86400sec preferred_lft 14400sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (ssh in via the QEMU hostfwd por--- ssh/KCS evidence attempt 1 ---
+Warning: Permanently added '[127.0.0.1]:2223' (ED25519) to the list of known hosts.
+===F5B_BEGIN===
+@@ uname
+Linux kgpe-d16-bmc 6.6.70-dirty #8 Sun Jul 12 02:57:33 ACST 2026 armv5tejl GNU/Linux
+@@ cmdline
+console=ttyS4,115200n8 earlyprintk
+@@ dev_ipmi
+crw-------    1 root     root       10, 127 Jan  1 00:00 /dev/ipmi-kcs3
+@@ dt_node
+path=/sys/firmware/devicetree/base/ahb/apb/lpc@1e789000/kcs@2c
+compatible=aspeed,ast2400-kcs-bmc-v2 
+status=okay 
+reg= 00 00 00 2c 00 00 00 01 00 00 00 38 00 00 00 01
+ 00 00 00 44 00 00 00 01
+@@ driver_bound
+total 0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 1e78902c.kcs -> ../../../../devices/platform/ahb/ahb:apb/1e789000.lpc/1e78902c.kcs
+--w-------    1 root     root          4096 Jan  1 00:00 bind
+--w-------    1 root     root          4096 Jan  1 00:00 uevent
+--w-------    1 root     root          4096 Jan  1 00:00 unbind
+@@ dmesg
+[    0.427142] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    0.427370] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+@@ reg_HICR0_0x1e789000
+0x00000080
+@@ reg_HICR2_0x1e789008
+0x00000000
+@@ reg_HICR4_0x1e789010
+0x00000004
+@@ reg_LADR3H_0x1e789014
+0x0000000C
+@@ reg_LADR3L_0x1e789018
+0x000000A2
+@@ reg_STR3_0x1e789044_ro
+0x00000000
+@@ poke_ODR3_write_0x5a
+@@ reg_ODR3_0x1e789038_readback
+0x0000005A
+===F5B_END===
+
+
+=== F5b host-side IPMI KCS (BMC-side readiness) ===
+  [PASS] /dev/ipmi-kcs3 present
+  [PASS] ast-kcs-bmc driver bound to kcs@2c
+  [PASS] HICR0.LPC3E set (ch3 enabled in the faithful LPC model): HICR0=0x00000080
+  [PASS] BMC-side ODR3 poke read back 0x5a: ODR3=0x0000005a
+
+F5b RESULT: PASS — /dev/ipmi-kcs3 alive + ast-kcs-bmc bound + faithful LPC model serviced the driver and a BMC-side KCS poke, at 64 MB

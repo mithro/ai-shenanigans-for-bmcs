@@ -25,6 +25,13 @@ concurrency:
 env:
   QEMU_DEPS: build-essential ninja-build pkg-config python3 python3-venv libglib2.0-dev libpixman-1-dev libslirp-dev flex bison
   XC_DEPS: gcc-arm-linux-gnueabi libc6-dev-armel-cross bc flex bison libssl-dev libelf-dev u-boot-tools device-tree-compiler
+  # The fuller OpenBMC rootfs (obmc-phosphor-image-ast2050-full, ~20-22 MB) is too
+  # large/slow to Yocto-build on a hosted runner, so it is published out-of-band as
+  # a durable GitHub *Release asset* (see build-openbmc-rootfs.yml + CI-README.md).
+  # The f5-ipmi-lan / f4-sol / fw-update jobs fetch it by tag+name on every push and
+  # SKIP GRACEFULLY (visible warning, never a silent green) when it is not published.
+  OBMC_ROOTFS_RELEASE: openbmc-rootfs
+  OBMC_ROOTFS_ASSET: openbmc-full-rootfs.tar
 
 jobs:
   build-qemu:
@@ -46,6 +53,28 @@ jobs:
           uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/run-qemu.py smoke \
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --timeout 15
+
+  power-control-test:
+    name: F2 host power-control loop (fwtest under QEMU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS gcc-arm-none-eabi
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      # Bare-metal fwtest: drive the KGPE-D16 power request lines (GPIOB1/F0/B6)
+      # and read GPIOH2 back — off@reset, on after power-up, on across reset, off
+      # after power-down — asserting the modeled aspeed_gpio_kgpe_d16_pwrseq latch.
+      - name: Run the power-control fwtest (host power on/off/reset loop)
+        run: |
+          cd asus-kgpe-d16-firmware/qemu-model
+          uv run --with pytest python -m pytest integration/test_power.py -v
 
   build-kernel:
     name: Build D16 kernel (uImage + dtb)
@@ -118,6 +147,138 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240
 
+  host-kcs:
+    name: F5b — host-side IPMI KCS channel alive (M1)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS openssh-client gcc-arm-none-eabi
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      # Model unit test: drive the faithful G3 KCS OBF/IBF/C-D state machine on
+      # channel 3 with no kernel — BMC side over qtest MMIO, host side over the
+      # QMP host-kcs3-{data,cmdsts} QOM back-channel — and assert every datasheet
+      # transition incl. the VIC #8 line. Fast (<1s), no rootfs needed.
+      - name: KCS3 host-handshake model test (qtest + QMP)
+        run: |
+          cd asus-kgpe-d16-firmware/qemu-model
+          uv run --with pytest python -m pytest integration/test_lpc.py -v
+      # Boots the same kernel/DTB as C2 but asserts the host-side IPMI KCS channel:
+      # the DTS &lpc/kcs@2c node + CONFIG_IPMI_KCS_BMC_CDEV_IPMI make the kernel
+      # create /dev/ipmi-kcs3, bind ast-kcs-bmc, and drive the faithful G3 LPC
+      # model (HICR0.LPC3E / HICR4.KCSENBL / LADR3=0xca2), plus a BMC-side ODR3
+      # poke. At the real 64 MB DRAM size. (Full host<->BMC round-trip is the
+      # host-kcs-m2 job below.)
+      - name: Boot kgpe-d16-bmc + prove /dev/ipmi-kcs3 alive, driver bound, model poked
+        run: |
+          chmod 600 initramfs-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f5b-host-kcs-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test \
+            --mem 64 --boot-timeout 300 \
+            --evidence-dir host-kcs-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f5b-host-kcs-evidence
+          path: host-kcs-evidence/
+
+  host-kcs-m2:
+    name: F5b M2 — genuine host->BMC IPMI Get Device ID over KCS (ipmid answers)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # The full round-trip needs an OpenBMC rootfs that ships kcsbridge
+    # (phosphor-ipmi-kcs@ipmi-kcs3, wired to /dev/ipmi-kcs3) — the image recipe
+    # installs it (IMAGE_INSTALL phosphor-ipmi-kcs; phosphor-ipmi-bt removed).
+    # That rootfs is published out-of-band as the same Release asset the
+    # f5-ipmi-lan job uses; this job fetches it, RUNS the transaction test when
+    # it exists AND ships kcsbridged, and SKIPS with a visible warning (never a
+    # silent green) otherwise. The host side is driven through the faithful G3
+    # LPC model's QOM back-channel (host-kcs3-{data,cmdsts}) — the LPC bus wires,
+    # nothing more; ipmid is the answering layer. See F5B-HOST-KCS-STATUS.md M2.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC rootfs (skip test gracefully if absent / no kcsbridge)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if ! gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F5b M2 SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the host->BMC KCS transaction test. Publish it via build-openbmc-rootfs.yml."
+            { echo "## F5b M2 host-KCS transaction — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the transaction test could not run. Visible skip, not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          if sudo test -e /export/openbmc-full/usr/libexec/kcsbridged; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F5b M2::rootfs ships kcsbridge — RUNNING the host->BMC KCS transaction test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F5b M2 SKIPPED::The published rootfs does not ship kcsbridge (usr/libexec/kcsbridged missing) — SKIPPING. Rebuild the image (phosphor-ipmi-kcs) and republish."
+            { echo "## F5b M2 host-KCS transaction — SKIPPED"; echo; echo "The published rootfs has no \`kcsbridged\`; rebuild with \`phosphor-ipmi-kcs\` and republish."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client sshpass nfs-kernel-server nfs-common
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC rootfs over NFS (localhost, insecure for slirp)
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Drive Get Device ID from the host side through the KCS state machine
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f5b-kcs-m2-transaction-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --boot-timeout 1200 --evidence-dir host-kcs-m2-evidence
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f5b-host-kcs-m2-evidence
+          path: host-kcs-m2-evidence/
+
   boot-nfsroot:
     name: Boot faithful machine with root over NFS (C5 / Phase 6a)
     runs-on: ubuntu-latest
@@ -165,6 +326,302 @@ jobs:
             --nfsroot 10.0.2.2:/export/kgpe-d16-rootfs \
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 300
+
+  boot-usb:
+    name: Boot USB kernel -> AST2050 vhub probe + gadget enum (F6)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot with USB + verify vhub probe + in-guest gadget enumeration
+        run: |
+          # The AST2050's only USB block is the USB2.0 device/vhub @0x1e6a0000
+          # (no host controller). Assert the kernel probes it (aspeed_vhub) and the
+          # gadget stack enumerates a virtual mass-storage device over dummy_hcd.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/usb-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --boot-timeout 300
+
+  f7-ncsi-dedicated-phy:
+    name: F7 — BMC networking is dedicated PHY, not NC-SI (ground-truth guard)
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    # Faithfulness guard for the F7 finding (asus-kgpe-d16-firmware/openbmc/
+    # bmc-functionality/F7-NCSI.md): the KGPE-D16 BMC uses its own dedicated
+    # RTL8201CP PHY (RMII), NOT NC-SI. Step 1 statically asserts that invariant
+    # against the DTS / Raptor U-Boot config / datasheet notes / kernel / QEMU
+    # model. Step 2 boots the faithful machine with a dedicated ftgmac100 NIC over
+    # slirp and proves eth0 comes up + gets a DHCP lease with ZERO NC-SI in dmesg
+    # — the real "share the host's network via the board's own NIC" path.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Static ground-truth invariants (DTS / Raptor / datasheet / kernel / QEMU model)
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f7-ncsi-evidence.py \
+            --boot-log asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence/qemu-ncsi/eth0-dedicated-phy-boot.log
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot faithful machine + assert dedicated-PHY eth0/DHCP with ZERO NC-SI
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f7-ncsi-evidence.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --mem 64 --boot-timeout 300 \
+            --boot-log f7-ncsi-boot.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: f7-ncsi-evidence
+          path: f7-ncsi-boot.log
+
+  f5-ipmi-lan:
+    name: F5 — IPMI over LAN (RMCP+) in 64 MB (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # Needs the fuller OpenBMC rootfs (obmc-phosphor-image-ast2050-full), whose
+    # Yocto build is multi-hour and does NOT fit a stock hosted runner, so it is
+    # published out-of-band as the '${OBMC_ROOTFS_RELEASE}' Release asset
+    # '${OBMC_ROOTFS_ASSET}' (see build-openbmc-rootfs.yml). This job now runs on
+    # every push/PR: it fetches that asset and RUNS the IPMI-over-LAN test when it
+    # exists, or SKIPS with a visible warning (never a silent green) when it does
+    # not. IPMI-over-LAN is the one capability proven on real silicon, so it must
+    # have an automatic guard the moment the rootfs is published.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F5 IPMI-over-LAN::rootfs '$OBMC_ROOTFS_ASSET' fetched from release '$OBMC_ROOTFS_RELEASE' — RUNNING the IPMI-over-LAN QEMU test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F5 IPMI-over-LAN SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the IPMI-over-LAN QEMU test. Publish it via the 'Publish OpenBMC fuller rootfs' workflow (build-openbmc-rootfs.yml); see .github/workflows/CI-README.md."
+            { echo "## F5 IPMI-over-LAN — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the IPMI-over-LAN QEMU test could not run. This is a visible skip, not a pass. Publish the rootfs (see \`.github/workflows/CI-README.md\`) to enable it."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC fuller rootfs over NFS (localhost, insecure for slirp)
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc with the IPMI daemon set + drive ipmitool over LAN
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f5-ipmi-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --evidence-dir f5-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f5-ipmi-evidence
+          path: f5-evidence/
+
+  f4-sol:
+    name: F4 — Serial-over-LAN on the AST2050 VUART in 64 MB (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # Same rootfs dependency as f5-ipmi-lan: needs the fuller OpenBMC rootfs
+    # published as the '${OBMC_ROOTFS_RELEASE}' Release asset. Runs on every
+    # push/PR now — RUNS the SOL test when the asset exists, SKIPS with a visible
+    # warning otherwise.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F4 SOL::rootfs '$OBMC_ROOTFS_ASSET' fetched from release '$OBMC_ROOTFS_RELEASE' — RUNNING the Serial-over-LAN QEMU test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F4 SOL SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the Serial-over-LAN QEMU test. Publish it via the 'Publish OpenBMC fuller rootfs' workflow (build-openbmc-rootfs.yml); see .github/workflows/CI-README.md."
+            { echo "## F4 Serial-over-LAN — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the SOL QEMU test could not run. This is a visible skip, not a pass. Publish the rootfs (see \`.github/workflows/CI-README.md\`) to enable it."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (with the AST2050 VUART model)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC fuller rootfs over NFS (localhost, insecure for slirp)
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc, feed the host VUART + capture the console over SOL
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f4-sol-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 64 \
+            --evidence-dir f4-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f4-sol-evidence
+          path: f4-evidence/
+
+  fw-update:
+    name: F9 — firmware-update mechanism surface (Redfish UpdateService + IPMI)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # Same rootfs dependency as f5-ipmi-lan / f4-sol: needs the fuller OpenBMC
+    # rootfs (bmcweb + ipmid) published as the '${OBMC_ROOTFS_RELEASE}' Release
+    # asset. Runs on every push/PR now — RUNS when the asset exists, SKIPS with a
+    # visible warning otherwise. Demonstrates the on-board firmware-update SURFACE
+    # with NO real flash write: GET /redfish/v1/UpdateService, a dummy POST to
+    # exercise the ingest path, ipmitool mc info, and in-BMC busctl/MTD
+    # inspection. See asus-kgpe-d16-firmware/fw-update/UPDATE-PATHS.md.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F9 fw-update::rootfs '$OBMC_ROOTFS_ASSET' fetched from release '$OBMC_ROOTFS_RELEASE' — RUNNING the firmware-update-surface QEMU test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F9 fw-update SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the firmware-update-surface QEMU test. Publish it via the 'Publish OpenBMC fuller rootfs' workflow (build-openbmc-rootfs.yml); see .github/workflows/CI-README.md."
+            { echo "## F9 firmware-update surface — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the firmware-update-surface QEMU test could not run. This is a visible skip, not a pass. Publish the rootfs (see \`.github/workflows/CI-README.md\`) to enable it."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client sshpass curl nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC fuller rootfs over NFS (localhost, insecure for slirp)
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-full
+          sudo tar -C /export/openbmc-full -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          echo '/export/openbmc-full *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc + characterize the firmware-update surface (no real flash)
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/fw-update/fw-update-demo.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-full --mem 128 \
+            --out fw-update-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: fw-update-evidence
+          path: fw-update-evidence/
 
   build-uboot:
     name: Build new U-Boot (OpenBMC AST2400)

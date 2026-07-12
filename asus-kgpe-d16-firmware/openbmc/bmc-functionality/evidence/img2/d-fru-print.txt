@@ -1,0 +1,14 @@
+$ ipmitool -I lanplus fru print  (after populate)
+# rc=124
+
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+Error: Received an Unexpected Open Session Response
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+> Error: no response from RAKP 1 message
+Get HPM.x Capabilities request failed, compcode = d4
+Get Device ID command failed
+No valid response received
+
+[timeout 45s]

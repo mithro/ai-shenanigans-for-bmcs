@@ -1,0 +1,29 @@
+`- /xyz
+  `- /xyz/openbmc_project
+    `- /xyz/openbmc_project/sensors
+      |- /xyz/openbmc_project/sensors/fan_tach
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan1
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan2
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan3
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan4
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan5
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan6
+      | |- /xyz/openbmc_project/sensors/fan_tach/fan7
+      | `- /xyz/openbmc_project/sensors/fan_tach/fan8
+      |- /xyz/openbmc_project/sensors/temperature
+      | |- /xyz/openbmc_project/sensors/temperature/temp1
+      | |- /xyz/openbmc_project/sensors/temperature/temp2_inlet
+      | `- /xyz/openbmc_project/sensors/temperature/temp3
+      `- /xyz/openbmc_project/sensors/voltage
+        |- /xyz/openbmc_project/sensors/voltage/p12v_aux_scaled
+        |- /xyz/openbmc_project/sensors/voltage/p12v_scaled
+        |- /xyz/openbmc_project/sensors/voltage/p1v1_ssb
+        |- /xyz/openbmc_project/sensors/voltage/p3v3_aux_scaled
+        |- /xyz/openbmc_project/sensors/voltage/p3v3_scaled
+        |- /xyz/openbmc_project/sensors/voltage/p3v_vbat
+        |- /xyz/openbmc_project/sensors/voltage/p5v_aux_scaled
+        |- /xyz/openbmc_project/sensors/voltage/p5v_scaled
+        |- /xyz/openbmc_project/sensors/voltage/pvcc_cpu0
+        |- /xyz/openbmc_project/sensors/voltage/pvcc_cpu1
+        |- /xyz/openbmc_project/sensors/voltage/pvcc_cpu2
+        `- /xyz/openbmc_project/sensors/voltage/pvcc_cpu3

@@ -1,0 +1,13 @@
+HTTP/2 201 
+allow: GET, HEAD, POST
+odata-version: 4.0
+x-auth-token: <redacted-ephemeral-qemu-token>
+location: /redfish/v1/SessionService/Sessions/<redacted>
+strict-transport-security: max-age=31536000; includeSubdomains
+pragma: no-cache
+cache-control: no-store, max-age=0
+x-content-type-options: nosniff
+content-type: application/json
+date: Sat, 11 Jul 2026 18:21:15 GMT
+content-length: 299
+

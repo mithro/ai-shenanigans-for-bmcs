@@ -1,0 +1,119 @@
+name: Publish OpenBMC fuller rootfs
+
+# DECOUPLED image build: the fuller OpenBMC rootfs
+# (obmc-phosphor-image-ast2050-full, ~20-22 MB squashfs / ~82 MB unpacked) is a
+# multi-hour Yocto/bitbake build that does NOT fit a stock GitHub-hosted runner
+# (disk/RAM/time). So it is built on the faithful build machine (where the
+# OpenBMC tree lives, e.g. /home/tim/openbmc) and PUBLISHED here as a durable
+# GitHub *Release asset* — `openbmc-full-rootfs.tar` on the `openbmc-rootfs`
+# release. The per-push test jobs in d16-qemu-stack.yml (f5-ipmi-lan / f4-sol /
+# fw-update) then fetch that asset with `gh release download` and run
+# automatically, or skip with a visible warning when it is absent.
+#
+# This workflow runs on a SELF-HOSTED runner registered on that build machine
+# (label `openbmc-builder`). It is workflow_dispatch-only (opt-in): if no such
+# runner is registered the dispatch simply waits and can be cancelled — nothing
+# on a hosted runner is affected. If you have no self-hosted runner, publish the
+# rootfs by hand instead — see .github/workflows/CI-README.md ("Manual publish").
+#
+# See asus-kgpe-d16-firmware/openbmc/bmc-functionality/BUILD-NOTES.md for the
+# image contents/recipe and IMG2-STAGING.md for the staging details.
+
+on:
+  workflow_dispatch:
+    inputs:
+      squashfs_path:
+        description: >-
+          Path on the self-hosted runner to a pre-built
+          obmc-phosphor-image-ast2050-full ...squashfs-xz. Leave blank to bitbake
+          it from the OpenBMC tree at openbmc_tree.
+        required: false
+        default: ''
+      openbmc_tree:
+        description: OpenBMC (Yocto) tree to build in when squashfs_path is blank.
+        required: false
+        default: /home/tim/openbmc
+      release_tag:
+        description: Release tag to publish the rootfs asset onto.
+        required: false
+        default: openbmc-rootfs
+
+permissions:
+  contents: write   # create/update the Release and upload the asset
+
+concurrency:
+  group: publish-openbmc-rootfs
+  cancel-in-progress: false
+
+jobs:
+  publish-rootfs:
+    name: Build (optional) + stage + tar + publish the fuller rootfs
+    # Self-hosted runner on the faithful build machine. A hosted runner cannot
+    # build (or even usefully re-stage) this image, so this job is intentionally
+    # pinned off ubuntu-latest.
+    runs-on: [self-hosted, linux, openbmc-builder]
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+      ASSET_NAME: openbmc-full-rootfs.tar
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build the fuller image (only if no pre-built squashfs was supplied)
+        id: build
+        env:
+          SQUASHFS_IN: ${{ github.event.inputs.squashfs_path }}
+          OPENBMC_TREE: ${{ github.event.inputs.openbmc_tree }}
+        run: |
+          set -eu
+          if [ -n "$SQUASHFS_IN" ]; then
+            echo "Using pre-built squashfs: $SQUASHFS_IN"
+            [ -f "$SQUASHFS_IN" ] || { echo "::error::squashfs_path not found: $SQUASHFS_IN"; exit 1; }
+            echo "squashfs=$SQUASHFS_IN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Bitbaking obmc-phosphor-image-ast2050-full in $OPENBMC_TREE (memory-capped)"
+          [ -d "$OPENBMC_TREE" ] || { echo "::error::OpenBMC tree not found: $OPENBMC_TREE (register the build machine as the openbmc-builder runner, or pass squashfs_path)"; exit 1; }
+          cd "$OPENBMC_TREE"
+          # shellcheck disable=SC1091
+          . setup quanta-q71l build/quanta-q71l
+          systemd-run --user --scope -p MemoryMax=20G -p MemoryHigh=18G \
+              nice -n 15 ionice -c3 bitbake obmc-phosphor-image-ast2050-full
+          img_dir="$OPENBMC_TREE/build/quanta-q71l/tmp/deploy/images/quanta-q71l"
+          squashfs="$img_dir/obmc-phosphor-image-ast2050-full-quanta-q71l.squashfs-xz"
+          [ -f "$squashfs" ] || { echo "::error::built squashfs not found at $squashfs"; exit 1; }
+          echo "squashfs=$squashfs" >> "$GITHUB_OUTPUT"
+
+      - name: Stage (unsquash + neutralise MTD units) and tar the rootfs tree
+        env:
+          SQUASHFS: ${{ steps.build.outputs.squashfs }}
+        run: |
+          set -eu
+          staged="$RUNNER_TEMP/openbmc-full"
+          # stage-openbmc-nfsroot.sh unsquashes + masks the MTD/UBI overlay units so
+          # the tree boots as a writable NFS root (exactly what the test jobs expect
+          # to untar into /export/openbmc-full).
+          asus-kgpe-d16-firmware/qemu-firmware/scripts/stage-openbmc-nfsroot.sh \
+              "$SQUASHFS" "$staged"
+          # Tar members are ./usr ./etc ... so `tar -C /export/openbmc-full -xf` in
+          # the test jobs lands the tree at the export root.
+          sudo tar -C "$staged" -cf "$RUNNER_TEMP/$ASSET_NAME" .
+          ls -l "$RUNNER_TEMP/$ASSET_NAME"
+
+      - name: Publish the rootfs tar as the release asset (create/refresh)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          asset="$RUNNER_TEMP/$ASSET_NAME"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null; then
+            echo "Release '$RELEASE_TAG' exists — clobbering the asset."
+            gh release upload "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "Creating release '$RELEASE_TAG' and uploading the asset."
+            gh release create "$RELEASE_TAG" "$asset" --repo "$GITHUB_REPOSITORY" \
+                --title "OpenBMC fuller rootfs (ast2050-full)" \
+                --notes "Staged obmc-phosphor-image-ast2050-full rootfs tar consumed by the f5-ipmi-lan / f4-sol / fw-update jobs in d16-qemu-stack.yml. Published $(date -u +%Y-%m-%dT%H:%M:%SZ). See .github/workflows/CI-README.md."
+          fi
+          echo "::notice title=OpenBMC rootfs published::'$ASSET_NAME' is now on release '$RELEASE_TAG' — the f5-ipmi-lan / f4-sol / fw-update jobs will run on the next push."

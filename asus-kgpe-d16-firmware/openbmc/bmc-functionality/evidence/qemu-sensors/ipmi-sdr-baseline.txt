@@ -1,0 +1,28 @@
+fan1             | disabled          | ns
+fan2             | disabled          | ns
+fan3             | disabled          | ns
+fan4             | disabled          | ns
+fan5             | disabled          | ns
+fan6             | disabled          | ns
+fan7             | disabled          | ns
+fan8             | disabled          | ns
+fan1             | no reading        | ns
+fan2             | no reading        | ns
+fan3             | no reading        | ns
+fan4             | no reading        | ns
+fleeting0        | disabled          | ns
+p3v3_scaled      | disabled          | ns
+p5v_scaled       | disabled          | ns
+p12v_aux_scaled  | disabled          | ns
+p1v1_ssb         | disabled          | ns
+pvcc_cpu0        | disabled          | ns
+pvcc_cpu1        | disabled          | ns
+p3v3_aux_scaled  | disabled          | ns
+p5v_aux_scaled   | disabled          | ns
+pvcc_cpu2        | disabled          | ns
+pvcc_cpu3        | disabled          | ns
+p12v_scaled      | disabled          | ns
+p3v_vbat         | disabled          | ns
+temp2_inlet      | disabled          | ns
+temp1            | disabled          | ns
+temp3            | disabled          | ns

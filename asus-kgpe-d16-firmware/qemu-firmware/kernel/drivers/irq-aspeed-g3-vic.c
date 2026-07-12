@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0+
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Aspeed AST2050 (G3) Vectored Interrupt Controller.
  *
@@ -84,6 +84,11 @@ static void g3vic_init_hw(struct aspeed_g3_vic *vic)
 
 	/* Clear any latched edge detections. */
 	writel(0xffffffff, vic->base + G3VIC_EDGE_CLR);
+
+	pr_info("aspeed-g3-vic: SENSE=%#x EVENT=%#x DUAL=%#x edge_sources=%#x\n",
+		readl(vic->base + G3VIC_INT_SENSE),
+		readl(vic->base + G3VIC_INT_EVENT),
+		readl(vic->base + G3VIC_INT_DUAL_EDGE), vic->edge_sources);
 }
 
 static void g3vic_ack_irq(struct irq_data *d)
@@ -109,11 +114,22 @@ static void g3vic_unmask_irq(struct irq_data *d)
 	writel(1u << (d->hwirq & 0x1f), vic->base + G3VIC_INT_ENABLE);
 }
 
+static void g3vic_mask_ack_irq(struct irq_data *d)
+{
+	struct aspeed_g3_vic *vic = irq_data_get_irq_chip_data(d);
+	u32 sbit = 1u << (d->hwirq & 0x1f);
+
+	writel(sbit, vic->base + G3VIC_INT_ENABLE_CLR);
+	if (vic->edge_sources & sbit)
+		writel(sbit, vic->base + G3VIC_EDGE_CLR);
+}
+
 static struct irq_chip g3vic_chip = {
 	.name		= "G3-VIC",
 	.irq_ack	= g3vic_ack_irq,
 	.irq_mask	= g3vic_mask_irq,
 	.irq_unmask	= g3vic_unmask_irq,
+	.irq_mask_ack	= g3vic_mask_ack_irq,
 };
 
 static void __exception_irq_entry g3vic_handle_irq(struct pt_regs *regs)

@@ -1,0 +1,56 @@
+$ curl -k /redfish/v1/Chassis/ASUS_KGPE_D16
+# rc=0
+
+{
+  "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16",
+  "@odata.type": "#Chassis.v1_22_0.Chassis",
+  "Actions": {
+    "#Chassis.Reset": {
+      "@Redfish.ActionInfo": "/redfish/v1/Chassis/ASUS_KGPE_D16/ResetActionInfo",
+      "target": "/redfish/v1/Chassis/ASUS_KGPE_D16/Actions/Chassis.Reset"
+    }
+  },
+  "Assembly": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/Assembly"
+  },
+  "AssetTag": "ASUS-KGPE-D16-AST2050",
+  "ChassisType": "RackMount",
+  "EnvironmentMetrics": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/EnvironmentMetrics"
+  },
+  "Id": "ASUS_KGPE_D16",
+  "Links": {
+    "ComputerSystems": [
+      {
+        "@odata.id": "/redfish/v1/Systems/system"
+      }
+    ],
+    "ManagedBy": [
+      {
+        "@odata.id": "/redfish/v1/Managers/bmc"
+      }
+    ]
+  },
+  "Manufacturer": "ASUSTeK Computer Inc.",
+  "Model": "KGPE-D16",
+  "Name": "ASUS_KGPE_D16",
+  "NetworkAdapters": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/NetworkAdapters"
+  },
+  "PartNumber": "90-MSVDR0-G0UAY0Z",
+  "PowerState": "Off",
+  "PowerSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/PowerSubsystem"
+  },
+  "Sensors": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/Sensors"
+  },
+  "SerialNumber": "KGPED16-OPENBMC-0001",
+  "Status": {
+    "State": "StandbyOffline"
+  },
+  "ThermalSubsystem": {
+    "@odata.id": "/redfish/v1/Chassis/ASUS_KGPE_D16/ThermalSubsystem"
+  },
+  "Version": "Rev 1.xxG"
+}

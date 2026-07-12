@@ -1,0 +1,4 @@
+$ ipmitool -I lanplus -H <bmc> -U root -P <pw> sel list
+# exit code: 0
+
+SEL has no entries
