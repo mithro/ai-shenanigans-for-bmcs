@@ -291,7 +291,24 @@ accumulated state, not hardware:
 Journal files archived to `Pi:/home/claude/journal-archive/` and cleared from
 both exports (openbmc-hwpass had none — its boots died pre-flush, consistent);
 network file still absent; NO IPMI traffic until the 15-min soak passes.
-Result: see below.
+**Result: wedged at T+6.2 min again** (soak: clean run then 6 straight misses
+from 17:53:39; kernel-up 17:47:25 → 374 s; attempt-8 was 370 s — deterministic).
+Post-mortem: **attempt-9 read 9.7 MB from the export (systemd + daemons paged
+in) but wrote ZERO bytes and re-created neither the network file nor a
+journal** — F5's proven boot had written keys/group/network-file/journal by
+T+3 min. So userspace wedges early and silently; ICMP (kernel-level) survives
+to the ~370 s mark, then the whole kernel goes. The journal accumulation and
+early-probe theories are eliminated; the T+6min death is a *third* mechanism,
+still environment-shaped (identical timing across boots ≠ thermal/marginal HW).
+
+### C.8 Why every serial console was blind — and attempt-10
+All console captures end at `[4.16s] clk: Disabling unused clocks` — the
+**known G3 clk-framework issue: the modern kernel gates UARTCLK (SCU0C[15])**
+(the exact issue ddr2-init-p2a.py works around for the *next* U-Boot). ttyS4
+output dies at 4.16 s on every modern-kernel boot, so the death was never
+observable on serial. Attempt-10 = instrumented: **`clk_ignore_unused`**
+(UARTCLK stays on → live console) + `systemd.show_status=1` + 700 s capture
+spanning the death point, F5 stack on openbmc-full. Result: see below.
 
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
