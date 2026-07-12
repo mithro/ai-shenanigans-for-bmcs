@@ -666,3 +666,33 @@ the SDMC during init) boots to its BMC web service (HTTP 301 Mbedthis-Appweb) �
 SDMC test; **C2** our from-source kernel (fresh build off this base) boots to an SSH login
 (dropbear listening, SSH_OK, `kgpe-d16-bmc` / `Linux armv5tejl`). qemu submodule branch
 `claude/sdmc-ast2050` (off eda871c48f, mithro/qemu).
+
+### 🧩 Consolidation — four completed branches integrated into `claude/bmc-functionality` (2026-07-12)
+Rolled the latest completed work into the integration branch `claude/bmc-functionality`
+with real `--no-ff` merges (superproject merge order: g3-clk → phy → sdmc → f2-sta):
+- **`claude/bmc-g3-clk`** — G3 SCU clock-stop/reset-hold QEMU model + kernel patches
+  `0001`(reworked)/`0004`(LPC optional-clock)/`0005`(I2C full-AC-timing); the
+  on-silicon-proven UARTCLK shared-gate + I2CD04 vendor-timing fix (#94/#93).
+- **`claude/bmc-phy-rtl8201cp`** — faithful RTL8201CP (10/100) PHY identity (#61).
+- **`claude/bmc-sdmc-ast2050`** — faithful AST2050 DDR2 SDMC model (#60).
+- **`claude/bmc-f2-sta`** — power-state fix #95 (real `gpio_defs.json` +
+  `obmc-libobmc-intf` bbappend); recipe-only, no submodule change.
+
+**QEMU submodule union** (`mithro/qemu` branch `claude/bmc-functionality` @ `eb2018b816`):
+one union commit = base + KCS-M2 + video datapath (`eda871c48f`) merged `--no-ff` with
+`g3-clk-gates`, `phy-rtl8201cp`, `sdmc-ast2050`. `g3-clk-gates` had branched off the older
+`a010d69`, so its merge combined the SCU clk-gate + KCS/video machine-wiring blocks in
+`hw/arm/aspeed_ast2400.c` (auto-unioned — the device-instantiation blocks are in disjoint
+functions: `soc_init` for sdmc, `soc_realize` for the SCU clk-gate GPIO wiring). Kernel
+patch-list in `scripts/build-kernel.sh` unioned to apply, in order: `0001`(reworked g3-clk
+VIC/clk), `0002-ftgmac100-...-cur_speed-g3`, `0002-ftgmac100-ast2050-macclk`,
+`0003-hwmon-w83795`, `0004-ipmi-kcs-...-optional-lpc-clock`, `0005-i2c-aspeed-full-ac-timing`
+— no patch dropped or double-applied.
+
+**Verified on the union build** (one incremental `make -j4`, arm-softmmu): binary carries
+`kgpe-d16-bmc`, `w83795`, `host-kcs`, `aspeed_video_ast2050`, `aspeed.sdmc-ast2050`,
+`rtl8201cp`; `-M kgpe-d16-bmc` instantiates (run-qemu.py smoke OK). Full model integration
+suite **96 passed / 6 xfailed / 0 failed** — incl. `test_phy_is_rtl8201cp_10_100` +
+`test_phy_bmsr_no_gigabit`, sdram `geom.cap64/w16/bank4`, UART loopback, and all 12 KCS
+handshake checks (kcs-m2 preserved). The 6 xfails are pre-existing documented items
+(i2c smbus_ee, scu sysreset/clksel/clkstop/pinmux1). No regressions.
