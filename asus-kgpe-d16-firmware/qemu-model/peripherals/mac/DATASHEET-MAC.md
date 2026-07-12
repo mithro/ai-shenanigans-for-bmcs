@@ -307,6 +307,19 @@ registers (MII reg 2/3) through PHYCR/PHYDATA; the responding address is the PHY
 The **RTL8201CP** is a 10/100 RMII PHY whose MDIO address is set by its PHYAD
 strap pins — the ftgmac100 auto-scan finds it (no fixed address in the MAC).
 
+> **RTL8201CP MII identity (ground truth, task #61).** MII reg 2 (PHYID1) = `0x0000`,
+> MII reg 3 (PHYID2) = `0x8201` — combined **`0x0000_8201`**. Source: Realtek
+> *RTL8201CP* datasheet (PHYID1 default `0000` @ reg 2, PHYID2 default `8201` @ reg 3),
+> corroborated by mainline Linux `drivers/net/phy/realtek.c`
+> (`PHY_ID_MATCH_EXACT(0x00008201)`, name "RTL8201CP Ethernet") and by the in-tree
+> QEMU `include/hw/net/mii.h` (`RTL8201CP_PHYID1/2`). Reset-default basic registers:
+> **BMCR (reg 0) = `0x3100`** (autoneg + 100M + full-duplex), **BMSR (reg 1) =
+> `0x786D`-class** (100/10 FD+HD, MFPS, AN-able/complete, link, ext-cap; **no**
+> extended-status/gigabit bit 8, since a 10/100 part has no reg-15). ANAR (reg 4)
+> advertises 10/100 half+full only. The QEMU `kgpe-d16-bmc` MAC presents exactly this
+> on the `aspeed-g3` path (`hw/net/ftgmac100.c`); the RTL8211E gigabit id
+> (`0x001C_C915`) is retained only for the AST2400+/Dell-C410X path.
+
 > A carrier/link model is required for the vendor driver: the prior C410X work
 > (`qemu-firmware/AST2050-PERIPHERAL-MODELING.md` §6) had to implement the PHY-
 > Specific Status register (reg 17) so the driver would see link. For the D16's

@@ -209,16 +209,19 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   16550 is register+datapath faithful for the G3 (UART1/UART2 only; no AST2400 UART3-5).
   Baud rate (24 MHz/÷13) ties to the SCU clock-tree. Suite: 24 passed, 15 xfailed.
 
-### MAC (ftgmac100): register-faithful; PHY-identity gap documented (no model change)
+### MAC (ftgmac100): register-faithful; PHY now RTL8201CP on the G3 (task #61)
 - `peripherals/mac/{DATASHEET-MAC,DOC}.md` + `fwtest.c` + `test_mac.py`. MACCR (0x50)
   is RW and holds the culvert capture `0x0002D51F`; the descriptor-ring base regs store
   the full [31:4] address (`RXR_BADR=0x41B10000` reads back — the datasheet [27:4] vs
   DRAM discrepancy is not present). MDIO/PHYCR works.
-- **Gap (xfail):** the MDIO PHY id is `0x001C_C915` = **RTL8211E (gigabit)**, but the
-  D16 has the **RTL8201CP (10/100)** — the RTL8211E was added for the C410X (C4) vendor
-  path. Fix is a per-board PHY (oracle-gated: must keep C4 green). G3 must not expose
-  gigabit/RGMII/NCSI/RCLK. Full TX/RX DMA is proven by the C2 boot (eth0 up 100M/full).
-- Suite: 27 passed, 16 xfailed.
+- **RESOLVED (was xfail):** the MDIO PHY id was `0x001C_C915` = RTL8211E (gigabit);
+  task #61 gave the G3 MAC the board's real **RTL8201CP (10/100)** id `0x0000_8201`
+  (datasheet MII reg 2/3; mainline realtek.c `PHY_ID_MATCH_EXACT(0x00008201)`), BMSR
+  without the gigabit ext-status bit, BMCR reset `0x3100`, CTRL1000/STAT1000 = 0.
+  Gated on the `aspeed-g3` flag (`hw/net/ftgmac100.c`); the C410X (C4) path keeps
+  RTL8211E — C4 depends on the reg-17 PHYSR *carrier*, not the id, so it's left intact.
+  G3 exposes no gigabit/RGMII/NCSI/RCLK. Full TX/RX DMA is proven by the C2 boot.
+- `test_mac.py` `test_phy_is_rtl8201cp_10_100` + `test_phy_bmsr_no_gigabit`: xfail→PASS.
 
 ### GPIO: datapath-faithful, done (no model change → oracle safe)
 - `peripherals/gpio/{DATASHEET-GPIO,DOC}.md` + `fwtest.c` + `test_gpio.py`. Banks A–H,
@@ -614,3 +617,26 @@ Get Device ID over `model → kcs_bmc_aspeed → kcsbridged → ipmid` at 64 MB 
 well-formed ipmid reply (F5b M2). **Faithful oracle boots stay green:** F5b M1
 PASS + C4 Dell vendor firmware boots to its BMC web service, both re-verified on
 the KCS-state-machine model.
+
+### 🎉 MAC PHY faithful — RTL8201CP (10/100) on the G3 (task #61, 2026-07-12)
+The `kgpe-d16-bmc` MDIO reported the RTL8211E *gigabit* id (`0x001C_C915`) for every
+firmware — added for the Dell C410X (C4), but wrong for the KGPE-D16, whose real
+dedicated PHY is the **Realtek RTL8201CP** 10/100 (F7-NCSI.md §1; DTS `phy-mode=rmii`;
+DATASHEET-MAC.md §5). **Ground truth:** RTL8201CP MII id = PHYID1 `0x0000` / PHYID2
+`0x8201` (= `0x0000_8201`) — RTL8201CP datasheet (reg 2/3 defaults), mainline
+`drivers/net/phy/realtek.c` `PHY_ID_MATCH_EXACT(0x00008201)` "RTL8201CP Ethernet", and
+in-tree `include/hw/net/mii.h` `RTL8201CP_PHYID1/2`; 10/100 half+full, no gigabit.
+**Change** (`hw/net/ftgmac100.c`, gated on the existing `aspeed-g3` flag =
+`silicon_rev==AST2050`): `do_phy_read()` returns the RTL8201CP id; `phy_reset()` clears
+the BMSR extended-status/gigabit bit (→ `0x786D`) and resets BMCR to `0x3100`
+(autoneg+100M+FD); `MII_CTRL1000/STAT1000` read 0. The AST2400+/C4 path keeps RTL8211E;
+the **reg-17 PHY-Specific-Status carrier is untouched**, so C4's vendor ftgmac (which
+uses the carrier, not the id) still brings eth0 up — per-board PHY, zero extra RE
+patches. qemu submodule branch `claude/phy-rtl8201cp` @ ad829c7b80 (mithro/qemu).
+**Validated (all on the freshly-built G3 QEMU):** MAC fwtest now reads `phy0.id2=0x0000
+phy0.id3=0x8201 phy0.bmsr=0x786d`; `test_mac.py::test_phy_is_rtl8201cp_10_100` +
+`test_phy_bmsr_no_gigabit` **xfail→PASS**; full model suite **90 passed / 9 xfailed,
+0 fail**. **C2** our modern kernel: dmesg `RTL8201CP Ethernet … attached PHY driver`
+then `eth0: Link is Up - 100Mbps/Full` → DHCP 10.0.2.15 → `SSH_OK` (C2 PASS, was
+"RTL8211E Gigabit Ethernet"). **C4** Dell vendor firmware still boots to its BMC web
+service (`HTTP/1.0 301`, `Mbedthis-Appweb/2.4.2`, C4 PASS). Both oracle boots green.
