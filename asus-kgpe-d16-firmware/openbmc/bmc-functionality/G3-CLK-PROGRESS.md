@@ -136,6 +136,38 @@ prepared but declined by policy (un-sanctioned live write); the sanctioned
 proof is the Phase-2 fixed-kernel boot, whose i2c init programs the same
 values.
 
+## SILICON PROOF — both findings fixed, NO clk_ignore_unused (2026-07-12)
+
+P2A boot of the clk-FIXED kernel (`uImage-kgpe-g3clk` + `kgpe-g3clk-safe.dtb`,
+NFS root openbmc-hwpass) with cmdline
+`console=ttyS4,115200n8 mem=64M root=/dev/nfs … systemd.show_status=1` —
+**`clk_ignore_unused` is NOT present** (evidence/real-hw-g3clk/).
+
+- **#94 FIXED:** console log (`boot-noclkignore-console.log`) shows
+  `[4.25] clk: Disabling unused clocks` — the exact point the unfixed kernel
+  went blind — and then keeps printing systemd's full unit sequence through
+  `Started Serial Getty on ttyS4` to **`quanta-q71l login:`** on real serial.
+  `serial-getty@ttyS4 = active`. The shared UARTCLK gate is refcounted by the
+  console clk reference (patch 0001 alias), so clk_disable_unused leaves it on.
+- **#93 FIXED** (`i2c-uart-fixed-silicon.txt`): `i2cdetect -y -r 1` completes
+  (was hanging) and shows **`UU` at 0x2f** (w83795 claimed) + a device at 0x69;
+  the i2c demux IRQ has fired **31186 times** (was 0 ever); the W83795 reads
+  real values over the BMC's own engine — **fan1=2657 RPM, temp1=55.5 °C,
+  in0=0.984 V, in2=1.374 V**. `I2CD04 = 0x77776005` (patch 0005 vendor
+  AC-timing, tHDSTA in BaseClk#1 units — was the 0x18076005 garbage that
+  wedged MSTART), `I2CD14 = 0x0A060000` idle.
+- **End-to-end** (`host-kcs-sdr-fixed.txt`): `ipmitool -I open sdr elist` over
+  the host LPC-KCS shows the sensors PUBLISHED with real values (VCORE0
+  0.96 V, P12V 13.82 V, P5V 3.26 V, FAN1 2600 RPM) — no longer 'ns'. Host-KCS
+  working at all also confirms patch 0004: without clk_ignore_unused the old
+  kernel would have gated the LPC LCLK and killed KCS; the DTS clocks
+  reference + optional-clock hold keep it up (`/dev/ipmi-kcs3` +
+  `phosphor-ipmi-kcs@ipmi-kcs3 = active`).
+
+`kgpe-g3clk-safe.dtb` = the combined DTB with video/vhub disabled (never
+HW-tested blocks), QEMU C2-verified before boot. Both the DTB and the full
+DTB pass QEMU C2.
+
 ## Log
 
 - 2026-07-12: worktree + branches created; full datasheet/driver/Raptor audit
