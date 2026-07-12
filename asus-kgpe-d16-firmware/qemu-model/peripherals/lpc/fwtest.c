@@ -39,4 +39,17 @@ void fwtest_run(void)
      */
     writel(LPC_BASE + HICR5, 0x00000001u);
     fwt_check("hicr5.rw", readl(LPC_BASE + HICR5) & 0x1u, 0x1u);
+
+    /* --- SCU0C[8] LCLK gate: with the LPC clock stopped the whole block
+     *     (incl. the KCS channels) is inert — reads 0, writes dropped
+     *     (G3 clock-stop behaviour, datasheet §18 p209; the latent sibling
+     *     of silicon finding #94). --- */
+    writel(SCU_BASE + SCU_PROTECT, 0x1688A8A8u);          /* unlock SCU   */
+    u32 stop = readl(SCU_BASE + SCU_CLK_STOP);
+    writel(SCU_BASE + SCU_CLK_STOP, stop | (1u << 8));    /* stop LCLK    */
+    u32 hicr0_gated = readl(LPC_BASE + HICR0);
+    writel(LPC_BASE + HICR0, 0x00000000u);                /* dropped      */
+    writel(SCU_BASE + SCU_CLK_STOP, stop & ~(1u << 8));   /* restore LCLK */
+    fwt_check("lclk.gated.inert", hicr0_gated, 0);
+    fwt_check("lclk.ungated.kept", readl(LPC_BASE + HICR0) & 0xFu, 0xFu);
 }
