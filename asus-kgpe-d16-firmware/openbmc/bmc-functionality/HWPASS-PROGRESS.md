@@ -146,7 +146,13 @@ F-HWPASS image is exonerated as the freeze cause.** Supporting: Pi dmesg clean (
 USB resets/OOM/NFS errors today), nfsd read counters advanced ~7 MB per attempt
 then went flat at each freeze, eth-bmc 0 errors.
 
-## Final rig state (released 2026-07-12 ~16:50 +09:30, logged on the Pi)
+## Final rig state — SUPERSEDED by Phase C below (recovery session 2026-07-12 evening)
+**This section describes F-HWPASS's mid-day state. The regression was fully
+root-caused and fixed the same evening (Phase C.5–C.10): board now ON serving
+the new image's IPMI, all demos captured. Current state: see C.10 + the
+19:01 +09:30 coordination entry.**
+
+## F-HWPASS's rig state (as released 2026-07-12 ~16:50 +09:30, logged on the Pi)
 - **Board: FROZEN** after the attempt-6 restoration boot (the as-found "board
   serving F5's IPMI" state could NOT be re-established — the environment
   regression, not any action taken, prevents it). Recovery for the next
