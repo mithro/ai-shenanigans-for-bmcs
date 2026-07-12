@@ -580,3 +580,25 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   * Honest remaining boundary (F8-KVM.md §3.1): a real host GPU writing the
     carve-out on silicon; the true G3 compressed-bitstream format; mode-set
     variety beyond the contractual 640x480x32. No PRs.
+- 2026-07-12: **Consolidation — three branches merged into
+  `claude/bmc-functionality`** (all `--no-ff`, no PRs):
+  * `claude/bmc-hwpass` @46db1ab (merge `8d9449b`) — HWRECOVER's final
+    real-silicon evidence: the `00-bmc-eth0.network` DHCP-file root cause,
+    the UARTCLK-gate + 2-min aspeed-WDT-chain finding with the
+    `clk_ignore_unused` runbook mitigation, and the on-silicon final demo
+    (populated IDs, host-KCS, SDR, SOL, lanplus, real W83795G sensors).
+  * `claude/bmc-kcs-m2` @62eb526 (merge `88e0bd8`) — F5b M2 host->BMC Get
+    Device ID over KCS answered by ipmid; `host-kcs` CI job revised +
+    `host-kcs-m2` added.
+  * `claude/bmc-video-datapath` @1efd605 (merge `8ea0990`) — F8 capture
+    datapath (pattern in VGA DRAM -> JPEG out of /dev/video0);
+    `boot-video-capture` added to `d16-kvm.yml`; `vga_memory` DTS node.
+  * QEMU submodule: `claude/kcs-m2` @25611b3 and `claude/video-datapath`
+    @bbed3a1 (both off a010d69, disjoint files) merged `--no-ff` into the
+    submodule's `claude/bmc-functionality` branch -> union `eda871c48f`,
+    pushed to mithro/qemu; superproject gitlink updated. Rebuilt
+    (`--target-list=arm-softmmu`): `kgpe-d16-bmc` machine present, binary
+    contains both the KCS host-port QOM properties and the video-ast2050
+    model.
+  * PROGRESS.md merged as a UNION (both 2026-07-12 entries kept); all 6
+    workflow YAMLs parse; no conflict markers; DTS node-sets intact.
