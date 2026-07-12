@@ -1,7 +1,7 @@
 # F-IMG2 board-specific OpenBMC recipes/bbappends
 
 Canonical copies of the KGPE-D16 (AST2050) OpenBMC image customisations that
-close the four gaps F1-F5 found (all image-recipe, not model/DTS/kernel). As the
+close the gaps F1-F5 / F2-STA found (all image-recipe, not model/DTS/kernel). As the
 image `README.md` documents, OpenBMC's meta layers live outside this repo, so
 these are **copied into** an OpenBMC checkout before building with
 `sync-to-openbmc-tree.sh` (idempotent). Each is a bbappend or a small config
@@ -13,6 +13,7 @@ recipe so upstream is not patched.
 | **(b) SDR** | `ipmitool sdr` shows quanta-q71l names (pvcc_cpu*, p3v3_scaled) not the board rails | `ipmi/q71l-ipmi-sensor-map-native.bbappend`, `ipmi/files/kgpe-d16-sensor.yaml`, `hwmon/kgpe-d16-hwmon-config.bb`, `hwmon/files/hwmon@2f.conf` | `meta-quanta/meta-q71l/recipes-phosphor/ipmi/`, `meta-phosphor/recipes-phosphor/hwmon/` | swap the static-SDR sensor.yaml (`virtual/phosphor-ipmi-sensor-inventory`) to KGPE-D16 rail names + a matching phosphor-hwmon channel map so the names resolve to real W83795G readings |
 | **(c) Redfish** | `/redfish/v1/Chassis` empty: no inventory Chassis object | `entity-manager/entity-manager_%.bbappend`, `entity-manager/files/kgpe-d16.json` | `meta-phosphor/recipes-phosphor/configuration/` | entity-manager publishes an `Inventory.Item.Chassis` (Probe:TRUE) + board Asset that bmcweb surfaces as a Chassis |
 | **(d) IDs/FRU** | `mc info` IDs zeroed; `fru print` empty | `ipmi/phosphor-ipmi-config.bbappend`, `ipmi/files/dev_id.json`, `ipmi/kgpe-d16-fru-populate.bb`, `ipmi/gen_fru.py`, `ipmi/files/motherboard-fru.bin`, `ipmi/files/kgpe-d16-fru-populate.service` | `meta-phosphor/recipes-phosphor/ipmi/` | real ASUS/KGPE-D16 `dev_id.json` (ASUSTeK IANA PEN 2623); a shipped IPMI FRU blob loaded into the motherboard inventory via `phosphor-read-eeprom` (no emulated EEPROM needed) |
+| **(e) Power state (F2-STA #95)** | `ipmitool chassis status` -> `System Power: off` while the host is ON | `power/obmc-libobmc-intf_%.bbappend`, `power/files/gpio_defs.json` | `meta-phosphor/recipes-phosphor/skeleton/` | the base `obmc-libobmc-intf` recipe ships an empty stub `gpio_defs.json`, so op-pwrctl (`org.openbmc.control.Power`) crash-loops at `gpio_configs.c:195` (`read_gpios` assert) and never publishes `pgood` -> chassis stuck Off. Prepend the board map (`PGOOD=GPIOH2` in / `B1`,`F0`,`B6` out) so op-pwrctl reads GPIOH2 (active-high, 1=on) and phosphor-chassis-state-manager tracks it |
 
 `gen_fru.py` regenerates `files/motherboard-fru.bin` (standard IPMI FRU v1.0,
 checksums verified). `sync-to-openbmc-tree.sh` adds the two new packages

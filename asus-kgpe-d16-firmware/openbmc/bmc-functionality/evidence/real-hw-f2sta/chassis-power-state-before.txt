@@ -1,0 +1,58 @@
+F2-STA #95 — real AST2050 (openbmc-hwpass, FIXED g3-clk kernel), host ON
+Captured 2026-07-12 from the Pi (asus-bmc) -> BMC 192.168.66.2 + host-KCS. READ-ONLY.
+
+=========================================================================
+BUG: `ipmitool chassis status` reports System Power = off while host is ON
+=========================================================================
+
+--- A. host-KCS `ipmitool -I open chassis status` (from the managed host's OS) ---
+System Power         : off          <-- WRONG: the x86 host is powered ON
+Power Overload       : false
+Power Interlock      : inactive
+Main Power Fault     : false
+Power Control Fault  : false
+Power Restore Policy : always-off
+Last Power Event     :
+Chassis Intrusion    : inactive
+Front-Panel Lockout  : inactive
+Drive Fault          : false
+Cooling/Fan Fault    : false
+Front Panel Control  : none
+
+--- B. The STATE-IN line is CORRECT — GPIOH2 physically tracks host power ---
+devmem 0x1E780020  = 0xF403FFFF   # GPIO20 (bank E-H data). H2 = bit26 = 1 => HIGH
+devmem 0x1E780024  = 0x0301000E   # GPIO24 (bank E-H dir).  H2 = bit26 = 0 => INPUT
+devmem 0x1E6E2074  = 0x4204D000   # SCU74 (multi-fn pin ctl; bit14 = SDA7/GPIO mux)
+  => GPIOH2 (STA_LINE_POWER, ball A12) reads 1 with the host ON, active-high (1=on),
+     exactly matching Raptor's board map, the DTS `power-state-in` line name, and the
+     QEMU model (GPIO20 bit26, 1=on). The DTS line index + polarity are RIGHT.
+
+--- C. chassis CurrentPowerState (what IPMI/Redfish report) ---
+busctl get-property xyz.openbmc_project.State.Chassis /xyz/openbmc_project/state/chassis0 \
+    xyz.openbmc_project.State.Chassis CurrentPowerState
+  s "xyz.openbmc_project.State.Chassis.PowerState.Off"
+
+--- D. ROOT CAUSE — deployed /etc/default/obmc/gpio/gpio_defs.json is the EMPTY STUB ---
+cat /etc/default/obmc/gpio/gpio_defs.json
+  {
+      "_comments": "This file should be overridden with one from the machine layer."
+  }
+
+--- E. op-pwrctl (org.openbmc.control.Power / power_control.exe) crash-loops on the stub ---
+journalctl -u org.openbmc.control.Power@0.service:
+  Starting Phosphor Power0 Control...
+  **
+  ERROR:gpio_configs.c:195:read_gpios: assertion failed: (configs != NULL)
+  Bail out! ERROR:gpio_configs.c:195:read_gpios: assertion failed: (configs != NULL)
+  org.openbmc.control.Power@0.service: Scheduled restart job, restart counter is at 60.
+
+=========================================================================
+CHAIN: stub gpio_defs.json (no `gpio_configs`) -> op-pwrctl asserts + core-dumps
+  -> no org.openbmc.control.Power `pgood` property
+  -> phosphor-chassis-state-manager leaves CurrentPowerState = Off
+  -> ipmitool/Redfish report the host as off, regardless of the real GPIOH2 (=on).
+
+FIX (repo): board bbappend installs the real gpio_defs.json (PGOOD=GPIOH2 in,
+  B1/F0/B6 out) over the stub, so op-pwrctl reads GPIOH2 (active-high) and publishes
+  pgood -> chassis tracks it. See recipes/power/ + OPENBMC-POWER-INTEGRATION.md.
+=========================================================================
