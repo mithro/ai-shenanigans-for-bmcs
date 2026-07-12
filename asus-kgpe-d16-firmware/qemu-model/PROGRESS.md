@@ -739,6 +739,15 @@ smbus_ee`; the 5 remaining xfails are the P2A BAR (task #62) + 4 SCU reset-table
 regressions. LOCAL qemu-system-arm rebuilt from this worktree's submodule (`eb2018b816`,
 arm-softmmu, one `make -j4`). This change touches **only** the i2c fwtest comments +
 `test_i2c.py` + docs — **no QEMU model, kernel, or firmware change** (submodule tree
-byte-identical to `eb2018b816`), so the legacy boots cannot regress by construction; C2/C4
-were last verified green on this exact submodule SHA in the 2026-07-12 consolidation above.
-Re-verification on the freshly-built LOCAL qemu recorded below as it completes.
+byte-identical to `eb2018b816`), so the legacy boots cannot regress by construction.
+**Both faithful oracles re-verified green on the freshly-built LOCAL qemu:**
+- **C2 PASS** — kernel built FRESH from this branch's `build-kernel.sh` (v6.6.70 + g3-clk +
+  ftgmac + w83795 + KCS-optional-LCLK + i2c-full-AC-timing patches) boots on `-M
+  kgpe-d16-bmc` (`Linux armv5tejl`, hostname `kgpe-d16-bmc`), does **not** freeze at
+  `clk: Disabling unused clocks` (the fresh kernel has the g3-clk work), dropbear listens,
+  and `ssh` returns `SSH_OK`.
+- **C4 PASS** — the unmodified Dell C410X vendor firmware boots to its BMC web service:
+  `HTTP/1.0 301 Moved Permanently … Server: Mbedthis-Appweb/2.4.2 … Location:
+  https://127.0.0.1/login.html`. eth0 comes up (10.0.2.15) using the MAC the vendor
+  ftgmac driver reads from **exactly this bus 0 / 0x50 EEPROM** — so C4 independently
+  exercises the device this task is about.
