@@ -71,6 +71,16 @@ MASK_UNITS = _MASK_COMMON + _HOST_BRIDGE
 # Profile: host (also expose host-side KCS/BT) — keep the host bridge.
 MASK_UNITS_HOST = list(_MASK_COMMON)
 
+# Profile: kcs (F5b M2 — host<->BMC IPMI over the LPC KCS channel only).
+# The F-IMG2/F-HWPASS image ships `kcsbridged` wired as
+# `phosphor-ipmi-kcs@ipmi-kcs3.service` (kept, with `ipmid`); the LAN listener
+# is not part of the KCS demo, so mask it for extra 64-MB headroom. The legacy
+# `org.openbmc.HostIpmi.service` (btbridged) unit name no longer exists in that
+# image; masking it anyway is harmless on older images.
+MASK_UNITS_KCS = _MASK_COMMON + _HOST_BRIDGE + [
+    "phosphor-ipmi-net@eth0.service",
+]
+
 # Extra RAM-hog daemons that IPMI does *not* need — masked only on the real
 # board, whose *effective* free RAM is below QEMU's clean 64 MB (video
 # framebuffer + SoC-reserved regions + NFS-root socket/write-back working set).
@@ -119,7 +129,7 @@ KEEP_UNITS = [
 ]
 
 _PROFILES = {"lan": MASK_UNITS, "host": MASK_UNITS_HOST,
-             "realhw": MASK_UNITS_REALHW}
+             "kcs": MASK_UNITS_KCS, "realhw": MASK_UNITS_REALHW}
 
 
 def mask_units(profile="lan"):
