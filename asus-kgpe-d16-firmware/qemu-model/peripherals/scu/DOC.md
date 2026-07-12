@@ -69,14 +69,21 @@ U-Boot to unlock it), so `prot` reads the key back. The model itself is faithful
 
 - [x] **Rev-id** SCU7C `0x00000202` — `AST2050_A1_SILICON_REV` fixed; wired to the
   machine (boot-safe: the modern-kernel direct boot passes CI with it).
-- [~] **G3 reset table** (`ast2050_a3_resets`) — implemented + fwtest-validated (8/8
-  when applied), but **NOT applied by default**. CI proved it breaks the legacy
-  boots tuned for the AST2400 machine: the **OpenBMC AST2400 U-Boot** and the
-  **RE-patched Dell vendor firmware** read AST2400 SCU values the G3 map zeroes
-  (UART_HPLL_CLK 0x160, SOC_SCRATCH1 DRAM-ready, …) → the boot hangs. The machine
-  keeps the AST2400 reset table (+ faithful rev-id); the G3 table is the **opt-in**
-  table for the co-evolution work. *Same lesson as the VIC: a faithful G3 SoC needs
-  a G3-aware firmware stack.*
+- [x] **G3 reset table** (`ast2050_a3_resets`) — **RESOLVED (2026-07-13).** Now a
+  per-device bool property **`g3-resets`** on the SCU (default **off**), selected via
+  `-global driver=aspeed.scu-ast2050,property=g3-resets,value=on`. When on, the model
+  presents the full datasheet G3 reset state (SCU04=`0x000FFE5C`, SCU08=`0xE3F00070`,
+  SCU0C=`0x000C3E8B`, SCU74=`0x40048000`, …). Off by default so the AST2400-tuned
+  legacy oracles stay byte-for-byte green (the **OpenBMC AST2400 U-Boot** behind
+  C2/C3/C4 and the **RE-patched Dell vendor firmware** read AST2400 SCU values the G3
+  map zeroes — UART_HPLL_CLK, SOC_SCRATCH1 DRAM-ready, …). The **co-evolution** is
+  discharged by a genuinely G3-aware firmware: **Raptor's AST2050 U-Boot (C-UBOOT)**
+  boots to its `boot#` prompt with `g3-resets=on`, running its real DDR2 init from
+  the faithful reset state (`DRAM Init-DDR ...Done`; see the C-UBOOT job in
+  `.github/workflows/d16-qemu-stack.yml`). Fwtest → **8/8 PASS** with the flag; the
+  four checks that used to xfail (sysreset/clksel/clkstop/pinmux1) now pass in
+  `integration/test_scu.py`. *Same lesson as the VIC, now closed: a faithful G3 SoC
+  needs a G3-aware firmware stack, and here it has one.*
 - [ ] **PLL post-divider** — G3 `calc_hpll`/`calc_mpll` applying `[14:12]`, and
   `get_apb` using SCU08[25:23]; so the emulated CPU/PCLK (→ timer) is 133 MHz not
   264. *Deferred to the timer peripheral (needs clock-rate, not register, testing;
@@ -94,5 +101,5 @@ U-Boot to unlock it), so `prot` reads the key back. The model itself is faithful
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ dumps+decodes the whole file; 8 golden checks |
 | 2 | doc (this file + `DATASHEET-SCU.md`) | ☑ |
-| 3 | QEMU model | ◐ rev-id faithful + wired; G3 reset table built but opt-in (co-evolution); PLL/strap pending |
-| 4 | integration test (`../../integration/test_scu.py`) | ◐ rev-id + reset-flag pass; 6 reset-table checks xfail (co-evolution) |
+| 3 | QEMU model | ☑ rev-id faithful + wired; G3 reset table selectable via `g3-resets` and validated by the C-UBOOT oracle (Raptor G3 U-Boot boots on it). PLL post-divider/strap deferred to the timer clock-rate work (§4) |
+| 4 | integration test (`../../integration/test_scu.py`) | ☑ 8/8 golden reset values pass in the faithful G3 mode; the four ex-xfails (sysreset/clksel/clkstop/pinmux1) flipped |

@@ -778,3 +778,35 @@ byte-identical to `eb2018b816`), so the legacy boots cannot regress by construct
   https://127.0.0.1/login.html`. eth0 comes up (10.0.2.15) using the MAC the vendor
   ftgmac driver reads from **exactly this bus 0 / 0x50 EEPROM** — so C4 independently
   exercises the device this task is about.
+
+## 2026-07-13 — SCU reset-table faithfulness closed + the C-UBOOT oracle
+
+- **The four SCU-reset xfails are flipped to PASS.** The datasheet-faithful G3
+  reset table (`ast2050_a3_resets`) is now selectable via a per-device bool
+  property **`g3-resets`** (default off) on `aspeed.scu-ast2050`; with it on, the
+  model presents SCU04=`0x000FFE5C`, SCU08=`0xE3F00070`, SCU0C=`0x000C3E8B`,
+  SCU74=`0x40048000` (+ the rev-id/strap/prot-key overrides and G3 gate
+  propagation). `integration/test_scu.py` boots the SCU fwtest with
+  `-global driver=aspeed.scu-ast2050,property=g3-resets,value=on` → **8/8 PASS**
+  (was 4/8 + 4 xfail). Baseline evidence: same ELF with the default AST2400 table
+  still fails exactly those four, proving isolation. QEMU submodule commit
+  `aspeed/scu: add opt-in G3 (AST2050) reset table via g3-resets`.
+- **Default machine unchanged.** `g3-resets` is off by default, so the reset
+  function's fast path is byte-identical to before — the AST2400-tuned legacy
+  oracles (C2 kernel→SSH, C3 Raptor, C4 Dell vendor→web) are structurally
+  unaffected (they never pass the flag).
+- **C-UBOOT — third firmware oracle.** Raptor Engineering's genuinely G3-aware
+  AST2050 U-Boot (2013.07) built from source and booted on `kgpe-d16-bmc`. With
+  `g3-resets=on`, SCU40[6] DRAM-ready resets to 0, so `platform.S` lowlevel_init
+  RUNS the real AST2050 SCU + DDR2 bring-up against our faithful SCU + SDMC
+  models: `DRAM Init-DDR ...Done` → `DRAM: 64 MiB` → `H/W: AST2050/AST2150 series
+  chip` (SCU7C=0x0202 read back through real firmware) → interactive `boot#`
+  prompt. With the default AST2400 table the `DRAM Init-DDR` banner is absent
+  (SCU40[6]=DRAM-ready is set → lowlevel_init skips its DDR2 init), which is the
+  co-evolution proof that the G3 reset table drives the native init path.
+  `raptor/scripts/build-raptor-uboot.sh` + `raptor/patches/0001-…` +
+  `boot-uboot-scu` CI job (exit-coded on `boot#`).
+- **Deliverable status:** SCU peripheral row → T☑ D☑ M☑ I☑ (was ◐/◐ on M/I).
+  Remaining SCU §4 items (PLL post-divider [14:12], strap SCU70 assert) are
+  deferred to the timer clock-rate work as before — they are clock-rate, not
+  reset-value, fidelity and do not affect the flipped checks.
