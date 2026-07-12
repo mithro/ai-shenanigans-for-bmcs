@@ -258,3 +258,13 @@ KVM path therefore needs a **new** model: minimally VR000 key gating, VR004
 trigger→status (set idle bits, latch a synthetic "capture/compress complete"),
 VR304/VR308 interrupt on INT#7, and honouring the VR040–058 buffer bases (so the
 driver sees a JPEG frame appear in the compressed-stream buffer).
+
+**Our fork models exactly that** (`hw/misc/aspeed_video_ast2050.c`,
+`aspeed.video-ast2050`): VR000 key latch, VR004 mode-detect / capture+compress
+triggers with [16]/[18] busy-idle status, the 640x480 internal-VGA mode-detection
+read-back (VR090/094/098/09C/0A0), a real capture datapath (reads the SCU70[3:2]-
+strapped VGA carve-out at the top of DRAM, JPEG-compresses, writes the VR054
+stream buffer, updates VR070/078/07C) and the VR304/VR308→INT#7 completion path.
+See `DOC.md` §2 for the two documented modelling contracts (fixed XRGB8888
+scanout; standard-JFIF bitstream — the G3's true bitstream format is not in the
+datasheet and needs real-silicon capture).

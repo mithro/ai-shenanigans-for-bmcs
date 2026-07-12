@@ -5,11 +5,15 @@ name: D16 KVM-over-IP (AST2050 video + HID)
 # verifies the KVM-over-IP silicon path (F8):
 #   * VIDEO: the aspeed-video V4L2 driver probes the modelled AST2050 video engine
 #     @0x1e700000 (VIC INT#7) and exposes /dev/video0 (the KVM screen-capture node).
+#   * VIDEO DATAPATH: a colour test pattern written into the VGA carve-out (the
+#     host framebuffer in BMC DRAM @0x43800000) is captured through the modelled
+#     engine (VR004 trigger -> JPEG -> stream buffer -> INT#7) and the dequeued
+#     V4L2 frame is decoded + pixel-verified against the pattern.
 #   * HID:   a virtual keyboard+mouse gadget is built on the USB2.0 vhub @0x1e6a0000
 #     (VIC INT#5) and an actual keypress ('a') HID report is written to /dev/hidg0
 #     and shown crossing the in-guest dummy_hcd loopback to a host-side evdev device.
-# The BMC-only machine has no VGA host source and no real server host, so this is the
-# achievable QEMU bar; see asus-kgpe-d16-firmware/openbmc/bmc-functionality/F8-KVM.md
+# The BMC-only machine has no real server host; the HID layer is the remaining
+# host-facing boundary. See asus-kgpe-d16-firmware/openbmc/bmc-functionality/F8-KVM.md
 # for the honest per-layer boundary and the obmc-ikvm 64 MB assessment.
 on:
   push:
@@ -116,3 +120,39 @@ jobs:
             --initrd initramfs-out/initramfs.cpio.gz \
             --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
             --mem 64 --boot-timeout 300
+
+  boot-video-capture:
+    name: Capture a real frame through the video engine (F8 datapath)
+    runs-on: ubuntu-latest
+    needs: [build-qemu, build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with: { name: qemu, path: qemu-out }
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Boot, draw pattern into the VGA carve-out, capture + verify the frame
+        run: |
+          chmod +x qemu-out/qemu-system-arm
+          # "See the virtual VGA screen": the guest draws a colour test pattern
+          # into the vga_memory carve-out (the host framebuffer in BMC DRAM,
+          # 8 MB @0x43800000, HW-verified strap), the modelled AST2050 video
+          # engine captures + JPEG-compresses it (VR004 trigger -> VR054 stream
+          # buffer -> VIC INT#7), and the dequeued /dev/video0 frame is decoded
+          # and pixel-compared against the pattern.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/video-capture-test.py \
+            --qemu qemu-out/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --mem 64 --boot-timeout 300 \
+            --evidence-dir captured-frame
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captured-frame
+          path: captured-frame/
+          if-no-files-found: ignore
