@@ -23,7 +23,12 @@ KOUT=$HW/qemu-firmware/kernel/out
 PI=asus-bmc
 BOARD=192.168.66.2
 EXPORT=/srv/nfs/openbmc-hwpass
-BOOTARGS="console=ttyS4,115200n8 mem=64M root=/dev/nfs rw ip=192.168.66.2::192.168.66.1:255.255.255.0:kgpe-d16:eth0:off nfsroot=192.168.66.1:$EXPORT,vers=3,tcp,nolock"
+# clk_ignore_unused is REQUIRED on real silicon: the G3 clk driver gates
+# UARTCLK at t=4.16s; late-boot console writes then block PID1 and systemd's
+# 2-min aspeed hardware watchdog resets the SoC at T+~6min (the 2026-07-12
+# "regression", root-caused in HWPASS-PROGRESS.md C.8). Keep it until the
+# G3 clk/DTS wiring refcounts the UART clock properly.
+BOOTARGS="console=ttyS4,115200n8 mem=64M clk_ignore_unused root=/dev/nfs rw ip=192.168.66.2::192.168.66.1:255.255.255.0::eth0:off nfsroot=192.168.66.1:$EXPORT,vers=3,tcp,nolock"
 
 echo "[0] sanity: Pi reachable"
 ssh -o BatchMode=yes -o ConnectTimeout=10 "$PI" 'hostname'
