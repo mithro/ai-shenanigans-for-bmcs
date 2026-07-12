@@ -786,3 +786,63 @@ jobs:
             --flash c4out/flash-c4.img \
             --port 8080 \
             --boot-timeout 300
+
+  # ---- C-UBOOT: Raptor's G3-aware AST2050 U-Boot (the real SCU+DDR2 init) ----
+  # A third firmware oracle beside C2 (our kernel->SSH) and C4 (Dell vendor->web):
+  # Raptor's genuinely AST2050-native U-Boot, whose platform.S lowlevel_init runs
+  # the real AST2050 SCU unlock + M-PLL + DDR2 controller bring-up. Booted with the
+  # faithful G3 SCU reset table (-global aspeed.scu-ast2050 g3-resets=on), SCU40[6]
+  # DRAM-ready resets to 0 so lowlevel_init actually RUNS its DDR2 init against our
+  # faithful SCU + SDMC models and reaches the interactive `boot#` prompt. This
+  # validates the G3 SCU model that unblocked the four SCU-reset-table checks
+  # (qemu-model/peripherals/scu/DOC.md §4).
+
+  build-raptor-uboot:
+    name: Build Raptor G3 AST2050 U-Boot (C-UBOOT)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git wget xz-utils make bc libmpfr6
+      - name: Build Raptor U-Boot (vintage gcc-4.9.4, fetched by the script)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/raptor/scripts/build-raptor-uboot.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raptor-uboot
+          path: |
+            asus-kgpe-d16-firmware/qemu-firmware/raptor/out/u-boot-raptor.bin
+            asus-kgpe-d16-firmware/qemu-firmware/raptor/out/flash-raptor-uboot.img
+          if-no-files-found: error
+
+  boot-uboot-scu:
+    name: Boot Raptor G3 U-Boot -> boot# on the faithful G3 SCU (C-UBOOT)
+    runs-on: ubuntu-latest
+    needs: [build-raptor-uboot]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with: { name: raptor-uboot, path: raptor-uboot-out }
+      - name: Boot Raptor U-Boot with the faithful G3 SCU reset table -> boot#
+        run: |
+          # -global driver=aspeed.scu-ast2050,property=g3-resets,value=on selects
+          # the datasheet-faithful G3 SCU reset table, so SCU40[6] (DRAM-ready)
+          # resets to 0 and lowlevel_init RUNS the real AST2050 SCU + DDR2 init
+          # ("DRAM Init-DDR ...Done") against our faithful models before the prompt.
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/run-qemu.py boot \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --flash raptor-uboot-out/flash-raptor-uboot.img \
+            --extra=-global \
+            --extra=driver=aspeed.scu-ast2050,property=g3-resets,value=on \
+            --expect 'boot#' --timeout 120

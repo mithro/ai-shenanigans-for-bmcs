@@ -93,7 +93,7 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 
 | # | Peripheral | Base | OpenBMC/board use | T | D | M | I | Phase |
 |--:|---|---|---|:-:|:-:|:-:|:-:|:-:|
-| 1 | SCU (system control: clocks, straps, rev-id, reset, pinmux) | 0x1E6E2000 | clocks/identity gate everything | ☑ | ☑ | ◐ | ◐ | 1 |
+| 1 | SCU (system control: clocks, straps, rev-id, reset, pinmux) | 0x1E6E2000 | clocks/identity gate everything | ☑ | ☑ | ☑ | ☑ | 1 |
 | 2 | SDRAM controller (DDR2) | 0x1E6E0000 | U-Boot DRAM init | ☑ | ☑ | ◐ | ◐ | 1 |
 | 3 | VIC (interrupt controller, compact G3) | 0x1E6C0000 | all IRQs | ☑ | ☑ | ◐ | ◐ | 1 |
 | 4 | Timer (FTTMR010, 3×) | 0x1E782000 | clocksource/clockevent | ☑ | ☑ | ☑ | ☑ | 1 |
@@ -111,7 +111,7 @@ integration test) track completion: ☐ todo · ◐ partial · ☑ done.
 | 16 | VUART / PUART | 0x1E787000 / TBD | SOL, host serial passthrough | ☐ | ☐ | ☐ | ☐ | 4 |
 | 17 | Video engine (KVM capture) | 0x1E700000 | vKVM, VGA capture | ☑ | ☑ | ☑ | ☑ | 4 |
 | 18 | USB2.0 UDC / virtual hub | 0x1E6A0000 | virtual media, vkeyboard | ☑ | ☑ | ☐ | ◐ | 4 |
-| 19 | PCI A2P bridge + arbiter (culvert p2a) | 0x1E720000 / 0x1E78C000 | culvert p2a (PCI-slave BAR) | ☑ | ☑ | ☐ | ◐ | 5 |
+| 19 | PCI A2P bridge + arbiter (culvert p2a) | 0x1E720000 / 0x1E78C000 | culvert p2a (PCI-slave BAR) | ☑ | ☑ | ◐ | ☑ | 5 |
 | 20 | HACE (hash/crypto), MIC, mailbox, scratch | 0x1E6E3000 / … | as probed | ☐ | ☐ | ☐ | ☐ | 5 |
 
 **Confirmed against the datasheet** (`AST2050-MEMORY-MAP.md`, §9 pp.97–98). G3-vs-G4
@@ -123,6 +123,12 @@ corrections folded in above:
   host. → D16 voltage/temp sensors come via **I2C** hwmon chips (LM75 etc.), not a SoC ADC.
 - **Flash** is the legacy SMC (data window `0x10000000`), not the G4 FMC/SPI.
 - **PCI** is conventional (A2P bridge), not PCIe/XDMA; culvert P2A uses the PCI-slave BAR.
+  The **P2A PCI→AHB back door** (§36) is now modelled (`hw/misc/aspeed_p2a_ast2050.c`,
+  `peripherals/p2a/`): a faithful P2A00/P2A04 translation gated by P2A00[0] + live
+  SCU2C[8], with an honest QOM host back-channel (the BMC-only machine has no host
+  PCI root complex) — `test_p2a.py::TestP2AHostBackdoor` reads SCU7C=0x202 through the
+  window (M=◐ only because the A2P bridge region 0x1E720000 + arbiter are still
+  unmodelled — the reused G4 memmap leaves SRAM there).
 
 ## 4. The four deliverables per peripheral (definition of done)
 

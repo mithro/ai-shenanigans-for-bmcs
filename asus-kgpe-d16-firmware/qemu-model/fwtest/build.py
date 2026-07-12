@@ -99,13 +99,15 @@ def build(name: str, outdir: Path) -> Path:
     return elf
 
 
-def run(qemu: Path, elf: Path, outdir: Path, timeout: float) -> str:
+def run(qemu: Path, elf: Path, outdir: Path, timeout: float,
+        extra_args: list[str] | None = None) -> str:
     check_machine(qemu)
     serial = outdir / f"{elf.stem}.serial.log"
     if serial.exists():
         serial.unlink()
     argv = [str(qemu), "-M", MACHINE, "-m", "128", "-display", "none",
-            "-serial", f"file:{serial}", "-kernel", str(elf), "-no-reboot"]
+            "-serial", f"file:{serial}", "-kernel", str(elf), "-no-reboot",
+            *(extra_args or [])]
     print("[run]", " ".join(argv))
     proc = subprocess.Popen(argv)
     deadline = time.monotonic() + timeout
@@ -161,6 +163,10 @@ def main() -> int:
     ap.add_argument("--qemu", help="path to qemu-system-arm with kgpe-d16-bmc")
     ap.add_argument("--timeout", type=float, default=20.0)
     ap.add_argument("--out", default=str(MODEL / "tmp" / "fwtest"))
+    ap.add_argument("--qemu-arg", action="append", default=[], dest="qemu_args",
+                    help="extra argument passed through to qemu-system-arm "
+                         "(repeatable; e.g. --qemu-arg=-global "
+                         "--qemu-arg=driver=aspeed.scu-ast2050,property=g3-resets,value=on)")
     args = ap.parse_args()
 
     outdir = Path(args.out)
@@ -169,7 +175,7 @@ def main() -> int:
         return 0
     qemu = resolve_qemu(args.qemu)
     print(f"[run] qemu = {qemu}")
-    transcript = run(qemu, elf, outdir, args.timeout)
+    transcript = run(qemu, elf, outdir, args.timeout, args.qemu_args)
     return summarize(transcript)
 
 

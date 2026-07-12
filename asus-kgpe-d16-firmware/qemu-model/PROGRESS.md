@@ -236,6 +236,10 @@ timer+WDT). Central finding: [[qemu-must-model-real-hardware]] — legacy boots 
   executes a START (auto-clears START, advances the CMD status field `0x00480000`).
   Deferred (xfail): full ACK/NAK + smbus_eeprom readback need the exact CMD-status-field +
   SMBus command protocol. Gap: AST2400 model exposes up to 14 buses vs the G3's 7.
+  **UPDATE 2026-07-13 (task #63): the ACK/NAK xfail is RESOLVED — see the 2026-07-13 entry
+  at the bottom. Root cause was a missing I2CD0C interrupt-enable in the fwtest (datasheet
+  master-transmit step), not a model gap; no model change. Byte-level readback stays a
+  documented depth gap.**
 
 ### Progress: 9 peripherals covered (all C1–C4 boots green throughout)
 SCU, VIC, Timer, WDT, UART, MAC, GPIO, I2C + SDRAM(test/doc). Fully faithful (no model
@@ -696,3 +700,159 @@ suite **96 passed / 6 xfailed / 0 failed** — incl. `test_phy_is_rtl8201cp_10_1
 `test_phy_bmsr_no_gigabit`, sdram `geom.cap64/w16/bank4`, UART loopback, and all 12 KCS
 handshake checks (kcs-m2 preserved). The 6 xfails are pre-existing documented items
 (i2c smbus_ee, scu sysreset/clksel/clkstop/pinmux1). No regressions.
+
+### 🎉 P2A back door MODELLED (2026-07-12, #62) — the culvert `p2a` path, xfail→pass
+The last host-side back-door xfail is closed the KCS-M2 way. New faithful G3 device
+**`aspeed.p2a-ast2050`** (`hw/misc/aspeed_p2a_ast2050.c` + header + meson + SoC struct
+field + realize wiring, G3-only) models the §36 PCI→AHB back door: **P2A00** protection
+key (unlock), **P2A04** remap base, and the aperture translation
+**`AHB=(P2A04[31:16]<<16)|offset[15:0]`** (datasheet §36.2 p.400). It masters the AHB via
+a linked `AddressSpace` over the SoC memory, so a host aperture cycle lands on the real
+modelled peripherals. The **host half** (the PCI-slave BAR1 window the BMC-only machine
+can't have) is an **honest QOM back-channel** (`host-p2a00-key`/`host-p2a04-remap`/
+`host-p2a-offset`/`host-p2a-data` on `/machine/soc/p2a-g3`) — replacing only the PCI bus
+wires + BIOS BAR1 enumeration; the §36 translation and both gates are the modelled
+silicon. Gates are genuine: a cycle is honoured only with **P2A00[0]=1** AND **SCU2C[8]=0**
+(the SCU bit read live from the real SCU model); either closed → `error_setg` (fail loud).
+- **`integration/test_p2a.py::TestP2AHostBackdoor`** (qtest BMC side + QMP host side):
+  reads **SCU7C = 0x00000202 through the window** — the exact value culvert reads over P2A
+  on the real AST2050 — verifies it equals the BMC-side AHB read, does a **write round-trip
+  into AHB/DRAM**, confirms the low-16 pass-through equation, and both gates refuse when
+  closed. The old `test_a2p_bridge_modelled` xfail is retired (the back door is now
+  genuinely exercised, not a weak AHB-region proxy).
+- **Suite: 103 passed / 5 xfailed / 0 failed** (was 96/6; +7 passed, −1 xfail). Remaining
+  5 xfails are the pre-existing i2c smbus_ee + scu sysreset/clksel/clkstop/pinmux1 items.
+- **Oracles green on the same new binary:** **C4** Dell vendor firmware boots to its BMC web
+  service (HTTP 301 Mbedthis-Appweb/2.4.2); **C2** from-source kernel+initramfs boots to an
+  SSH login (`SSH_OK`). The P2A device is inert during boot (no MMIO, no IRQ, driven only by
+  the QOM back-channel), so no legacy boot is affected. qemu submodule branch
+  `claude/p2a-bar` (off `eb2018b816`, mithro/qemu).
+
+## 2026-07-13 — I2C EEPROM probe: xfail → PASS, no model change (task #63)
+
+**Flipped the `i2c smbus_ee` xfail (`test_i2c.py::test_eeprom_probe_acks`) to PASS,
+faithfully.** Branch `claude/bmc-i2c-eeprom` off `claude/bmc-functionality` (`0b44e70`);
+qemu submodule branch `claude/i2c-eeprom` off `eb2018b816` (no submodule change needed).
+
+**Root cause (the 2026-07-10 xfail was a test-harness bug, not a missing device).** The
+kgpe-d16-bmc machine *does* seed an `smbus_eeprom` at bus 0 / 0x50 (`kgpe_d16_bmc_i2c_init`).
+QEMU's `smbus_eeprom` genuinely ACKs a bare addr+W probe (`smbus_i2c_event` returns 0 for
+`I2C_START_SEND` from IDLE, `smbus_slave.c:156`), and the AST2050 master latches that ACK
+as `TX_ACK` in I2CD10[0] (`aspeed_i2c_bus_handle_cmd`, non-packet path). The *only* reason
+the earlier probe saw nothing: in old (non-packet) mode `aspeed_i2c_bus_raise_interrupt`
+does `intr_sts &= intr_ctrl_mask` — I2CD10 is masked by the I2CD0C enable, and the old
+fwtest left I2CD0C=0. Enabling the ACK/NAK interrupts first is exactly the **datasheet-
+documented** master-transmit sequence (`DATASHEET-I2C.md` §4.1 init + §4.3 example:
+`I2CD10=0xFFFFFFFF` → `I2CD0C=0x000000BF` → poll I2CD10) and what all real firmware does.
+**No QEMU model change was required.**
+
+**Faithfulness / honest finding (`DOC.md` §2.1).** The device at bus 0 / 0x50 is the **Dell
+C410X** MAC/board-config EEPROM (`dell-c410x-firmware/ANALYSIS.md` §"EEPROM 0x50+ I2C0"),
+seeded on this *shared* machine purely for the **C4** vendor-firmware oracle. It is **not** a
+KGPE-D16 board device. The **KGPE-D16 itself has no attested probe-able master-side BMC I2C
+EEPROM**: its motherboard FRU is *software-populated* (`kgpe-d16-fru-populate.bb`, whose own
+summary reads "…(no EEPROM)"), DIMM SPD sits behind a host-side mux (GPIOF4/F5), and the
+only attested BMC-bus peripheral is the W83795G hwmon at bus 1 / 0x2f. We did **not** invent
+a KGPE-D16 EEPROM — the test proves the shared **AST2050 I2C master-engine** probe-ACK/NAK
+(the SoC fact common to both boards, datasheet §31.5) against the one real device the machine
+carries. The fwtest also exercises the SCU04[2] `g3-i2c-rst` reset-hold (register file inert
+until firmware de-asserts) from the g3-clk work.
+
+**Validated:** i2c fwtest **6/6 checks PASS** (`held_in_reset.inert`, `fun_ctrl.reset`,
+`master_en.rw`, `start.autoclears`, `unused.naks` 0x55→NAK, `eeprom50.acks` mask=0x01);
+`integration/test_i2c.py` **3 passed, 0 xfail** (was 1 xfail). Full model integration suite
+**97 passed / 5 xfailed / 0 failed** (was 96/6) — the resolved item is exactly `i2c
+smbus_ee`; the 5 remaining xfails are the P2A BAR (task #62) + 4 SCU reset-table items. No
+regressions. LOCAL qemu-system-arm rebuilt from this worktree's submodule (`eb2018b816`,
+arm-softmmu, one `make -j4`). This change touches **only** the i2c fwtest comments +
+`test_i2c.py` + docs — **no QEMU model, kernel, or firmware change** (submodule tree
+byte-identical to `eb2018b816`), so the legacy boots cannot regress by construction.
+**Both faithful oracles re-verified green on the freshly-built LOCAL qemu:**
+- **C2 PASS** — kernel built FRESH from this branch's `build-kernel.sh` (v6.6.70 + g3-clk +
+  ftgmac + w83795 + KCS-optional-LCLK + i2c-full-AC-timing patches) boots on `-M
+  kgpe-d16-bmc` (`Linux armv5tejl`, hostname `kgpe-d16-bmc`), does **not** freeze at
+  `clk: Disabling unused clocks` (the fresh kernel has the g3-clk work), dropbear listens,
+  and `ssh` returns `SSH_OK`.
+- **C4 PASS** — the unmodified Dell C410X vendor firmware boots to its BMC web service:
+  `HTTP/1.0 301 Moved Permanently … Server: Mbedthis-Appweb/2.4.2 … Location:
+  https://127.0.0.1/login.html`. eth0 comes up (10.0.2.15) using the MAC the vendor
+  ftgmac driver reads from **exactly this bus 0 / 0x50 EEPROM** — so C4 independently
+  exercises the device this task is about.
+
+## 2026-07-13 — SCU reset-table faithfulness closed + the C-UBOOT oracle
+
+- **The four SCU-reset xfails are flipped to PASS.** The datasheet-faithful G3
+  reset table (`ast2050_a3_resets`) is now selectable via a per-device bool
+  property **`g3-resets`** (default off) on `aspeed.scu-ast2050`; with it on, the
+  model presents SCU04=`0x000FFE5C`, SCU08=`0xE3F00070`, SCU0C=`0x000C3E8B`,
+  SCU74=`0x40048000` (+ the rev-id/strap/prot-key overrides and G3 gate
+  propagation). `integration/test_scu.py` boots the SCU fwtest with
+  `-global driver=aspeed.scu-ast2050,property=g3-resets,value=on` → **8/8 PASS**
+  (was 4/8 + 4 xfail). Baseline evidence: same ELF with the default AST2400 table
+  still fails exactly those four, proving isolation. QEMU submodule commit
+  `aspeed/scu: add opt-in G3 (AST2050) reset table via g3-resets`.
+- **Default machine unchanged.** `g3-resets` is off by default, so the reset
+  function's fast path is byte-identical to before — the AST2400-tuned legacy
+  oracles (C2 kernel→SSH, C3 Raptor, C4 Dell vendor→web) are structurally
+  unaffected (they never pass the flag).
+- **C-UBOOT — third firmware oracle.** Raptor Engineering's genuinely G3-aware
+  AST2050 U-Boot (2013.07) built from source and booted on `kgpe-d16-bmc`. With
+  `g3-resets=on`, SCU40[6] DRAM-ready resets to 0, so `platform.S` lowlevel_init
+  RUNS the real AST2050 SCU + DDR2 bring-up against our faithful SCU + SDMC
+  models: `DRAM Init-DDR ...Done` → `DRAM: 64 MiB` → `H/W: AST2050/AST2150 series
+  chip` (SCU7C=0x0202 read back through real firmware) → interactive `boot#`
+  prompt. With the default AST2400 table the `DRAM Init-DDR` banner is absent
+  (SCU40[6]=DRAM-ready is set → lowlevel_init skips its DDR2 init), which is the
+  co-evolution proof that the G3 reset table drives the native init path.
+  `raptor/scripts/build-raptor-uboot.sh` + `raptor/patches/0001-…` +
+  `boot-uboot-scu` CI job (exit-coded on `boot#`).
+- **Deliverable status:** SCU peripheral row → T☑ D☑ M☑ I☑ (was ◐/◐ on M/I).
+  Remaining SCU §4 items (PLL post-divider [14:12], strap SCU70 assert) are
+  deferred to the timer clock-rate work as before — they are clock-rate, not
+  reset-value, fidelity and do not affect the flipped checks.
+
+## 2026-07-13 — FINAL consolidation: the faithful-model backlog is complete (0 xfails)
+
+**The three last feature branches are merged into `claude/bmc-functionality` and
+the combined model suite reaches its maximum — 108 passed / 0 xfailed / 0 failed.**
+This closes every remaining xfail in the AST2050 faithful-QEMU program.
+
+- **Superproject `--no-ff` merges** (in order, off `0b44e70`):
+  `claude/bmc-p2a-bar` → `5ada8b1`, `claude/bmc-i2c-eeprom` → `badd854`,
+  `claude/bmc-uboot-scu` → `8c2fa29`. Conflicts were PROGRESS.md only (unioned —
+  all three dated entries kept); the SCU DOC/test/CI/README auto-merged cleanly.
+- **QEMU submodule union → `ae204f8` on `mithro/qemu:claude/bmc-functionality`**
+  (off `eb2018b816`). Two `--no-ff` merges of disjoint single-commit branches:
+  `claude/p2a-bar` (`02060a8e`, the `hw/misc/aspeed_p2a_ast2050` P2A back-door
+  device + SoC wiring) and `claude/uboot-scu` (`0da49bd9`, the `aspeed_scu.c`
+  `g3-resets` reset-table property). `claude/i2c-eeprom` carried **no** submodule
+  delta (its faithful finding was a test-harness/datasheet-sequence fix, not a
+  model change), so the submodule union is exactly base + P2A + SCU — no shared
+  files, no conflicts. git's own submodule-merge resolver independently proposed
+  `ae204f8` as the resolution, confirming the union.
+- **One incremental `make -j4` (arm-softmmu)** rebuilt `aspeed_p2a_ast2050.c` +
+  `aspeed_scu.c` and relinked `qemu-system-arm`. The union binary carries, in one
+  image: `kgpe-d16-bmc`, `w83795`, `host-kcs`, `aspeed_video_ast2050`,
+  `aspeed.sdmc-ast2050`, `rtl8201cp`, **`aspeed.p2a-ast2050`**, the SCU
+  **`g3-resets`** property, and the bus-0/0x50 `smbus-eeprom` — every feature from
+  every merged branch coexisting.
+- **Combined integration suite: 108 passed / 0 xfailed / 0 failed** (`pytest
+  integration/`). All items the three branches flipped are green **together** on
+  the single union binary: the 9 `test_p2a.py` P2A back-door checks (incl.
+  SCU7C=0x0202-through-the-window == silicon, the write round-trip, and both
+  gates), `test_i2c.py::test_eeprom_probe_acks` (smbus_ee), and the four
+  `test_scu.py::test_reset_value_faithful[sysreset|clksel|clkstop|pinmux1]`
+  reset-table checks. **Zero xfails remain in the whole suite.**
+- **All three firmware oracles re-verified green on the union binary:**
+  - **C-UBOOT** — Raptor's G3 AST2050 U-Boot booted with
+    `-global aspeed.scu-ast2050.g3-resets=on`: `DRAM Init-DDR ...Done` →
+    `DRAM: 64 MiB` → `H/W: AST2050/AST2150 series chip` (SCU7C=0x0202 read back by
+    real firmware) → interactive `boot#`.
+  - **C2** — fresh `v6.6.70` g3-clk kernel + initramfs boots `-M kgpe-d16-bmc`
+    (`Linux armv5tejl`, hostname `kgpe-d16-bmc`), does **not** freeze at
+    `clk: Disabling unused clocks`, and `ssh` returns `SSH_OK`.
+  - **C4** — the unmodified Dell C410X vendor firmware boots to its BMC web
+    service: `HTTP/1.0 301 Moved Permanently … Server: Mbedthis-Appweb/2.4.2`.
+  The new devices are inert on the legacy paths (P2A: no MMIO/IRQ during boot,
+  driven only by the QOM back-channel; `g3-resets` default-off), so no legacy
+  boot regresses — the faithfulness oracle holds.

@@ -1,0 +1,43 @@
+diff --git a/include/configs/asus.h b/include/configs/asus.h
+index 4d1320b..5d57543 100644
+--- a/include/configs/asus.h
++++ b/include/configs/asus.h
+@@ -351,4 +351,18 @@
+ #define CONFIG_ASPEED_ENABLE_WATCHDOG
+ #define CONFIG_ASPEED_WATCHDOG_TIMEOUT (5*60) // 5m
+ 
++/* --- QEMU kgpe-d16-bmc boot overrides (faithful G3 SCU+DDR2 validation) --- */
++/* Use the compiled-in default environment instead of reading/writing the SPI
++ * flash env: (1) it lets U-Boot reach a prompt without a working flash-env chip,
++ * and (2) it avoids building the CRC host-tool (env_embedded.o -> ../tools/envcrc
++ * -> aisimage.o), whose vintage code does not compile under a modern host gcc.
++ * The boot flash IS memory-mapped at 0x0 on the machine, so lowlevel_init still
++ * runs from flash and does the real AST2050 SCU + DDR2 init. */
++#undef  CONFIG_ENV_IS_IN_FLASH
++#undef  CONFIG_ENV_OFFSET
++#undef  CONFIG_ASPEED_WRITE_DEFAULT_ENV
++#define CONFIG_ENV_IS_NOWHERE   1
++#undef  CONFIG_ENV_SIZE
++#define CONFIG_ENV_SIZE         0x2000
++
+ #endif	/* __CONFIG_H */
+diff --git a/tools/Makefile b/tools/Makefile
+index 46159b2..e6193b8 100644
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -172,13 +172,14 @@ NOPEDOBJS := $(addprefix $(obj),$(NOPED_OBJ_FILES-y))
+ # Define __KERNEL_STRICT_NAMES to prevent typedef overlaps
+ #
+ HOSTCPPFLAGS =	-include $(SRCTREE)/include/libfdt_env.h \
+-		-idirafter $(SRCTREE)/include \
++		-I $(SRCTREE)/include \
+ 		-idirafter $(OBJTREE)/include2 \
+ 		-idirafter $(OBJTREE)/include \
+ 	        -I $(SRCTREE)/lib/libfdt \
+ 		-I $(SRCTREE)/tools \
+ 		-DCONFIG_SYS_TEXT_BASE=$(CONFIG_SYS_TEXT_BASE) \
+ 		-DUSE_HOSTCC \
++		-DLIBFDT_H \
+ 		-D__KERNEL_STRICT_NAMES
+ 
+ 

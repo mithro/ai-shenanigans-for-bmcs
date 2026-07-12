@@ -7,9 +7,11 @@
  * b1, RX_DONE b2, W1C), I2CD14 command (START b0, TX b1, RX b3, RX_LAST b4, STOP
  * b5), I2CD20 byte buffer (TX low, RX [15:8]).
  *
- * The machine seeds an EEPROM at bus 0 / addr 0x50 (holds the BMC MAC). This test
- * enables the master and proves the transaction path: address 0x50 ACKs (device
- * present), an unused address NAKs. Apache-2.0.
+ * The machine seeds an EEPROM at bus 0 / addr 0x50 (the Dell C410X MAC/board-
+ * config store, present for the C4 vendor-firmware oracle). This test enables the
+ * master, enables the ACK/NAK interrupts (I2CD0C) as real firmware does, and
+ * proves the transaction path: a present device (0x50) ACKs, an unused address
+ * (0x55) NAKs — exactly what a bare i2cdetect-style probe sees. Apache-2.0.
  */
 #include "harness.h"
 #include "ast2050.h"
@@ -26,6 +28,16 @@
 #define CMD_STOP    0x20u
 #define STS_TX_ACK  0x01u
 #define STS_TX_NAK  0x02u
+#define STS_RX_DONE 0x04u
+/* I2CD0C interrupt-enable bits share I2CD10's bit layout (datasheet §31, I2CD0C
+ * bits [2:0] = RX-done/TX-NAK/TX-ACK enable). Real firmware — Linux i2c-aspeed
+ * (ASPEED_I2CD_INTR_TX_ACK|TX_NAK|RX_DONE in its INTR_CTRL write), U-Boot's
+ * ast_i2c, and the Avocent vendor driver — enables these before *every* master
+ * transfer, then polls I2CD10. The AST2050 latches the 9th-clock ACK/NAK into
+ * I2CD10[0]/[1]; the controller surfaces the *enabled* sources, so a probe that
+ * leaves I2CD0C=0 sees nothing. Enable them here to observe the ACK the way
+ * firmware (and i2cdetect's kernel driver) does. */
+#define INTR_EN_ALL (STS_TX_ACK | STS_TX_NAK | STS_RX_DONE)
 
 const char fwtest_name[] = "i2c";
 
@@ -36,6 +48,7 @@ const char fwtest_name[] = "i2c";
 static u32 i2c_addr_acks(u32 base, u32 dev7)
 {
     writel(base + FUN_CTRL, MASTER_EN);
+    writel(base + INTR_CTRL, INTR_EN_ALL);         /* enable ACK/NAK like firmware */
     writel(base + INTR_STS, 0xFFFFFFFFu);          /* clear status */
     writel(base + BYTE_BUF, (dev7 << 1) | 0u);     /* addr + write */
     writel(base + CMD, CMD_START);                 /* START sends the addr byte */
@@ -73,8 +86,11 @@ void fwtest_run(void)
     fwt_check("master_en.rw", readl(I2C0 + FUN_CTRL) & MASTER_EN, MASTER_EN);
 
     /* --- the master engine executes a START command: it auto-clears the START
-     *     bit and reports a transaction result (TX_NAK for an unused address).
-     *     This proves the master state machine runs. --- */
+     *     bit and reports a transaction result. Enable the ACK/NAK interrupts
+     *     first (I2CD0C) — the AST2050 latches the 9th-clock ACK/NAK into I2CD10,
+     *     and firmware/i2cdetect always enables these before polling. Address
+     *     0x55 is unused on bus 0, so the master samples NO ACK → TX_NAK. --- */
+    writel(I2C0 + INTR_CTRL, INTR_EN_ALL);
     writel(I2C0 + INTR_STS, 0xFFFFFFFFu);
     writel(I2C0 + BYTE_BUF, (0x55u << 1) | 0u);     /* an unused address */
     writel(I2C0 + CMD, CMD_START);
@@ -87,21 +103,24 @@ void fwtest_run(void)
     }
     u32 cmd_after = readl(I2C0 + CMD);
     writel(I2C0 + CMD, CMD_STOP);
+    writel(I2C0 + INTR_STS, 0xFFFFFFFFu);
     fwt_kv("cmd.after_start", cmd_after);   /* status/state field in [23:16] */
     fwt_kv("probe.sts", sts);
     fwt_check("start.autoclears", cmd_after & CMD_START, 0);   /* engine ran   */
-    /* observation: full ACK/NAK + device readback depend on the exact
-     * status-reporting (CMD state field) + SMBus command protocol — deferred. */
+    fwt_check("unused.naks", sts & STS_TX_NAK, STS_TX_NAK);    /* 0x55 → NAK    */
 
-    /* --- OBSERVATION: scan all 7 engine blocks for a device ACK at 0x50 (the
-     *     machine seeds an EEPROM — the BMC MAC — on bus 0). Record a per-bus
-     *     bitmask (bit e set if engine e's master gets an address ACK) so no
-     *     result is lost. Confirmed (2026-07-10): the mask is 0 — the QEMU
-     *     smbus_eeprom is an SMBus device that does NOT ACK a bare I2C address
-     *     probe; it needs the SMBus command protocol (addr+W, offset, repeated
-     *     START, addr+R, read). Full device read-back is therefore deferred; the
-     *     I2C *engine* is faithful (OpenBMC reads this EEPROM at boot). See
-     *     DOC.md §2. --- */
+    /* --- Scan all 7 engine blocks for a device ACK at 0x50. The shared
+     *     kgpe-d16-bmc machine carries ONE device at 0x50: an smbus_eeprom on
+     *     bus 0 — the Dell C410X MAC/board-config store, seeded for the C4
+     *     vendor-firmware oracle (dell-c410x-firmware/ANALYSIS.md §"EEPROM 0x50+
+     *     I2C0"). It is NOT a KGPE-D16 board device — the KGPE-D16 has no
+     *     attested probe-able BMC I2C EEPROM (its FRU is software-populated; see
+     *     DOC.md §2.1). What THIS test proves is the shared AST2050 I2C *master
+     *     engine* address-probe behaviour, which is silicon-faithful and common
+     *     to both boards: bus 0 ACKs (the smbus_eeprom acknowledges the addr+W
+     *     probe → the master latches TX_ACK into I2CD10[0], datasheet §31.5);
+     *     buses 1-6 have no device at 0x50 → NAK → their bits stay 0. Record a
+     *     per-bus bitmask so no result is lost. See DOC.md §2. --- */
     u32 e, mask = 0;
     for (e = 0; e < 7u; e++) {
         if (i2c_addr_acks(BUS(e), 0x50)) {
@@ -109,4 +128,5 @@ void fwtest_run(void)
         }
     }
     fwt_kv("ack50.mask", mask);
+    fwt_check("eeprom50.acks", mask & 1u, 1u);   /* bus 0 EEPROM ACKs a probe */
 }
