@@ -98,6 +98,44 @@ next-evidence step; do NOT guess further without it.
    if justified, boot the fixed kernel without `clk_ignore_unused` per
    `hwpass-boot-and-demo.sh` (incl. the 00-bmc-eth0.network deletion step).
 
+## #93 SILICON ROOT CAUSE (2026-07-12 evening, live-BMC devmem diagnostics)
+
+Read-only devmem dumps on the running board (image from HWRECOVER C.10, which
+boots with `clk_ignore_unused`) — every "easy" hypothesis measured FALSE:
+
+- `SCU00=0x00000001` → SCU **unlocked** (kernel SCU writes land).
+- `SCU04=0x000FF658` → bit2=0: **I2C reset properly de-asserted** by
+  i2c-aspeed's `reset_control_deassert`.
+- `SCU08=0x61800070` → PCLK divider [25:23]=0b011 → PCLK = 200 MHz/8 = 25 MHz.
+- `I2CG04=0` (7-set I2C pinmux), `I2CD00=0x8001` (master enabled,
+  multi-master disabled), `I2CD0C=0x207F` (driver's interrupt enables set).
+- VIC: enable bit12 set, SENSE/EVENT bit12 = level-high. `/proc/interrupts`:
+  the i2c demux IRQ has fired **0 times ever**.
+- Idle `I2CD14=0x0A060000`: sampled **SCL=1 SDA=1** (bus electrically fine),
+  state machine IDLE, not busy.
+
+**The wedge, caught live:** during a probe of an unclaimed address
+(`i2cdetect -y 1 0x21 0x21`, 1.2 s = one adapter timeout), sustained
+`I2CD14=0x12CD0002`: state machine **[22:19]=0b1001 = MSTART**, SDA_OE=1
+(START being driven, SDA low, SCL still high), bus-busy=1, Master-TX command
+still latched — the FSM **never leaves the START state**; no I2CD10 status,
+no IRQ, until the driver's timeout + recovery resets the engine
+(`I2CD14` back to 0x0A060000). Every transaction repeats this.
+
+The stalled phase is **tHDSTA (Start-hold) counting**, and the live
+`I2CD04=0x18076005` shows the mainline-**preserved power-up garbage**:
+tHDSTA[27:24]=0x8 = "1×**BaseClk#2**" units (with BaseClk#2 divisor [7:4]
+left 0 by mainline). tBUF/tACST use BaseClk#1 and don't stall; the FSM wedges
+exactly in the only phase clocked by BaseClk#2 on this power-up value. The
+vendor driver (Raptor/Aspeed SDK `select_i2c_clock()`) always writes
+`0x777xxxxx` — all three fields in BaseClk#1 units — so the vendor stack
+never exercises this corner (matching "first-ever exercise fails").
+Patch 0005 (program tBUF/tHDSTA/tACST=7 in BaseClk#1 units, vendor-style)
+targets exactly this. A live confirmation `devmem` write of I2CD04 was
+prepared but declined by policy (un-sanctioned live write); the sanctioned
+proof is the Phase-2 fixed-kernel boot, whose i2c init programs the same
+values.
+
 ## Log
 
 - 2026-07-12: worktree + branches created; full datasheet/driver/Raptor audit
