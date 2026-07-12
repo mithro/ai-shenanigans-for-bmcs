@@ -37,6 +37,17 @@ if ! grep -q "Set the speed mode from the current link speed" \
     git apply "$ROOT/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch"
 fi
 
+# AST2050 ftgmac100 MACCLK: leave the MAC clock at the U-Boot default instead of
+# forcing 100MHz via clk_set_rate() (independent of the speed-mode fix above --
+# different function, ftgmac100_setup_clk). From main's hardware-verified series
+# (asus-kgpe-d16-firmware/kernel/patches, PR #22/#26): correct G3 behaviour --
+# U-Boot's AST2050 path never sets MACCLK -- and harmless on QEMU.
+# Idempotent guard on a unique string from the patched comment.
+if ! grep -q "leaving MACCLK at the U-Boot default" \
+        drivers/net/ethernet/faraday/ftgmac100.c; then
+    git apply "$ROOT/../kernel/patches/0002-ftgmac100-ast2050-macclk.patch"
+fi
+
 # W83795G hardware-monitor modern-hwmon registration (F3 sensors): the mainline
 # drivers/hwmon/w83795.c uses the legacy hwmon_device_register(), which puts the
 # sensor attributes on the i2c client device and leaves /sys/class/hwmon/hwmonN
