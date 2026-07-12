@@ -379,15 +379,16 @@ def main():
         print("\n=== host-side byte trace (tail) ===")
         print("\n".join(trace[-12:]))
 
-        # 4. BMC-side evidence: journal for kcsbridged + ipmid, driver state
+        # 4. BMC-side evidence: journal for kcsbridged + ipmid, driver state.
+        # NB: the guest coreutils are BusyBox — `head -N` is invalid, use -n N.
         rc, journal = ssh_run(args.ssh_port, args.password, r"""
 echo '=== systemctl status (bridge + ipmid) ==='
-systemctl status --no-pager -l phosphor-ipmi-kcs@ipmi-kcs3.service | head -12
-systemctl status --no-pager -l phosphor-ipmi-host.service | head -8
+systemctl status --no-pager -l phosphor-ipmi-kcs@ipmi-kcs3.service | head -n 12
+systemctl status --no-pager -l phosphor-ipmi-host.service | head -n 8
 echo '=== journal: kcsbridged ==='
-journalctl --no-pager -u phosphor-ipmi-kcs@ipmi-kcs3.service | tail -30
+journalctl --no-pager -u phosphor-ipmi-kcs@ipmi-kcs3.service | tail -n 30
 echo '=== journal: ipmid (tail) ==='
-journalctl --no-pager -u phosphor-ipmi-host.service | tail -15
+journalctl --no-pager -u phosphor-ipmi-host.service | tail -n 20
 echo '=== kcsbridged holds /dev/ipmi-kcs3 ==='
 ls -l /proc/$(pidof kcsbridged)/fd | grep ipmi-kcs || echo 'fd list unavailable'
 echo '=== dmesg: kcs ==='
@@ -403,14 +404,20 @@ dmesg | grep -i kcs
                    and response[1] == 0x01)
         cc = response[2] if ok_form else None
         ok_cc = cc == 0x00
-        ok_bridge = "ipmi-kcs" in journal and "active (running)" in journal
+        # kcsbridged proven by: it started, ipmid mapped the KCS channel on
+        # D-Bus, and the daemon holds the /dev/ipmi-kcs3 fd right now.
+        ok_started = "Started Phosphor IPMI KCS DBus Bridge" in journal
+        ok_mapped = "Ipmi.Channel.ipmi_kcs3" in journal
+        ok_fd = "-> /dev/ipmi-kcs3" in journal
+        ok_bridge = ok_started and ok_fd
         print("\n=== F5b M2 host->BMC IPMI-over-KCS transaction ===")
         print(f"  [{'PASS' if ok_form else 'FAIL'}] well-formed Get Device ID "
               f"response (netfn 0x07, cmd 0x01)")
         print(f"  [{'PASS' if ok_cc else 'FAIL'}] completion code 0x00"
               + (f" (got {cc:#04x})" if cc is not None else " (no cc byte)"))
-        print(f"  [{'PASS' if ok_bridge else 'FAIL'}] kcsbridged active and "
-              f"holding /dev/ipmi-kcs3 (BMC-side journal)")
+        print(f"  [{'PASS' if ok_bridge else 'FAIL'}] kcsbridged started and "
+              f"holding /dev/ipmi-kcs3 (journal: started={ok_started} "
+              f"fd={ok_fd} ipmid-channel-mapped={ok_mapped})")
         if ok_form:
             print("\n" + decode_devid(response))
         ok = ok_form and ok_cc and ok_bridge
