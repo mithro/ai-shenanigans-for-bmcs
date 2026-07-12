@@ -102,3 +102,14 @@ next-evidence step; do NOT guess further without it.
 
 - 2026-07-12: worktree + branches created; full datasheet/driver/Raptor audit
   above completed (no code changes yet).
+- 2026-07-12: **QEMU faithfulness landed** (submodule eecfbf68, branch
+  `claude/g3-clk-gates`): 2050 SCU drives `g3-uartclk-stop`/`g3-lclk-stop`/
+  `g3-i2c-rst`; the 2050 SoC disables the UART1+UART2 / LPC / I2C MMIO regions
+  accordingly (inert = reads 0, writes dropped, no IRQ). SCU04[2] reset
+  default already holds I2C (0xFFCFFEDC bit2=1). fwtests updated: i2c now
+  unlocks SCU + de-asserts the reset like real firmware (and asserts
+  inert-while-held); uart/lpc assert gate/ungate. Verified: i2c/uart/lpc
+  fwtests PASS, integration suite 76 passed + 10 pre-existing xfails,
+  **C4 oracle PASS** (Dell vendor firmware boots to a serving appweb on the
+  faithful model — the vendor stack de-asserts/keeps clocks on, as real
+  firmware must).
