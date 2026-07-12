@@ -1,6 +1,0 @@
-$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> -C 17 sol info 1
-# exit code: 1
-
-ControlSocket /home/tim/.ssh/tmp/master-claude@rpi4-asus-aspeed2050-dev.iot.welland.mithis.com:22 already exists, disabling multiplexing
-Error: Unable to establish IPMI v2 / RMCP+ session
-

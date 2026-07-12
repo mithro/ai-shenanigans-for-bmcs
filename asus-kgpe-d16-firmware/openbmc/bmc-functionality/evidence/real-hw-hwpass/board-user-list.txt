@@ -1,5 +1,0 @@
-$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> -C 17 user list 1
-# exit code: 1
-
-Error: Unable to establish IPMI v2 / RMCP+ session
-
