@@ -1,0 +1,253 @@
+From 69dd008c298fca2a3888876ac68b2d31c18c194b Mon Sep 17 00:00:00 2001
+From: Tim 'mithro' Ansell <me@mith.ro>
+Date: Thu, 9 Jul 2026 15:18:29 +0930
+Subject: [PATCH 1/2] irqchip: add aspeed,ast2050-vic driver for the G3
+ (AST2050/AST1100) VIC
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The AST2050 (SoC generation 3) interrupt controller is a compact VIC at 0x1e6c0000
+with a non-interleaved 32-source register layout (datasheet §16): VIC00 STATUS,
+VIC10 ENABLE, VIC14 ENABLE_CLR, VIC24 SENSE (1=level), VIC28 DUAL_EDGE, VIC2C EVENT
+(1=high/rising), VIC38 EDGE_CLEAR. This is functionally the same VIC as the AST2400
+but the AST2400+ moved it to an interleaved map at 0x1e6c0080 that irq-aspeed-vic.c
+drives -- its register writes miss the G3 entirely, so no interrupt is ever enabled,
+the timer clockevent is dead, hrtimers hang, and boot stalls at local_irq_enable().
+
+irq-aspeed-g3-vic.c programs sense/event/dual per datasheet Table 36 (timers 16-18 and
+WDT 27 = rising-edge, RTC 22-26 = both-edge, peripherals = high-level) since the P2A
+reset-boot path has no firmware to do it, and ACKs edge sources via VIC38. Bind with a
+DT node: compatible="aspeed,ast2050-vic", reg=<0x1e6c0000 0x1000>.
+
+Verified on real AST2050 hardware: clockevent fires at ~1kHz, eth0 links up with real
+interrupts, kernel IP-config completes.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WwQmDxXnjQ3ZinKocvVHfa
+---
+ drivers/irqchip/Makefile            |   2 +-
+ drivers/irqchip/irq-aspeed-g3-vic.c | 198 ++++++++++++++++++++++++++++
+ 2 files changed, 199 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/irqchip/irq-aspeed-g3-vic.c
+
+diff --git a/drivers/irqchip/Makefile b/drivers/irqchip/Makefile
+index ffd945fe7..8e1ec9693 100644
+--- a/drivers/irqchip/Makefile
++++ b/drivers/irqchip/Makefile
+@@ -83,7 +83,7 @@ obj-$(CONFIG_MVEBU_PIC)			+= irq-mvebu-pic.o
+ obj-$(CONFIG_MVEBU_SEI)			+= irq-mvebu-sei.o
+ obj-$(CONFIG_LS_EXTIRQ)			+= irq-ls-extirq.o
+ obj-$(CONFIG_LS_SCFG_MSI)		+= irq-ls-scfg-msi.o
+-obj-$(CONFIG_ARCH_ASPEED)		+= irq-aspeed-vic.o irq-aspeed-i2c-ic.o irq-aspeed-scu-ic.o
++obj-$(CONFIG_ARCH_ASPEED)		+= irq-aspeed-vic.o irq-aspeed-g3-vic.o irq-aspeed-i2c-ic.o irq-aspeed-scu-ic.o
+ obj-$(CONFIG_STM32_EXTI) 		+= irq-stm32-exti.o
+ obj-$(CONFIG_QCOM_IRQ_COMBINER)		+= qcom-irq-combiner.o
+ obj-$(CONFIG_IRQ_UNIPHIER_AIDET)	+= irq-uniphier-aidet.o
+diff --git a/drivers/irqchip/irq-aspeed-g3-vic.c b/drivers/irqchip/irq-aspeed-g3-vic.c
+new file mode 100644
+index 000000000..328a45a65
+--- /dev/null
++++ b/drivers/irqchip/irq-aspeed-g3-vic.c
+@@ -0,0 +1,198 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * Driver for the Aspeed "old" VIC as found in SoC generation 3 (AST2050 / AST1100).
++ *
++ * [ast2050-support] The G3 interrupt controller lives at 0x1e6c0000 with a COMPACT,
++ * non-interleaved register layout (32 sources, one 32-bit word per register) — unlike
++ * the AST2400+ "new" VIC at 0x1e6c0080 that irq-aspeed-vic.c drives (interleaved
++ * high/low, up to 51 sources). Functionally identical (programmable sense / event /
++ * dual-edge, plus an edge-clear register), just remapped. Register map (datasheet §16):
++ *
++ *   VIC00 IRQ_STATUS   VIC04 FIQ_STATUS  VIC08 RAW_STATUS  VIC0C SELECT(1=FIQ)
++ *   VIC10 ENABLE       VIC14 ENABLE_CLR  VIC18 SOFT_INT    VIC1C SOFT_INT_CLR
++ *   VIC20 PROTECT      VIC24 SENSE(1=level,0=edge)         VIC28 DUAL_EDGE(1=both)
++ *   VIC2C EVENT(1=high/rising,0=low/falling)               VIC38 EDGE_CLEAR(W1C)
++ *
++ * The P2A reset-boot path has no firmware to configure the VIC, so we program the
++ * sense/event/dual per the datasheet Interrupt Source Table (Table 36) ourselves:
++ *   level-high : 1-10,12,15,19,20,21,28,31     rising-edge: 16,17,18 (timers), 27 (WDT)
++ *   both-edge  : 22-26 (RTC)
++ *
++ * Based on irq-aspeed-vic.c (Copyright 2015 Ben Herrenschmidt, IBM Corp.).
++ */
++
++#include <linux/export.h>
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/irq.h>
++#include <linux/irqchip.h>
++#include <linux/irqchip/chained_irq.h>
++#include <linux/irqdomain.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/slab.h>
++
++#include <asm/exception.h>
++#include <asm/irq.h>
++
++/* Compact "old" register map (base 0x1e6c0000). */
++#define G3VIC_IRQ_STATUS	0x00
++#define G3VIC_RAW_STATUS	0x08
++#define G3VIC_INT_SELECT	0x0c
++#define G3VIC_INT_ENABLE	0x10
++#define G3VIC_INT_ENABLE_CLR	0x14
++#define G3VIC_SOFT_INT		0x18
++#define G3VIC_SOFT_INT_CLR	0x1c
++#define G3VIC_INT_SENSE		0x24
++#define G3VIC_INT_DUAL_EDGE	0x28
++#define G3VIC_INT_EVENT		0x2c
++#define G3VIC_EDGE_CLR		0x38
++
++#define G3VIC_NUM_IRQS		32
++
++/*
++ * Datasheet Table 36 config: sense (1=level), event (1=high/rising), dual (1=both edge).
++ *   level-high  1-10,12,15,19,20,21,28,31 -> SENSE & EVENT bits
++ *   rising-edge 16,17,18,27               -> EVENT bits (SENSE=0)
++ *   both-edge   22-26                     -> DUAL bits  (SENSE=0)
++ */
++#define G3VIC_SENSE_CFG		0x903897fe
++#define G3VIC_EVENT_CFG		0x983f97fe
++#define G3VIC_DUAL_CFG		0x07c00000
++
++struct aspeed_g3_vic {
++	void __iomem		*base;
++	u32			edge_sources;
++	struct irq_domain	*dom;
++};
++static struct aspeed_g3_vic *system_g3vic;
++
++static void g3vic_init_hw(struct aspeed_g3_vic *vic)
++{
++	u32 sense;
++
++	/* Disable + clear everything */
++	writel(0xffffffff, vic->base + G3VIC_INT_ENABLE_CLR);
++	writel(0xffffffff, vic->base + G3VIC_SOFT_INT_CLR);
++	/* All sources as IRQ (not FIQ) */
++	writel(0, vic->base + G3VIC_INT_SELECT);
++
++	/* Program sense/event/dual per the datasheet (no firmware did it). */
++	writel(G3VIC_SENSE_CFG, vic->base + G3VIC_INT_SENSE);
++	writel(G3VIC_EVENT_CFG, vic->base + G3VIC_INT_EVENT);
++	writel(G3VIC_DUAL_CFG,  vic->base + G3VIC_INT_DUAL_EDGE);
++
++	/* Edge sources must have their detection latch cleared before enable. */
++	writel(0xffffffff, vic->base + G3VIC_EDGE_CLR);
++
++	sense = readl(vic->base + G3VIC_INT_SENSE);
++	vic->edge_sources = ~sense;
++	pr_info("aspeed-g3-vic: SENSE=%#x EVENT=%#x DUAL=%#x edge_sources=%#x\n",
++		sense, readl(vic->base + G3VIC_INT_EVENT),
++		readl(vic->base + G3VIC_INT_DUAL_EDGE), vic->edge_sources);
++}
++
++static void __exception_irq_entry g3vic_handle_irq(struct pt_regs *regs)
++{
++	struct aspeed_g3_vic *vic = system_g3vic;
++	u32 stat;
++
++	while ((stat = readl_relaxed(vic->base + G3VIC_IRQ_STATUS)) != 0)
++		generic_handle_domain_irq(vic->dom, ffs(stat) - 1);
++}
++
++static void g3vic_ack_irq(struct irq_data *d)
++{
++	struct aspeed_g3_vic *vic = irq_data_get_irq_chip_data(d);
++	u32 sbit = 1u << d->hwirq;
++
++	/* Clear the edge latch for edge sources; nop for level. */
++	if (vic->edge_sources & sbit)
++		writel(sbit, vic->base + G3VIC_EDGE_CLR);
++}
++
++static void g3vic_mask_irq(struct irq_data *d)
++{
++	struct aspeed_g3_vic *vic = irq_data_get_irq_chip_data(d);
++
++	writel(1u << d->hwirq, vic->base + G3VIC_INT_ENABLE_CLR);
++}
++
++static void g3vic_unmask_irq(struct irq_data *d)
++{
++	struct aspeed_g3_vic *vic = irq_data_get_irq_chip_data(d);
++
++	writel(1u << d->hwirq, vic->base + G3VIC_INT_ENABLE);
++}
++
++static void g3vic_mask_ack_irq(struct irq_data *d)
++{
++	struct aspeed_g3_vic *vic = irq_data_get_irq_chip_data(d);
++	u32 sbit = 1u << d->hwirq;
++
++	writel(sbit, vic->base + G3VIC_INT_ENABLE_CLR);
++	if (vic->edge_sources & sbit)
++		writel(sbit, vic->base + G3VIC_EDGE_CLR);
++}
++
++static struct irq_chip g3vic_chip = {
++	.name		= "G3VIC",
++	.irq_ack	= g3vic_ack_irq,
++	.irq_mask	= g3vic_mask_irq,
++	.irq_unmask	= g3vic_unmask_irq,
++	.irq_mask_ack	= g3vic_mask_ack_irq,
++};
++
++static int g3vic_map(struct irq_domain *d, unsigned int irq,
++		     irq_hw_number_t hwirq)
++{
++	struct aspeed_g3_vic *vic = d->host_data;
++
++	if (hwirq >= G3VIC_NUM_IRQS)
++		return -EPERM;
++
++	if (vic->edge_sources & (1u << hwirq))
++		irq_set_chip_and_handler(irq, &g3vic_chip, handle_edge_irq);
++	else
++		irq_set_chip_and_handler(irq, &g3vic_chip, handle_level_irq);
++	irq_set_chip_data(irq, vic);
++	irq_set_probe(irq);
++	return 0;
++}
++
++static const struct irq_domain_ops g3vic_dom_ops = {
++	.map = g3vic_map,
++	.xlate = irq_domain_xlate_onetwocell,
++};
++
++static int __init g3vic_of_init(struct device_node *node,
++				struct device_node *parent)
++{
++	void __iomem *regs;
++	struct aspeed_g3_vic *vic;
++
++	if (WARN(parent, "non-root Aspeed G3 VIC not supported"))
++		return -EINVAL;
++	if (WARN(system_g3vic, "duplicate Aspeed G3 VIC not supported"))
++		return -EINVAL;
++
++	regs = of_iomap(node, 0);
++	if (WARN_ON(!regs))
++		return -EIO;
++
++	vic = kzalloc(sizeof(*vic), GFP_KERNEL);
++	if (WARN_ON(!vic)) {
++		iounmap(regs);
++		return -ENOMEM;
++	}
++	vic->base = regs;
++	g3vic_init_hw(vic);
++
++	system_g3vic = vic;
++	set_handle_irq(g3vic_handle_irq);
++	vic->dom = irq_domain_add_simple(node, G3VIC_NUM_IRQS, 0,
++					 &g3vic_dom_ops, vic);
++	return 0;
++}
++
++IRQCHIP_DECLARE(ast2050_vic, "aspeed,ast2050-vic", g3vic_of_init);
+-- 
+2.47.3
+

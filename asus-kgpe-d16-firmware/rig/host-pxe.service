@@ -1,0 +1,21 @@
+# PXE server for the KGPE-D16 x86 HOST (dnsmasq DHCP + TFTP on eth-host).
+# Install on the ASUS bridge Pi as /etc/systemd/system/host-pxe.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now host-pxe
+#
+# Uses /srv/pxe/dnsmasq.conf (DHCP 192.168.77.50-150 + TFTP /srv/pxe/tftp,
+# dhcp-boot=pxelinux.0 -> SystemRescue). Bound to eth-host only (except-interface
+# eth-bmc/eth0/lo) so it never serves the BMC net or the Pi's own uplink. eth-host's
+# static 192.168.77.1/24 comes from the NetworkManager profile 'eth-host-pxe'.
+# Pairs with host-pxe-http.service (serves the SystemRescue rootfs over HTTP).
+[Unit]
+Description=KGPE-D16 host PXE (dnsmasq DHCP+TFTP on eth-host)
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/srv/pxe/dnsmasq.conf
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

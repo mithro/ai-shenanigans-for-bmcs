@@ -25,7 +25,7 @@ option analysis is in [`BIOS-CONFIG-WITHOUT-MENU.md`](BIOS-CONFIG-WITHOUT-MENU.m
   USB kbd <---+ USB  <==== HID boot keyboard   (opi /dev/hidg0)                                      |
   USB net <---+ USB  <==== ECM usb-ethernet    (opi usb0 .2 / host .1)                               |
   VGA/HDMI --->  video ===> Magewell capture    (rpi4 /dev/video0)                                   |
-  COM1 3F8h --> serial ===> FTDI USB-serial     (rpi4 /dev/serial-com1)  <=== BIOS redirects here    |
+  COM1 3F8h --> serial ===> PL2303 USB-serial   (rpi4 /dev/serial-com1)  <=== BIOS redirects here    |
   AC in   <---- mains  <=== Tasmota smart plug   (au-plug-10)                                         |
               +-------------------------------------------------------------------------------------+
                      |                    |                        |                    |
