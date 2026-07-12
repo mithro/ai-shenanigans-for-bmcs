@@ -178,6 +178,32 @@ attempt 4 splits that). NB: the F-IMG2-derived image was only ever QEMU-proven a
 **mem=256**, never 64 — this exposed that validation gap. x86 host verified
 unharmed after each attempt (uptime advancing).
 
+## Phase C (2026-07-12, instance-HWRECOVER) — cold AC cycle recovery
+
+Mission: clear the post-outage board regression with a **cold AC power-cycle**
+(the sanctioned recoverable remedy), re-establish the PXE-host + culvert P2A
+chain, re-test F5's proven stack for stability, then run the staged demo.
+
+### C.1 Pre-cycle state + preservation (17:01 +09:30)
+- Rig claimed in the Pi coordination log. Board **frozen** (0/3 pings to
+  192.168.66.2); x86 host still up (1d19h; RAM-resident SystemRescue).
+- **Culvert snapshot taken off the live host before killing it**:
+  `/root/culvert-g3/build/src/culvert` (x86-64, 797032 B) + its one non-libc dep
+  `/usr/lib/libfdt.so.1` (164304 B) → `Pi:/home/claude/host-culvert-snapshot.tar.gz`
+  (389663 B, listing verified). Re-push after PXE = one untar.
+- Host-access helper installed: `Pi:/home/claude/pi-host-sh.sh` (mirror of
+  pi-bmc-sh.sh; sshpass → root@192.168.77.138).
+- Pre-checks: plug `au-plug-10` ON @ **50 W**; opi keyboard gadget bound
+  (`musb-hdrc.4.auto`, /dev/hidg0 present); kgpe-seriald + host-pxe +
+  host-pxe-http + bmc-tftp all `active`; com1.log offset marked (178685).
+
+### C.2 The cold cycle (17:03–17:06 +09:30)
+- `Power OFF` → meter decayed to **0 W / 0.000 A** (verified) — board fully
+  dark ~75 s (DDR2/SoC state drained).
+- `Power ON` → meter **71 W** (POST draw) — board powering back up.
+- Watching COM1 for the POST sequence (BMC-wait ~100–130 s → PXE →
+  SystemRescue) + host ssh liveness.
+
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
 request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no
