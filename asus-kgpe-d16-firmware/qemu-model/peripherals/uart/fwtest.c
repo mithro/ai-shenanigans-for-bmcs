@@ -44,4 +44,24 @@ void fwtest_run(void)
     u32 rx = readl(UART1_BASE + RBR) & 0xff;
     fwt_kv("uart1.rx", rx);
     fwt_check("uart1.loopback", rx, 0x42);
+
+    /* --- SCU0C[15] UARTCLK gate: ONE clock gate stops BOTH UARTs (G3-only
+     *     behaviour, datasheet §18 p209; silicon finding #94 — gating this bit
+     *     killed the live console on the real KGPE-D16). While the console is
+     *     the gated UART2, nothing may be printed: sample registers into
+     *     variables, restore the clock, then report. --- */
+    writel(SCU_BASE + SCU_PROTECT, 0x1688A8A8u);       /* unlock SCU */
+    writel(UART1_BASE + SCR, 0x24);                    /* pre-gate marker */
+    u32 stop = readl(SCU_BASE + SCU_CLK_STOP);
+    writel(SCU_BASE + SCU_CLK_STOP, stop | (1u << 15));   /* stop UARTCLK  */
+    u32 con_lsr_gated = readl(UART5_BASE + LSR);          /* both UARTs... */
+    writel(UART1_BASE + SCR, 0x77);                       /* write dropped */
+    u32 u1_scr_gated = readl(UART1_BASE + SCR);
+    writel(SCU_BASE + SCU_CLK_STOP, stop & ~(1u << 15));  /* restore clock */
+    fwt_kv("gate.con_lsr", con_lsr_gated);
+    fwt_check("gate.con.inert", con_lsr_gated, 0);        /* no THRE: dead */
+    fwt_check("gate.uart1.inert", u1_scr_gated & 0xff, 0);
+    fwt_check("ungate.con.thre", (readl(UART5_BASE + LSR) >> 5) & 1u, 1u);
+    /* the gated-era write must have been dropped: marker survives */
+    fwt_check("ungate.uart1.scr", readl(UART1_BASE + SCR) & 0xff, 0x24);
 }

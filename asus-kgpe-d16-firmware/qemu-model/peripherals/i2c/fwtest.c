@@ -53,6 +53,18 @@ static u32 i2c_addr_acks(u32 base, u32 dev7)
 
 void fwtest_run(void)
 {
+    /* --- SCU04[2] reset-hold: the G3 powers up with the whole 7-engine I2C
+     *     controller HELD IN RESET (SCU04 reset default has bit2=1, datasheet
+     *     §18 p205). While held, the register file is inert — writes are
+     *     dropped. Real firmware (Raptor ast_scu_init_i2c(), mainline
+     *     i2c-aspeed reset_control_deassert) must clear the bit first; do the
+     *     same here, and assert the inert-while-held behaviour on the way. --- */
+    writel(I2C0 + FUN_CTRL, MASTER_EN);                /* dropped: still held */
+    fwt_check("held_in_reset.inert", readl(I2C0 + FUN_CTRL), 0);
+    writel(SCU_BASE + SCU_PROTECT, 0x1688A8A8u);       /* unlock SCU          */
+    writel(SCU_BASE + SCU_RESET,
+           readl(SCU_BASE + SCU_RESET) & ~(1u << 2));  /* de-assert I2C reset */
+
     /* --- reset / RW on engine 0 --- */
     u32 fc = fwt_reg("fun_ctrl.reset", I2C0 + FUN_CTRL);
     fwt_reg("intr_ctrl.reset", I2C0 + INTR_CTRL);

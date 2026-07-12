@@ -4,9 +4,11 @@
  * (pp.183-203; see DATASHEET-SDRAM.md / DOC.md): MCR00 is a protection lock-latch
  * (unlock key 0xFC600309; reads 0=locked / 1=unlocked, resets locked); MCR04
  * config resets to 0 and is written by firmware (no SPD/strap/probe DRAM sizing);
- * MCR100 reads 0x000000A8. The stock QEMU aspeed_sdmc models DDR3 and *synthesises*
- * MCR04 from the machine RAM size, so several checks below FAIL and document the
- * gaps a DDR2 model closes. Apache-2.0.
+ * MCR100 reads 0x000000A8. The faithful aspeed.sdmc-ast2050 model resets MCR04=0,
+ * stores writes verbatim, and reports the real KGPE-D16 geometry when firmware
+ * programs it. The stock DDR3 aspeed_sdmc *synthesises* MCR04 from the machine RAM
+ * size and misses the AST2000 shadow, so on it the three DDR2 checks FAIL.
+ * Apache-2.0.
  */
 #include "harness.h"
 #include "ast2050.h"
@@ -14,8 +16,12 @@
 const char fwtest_name[] = "sdram";
 
 #define SDMC_UNLOCK   0xFC600309u
-/* Raptor 128 MB DDR2 geometry: 8-bank / 128 MB cap / 10-col (platform.S). */
-#define G3_CONF_128M  0x00000D89u
+/*
+ * Real KGPE-D16 DDR2 geometry, captured live over JTAG (MCR04 = 0x00000585):
+ * 4-bank / 64 MB total / 16-bit bus / BL4 / auto-precharge / 10 column bits.
+ * asus-kgpe-d16-firmware/JTAG-USAGE-GUIDE.md (~line 302); DATASHEET-SDRAM.md §2.2.
+ */
+#define G3_CONF_64M   0x00000585u
 
 void fwtest_run(void)
 {
@@ -26,11 +32,6 @@ void fwtest_run(void)
     fwt_reg("mode2c",  SDMC_BASE + 0x2C);   /* DDR-type / mode-set (X reset)  */
     u32 m100  = fwt_reg("compat100", SDMC_BASE + 0x100);  /* AST2000 shadow   */
 
-    /* decode current config per the G3 DDR2 layout (§17): */
-    fwt_kv("conf.cap",   (conf >> 2) & 0x3);   /* 00<=32M 01=64M 10=128M 11=256M */
-    fwt_kv("conf.width", (conf >> 8) & 0x3);   /* 01 = 16-bit                    */
-    fwt_kv("conf.bank",  (conf >> 11) & 0x1);  /* 0=4-bank 1=8-bank              */
-
     /* --- faithfulness checks (datasheet §17 reset values) --- */
     fwt_check("protect.reset", prot, 0);       /* MCR00 resets locked -> reads 0 */
     fwt_check("config.reset",  conf, 0);       /* MCR04 Init=0; firmware writes it */
@@ -40,6 +41,14 @@ void fwtest_run(void)
     /* --- behavioural: unlock (0xFC600309 -> MCR00 reads 1) + program config --- */
     writel(SDMC_BASE + 0x00, SDMC_UNLOCK);
     fwt_check("unlock", readl(SDMC_BASE + 0x00), 1);
-    writel(SDMC_BASE + 0x04, G3_CONF_128M);
-    fwt_check("config.rw", readl(SDMC_BASE + 0x04) & 0xFFF, G3_CONF_128M);
+
+    /* Firmware writes the real geometry; the controller stores it verbatim. */
+    writel(SDMC_BASE + 0x04, G3_CONF_64M);
+    u32 rb = readl(SDMC_BASE + 0x04);
+    fwt_check("config.rw", rb & 0xFFF, G3_CONF_64M);
+
+    /* Read MCR04 back and confirm it reports the real KGPE-D16 geometry (§17). */
+    fwt_check("geom.cap64", (rb >> 2) & 0x3, 0x1);    /* [3:2]=01 -> 64 MB total */
+    fwt_check("geom.w16",   (rb >> 8) & 0x3, 0x1);    /* [9:8]=01 -> 16-bit bus  */
+    fwt_check("geom.bank4", (rb >> 11) & 0x1, 0x0);   /* [11]=0  -> 4-bank       */
 }

@@ -1,0 +1,37 @@
+Warning: Permanently added '192.168.66.2' (ED25519) to the list of known hosts.
+=== uname / cmdline (NO clk_ignore_unused) ===
+Linux quanta-q71l 6.6.70-dirty #3 Sun Jul 12 20:11:58 ACST 2026 armv5tejl GNU/Linux
+console=ttyS4,115200n8 mem=64M root=/dev/nfs rw ip=192.168.66.2::192.168.66.1:255.255.255.0::eth0:off nfsroot=192.168.66.1:/srv/nfs/openbmc-hwpass,vers=3,tcp,nolock systemd.show_status=1
+ 15:39:48 up 4 min,  load average: 7.50, 4.81, 2.08
+
+=== i2cdetect bus1 ===
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:                         -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- UU 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- 69 -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+
+=== i2c IRQ count ===
+ 22:      31186     dummy   1 Edge      1e78a080.i2c-bus
+
+=== W83795 via BMC I2C engine 1-002f ===
+fan1_input=2657
+fan2_input=0
+fan3_input=0
+temp1_input=55500
+temp2_input=-62500
+in0_input=984
+in1_input=0
+in2_input=1374
+
+=== I2CD04 vendor AC-timing patch0005 / I2CD14 idle ===
+I2CD04=0x77776005 I2CD14=0x0A060000
+
+=== serial getty + kcs alive ===
+active
+crw-------    1 root     root       10, 127 Mar 13 15:35 /dev/ipmi-kcs3
+active

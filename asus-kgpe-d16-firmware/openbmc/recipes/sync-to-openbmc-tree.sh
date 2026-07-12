@@ -15,6 +15,7 @@ PH_IPMI="$OPENBMC/meta-phosphor/recipes-phosphor/ipmi"
 PH_SET="$OPENBMC/meta-phosphor/recipes-phosphor/settings"
 PH_EM="$OPENBMC/meta-phosphor/recipes-phosphor/configuration"
 PH_HWMON="$OPENBMC/meta-phosphor/recipes-phosphor/hwmon"
+PH_SKEL="$OPENBMC/meta-phosphor/recipes-phosphor/skeleton"
 Q71L_IPMI="$OPENBMC/meta-quanta/meta-q71l/recipes-phosphor/ipmi"
 PH_IMG="$OPENBMC/meta-phosphor/recipes-phosphor/images"
 
@@ -69,6 +70,16 @@ install -D -m0644 "$HERE/entity-manager/files/kgpe-d16.json" \
     "$PH_EM/files/kgpe-d16.json"
 install -D -m0644 "$HERE/entity-manager/entity-manager_%.bbappend" \
     "$PH_EM/entity-manager_%.bbappend"
+
+# (F2-STA #95) host-power GPIO map for op-pwrctl -> obmc-libobmc-intf bbappend.
+# The upstream recipe ships an empty stub gpio_defs.json, which makes op-pwrctl
+# (org.openbmc.control.Power) crash at gpio_configs.c:195 (read_gpios assert) so
+# nothing publishes `pgood` and chassis power always reports Off. This override
+# installs the real KGPE-D16 map (PGOOD=GPIOH2 in / B1,F0,B6 out) instead.
+install -D -m0644 "$HERE/power/files/gpio_defs.json" \
+    "$PH_SKEL/files/gpio_defs.json"
+install -D -m0644 "$HERE/power/obmc-libobmc-intf_%.bbappend" \
+    "$PH_SKEL/obmc-libobmc-intf_%.bbappend"
 
 # image .bb: add our two config packages ADDITIVELY (do not clobber other
 # agents' in-tree edits, e.g. F2's phosphor-skeleton-control-power). Insert the
