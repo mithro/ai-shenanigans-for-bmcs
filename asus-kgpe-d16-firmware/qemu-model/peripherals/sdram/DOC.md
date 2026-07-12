@@ -31,44 +31,51 @@ G3). Full page-cited reference: **[`DATASHEET-SDRAM.md`](DATASHEET-SDRAM.md)**
   program timing/mode (MCR10/MCR20/…), MRS/EMRS with DDR2 fields (WR, OCD, ODT
   75/150Ω), DLL, then enable refresh + CKE. WL = CL−1T; SSTL18 IO; 12 MHz refresh base.
 
-## 3. QEMU faithfulness — current gaps (fwtest baseline)
+## 3. QEMU faithfulness — gaps closed by `aspeed.sdmc-ast2050`
 
-`peripherals/sdram/fwtest.c` vs the current DDR3-based `aspeed_sdmc`:
+`peripherals/sdram/fwtest.c` vs the faithful DDR2 model (all checks now PASS):
 
-| Check | Golden (G3 DDR2) | Current QEMU | Status |
+| Check | Golden (G3 DDR2) | DDR3 `aspeed_sdmc` (old) | `aspeed.sdmc-ast2050` |
 |---|---|---|---|
-| protect reset (0=locked) | 0 | 0 | ✓ |
-| unlock (`0xFC600309`→reads 1) | 1 | 1 | ✓ |
-| refresh reset | 0 | 0 | ✓ |
-| **config (MCR04) reset** | **0** | `0x41` (DDR3 synth) | ✗ |
-| **config write stored verbatim** | `0xD89` | `0x5c1` (recomputed) | ✗ |
-| **MCR100 compat shadow** | `0xA8` | `0` (unmodelled) | ✗ |
+| protect reset (0=locked) | 0 | 0 ✓ | 0 ✓ |
+| unlock (`0xFC600309`→reads 1) | 1 | 1 ✓ | 1 ✓ |
+| refresh reset | 0 | 0 ✓ | 0 ✓ |
+| **config (MCR04) reset** | **0** | `0x41` (DDR3 synth) ✗ | **0 ✓** |
+| **config write stored verbatim** | `0x585` | `0x5c1` (recomputed) ✗ | **`0x585` ✓** |
+| **MCR100 compat shadow** | `0xA8` | `0` (unmodelled) ✗ | **`0xA8` ✓** |
+| geom decode (cap/width/bank) | 64 MB / 16-bit / 4-bank | — | **64 MB / 16-bit / 4-bank ✓** |
 
-Root cause: `aspeed_sdmc` (a) **synthesises MCR04 from the machine RAM size** using
-the **DDR3/AST2400 encoding** and pre-fills it at reset (real HW resets 0), (b)
-**recomputes** MCR04 on write instead of storing the value, and (c) does not model
-the AST2000-compat shadow at 0x100.
+Root cause the DDR2 model fixes: the DDR3 `aspeed_sdmc` (a) **synthesised MCR04 from
+the machine RAM size** using the **DDR3/AST2400 encoding** and pre-filled it at reset
+(real HW resets 0), (b) **recomputed** MCR04 on write instead of storing the value,
+and (c) did not model the AST2000-compat shadow at 0x100.
 
-## 4. Faithful-model plan — **gated on the C1–C4 boot check**
+## 4. Faithful model — landed (`aspeed.sdmc-ast2050`)
 
-A **`aspeed.sdmc-ast2050`** DDR2 variant:
-- MCR04 resets **0**; stores the written value **verbatim** (no recompute); DDR2
-  `[3:2]/[9:8]/[11]` geometry decode.
-- MCR100 reads `0x000000A8`.
-- Keep protect (`0xFC600309`) + lock-latch read-back (already correct).
+Implemented in the QEMU fork (`hw/misc/aspeed_sdmc.c`, `TYPE_ASPEED_2050_SDMC`),
+wired into the G3 SoC in `hw/arm/aspeed_ast2400.c` gated on the AST2050 silicon rev
+(the same pattern as the G3 SCU/VIC/RTC):
+- MCR04 resets **0**; stored **verbatim** on write (no recompute, no ram_size
+  synthesis); read back to discover the DDR2 `[3:2]/[9:8]/[11]` geometry.
+- MCR100 reads `0x000000A8`; MCR170 reads `0` (both read-only, datasheet p201).
+- Protect (`0xFC600309`) + 1-bit lock-latch read-back preserved; resets locked.
+- No DDR3 PHY block populated at reset.
 
-**Risk:** MCR04 feeds U-Boot's DRAM sizing. Resetting it to 0 / changing the encoding
-could break the flash/U-Boot boot path (the from-source and vendor stacks). So this
-change lands **only after** the CI `d16-qemu-stack` C1–C4 boot jobs confirm the
-current SCU+VIC changes are green, and is itself re-validated by the next CI boot
-run. Until then the three gaps are `xfail` in the integration test — tracked, not
-hidden.
+MCR04[6] (read-only bus-width status decoded from [9:8] in the datasheet) is **not**
+mirrored: MCR04 is a plain RW latch so a read-back equals the firmware-written value
+(0x585), matching the only value captured on real silicon (JTAG). A bit6 mirror would
+make the read-back 0x5C5, for which there is no capture — flagged in the model source.
+
+**Risk that was retired:** MCR04 feeds U-Boot/firmware DRAM sizing, so resetting it to
+0 could have broken the boot path. Verified green: the C2 (from-source kernel → SSH)
+and C4 (Dell C410X vendor firmware → BMC web) boots both still pass with the DDR2
+model wired — the vendor init writes the SDMC directly, so C4 is the real oracle.
 
 ## 5. Deliverable status
 
 | # | Deliverable | State |
 |---|---|---|
-| 1 | firmware test (`fwtest.c`) | ☑ 6 checks (3 pass, 3 documented gaps) |
+| 1 | firmware test (`fwtest.c`) | ☑ 9 checks, all pass (6 baseline + 3 geometry) |
 | 2 | doc (this + `DATASHEET-SDRAM.md`) | ☑ |
-| 3 | QEMU model (`aspeed.sdmc-ast2050`) | ☐ §4 (gated on boot check) |
-| 4 | integration test (`../../integration/test_sdram.py`) | ◐ 3 assert, 3 xfail until §4 |
+| 3 | QEMU model (`aspeed.sdmc-ast2050`) | ☑ landed + SoC-wired (§4) |
+| 4 | integration test (`../../integration/test_sdram.py`) | ☑ 9 assert, 0 xfail |
