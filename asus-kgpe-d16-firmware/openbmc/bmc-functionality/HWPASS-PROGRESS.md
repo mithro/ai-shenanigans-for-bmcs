@@ -134,7 +134,17 @@ staged export + TFTP artifacts intact. Rig claimed in the Pi coordination log.
 | 1 | uImage-kgpe-d16-hwpass (full) | combined (kcs+vuart+w83795+gpio+vhub+video) | openbmc-hwpass (new) | kernel up, eth0 100M, IP OK, NFS root mounted (rmtab) → **hard froze** minutes into systemd (NFS io flat, ping dead, serial silent) |
 | 2 | same | **safe DTB** (vhub+video disabled — never-HW-tested blocks) + seeded 00-bmc-eth0.network | openbmc-hwpass | ~90 s of systemd alive (10/10 pings) → **froze** |
 | 3 | **rxfix (F5's proven)** | **kgpe-g3vic.dtb (F5's proven)** | openbmc-hwpass (+ kcsbridge/op-pwrctl masked) | kernel up, ~12+ pings → **froze** |
-| 4 | rxfix | kgpe-g3vic.dtb | **openbmc-full (F5's proven, re-masked per F5's doc)** | CONTROL: splits image-vs-environment |
+| 4 | rxfix | kgpe-g3vic.dtb | **openbmc-full (F5's proven, re-masked per F5's doc)** | CONTROL — kernel up, 13/13 then 10/12 pings (~4 min alive) → **froze** |
+| 5 | rxfix | kgpe-g3vic.dtb | RAM-only culvert initramfs (raw gzip verified, `initrd=addr,size`) | serial soak 0 bytes on 4/4 pokes (suggestive board-level; culvert-init console-on-ttyS4 behavior unproven → not conclusive) |
+| 6 | rxfix | kgpe-g3vic.dtb | openbmc-full (restoration attempt) | final attempt to restore the as-found state |
+
+**CONTROL VERDICT (attempt 4): F5's fully-proven stack — which had run for days
+on this exact board — now freezes the same way. The post-outage environment (most
+plausibly board-level: marginal DDR2/SoC state; chassis at 59 °C with only fan1
+spinning, per the live W83795G read) cannot sustain the boot. The new F-HWPASS
+image is exonerated as the freeze cause.** Supporting: Pi dmesg clean (no USB
+resets/OOM/NFS errors today), nfsd read counters advanced ~7 MB per attempt then
+went flat at each freeze, eth-bmc 0 errors.
 
 **Diagnostics:** attempt-1 console shows the video engine probing real silicon
 (`aspeed-video 1e700000.video: irq 24`, jpeg-header alloc) pre-freeze; serial
