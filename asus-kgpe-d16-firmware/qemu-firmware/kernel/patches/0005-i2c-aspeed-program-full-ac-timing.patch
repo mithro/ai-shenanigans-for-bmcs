@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Ansell <me@mith.ro>
+Date: Sat, 12 Jul 2026 00:00:00 +0000
+Subject: [PATCH] i2c: aspeed: program tBUF/tHDSTA/tACST instead of preserving
+
+aspeed_i2c_init_clk() used to preserve the tBUF/tHDSTA/tACST fields of
+the clock/AC-timing register. On the AST2050/AST1100 (G3) that
+register (I2CD04) resets to X - undefined, per the datasheet (V1.05
+SS31.4.3 "Init = X") - so on the first init after power-on there is
+nothing valid to preserve and the bus-free/start/stop timing runs on
+power-up garbage. The vendor driver (Aspeed SDK i2c-ast.c
+select_i2c_clock()) never preserves: it always writes the full
+register with tBUF/tHDSTA/tACST = 7 (0x777xxxxx). Do the same.
+
+Correctness hardening for the G3 bring-up (the fields are 1-8 base-
+clock counts, so the skew is bounded, but "preserved undefined" is
+never right); behaviour on G4+ becomes the vendor-equivalent constant
+instead of the SoC reset defaults.
+
+Signed-off-by: Tim Ansell <me@mith.ro>
+---
+ drivers/i2c/busses/i2c-aspeed.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/i2c/busses/i2c-aspeed.c b/drivers/i2c/busses/i2c-aspeed.c
+index 83e671490..66f8e03e6 100644
+--- a/drivers/i2c/busses/i2c-aspeed.c
++++ b/drivers/i2c/busses/i2c-aspeed.c
+@@ -7,6 +7,7 @@
+  *  Copyright 2017 Google, Inc.
+  */
+ 
++#include <linux/bitfield.h>
+ #include <linux/clk.h>
+ #include <linux/completion.h>
+ #include <linux/err.h>
+@@ -912,10 +913,17 @@ static int aspeed_i2c_init_clk(struct aspeed_i2c_bus *bus)
+ 	u32 divisor, clk_reg_val;
+ 
+ 	divisor = DIV_ROUND_UP(bus->parent_clk_frequency, bus->bus_frequency);
+-	clk_reg_val = readl(bus->base + ASPEED_I2C_AC_TIMING_REG1);
+-	clk_reg_val &= (ASPEED_I2CD_TIME_TBUF_MASK |
+-			ASPEED_I2CD_TIME_THDSTA_MASK |
+-			ASPEED_I2CD_TIME_TACST_MASK);
++	/*
++	 * Program tBUF/tHDSTA/tACST explicitly instead of preserving the
++	 * register's power-up content: on the AST2050/AST1100 (G3) I2CD04
++	 * resets to X (undefined; datasheet §31.4.3 "Init = X"), so there is
++	 * nothing valid to preserve on the first init after power-on. Use the
++	 * vendor-driver values (Aspeed SDK i2c-ast.c select_i2c_clock() always
++	 * writes 0x777xxxxx: tBUF/tHDSTA/tACST = 7, in BaseClk#1 units).
++	 */
++	clk_reg_val = FIELD_PREP(ASPEED_I2CD_TIME_TBUF_MASK, 0x7) |
++		      FIELD_PREP(ASPEED_I2CD_TIME_THDSTA_MASK, 0x7) |
++		      FIELD_PREP(ASPEED_I2CD_TIME_TACST_MASK, 0x7);
+ 	clk_reg_val |= bus->get_clk_reg_val(bus->dev, divisor);
+ 	writel(clk_reg_val, bus->base + ASPEED_I2C_AC_TIMING_REG1);
+ 	writel(ASPEED_NO_TIMEOUT_CTRL, bus->base + ASPEED_I2C_AC_TIMING_REG2);
+-- 
+2.43.0

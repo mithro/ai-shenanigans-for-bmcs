@@ -48,6 +48,22 @@ if ! grep -q "w83795_hwmon_read" drivers/hwmon/w83795.c; then
     git apply "$ROOT/kernel/patches/0003-hwmon-w83795-modern-hwmon-registration.patch"
 fi
 
+# KCS holds the LPC clock (G3 SCU0C[8] LCLK is a real gate and the kcs@2c node
+# is the only enabled LPC consumer on the KGPE-D16) -- without this,
+# clk_disable_unused() kills the host-facing LPC block on real silicon (the
+# latent sibling of finding #94; see G3-CLK-PROGRESS.md). Optional clock, so
+# other DTs are unaffected. Idempotent guard on the include the patch adds.
+if ! grep -q "linux/clk.h" drivers/char/ipmi/kcs_bmc_aspeed.c; then
+    git apply "$ROOT/kernel/patches/0004-ipmi-kcs-bmc-aspeed-optional-lpc-clock.patch"
+fi
+
+# I2CD04 resets to X (undefined) on the G3: program tBUF/tHDSTA/tACST like the
+# vendor driver instead of preserving power-up garbage (hardening for the G3
+# I2C bring-up, finding #93). Idempotent guard on the FIELD_PREP the patch adds.
+if ! grep -q "ASPEED_I2CD_TIME_TBUF_MASK, 0x7" drivers/i2c/busses/i2c-aspeed.c; then
+    git apply "$ROOT/kernel/patches/0005-i2c-aspeed-program-full-ac-timing.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

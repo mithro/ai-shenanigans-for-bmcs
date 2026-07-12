@@ -179,6 +179,16 @@
 		reg = <0x2c 0x1>, <0x38 0x1>, <0x44 0x1>;
 		aspeed,lpc-io-reg = <0xca2>;
 		interrupts = <8>;
+		/*
+		 * Hold the LPC clock (G3 SCU0C[8] "Stop LCLK") while KCS is
+		 * up. No other enabled node references LCLK on this board, so
+		 * without this clk_disable_unused() stops the LPC clock and
+		 * the whole host-facing LPC block (KCS + the VUART SOL data
+		 * path) dies on real silicon — the latent sibling of finding
+		 * #94 (see G3-CLK-PROGRESS.md). Consumed by the
+		 * kcs_bmc_aspeed optional-clock patch (0004).
+		 */
+		clocks = <&syscon ASPEED_CLK_GATE_LCLK>;
 		status = "okay";
 	};
 };

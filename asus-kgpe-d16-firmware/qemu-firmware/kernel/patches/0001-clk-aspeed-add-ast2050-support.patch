@@ -5,10 +5,9 @@ Subject: [PATCH] clk: aspeed: Add AST2050/AST1100 clock support
 
 The Aspeed AST2050 (also sold as AST1100) is an older BMC SoC that
 shares the same ARM926EJ-S core and many peripherals with the AST2400,
-but has incompatible clock strap register layouts in SCU70 and an
-additional post-divider field in the H-PLL parameter register (SCU24).
+but has incompatible clock register layouts.
 
-Key differences from AST2400:
+PLL/strap differences from AST2400 (SCU24/SCU70):
   - H-PLL default frequency strap: SCU70 bits [11:9] (not [9:8])
     Values: 010=200MHz, 011=166MHz, 100=133MHz, 101=100MHz, 111=24MHz
   - CPU:AHB clock ratio: SCU70 bits [13:12] (not [11:10])
@@ -16,25 +15,53 @@ Key differences from AST2400:
   - H-PLL post-divider: SCU24 bits [14:12] (not present on AST2400)
     Values: 0xx=div1, 100=div2, 101=div4, 110=div8, 111=div16
 
-The H-PLL base PLL formula is identical to AST2400:
-  F = 24MHz * (2-OD) * [(N+2) / (D+1)]
-but with an additional post-divider applied after.
+Clock-gate differences (SCU0C "Clock Stop Control", datasheet V1.05
+p209-210) - the G3 gate map is NOT the AST2400 one:
+  - bit15 is ONE "Stop UARTCLK" gate shared by BOTH UARTs (UART1
+    @1E783000 + UART2 @1E784000, the console); bits 16/17 are reserved.
+    With the AST2400 table, clk_disable_unused() stopped the shared
+    gate as the "unused uart1clk-gate" while the console held the
+    reserved no-op bit17 - killing the live serial console on the real
+    ASUS KGPE-D16 at t=4.16s and, via blocked PID1 console writes,
+    tripping the 120s aspeed WDT (silicon finding #94).
+  - bits 31:20 are reserved: no MAC/RSA/UART3/UART4/SD/LHCLK gates.
+    MAC clocks are exposed as ungateable fixed-factor pass-throughs.
+  - bit7 = USB1.1 UCLK, bit14 = USB2.0 device clock enable (inverted),
+    bit19 = BHCLK (PCI host, unused/not registered).
+  - BCLK (bit4, PCI slave) and DCLK (bit5, VGA) stay CLK_IS_CRITICAL:
+    they clock the VGA/P2A BAR recovery path and have no consumer.
+
+SCU08 field-layout differences guarded by soc_data->is_ast2050:
+  - no SD clock fields ([15:11] reserved), no MAC clock divider
+    ([18:17] reserved; MACs run on AHB), LHCLK divider at [31:29]
+    (not [22:20]), NO ECLK divider ([30:28] belong to LHCLK - a G4-
+    style eclk divider write would clobber the LPC host clock), and
+    no SCU D8 (the G3 SCU register file ends at 0x7C).
+
+The single G3 UART gate is aliased to the ASPEED_CLK_GATE_UART1CLK/
+UART2CLK/UART5CLK dt ids so unmodified aspeed-g4.dtsi serial nodes
+refcount the real gate.
 
 This patch adds:
   - aspeed_ast2050_calc_pll() with post-divider support
   - aspeed_ast2050_cc() with correct SCU70 bit positions
+  - ast2050_gates[] G3 gate table + soc_data .gates/.num_gates/
+    .is_ast2050 plumbing (NULL-name entries are gates absent on the
+    SoC and are skipped)
   - "aspeed,ast2050-scu" compatible string in both the platform driver
     match table and CLK_OF_DECLARE_DRIVER early init
 
-Tested on Dell PowerEdge C410X (AST2050 BMC, ARM926EJ-S @ 200MHz).
+Tested on the ASUS KGPE-D16 (AST2050 A3) QEMU model and silicon; also
+targets the Dell PowerEdge C410X (AST2050 BMC, ARM926EJ-S @ 200MHz).
 
 Signed-off-by: Tim Ansell <me@mith.ro>
 ---
- drivers/clk/clk-aspeed.c | 120 +++++++++++++++++++++++++++++++++++++++
- 1 file changed, 120 insertions(+)
+ drivers/clk/clk-aspeed.c | 330 ++++++++++++++++++++++++++++++++-----
+ drivers/clk/clk-aspeed.h |  10 ++
+ 2 files changed, 294 insertions(+), 46 deletions(-)
 
 diff --git a/drivers/clk/clk-aspeed.c b/drivers/clk/clk-aspeed.c
-index ff84191..9148011 100644
+index ff84191d0..3e7342f67 100644
 --- a/drivers/clk/clk-aspeed.c
 +++ b/drivers/clk/clk-aspeed.c
 @@ -146,6 +146,43 @@ static struct clk_hw *aspeed_ast2400_calc_pll(const char *name, u32 val)
@@ -81,21 +108,271 @@ index ff84191..9148011 100644
  static struct clk_hw *aspeed_ast2500_calc_pll(const char *name, u32 val)
  {
  	unsigned int mult, div;
-@@ -174,6 +211,13 @@ static const struct aspeed_clk_soc_data ast2500_data = {
+@@ -174,6 +211,57 @@ static const struct aspeed_clk_soc_data ast2500_data = {
  	.calc_pll = aspeed_ast2500_calc_pll,
  };
  
++/*
++ * AST2050/AST1100 (G3) SCU0C Clock Stop Control gate map (datasheet §18
++ * p209-210). This is NOT the AST2400 map:
++ *
++ *  - bit15 is ONE "Stop UARTCLK" gate shared by BOTH UARTs (UART1 @1E783000
++ *    and UART2 @1E784000, the serial console). Bits 16/17 (the G4 UART2/UART5
++ *    gates) are reserved on the G3. Registering the G4 table here made
++ *    clk_disable_unused() stop the shared gate as the "unused uart1clk-gate"
++ *    while the console held the reserved no-op bit17 — killing the live
++ *    console on real silicon at t=4.16s and (via blocked PID1 console writes)
++ *    tripping the 120 s aspeed WDT (KGPE-D16 finding #94).
++ *  - bits 31:20 are reserved: there are NO MAC/RSA/UART3/UART4/SD/LHCLK
++ *    gates. MAC clocks are exposed as ungateable pass-throughs in probe so
++ *    the aspeed-g4.dtsi references still resolve.
++ *  - bit7 is USB1.1 UCLK (not the G4 USB2-port2), bit14 is the USB2.0 device
++ *    clock enable (inverted polarity, same as G4 bit14), bit19 is BHCLK (PCI
++ *    host; unused, left at its stopped reset default by not registering it).
++ *  - BCLK (bit4, PCI slave) and DCLK (bit5, VGA) are kept CRITICAL: they
++ *    clock the VGA/P2A BAR path — the only recovery access to the BMC — and
++ *    have no Linux consumer to refcount them.
++ *
++ * Reset bits are the G3 SCU04 (§18 p205): Video=6, LPC=5, HAC=4, USB2.0=14.
++ * Table indices are the dt-binding clock ids; holes (NULL name) are gates
++ * that do not exist on the G3 and are skipped at registration.
++ */
++static const struct aspeed_gate_data ast2050_gates[] = {
++	/*				 clk rst   name		 parent	 flags */
++	[ASPEED_CLK_GATE_ECLK] =	{  0,  6, "eclk-gate",	 "eclk", 0 }, /* Video Engine */
++	[ASPEED_CLK_GATE_GCLK] =	{  1, -1, "gclk-gate",	 NULL,	 0 }, /* 2D engine */
++	[ASPEED_CLK_GATE_MCLK] =	{  2, -1, "mclk-gate",	 "mpll", CLK_IS_CRITICAL }, /* SDRAM */
++	[ASPEED_CLK_GATE_VCLK] =	{  3, -1, "vclk-gate",	 NULL,	 0 }, /* Video Capture */
++	[ASPEED_CLK_GATE_BCLK] =	{  4, -1, "bclk-gate",	 "bclk", CLK_IS_CRITICAL }, /* PCI slave / P2A */
++	[ASPEED_CLK_GATE_DCLK] =	{  5, -1, "dclk-gate",	 NULL,	 CLK_IS_CRITICAL }, /* VGA DAC */
++	[ASPEED_CLK_GATE_REFCLK] =	{  6, -1, "refclk-gate", "clkin", CLK_IS_CRITICAL },
++	[ASPEED_CLK_GATE_USBUHCICLK] =	{  7, -1, "uclk-gate",	 NULL,	 0 }, /* USB1.1 */
++	[ASPEED_CLK_GATE_LCLK] =	{  8,  5, "lclk-gate",	 NULL,	 0 }, /* LPC (KCS/BT/snoop) */
++	[ASPEED_CLK_GATE_YCLK] =	{ 13,  4, "yclk-gate",	 NULL,	 0 }, /* HAC */
++	[ASPEED_CLK_GATE_USBPORT1CLK] = { 14, 14, "usb2clk-gate", NULL,	 0 }, /* USB2.0 device/vhub (inverted) */
++	[ASPEED_CLK_GATE_UART1CLK] =	{ 15, -1, "uartclk-gate", "uart", 0 }, /* UART1+UART2 SHARED */
++};
++
 +static const struct aspeed_clk_soc_data ast2050_data = {
 +	.div_table = ast2400_div_table,
 +	.eclk_div_table = ast2400_div_table,
 +	.mac_div_table = ast2400_div_table,
++	.gates = ast2050_gates,
++	.num_gates = ARRAY_SIZE(ast2050_gates),
++	.is_ast2050 = true,
 +	.calc_pll = aspeed_ast2050_calc_pll,
 +};
 +
  static const struct aspeed_clk_soc_data ast2400_data = {
  	.div_table = ast2400_div_table,
  	.eclk_div_table = ast2400_div_table,
-@@ -567,6 +611,7 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+@@ -440,25 +528,39 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+ 		return PTR_ERR(hw);
+ 	aspeed_clk_data->hws[ASPEED_CLK_MPLL] =	hw;
+ 
+-	/* SD/SDIO clock divider and gate */
+-	hw = clk_hw_register_gate(dev, "sd_extclk_gate", "hpll", 0,
+-				  scu_base + ASPEED_CLK_SELECTION, 15, 0,
+-				  &aspeed_clk_lock);
+-	if (IS_ERR(hw))
+-		return PTR_ERR(hw);
+-	hw = clk_hw_register_divider_table(dev, "sd_extclk", "sd_extclk_gate",
+-			0, scu_base + ASPEED_CLK_SELECTION, 12, 3, 0,
+-			soc_data->div_table,
+-			&aspeed_clk_lock);
+-	if (IS_ERR(hw))
+-		return PTR_ERR(hw);
+-	aspeed_clk_data->hws[ASPEED_CLK_SDIO] = hw;
++	/*
++	 * SD/SDIO clock divider and gate. The AST2050 (G3) has no SD host and
++	 * SCU08[15:11] are reserved-keep-0 there — do not register (and never
++	 * touch) these fields on the G3.
++	 */
++	if (!soc_data->is_ast2050) {
++		hw = clk_hw_register_gate(dev, "sd_extclk_gate", "hpll", 0,
++					  scu_base + ASPEED_CLK_SELECTION, 15, 0,
++					  &aspeed_clk_lock);
++		if (IS_ERR(hw))
++			return PTR_ERR(hw);
++		hw = clk_hw_register_divider_table(dev, "sd_extclk",
++				"sd_extclk_gate",
++				0, scu_base + ASPEED_CLK_SELECTION, 12, 3, 0,
++				soc_data->div_table,
++				&aspeed_clk_lock);
++		if (IS_ERR(hw))
++			return PTR_ERR(hw);
++		aspeed_clk_data->hws[ASPEED_CLK_SDIO] = hw;
++	}
+ 
+-	/* MAC AHB bus clock divider */
+-	hw = clk_hw_register_divider_table(dev, "mac", "hpll", 0,
+-			scu_base + ASPEED_CLK_SELECTION, 16, 3, 0,
+-			soc_data->mac_div_table,
+-			&aspeed_clk_lock);
++	/*
++	 * MAC AHB bus clock divider. On the AST2050 (G3) there is no MAC
++	 * divider in SCU08 (bits [18:17] are reserved, [16] is an RTC test
++	 * bit); the MACs run on the AHB clock directly.
++	 */
++	if (soc_data->is_ast2050)
++		hw = clk_hw_register_fixed_factor(dev, "mac", "ahb", 0, 1, 1);
++	else
++		hw = clk_hw_register_divider_table(dev, "mac", "hpll", 0,
++				scu_base + ASPEED_CLK_SELECTION, 16, 3, 0,
++				soc_data->mac_div_table,
++				&aspeed_clk_lock);
+ 	if (IS_ERR(hw))
+ 		return PTR_ERR(hw);
+ 	aspeed_clk_data->hws[ASPEED_CLK_MAC] = hw;
+@@ -487,20 +589,32 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+ 		aspeed_clk_data->hws[ASPEED_CLK_MAC2RCLK] = hw;
+ 	}
+ 
+-	/* LPC Host (LHCLK) clock divider */
++	/*
++	 * LPC Host (LHCLK) clock divider. G3: the field is SCU08[31:29]
++	 * (SCU08[22:20] is the PCI-host BHCLK divider there).
++	 */
+ 	hw = clk_hw_register_divider_table(dev, "lhclk", "hpll", 0,
+-			scu_base + ASPEED_CLK_SELECTION, 20, 3, 0,
++			scu_base + ASPEED_CLK_SELECTION,
++			soc_data->is_ast2050 ? 29 : 20, 3, 0,
+ 			soc_data->div_table,
+ 			&aspeed_clk_lock);
+ 	if (IS_ERR(hw))
+ 		return PTR_ERR(hw);
+ 	aspeed_clk_data->hws[ASPEED_CLK_LHCLK] = hw;
+ 
+-	/* P-Bus (BCLK) clock divider */
+-	hw = clk_hw_register_divider_table(dev, "bclk", "hpll", 0,
+-			scu_base + ASPEED_CLK_SELECTION_2, 0, 2, 0,
+-			soc_data->div_table,
+-			&aspeed_clk_lock);
++	/*
++	 * P-Bus (BCLK) clock divider. The G3 has no SCU D8 register (its SCU
++	 * file ends at 0x7C); the PCI-slave BCLK is the 33 MHz PCI clock.
++	 * Never dereference SCU D8 on the G3.
++	 */
++	if (soc_data->is_ast2050)
++		hw = clk_hw_register_fixed_rate(dev, "bclk", NULL, 0,
++						33333333);
++	else
++		hw = clk_hw_register_divider_table(dev, "bclk", "hpll", 0,
++				scu_base + ASPEED_CLK_SELECTION_2, 0, 2, 0,
++				soc_data->div_table,
++				&aspeed_clk_lock);
+ 	if (IS_ERR(hw))
+ 		return PTR_ERR(hw);
+ 	aspeed_clk_data->hws[ASPEED_CLK_BCLK] = hw;
+@@ -520,7 +634,17 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+ 		return PTR_ERR(hw);
+ 	aspeed_clk_data->hws[ASPEED_CLK_ECLK_MUX] = hw;
+ 
+-	hw = clk_hw_register_divider_table(dev, "eclk", "eclk-mux", 0,
++	/*
++	 * ECLK divider. The G3 has NO ECLK divider — the video engine clock is
++	 * the selected PLL directly, and SCU08[30:28] belong to the LHCLK
++	 * divider/enable there (writing a G4-style eclk divider would clobber
++	 * the G3 LPC-host clock setting).
++	 */
++	if (soc_data->is_ast2050)
++		hw = clk_hw_register_fixed_factor(dev, "eclk", "eclk-mux", 0,
++						  1, 1);
++	else
++		hw = clk_hw_register_divider_table(dev, "eclk", "eclk-mux", 0,
+ 					   scu_base + ASPEED_CLK_SELECTION, 28,
+ 					   3, 0, soc_data->eclk_div_table,
+ 					   &aspeed_clk_lock);
+@@ -539,26 +663,72 @@ static int aspeed_clk_probe(struct platform_device *pdev)
+ 	 *   UART[1..5] clock source mux
+ 	 */
+ 
+-	for (i = 0; i < ARRAY_SIZE(aspeed_gates); i++) {
+-		const struct aspeed_gate_data *gd = &aspeed_gates[i];
+-		u32 gate_flags;
++	{
++		const struct aspeed_gate_data *gates = soc_data->gates ?
++			soc_data->gates : aspeed_gates;
++		int num_gates = soc_data->gates ? soc_data->num_gates :
++			ARRAY_SIZE(aspeed_gates);
++
++		for (i = 0; i < num_gates; i++) {
++			const struct aspeed_gate_data *gd = &gates[i];
++			u32 gate_flags;
++
++			/* A hole in a SoC-specific table: no such gate here */
++			if (!gd->name)
++				continue;
++
++			/* Special case: the USB port 1 clock (bit 14) is
++			 * always working the opposite way from the other
++			 * ones.
++			 */
++			gate_flags = (gd->clock_idx == 14) ?
++				0 : CLK_GATE_SET_TO_DISABLE;
++			hw = aspeed_clk_hw_register_gate(dev,
++					gd->name,
++					gd->parent_name,
++					gd->flags,
++					map,
++					gd->clock_idx,
++					gd->reset_idx,
++					gate_flags,
++					&aspeed_clk_lock);
++			if (IS_ERR(hw))
++				return PTR_ERR(hw);
++			aspeed_clk_data->hws[i] = hw;
++		}
++	}
+ 
+-		/* Special case: the USB port 1 clock (bit 14) is always
+-		 * working the opposite way from the other ones.
++	if (soc_data->is_ast2050) {
++		/*
++		 * G3: SCU0C[15] is ONE UARTCLK gate for both UARTs. The
++		 * aspeed-g4.dtsi serial nodes reference the per-UART G4 ids
++		 * (the console at 0x1E784000 uses ASPEED_CLK_GATE_UART5CLK),
++		 * so alias them all to the shared gate — the console's clk
++		 * reference then refcounts the REAL gate and
++		 * clk_disable_unused() can no longer kill a live console
++		 * (KGPE-D16 silicon finding #94).
+ 		 */
+-		gate_flags = (gd->clock_idx == 14) ? 0 : CLK_GATE_SET_TO_DISABLE;
+-		hw = aspeed_clk_hw_register_gate(dev,
+-				gd->name,
+-				gd->parent_name,
+-				gd->flags,
+-				map,
+-				gd->clock_idx,
+-				gd->reset_idx,
+-				gate_flags,
+-				&aspeed_clk_lock);
++		aspeed_clk_data->hws[ASPEED_CLK_GATE_UART2CLK] =
++			aspeed_clk_data->hws[ASPEED_CLK_GATE_UART1CLK];
++		aspeed_clk_data->hws[ASPEED_CLK_GATE_UART5CLK] =
++			aspeed_clk_data->hws[ASPEED_CLK_GATE_UART1CLK];
++
++		/*
++		 * G3: no MAC clock gates exist (SCU0C[31:20] reserved) — the
++		 * MAC clocks cannot be stopped. Provide ungateable
++		 * pass-throughs so the aspeed-g4.dtsi ftgmac100 references
++		 * resolve and enable/disable are no-ops.
++		 */
++		hw = clk_hw_register_fixed_factor(dev, "mac1clk-gate", "mac",
++						  0, 1, 1);
+ 		if (IS_ERR(hw))
+ 			return PTR_ERR(hw);
+-		aspeed_clk_data->hws[i] = hw;
++		aspeed_clk_data->hws[ASPEED_CLK_GATE_MAC1CLK] = hw;
++		hw = clk_hw_register_fixed_factor(dev, "mac2clk-gate", "mac",
++						  0, 1, 1);
++		if (IS_ERR(hw))
++			return PTR_ERR(hw);
++		aspeed_clk_data->hws[ASPEED_CLK_GATE_MAC2CLK] = hw;
+ 	}
+ 
+ 	return 0;
+@@ -567,6 +737,7 @@ static int aspeed_clk_probe(struct platform_device *pdev)
  static const struct of_device_id aspeed_clk_dt_ids[] = {
  	{ .compatible = "aspeed,ast2400-scu", .data = &ast2400_data },
  	{ .compatible = "aspeed,ast2500-scu", .data = &ast2500_data },
@@ -103,7 +380,7 @@ index ff84191..9148011 100644
  	{ }
  };
  
-@@ -648,6 +693,78 @@ static void __init aspeed_ast2400_cc(struct regmap *map)
+@@ -648,6 +819,78 @@ static void __init aspeed_ast2400_cc(struct regmap *map)
  	aspeed_clk_data->hws[ASPEED_CLK_APB] = hw;
  }
  
@@ -182,7 +459,7 @@ index ff84191..9148011 100644
  static void __init aspeed_ast2500_cc(struct regmap *map)
  {
  	struct clk_hw *hw;
-@@ -729,6 +846,8 @@ static void __init aspeed_cc_init(struct device_node *np)
+@@ -729,6 +972,8 @@ static void __init aspeed_cc_init(struct device_node *np)
  
  	if (of_device_is_compatible(np, "aspeed,ast2400-scu"))
  		aspeed_ast2400_cc(map);
@@ -191,11 +468,36 @@ index ff84191..9148011 100644
  	else if (of_device_is_compatible(np, "aspeed,ast2500-scu"))
  		aspeed_ast2500_cc(map);
  	else
-@@ -739,3 +858,4 @@ static void __init aspeed_cc_init(struct device_node *np)
+@@ -739,3 +984,4 @@ static void __init aspeed_cc_init(struct device_node *np)
  };
  CLK_OF_DECLARE_DRIVER(aspeed_cc_g5, "aspeed,ast2500-scu", aspeed_cc_init);
  CLK_OF_DECLARE_DRIVER(aspeed_cc_g4, "aspeed,ast2400-scu", aspeed_cc_init);
 +CLK_OF_DECLARE_DRIVER(aspeed_cc_g2, "aspeed,ast2050-scu", aspeed_cc_init);
+diff --git a/drivers/clk/clk-aspeed.h b/drivers/clk/clk-aspeed.h
+index 5296b15b1..ea80b3ea8 100644
+--- a/drivers/clk/clk-aspeed.h
++++ b/drivers/clk/clk-aspeed.h
+@@ -72,11 +72,21 @@ struct aspeed_reset {
+  * @div_table: Common divider lookup table
+  * @eclk_div_table: Divider lookup table for ECLK
+  * @mac_div_table: Divider lookup table for MAC (Ethernet) clocks
++ * @gates: SoC-specific clock-gate table (NULL: the common AST2400/2500
++ *         aspeed_gates table). Entries with a NULL name are gates that do
++ *         not exist on this SoC and are skipped.
++ * @num_gates: number of entries in @gates
++ * @is_ast2050: AST2050/AST1100 (G3): SCU08 field layout differs from the
++ *              G4/G5 (no SD/MAC clock fields, LHCLK divider at [31:29]) and
++ *              SCU D8 does not exist
+  * @calc_pll: Callback to maculate common PLL settings
+  */
+ struct aspeed_clk_soc_data {
+ 	const struct clk_div_table *div_table;
+ 	const struct clk_div_table *eclk_div_table;
+ 	const struct clk_div_table *mac_div_table;
++	const struct aspeed_gate_data *gates;
++	int num_gates;
++	bool is_ast2050;
+ 	struct clk_hw *(*calc_pll)(const char *name, u32 val);
+ };
 -- 
 2.43.0
-
