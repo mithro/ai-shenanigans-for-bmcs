@@ -308,7 +308,41 @@ All console captures end at `[4.16s] clk: Disabling unused clocks` — the
 output dies at 4.16 s on every modern-kernel boot, so the death was never
 observable on serial. Attempt-10 = instrumented: **`clk_ignore_unused`**
 (UARTCLK stays on → live console) + `systemd.show_status=1` + 700 s capture
-spanning the death point, F5 stack on openbmc-full. Result: see below.
+spanning the death point, F5 stack on openbmc-full.
+
+**Result: attempt-10 BOOTED TO COMPLETION AND STAYED UP.** Console (finally
+live) shows the whole unit sequence through `Started Serial Getty on ttyS4` →
+**`quanta-q71l login:` prompt on real serial**; soak 96/96+ pings zero-loss
+straight through the 370 s point where 8/9 died (2+ min past it and counting;
+full PASS below). Only failure: `clear-once.service` (harmless).
+
+**The T+6.2 min mechanism, fully explained by the console:**
+`systemd[1]: Using hardware watchdog /dev/watchdog0: 'aspeed_wdt'` with a
+**2-minute hardware timeout**. On a default boot the G3 clk framework gates
+UARTCLK at t=4.16 s (our port's known clk bug — the console goes dead); when
+late-boot units (getty/status writes, ~T+4.2 min) write to the clock-dead
+UART, the writer blocks in the tty layer, PID1's console writes block PID1,
+the watchdog stops being patted, and **the aspeed WDT fires exactly 120 s
+later → SoC reset** — ICMP dies instantly, serial mute, NFS flat, and *no
+eth-bmc carrier flap* because the external RTL8201CP PHY keeps link through
+an SoC-only reset. A perfect "hard freeze / dying hardware" impersonation:
+deterministic at 370 s = console-stall time + the 2-min WDT.
+- Mitigation (proven): boot with **`clk_ignore_unused`**. Proper fix (later):
+  wire the UART/APB clocks correctly in the G3 clk driver / DTS so the 8250's
+  clock is refcounted.
+- NB the plug telemetry (`Uptime 2T23:58`, up since Jul 9 spanning the whole
+  WG outage) shows **no site power event** — the "post-outage" timing of the
+  regression was pure coincidence of fresh-boot ordering, as the audit found.
+
+### C.9 Verdict: hardware exonerated — it was our changes all along
+The user's reframe was correct. Three stacked our-side mechanisms produced the
+"board-level regression" illusion: (1) phosphor-network's DHCP
+`00-bmc-eth0.network` written into the shared rw export (killed every boot at
+T+2.2 min); (2) [not-fatal-alone accumulations: 16 MB journal etc, now
+cleared]; (3) the UARTCLK-gate + console-write + 2-min aspeed-WDT chain
+(killed file-fixed boots at T+6.2 min). The cold AC cycle was harmless but
+unnecessary; no evidence of DDR2/SoC degradation exists — attempt-10 runs
+clean on the same silicon.
 
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
