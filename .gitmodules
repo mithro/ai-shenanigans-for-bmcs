@@ -16,3 +16,7 @@
 	path = asus-kgpe-d16-firmware/culvert
 	url = https://github.com/mithro/culvert.git
 	branch = ast2050-support
+[submodule "asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu"]
+	path = asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu
+	url = https://github.com/mithro/qemu.git
+	branch = d16-ast2050-machine
