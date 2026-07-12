@@ -696,3 +696,30 @@ suite **96 passed / 6 xfailed / 0 failed** — incl. `test_phy_is_rtl8201cp_10_1
 `test_phy_bmsr_no_gigabit`, sdram `geom.cap64/w16/bank4`, UART loopback, and all 12 KCS
 handshake checks (kcs-m2 preserved). The 6 xfails are pre-existing documented items
 (i2c smbus_ee, scu sysreset/clksel/clkstop/pinmux1). No regressions.
+
+### 🎉 P2A back door MODELLED (2026-07-12, #62) — the culvert `p2a` path, xfail→pass
+The last host-side back-door xfail is closed the KCS-M2 way. New faithful G3 device
+**`aspeed.p2a-ast2050`** (`hw/misc/aspeed_p2a_ast2050.c` + header + meson + SoC struct
+field + realize wiring, G3-only) models the §36 PCI→AHB back door: **P2A00** protection
+key (unlock), **P2A04** remap base, and the aperture translation
+**`AHB=(P2A04[31:16]<<16)|offset[15:0]`** (datasheet §36.2 p.400). It masters the AHB via
+a linked `AddressSpace` over the SoC memory, so a host aperture cycle lands on the real
+modelled peripherals. The **host half** (the PCI-slave BAR1 window the BMC-only machine
+can't have) is an **honest QOM back-channel** (`host-p2a00-key`/`host-p2a04-remap`/
+`host-p2a-offset`/`host-p2a-data` on `/machine/soc/p2a-g3`) — replacing only the PCI bus
+wires + BIOS BAR1 enumeration; the §36 translation and both gates are the modelled
+silicon. Gates are genuine: a cycle is honoured only with **P2A00[0]=1** AND **SCU2C[8]=0**
+(the SCU bit read live from the real SCU model); either closed → `error_setg` (fail loud).
+- **`integration/test_p2a.py::TestP2AHostBackdoor`** (qtest BMC side + QMP host side):
+  reads **SCU7C = 0x00000202 through the window** — the exact value culvert reads over P2A
+  on the real AST2050 — verifies it equals the BMC-side AHB read, does a **write round-trip
+  into AHB/DRAM**, confirms the low-16 pass-through equation, and both gates refuse when
+  closed. The old `test_a2p_bridge_modelled` xfail is retired (the back door is now
+  genuinely exercised, not a weak AHB-region proxy).
+- **Suite: 103 passed / 5 xfailed / 0 failed** (was 96/6; +7 passed, −1 xfail). Remaining
+  5 xfails are the pre-existing i2c smbus_ee + scu sysreset/clksel/clkstop/pinmux1 items.
+- **Oracles green on the same new binary:** **C4** Dell vendor firmware boots to its BMC web
+  service (HTTP 301 Mbedthis-Appweb/2.4.2); **C2** from-source kernel+initramfs boots to an
+  SSH login (`SSH_OK`). The P2A device is inert during boot (no MMIO, no IRQ, driven only by
+  the QOM back-channel), so no legacy boot is affected. qemu submodule branch
+  `claude/p2a-bar` (off `eb2018b816`, mithro/qemu).
