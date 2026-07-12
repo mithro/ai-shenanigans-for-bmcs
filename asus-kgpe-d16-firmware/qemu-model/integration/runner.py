@@ -86,9 +86,12 @@ def parse(text: str) -> Transcript:
     return Transcript(regs, kvs, checks, fails, halted, text)
 
 
-def run_fwtest(name: str, qemu: str | None = None, timeout: float = 20.0) -> Transcript:
+def run_fwtest(name: str, qemu: str | None = None, timeout: float = 20.0,
+               qemu_args: list[str] | None = None) -> Transcript:
     cmd = [sys.executable, str(BUILD_PY), name, "--run", "--timeout", str(timeout)]
     if qemu:
         cmd += ["--qemu", qemu]
+    for a in (qemu_args or []):
+        cmd.append(f"--qemu-arg={a}")   # '=' form so values starting with '-' pass
     r = subprocess.run(cmd, capture_output=True, text=True)
     return parse(r.stdout + r.stderr)
