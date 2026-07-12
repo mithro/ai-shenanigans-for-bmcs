@@ -122,6 +122,30 @@ any host-power action remain STAGED-but-unbooted. Host-power *drive* is separate
 bounded by the SCU-pinmux-on-shared-pins hazard (and moot: the host is already on
 and is the P2A peer, so turning it off would strand the boot channel).
 
+## Phase B (2026-07-12, tunnel recovered ~05:52Z) — boot attempts + freeze bisect
+
+State re-verified first: Pi up 2d21h (no site power event), board still serving
+F5's image (mc info rc=0), x86 host still up (42h RAM-resident SystemRescue),
+staged export + TFTP artifacts intact. Rig claimed in the Pi coordination log.
+
+**Boot attempts (all P2A + TFTP + NFS-root):**
+| # | kernel | DTB | rootfs | outcome |
+|---|--------|-----|--------|---------|
+| 1 | uImage-kgpe-d16-hwpass (full) | combined (kcs+vuart+w83795+gpio+vhub+video) | openbmc-hwpass (new) | kernel up, eth0 100M, IP OK, NFS root mounted (rmtab) → **hard froze** minutes into systemd (NFS io flat, ping dead, serial silent) |
+| 2 | same | **safe DTB** (vhub+video disabled — never-HW-tested blocks) + seeded 00-bmc-eth0.network | openbmc-hwpass | ~90 s of systemd alive (10/10 pings) → **froze** |
+| 3 | **rxfix (F5's proven)** | **kgpe-g3vic.dtb (F5's proven)** | openbmc-hwpass (+ kcsbridge/op-pwrctl masked) | kernel up, ~12+ pings → **froze** |
+| 4 | rxfix | kgpe-g3vic.dtb | **openbmc-full (F5's proven, re-masked per F5's doc)** | CONTROL: splits image-vs-environment |
+
+**Diagnostics:** attempt-1 console shows the video engine probing real silicon
+(`aspeed-video 1e700000.video: irq 24`, jpeg-header alloc) pre-freeze; serial
+poke at freeze = **0 bytes** (no getty → hard freeze, not IP loss); Pi dmesg =
+**no eth-bmc carrier flaps, 0 link errors** across all attempts (link exonerated);
+board did mount the new export. Attempt 3 freezing on F5's exact kernel+DTB means
+the freeze follows the **new image** (or a post-outage environment change —
+attempt 4 splits that). NB: the F-IMG2-derived image was only ever QEMU-proven at
+**mem=256**, never 64 — this exposed that validation gap. x86 host verified
+unharmed after each attempt (uptime advancing).
+
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
 request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no
