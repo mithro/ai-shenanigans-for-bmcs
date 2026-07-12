@@ -225,5 +225,31 @@ if grep -q f8kvm /proc/cmdline; then
 	echo "=== F8-KVM-DEMO-END ==="
 fi
 
+# --- F8 VIDEO DATAPATH demo (only when 'f8video' is on the kernel cmdline) ---
+# "See the virtual VGA screen" with ACTUAL PIXELS: on the KGPE-D16 the AST2050
+# IS the host's VGA adapter — the host framebuffer lives in BMC DRAM (the 8 MB
+# vga_memory carve-out at 0x43800000, SCU70[3:2]-strapped; see the DTS). The
+# static f8video tool (initramfs/f8video.c):
+#   1. writes an 8-bar colour test pattern into that carve-out via /dev/mem
+#      (standing in for "the host rendered something" — on real HW the host GPU
+#      path writes this same DRAM);
+#   2. captures one frame from /dev/video0: aspeed-video programs the AST2050
+#      video engine, VR004 triggers capture+compression, the engine reads the
+#      VGA scanout, JPEG-compresses it into the driver's vb2 buffer and raises
+#      VIC INT#7, and the dequeued V4L2 buffer IS the JPEG;
+#   3. emits the frame as base64 between F8-FRAME-BEGIN/END so the boot harness
+#      (scripts/video-capture-test.py) can decode it and verify the pattern.
+if grep -q f8video /proc/cmdline; then
+	echo "=== F8-VIDEO-DEMO-BEGIN ==="
+	dmesg | grep -iE 'aspeed.?video|video-engine|1e700000' || echo "(no aspeed-video dmesg)"
+	if [ -e /dev/video0 ]; then
+		echo "F8-VIDEO: /dev/video0 present (aspeed-video bound the AST2050 video engine)"
+		f8video 0x43800000 || echo "F8-VIDEO-FAIL: f8video exited $?"
+	else
+		echo "F8-VIDEO-FAIL: no /dev/video0"
+	fi
+	echo "=== F8-VIDEO-DEMO-END ==="
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh
