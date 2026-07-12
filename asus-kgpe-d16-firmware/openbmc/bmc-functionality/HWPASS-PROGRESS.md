@@ -271,7 +271,27 @@ Audit of every rig-side delta between F5's proven boots and the freezing boots:
   static-Address seed/image fix later.
 
 ### C.6 Corrected control boot (file-absent openbmc-full) — attempt-8
-Same F5 proven stack, byte-accurate environment this time. Result: see below.
+Same F5 proven stack, network file deleted from both exports first. Boot
+17:36 +09:30: kernel + eth0 100M + IP OK. **Survived 71 zero-loss pings to
+T+6 min — 3× past the 2.2–2.7 min mark where every file-present boot died**
+(the file was never re-created during the run), confirming the
+`00-bmc-eth0.network` mechanism as the death-at-2-min cause. **Then froze at
+T+6.5 min** (SOAK-FROZE 17:43:33, NFS io flat = writeback-wedge signature) —
+a *different, later* failure with two candidate triggers, both again OUR
+accumulated state, not hardware:
+- **16 MB of persistent journal** (`system.journal` + rotated `~`) on the NFS
+  export, born during F5's stable run — F5's proven boot started with an
+  EMPTY `/var/log/journal/<mid>/`; every boot since must mmap + flush 16 MB
+  over NFS inside 64 MB at exactly the systemd-journal-flush point.
+- **My 6 early netipmid warmup probes** (17:40:30–17:43) — each RMCP+ packet
+  socket-activates a netipmid spawn (big binary page-in) mid-startup; the
+  freeze landed on the last probe. F5's proven warmup ran only after settle.
+
+### C.7 Attempt-9 — journals cleared + no early probes
+Journal files archived to `Pi:/home/claude/journal-archive/` and cleared from
+both exports (openbmc-hwpass had none — its boots died pre-flush, consistent);
+network file still absent; NO IPMI traffic until the 15-min soak passes.
+Result: see below.
 
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
