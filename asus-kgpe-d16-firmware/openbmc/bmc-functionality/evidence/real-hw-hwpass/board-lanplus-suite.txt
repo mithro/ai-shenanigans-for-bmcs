@@ -1,0 +1,90 @@
+=== fru print 0 ===
+ Board Mfg Date        : Sun 01 Jan 2012 10:30:00 ACDT ACDT
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z
+rc=0
+=== lan print 1 ===
+Set in Progress         : Set Complete
+Auth Type Support       : 
+Auth Type Enable        : Callback : 
+                        : User     : 
+                        : Operator : 
+                        : Admin    : 
+                        : OEM      : 
+IP Address Source       : DHCP Address
+IP Address              : 0.0.0.0
+Subnet Mask             : 255.255.255.255
+MAC Address             : 96:0e:ce:b9:5d:8d
+Default Gateway IP      : 192.168.66.1
+Default Gateway MAC     : 00:00:00:00:00:00
+802.1q VLAN ID          : Disabled
+RMCP+ Cipher Suites     : 17
+Cipher Suite Priv Max   : aaaaaaaaaaaaaaa
+                        :     X=Cipher Suite Unused
+                        :     c=CALLBACK
+                        :     u=USER
+                        :     o=OPERATOR
+                        :     a=ADMIN
+                        :     O=OEM
+Bad Password Threshold  : Not Available
+rc=0
+=== chassis status ===
+System Power         : off
+Power Overload       : false
+Power Interlock      : inactive
+Main Power Fault     : false
+Power Control Fault  : false
+Power Restore Policy : always-off
+Last Power Event     : 
+Chassis Intrusion    : inactive
+Front-Panel Lockout  : inactive
+Drive Fault          : false
+Cooling/Fan Fault    : false
+Front Panel Control  : none
+rc=0
+=== sel info ===
+SEL Information
+Version          : 1.5 (v1.5, v2 compliant)
+Entries          : 0
+Free Space       : 65535 bytes or more
+Percent Used     : unknown
+Last Add Time    : Not Available
+Last Del Time    : Not Available
+Overflow         : false
+Supported Cmds   : 'Delete' 'Reserve' 
+rc=0
+=== user list 1 ===
+ID  Name	     Callin  Link Auth	IPMI Msg   Channel Priv Limit
+1   root             false   true       true       ADMINISTRATOR
+2                    true    false      false      NO ACCESS
+3                    true    false      false      NO ACCESS
+4                    true    false      false      NO ACCESS
+5                    true    false      false      NO ACCESS
+6                    true    false      false      NO ACCESS
+7                    true    false      false      NO ACCESS
+8                    true    false      false      NO ACCESS
+9                    true    false      false      NO ACCESS
+10                   true    false      false      NO ACCESS
+11                   true    false      false      NO ACCESS
+12                   true    false      false      NO ACCESS
+13                   true    false      false      NO ACCESS
+14                   true    false      false      NO ACCESS
+15                   true    false      false      NO ACCESS
+rc=0
+=== sol info 1 ===
+Set in progress                 : set-complete
+Enabled                         : true
+Force Encryption                : true
+Force Authentication            : true
+Privilege Level                 : ADMINISTRATOR
+Character Accumulate Level (ms) : 100
+Character Send Threshold        : 1
+Retry Count                     : 7
+Retry Interval (ms)             : 1000
+Volatile Bit Rate (kbps)        : IPMI-Over-Serial-Setting
+Non-Volatile Bit Rate (kbps)    : IPMI-Over-Serial-Setting
+Payload Channel                 : 1 (0x01)
+Payload Port                    : 623
+rc=0

@@ -1,0 +1,34 @@
+/srv/nfs/openbmc-full/etc/systemd/network/:
+total 12
+drwxr-xr-x 2 root root 4096 2026-07-11 23:44:03.112241982 +0930 .
+drwxr-xr-x 6 root root 4096 2018-03-09 23:04:56.000000000 +1030 ..
+-rw-r--r-- 1 root root  338 2026-07-11 23:44:03.088242441 +0930 00-bmc-eth0.network
+
+/srv/nfs/openbmc-hwpass/etc/systemd/network/:
+total 12
+drwxr-xr-x 2 root root 4096 2026-07-12 15:38:47.425235418 +0930 .
+drwxr-xr-x 6 root root 4096 2018-03-09 23:04:56.000000000 +1030 ..
+-rw-r--r-- 1 root root  338 2026-07-12 15:38:47.429146989 +0930 00-bmc-eth0.network
+[DHCPv4]
+SendHostname=true
+UseHostname=true
+UseDomains=true
+UseDNS=true
+UseNTP=true
+ClientIdentifier=mac
+[IPv6AcceptRA]
+DHCPv6Client=true
+[DHCPv6]
+SendHostname=true
+UseHostname=true
+UseNTP=true
+UseDomains=true
+UseDNS=true
+[Network]
+DHCP=true
+IPv6AcceptRA=true
+LinkLocalAddressing=yes
+[Link]
+MACAddress=96:0e:ce:b9:5d:8d
+[Match]
+Name=eth0

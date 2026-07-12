@@ -1,0 +1,49 @@
+=== sdr elist over KCS ===
+CPU_DIODE        | 01h | ns  |  0.0 | Disabled
+CPU0_DTS         | 02h | ns  |  0.0 | Disabled
+CPU1_DTS         | 03h | ns  |  0.0 | Disabled
+VCORE0           | 10h | ns  |  0.0 | Disabled
+VCORE1           | 11h | ns  |  0.0 | Disabled
+P12V             | 12h | ns  |  0.0 | Disabled
+P5V              | 13h | ns  |  0.0 | Disabled
+P3V3             | 14h | ns  |  0.0 | Disabled
+P1V5             | 15h | ns  |  0.0 | Disabled
+P1V1             | 16h | ns  |  0.0 | Disabled
+P0V9             | 17h | ns  |  0.0 | Disabled
+VBAT             | 18h | ns  |  0.0 | Disabled
+FAN1             | 30h | ns  |  0.0 | Disabled
+FAN2             | 31h | ns  |  0.0 | Disabled
+FAN3             | 32h | ns  |  0.0 | Disabled
+FAN4             | 33h | ns  |  0.0 | Disabled
+FAN5             | 34h | ns  |  0.0 | Disabled
+FAN6             | 35h | ns  |  0.0 | Disabled
+rc=0
+=== chassis status ===
+System Power         : off
+Power Overload       : false
+Power Interlock      : inactive
+Main Power Fault     : false
+Power Control Fault  : false
+Power Restore Policy : always-off
+Last Power Event     : 
+Chassis Intrusion    : inactive
+Front-Panel Lockout  : inactive
+Drive Fault          : false
+Cooling/Fan Fault    : false
+Front Panel Control  : none
+rc=0
+=== sol info 1 ===
+Set in progress                 : set-complete
+Enabled                         : true
+Force Encryption                : true
+Force Authentication            : true
+Privilege Level                 : ADMINISTRATOR
+Character Accumulate Level (ms) : 100
+Character Send Threshold        : 1
+Retry Count                     : 7
+Retry Interval (ms)             : 1000
+Volatile Bit Rate (kbps)        : IPMI-Over-Serial-Setting
+Non-Volatile Bit Rate (kbps)    : IPMI-Over-Serial-Setting
+Payload Channel                 : 1 (0x01)
+Payload Port                    : 623
+rc=0

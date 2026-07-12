@@ -1,0 +1,30 @@
+=== mc info over KCS ===
+Device ID                 : 1
+Device Revision           : 1
+Firmware Revision         : 0.00
+IPMI Version              : 2.0
+Manufacturer ID           : 2623
+Manufacturer Name         : ASUSTek Computer Inc.
+Product ID                : 3350 (0x0d16)
+Product Name              : Unknown (0xD16)
+Device Available          : no
+Provides Device SDRs      : no
+Additional Device Support :
+    Sensor Device
+    SDR Repository Device
+    SEL Device
+    FRU Inventory Device
+    Chassis Device
+Aux Firmware Rev Info     : 
+    0x00
+    0x00
+    0x00
+    0x00
+rc=0
+=== fru print 0 ===
+ Board Mfg Date        : Sun Jan  1 00:00:00 2012 UTC
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z
+rc=0

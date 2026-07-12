@@ -1,0 +1,2 @@
+[SOL Session operational.  Use ~? for help]
+activate-rc=0
