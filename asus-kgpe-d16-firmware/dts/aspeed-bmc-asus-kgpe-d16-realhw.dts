@@ -1,0 +1,1447 @@
+/dts-v1/;
+
+/ {
+	model = "ASUS KGPE-D16 BMC";
+	compatible = "asus,kgpe-d16-bmc", "aspeed,ast2400";
+	#address-cells = <0x01>;
+	#size-cells = <0x01>;
+	interrupt-parent = <0x01>;
+
+	aliases {
+		i2c0 = "/ahb/apb/bus@1e78a000/i2c-bus@40";
+		i2c1 = "/ahb/apb/bus@1e78a000/i2c-bus@80";
+		i2c2 = "/ahb/apb/bus@1e78a000/i2c-bus@c0";
+		i2c3 = "/ahb/apb/bus@1e78a000/i2c-bus@100";
+		i2c4 = "/ahb/apb/bus@1e78a000/i2c-bus@140";
+		i2c5 = "/ahb/apb/bus@1e78a000/i2c-bus@180";
+		i2c6 = "/ahb/apb/bus@1e78a000/i2c-bus@1c0";
+		i2c7 = "/ahb/apb/bus@1e78a000/i2c-bus@300";
+		i2c8 = "/ahb/apb/bus@1e78a000/i2c-bus@340";
+		i2c9 = "/ahb/apb/bus@1e78a000/i2c-bus@380";
+		i2c10 = "/ahb/apb/bus@1e78a000/i2c-bus@3c0";
+		i2c11 = "/ahb/apb/bus@1e78a000/i2c-bus@400";
+		i2c12 = "/ahb/apb/bus@1e78a000/i2c-bus@440";
+		i2c13 = "/ahb/apb/bus@1e78a000/i2c-bus@480";
+		serial0 = "/ahb/apb/serial@1e783000";
+		serial1 = "/ahb/apb/serial@1e78d000";
+		serial2 = "/ahb/apb/serial@1e78e000";
+		serial3 = "/ahb/apb/serial@1e78f000";
+		serial4 = "/ahb/apb/serial@1e784000";
+		serial5 = "/ahb/apb/serial@1e787000";
+	};
+
+	cpus {
+		#address-cells = <0x01>;
+		#size-cells = <0x00>;
+
+		cpu@0 {
+			compatible = "arm,arm926ej-s";
+			device_type = "cpu";
+			reg = <0x00>;
+		};
+	};
+
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x40000000 0x4000000>;
+	};
+
+	ahb {
+		compatible = "simple-bus";
+		#address-cells = <0x01>;
+		#size-cells = <0x01>;
+		ranges;
+
+		spi@1e620000 {
+			reg = <0x1e620000 0x94 0x20000000 0x10000000>;
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+			compatible = "aspeed,ast2400-fmc";
+			clocks = <0x02 0x19>;
+			status = "disabled";
+			interrupts = <0x13>;
+
+			flash@0 {
+				reg = <0x00>;
+				compatible = "jedec,spi-nor";
+				spi-rx-bus-width = <0x02>;
+				spi-max-frequency = <0x2faf080>;
+				status = "disabled";
+			};
+
+			flash@1 {
+				reg = <0x01>;
+				compatible = "jedec,spi-nor";
+				spi-rx-bus-width = <0x02>;
+				spi-max-frequency = <0x2faf080>;
+				status = "disabled";
+			};
+
+			flash@2 {
+				reg = <0x02>;
+				compatible = "jedec,spi-nor";
+				spi-rx-bus-width = <0x02>;
+				spi-max-frequency = <0x2faf080>;
+				status = "disabled";
+			};
+
+			flash@3 {
+				reg = <0x03>;
+				compatible = "jedec,spi-nor";
+				spi-rx-bus-width = <0x02>;
+				spi-max-frequency = <0x2faf080>;
+				status = "disabled";
+			};
+
+			flash@4 {
+				reg = <0x04>;
+				compatible = "jedec,spi-nor";
+				spi-rx-bus-width = <0x02>;
+				spi-max-frequency = <0x2faf080>;
+				status = "disabled";
+			};
+		};
+
+		spi@1e630000 {
+			reg = <0x1e630000 0x18 0x30000000 0x10000000>;
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+			compatible = "aspeed,ast2400-spi";
+			clocks = <0x02 0x19>;
+			status = "disabled";
+
+			flash@0 {
+				reg = <0x00>;
+				compatible = "jedec,spi-nor";
+				spi-max-frequency = <0x2faf080>;
+				spi-rx-bus-width = <0x02>;
+				status = "disabled";
+			};
+		};
+
+		interrupt-controller@1e6c0080 {
+			compatible = "aspeed,ast2400-vic";
+			interrupt-controller;
+			#interrupt-cells = <0x01>;
+			valid-sources = <0xffffffff 0x7ffff>;
+			reg = <0x1e6c0080 0x80>;
+			phandle = <0x01>;
+		};
+
+		copro-interrupt-controller@1e6c2000 {
+			compatible = "aspeed,ast2400-cvic", "aspeed-cvic";
+			valid-sources = <0x7fffffff>;
+			reg = <0x1e6c2000 0x80>;
+		};
+
+		ethernet@1e660000 {
+			compatible = "aspeed,ast2050-mac", "aspeed,ast2400-mac", "faraday,ftgmac100";
+			reg = <0x1e660000 0x180>;
+			interrupts = <0x02>;
+			clocks = <0x02 0x11>;
+			status = "okay";
+			phy-mode = "rmii";
+			/* Real HW: no fixed-link (that's a QEMU-ism -- QEMU's ftgmac100 has
+			 * no PHY). The ftgmac100 driver auto-scans its embedded MDIO and
+			 * connects to the real PHY (U-Boot finds it at MDIO addr 0x20), so
+			 * eth0 actually negotiates a link and can reach the NFS server. */
+		};
+
+		ethernet@1e680000 {
+			compatible = "aspeed,ast2400-mac", "faraday,ftgmac100";
+			reg = <0x1e680000 0x180>;
+			interrupts = <0x03>;
+			clocks = <0x02 0x12>;
+			status = "disabled";
+		};
+
+		usb@1e6a1000 {
+			compatible = "aspeed,ast2400-ehci", "generic-ehci";
+			reg = <0x1e6a1000 0x100>;
+			interrupts = <0x05>;
+			clocks = <0x02 0x0c>;
+			pinctrl-names = "default";
+			pinctrl-0 = <0x03>;
+			status = "disabled";
+		};
+
+		usb@1e6b0000 {
+			compatible = "aspeed,ast2400-uhci", "generic-uhci";
+			reg = <0x1e6b0000 0x100>;
+			interrupts = <0x0e>;
+			#ports = <0x03>;
+			clocks = <0x02 0x09>;
+			status = "disabled";
+		};
+
+		usb-vhub@1e6a0000 {
+			compatible = "aspeed,ast2400-usb-vhub";
+			reg = <0x1e6a0000 0x300>;
+			interrupts = <0x05>;
+			clocks = <0x02 0x0c>;
+			aspeed,vhub-downstream-ports = <0x05>;
+			aspeed,vhub-generic-endpoints = <0x0f>;
+			pinctrl-names = "default";
+			pinctrl-0 = <0x04>;
+			status = "disabled";
+		};
+
+		apb {
+			compatible = "simple-bus";
+			#address-cells = <0x01>;
+			#size-cells = <0x01>;
+			ranges;
+
+			syscon@1e6e2000 {
+				compatible = "aspeed,ast2050-scu", "aspeed,ast2400-scu", "syscon", "simple-mfd";
+				reg = <0x1e6e2000 0x1a8>;
+				#address-cells = <0x01>;
+				#size-cells = <0x01>;
+				ranges = <0x00 0x1e6e2000 0x1000>;
+				#clock-cells = <0x01>;
+				#reset-cells = <0x01>;
+				phandle = <0x02>;
+
+				p2a-control@2c {
+					reg = <0x2c 0x04>;
+					compatible = "aspeed,ast2400-p2a-ctrl";
+					status = "disabled";
+				};
+
+				silicon-id@7c {
+					compatible = "aspeed,ast2400-silicon-id", "aspeed,silicon-id";
+					reg = <0x7c 0x04>;
+				};
+
+				pinctrl@80 {
+					reg = <0x80 0x18 0xa0 0x10>;
+					compatible = "aspeed,ast2400-pinctrl";
+					phandle = <0x05>;
+
+					acpi_default {
+						function = "ACPI";
+						groups = "ACPI";
+					};
+
+					adc0_default {
+						function = "ADC0";
+						groups = "ADC0";
+					};
+
+					adc1_default {
+						function = "ADC1";
+						groups = "ADC1";
+					};
+
+					adc10_default {
+						function = "ADC10";
+						groups = "ADC10";
+					};
+
+					adc11_default {
+						function = "ADC11";
+						groups = "ADC11";
+					};
+
+					adc12_default {
+						function = "ADC12";
+						groups = "ADC12";
+					};
+
+					adc13_default {
+						function = "ADC13";
+						groups = "ADC13";
+					};
+
+					adc14_default {
+						function = "ADC14";
+						groups = "ADC14";
+					};
+
+					adc15_default {
+						function = "ADC15";
+						groups = "ADC15";
+					};
+
+					adc2_default {
+						function = "ADC2";
+						groups = "ADC2";
+					};
+
+					adc3_default {
+						function = "ADC3";
+						groups = "ADC3";
+					};
+
+					adc4_default {
+						function = "ADC4";
+						groups = "ADC4";
+					};
+
+					adc5_default {
+						function = "ADC5";
+						groups = "ADC5";
+					};
+
+					adc6_default {
+						function = "ADC6";
+						groups = "ADC6";
+					};
+
+					adc7_default {
+						function = "ADC7";
+						groups = "ADC7";
+					};
+
+					adc8_default {
+						function = "ADC8";
+						groups = "ADC8";
+					};
+
+					adc9_default {
+						function = "ADC9";
+						groups = "ADC9";
+					};
+
+					bmcint_default {
+						function = "BMCINT";
+						groups = "BMCINT";
+					};
+
+					ddcclk_default {
+						function = "DDCCLK";
+						groups = "DDCCLK";
+					};
+
+					ddcdat_default {
+						function = "DDCDAT";
+						groups = "DDCDAT";
+					};
+
+					extrst_default {
+						function = "EXTRST";
+						groups = "EXTRST";
+					};
+
+					flack_default {
+						function = "FLACK";
+						groups = "FLACK";
+					};
+
+					flbusy_default {
+						function = "FLBUSY";
+						groups = "FLBUSY";
+					};
+
+					flwp_default {
+						function = "FLWP";
+						groups = "FLWP";
+					};
+
+					gpid_default {
+						function = "GPID";
+						groups = "GPID";
+					};
+
+					gpid0_default {
+						function = "GPID0";
+						groups = "GPID0";
+					};
+
+					gpid2_default {
+						function = "GPID2";
+						groups = "GPID2";
+					};
+
+					gpid4_default {
+						function = "GPID4";
+						groups = "GPID4";
+					};
+
+					gpid6_default {
+						function = "GPID6";
+						groups = "GPID6";
+					};
+
+					gpie0_default {
+						function = "GPIE0";
+						groups = "GPIE0";
+					};
+
+					gpie2_default {
+						function = "GPIE2";
+						groups = "GPIE2";
+					};
+
+					gpie4_default {
+						function = "GPIE4";
+						groups = "GPIE4";
+					};
+
+					gpie6_default {
+						function = "GPIE6";
+						groups = "GPIE6";
+					};
+
+					i2c10_default {
+						function = "I2C10";
+						groups = "I2C10";
+						phandle = <0x0f>;
+					};
+
+					i2c11_default {
+						function = "I2C11";
+						groups = "I2C11";
+						phandle = <0x10>;
+					};
+
+					i2c12_default {
+						function = "I2C12";
+						groups = "I2C12";
+						phandle = <0x11>;
+					};
+
+					i2c13_default {
+						function = "I2C13";
+						groups = "I2C13";
+						phandle = <0x12>;
+					};
+
+					i2c14_default {
+						function = "I2C14";
+						groups = "I2C14";
+						phandle = <0x13>;
+					};
+
+					i2c3_default {
+						function = "I2C3";
+						groups = "I2C3";
+						phandle = <0x08>;
+					};
+
+					i2c4_default {
+						function = "I2C4";
+						groups = "I2C4";
+						phandle = <0x09>;
+					};
+
+					i2c5_default {
+						function = "I2C5";
+						groups = "I2C5";
+						phandle = <0x0a>;
+					};
+
+					i2c6_default {
+						function = "I2C6";
+						groups = "I2C6";
+						phandle = <0x0b>;
+					};
+
+					i2c7_default {
+						function = "I2C7";
+						groups = "I2C7";
+						phandle = <0x0c>;
+					};
+
+					i2c8_default {
+						function = "I2C8";
+						groups = "I2C8";
+						phandle = <0x0d>;
+					};
+
+					i2c9_default {
+						function = "I2C9";
+						groups = "I2C9";
+						phandle = <0x0e>;
+					};
+
+					lpcpd_default {
+						function = "LPCPD";
+						groups = "LPCPD";
+					};
+
+					lpcpme_default {
+						function = "LPCPME";
+						groups = "LPCPME";
+					};
+
+					lpcrst_default {
+						function = "LPCRST";
+						groups = "LPCRST";
+					};
+
+					lpcsmi_default {
+						function = "LPCSMI";
+						groups = "LPCSMI";
+					};
+
+					mac1link_default {
+						function = "MAC1LINK";
+						groups = "MAC1LINK";
+					};
+
+					mac2link_default {
+						function = "MAC2LINK";
+						groups = "MAC2LINK";
+					};
+
+					mdio1_default {
+						function = "MDIO1";
+						groups = "MDIO1";
+					};
+
+					mdio2_default {
+						function = "MDIO2";
+						groups = "MDIO2";
+					};
+
+					ncts1_default {
+						function = "NCTS1";
+						groups = "NCTS1";
+					};
+
+					ncts2_default {
+						function = "NCTS2";
+						groups = "NCTS2";
+					};
+
+					ncts3_default {
+						function = "NCTS3";
+						groups = "NCTS3";
+					};
+
+					ncts4_default {
+						function = "NCTS4";
+						groups = "NCTS4";
+					};
+
+					ndcd1_default {
+						function = "NDCD1";
+						groups = "NDCD1";
+					};
+
+					ndcd2_default {
+						function = "NDCD2";
+						groups = "NDCD2";
+					};
+
+					ndcd3_default {
+						function = "NDCD3";
+						groups = "NDCD3";
+					};
+
+					ndcd4_default {
+						function = "NDCD4";
+						groups = "NDCD4";
+					};
+
+					ndsr1_default {
+						function = "NDSR1";
+						groups = "NDSR1";
+					};
+
+					ndsr2_default {
+						function = "NDSR2";
+						groups = "NDSR2";
+					};
+
+					ndsr3_default {
+						function = "NDSR3";
+						groups = "NDSR3";
+					};
+
+					ndsr4_default {
+						function = "NDSR4";
+						groups = "NDSR4";
+					};
+
+					ndtr1_default {
+						function = "NDTR1";
+						groups = "NDTR1";
+					};
+
+					ndtr2_default {
+						function = "NDTR2";
+						groups = "NDTR2";
+					};
+
+					ndtr3_default {
+						function = "NDTR3";
+						groups = "NDTR3";
+					};
+
+					ndtr4_default {
+						function = "NDTR4";
+						groups = "NDTR4";
+					};
+
+					ndts4_default {
+						function = "NDTS4";
+						groups = "NDTS4";
+					};
+
+					nri1_default {
+						function = "NRI1";
+						groups = "NRI1";
+					};
+
+					nri2_default {
+						function = "NRI2";
+						groups = "NRI2";
+					};
+
+					nri3_default {
+						function = "NRI3";
+						groups = "NRI3";
+					};
+
+					nri4_default {
+						function = "NRI4";
+						groups = "NRI4";
+					};
+
+					nrts1_default {
+						function = "NRTS1";
+						groups = "NRTS1";
+					};
+
+					nrts2_default {
+						function = "NRTS2";
+						groups = "NRTS2";
+					};
+
+					nrts3_default {
+						function = "NRTS3";
+						groups = "NRTS3";
+					};
+
+					oscclk_default {
+						function = "OSCCLK";
+						groups = "OSCCLK";
+					};
+
+					pwm0_default {
+						function = "PWM0";
+						groups = "PWM0";
+					};
+
+					pwm1_default {
+						function = "PWM1";
+						groups = "PWM1";
+					};
+
+					pwm2_default {
+						function = "PWM2";
+						groups = "PWM2";
+					};
+
+					pwm3_default {
+						function = "PWM3";
+						groups = "PWM3";
+					};
+
+					pwm4_default {
+						function = "PWM4";
+						groups = "PWM4";
+					};
+
+					pwm5_default {
+						function = "PWM5";
+						groups = "PWM5";
+					};
+
+					pwm6_default {
+						function = "PWM6";
+						groups = "PWM6";
+					};
+
+					pwm7_default {
+						function = "PWM7";
+						groups = "PWM7";
+					};
+
+					rgmii1_default {
+						function = "RGMII1";
+						groups = "RGMII1";
+					};
+
+					rgmii2_default {
+						function = "RGMII2";
+						groups = "RGMII2";
+					};
+
+					rmii1_default {
+						function = "RMII1";
+						groups = "RMII1";
+					};
+
+					rmii2_default {
+						function = "RMII2";
+						groups = "RMII2";
+					};
+
+					rom16_default {
+						function = "ROM16";
+						groups = "ROM16";
+					};
+
+					rom8_default {
+						function = "ROM8";
+						groups = "ROM8";
+					};
+
+					romcs1_default {
+						function = "ROMCS1";
+						groups = "ROMCS1";
+					};
+
+					romcs2_default {
+						function = "ROMCS2";
+						groups = "ROMCS2";
+					};
+
+					romcs3_default {
+						function = "ROMCS3";
+						groups = "ROMCS3";
+					};
+
+					romcs4_default {
+						function = "ROMCS4";
+						groups = "ROMCS4";
+					};
+
+					rxd1_default {
+						function = "RXD1";
+						groups = "RXD1";
+					};
+
+					rxd2_default {
+						function = "RXD2";
+						groups = "RXD2";
+					};
+
+					rxd3_default {
+						function = "RXD3";
+						groups = "RXD3";
+					};
+
+					rxd4_default {
+						function = "RXD4";
+						groups = "RXD4";
+					};
+
+					salt1_default {
+						function = "SALT1";
+						groups = "SALT1";
+					};
+
+					salt2_default {
+						function = "SALT2";
+						groups = "SALT2";
+					};
+
+					salt3_default {
+						function = "SALT3";
+						groups = "SALT3";
+					};
+
+					salt4_default {
+						function = "SALT4";
+						groups = "SALT4";
+					};
+
+					sd1_default {
+						function = "SD1";
+						groups = "SD1";
+					};
+
+					sd2_default {
+						function = "SD2";
+						groups = "SD2";
+					};
+
+					sgpmck_default {
+						function = "SGPMCK";
+						groups = "SGPMCK";
+					};
+
+					sgpmi_default {
+						function = "SGPMI";
+						groups = "SGPMI";
+					};
+
+					sgpmld_default {
+						function = "SGPMLD";
+						groups = "SGPMLD";
+					};
+
+					sgpmo_default {
+						function = "SGPMO";
+						groups = "SGPMO";
+					};
+
+					sgpsck_default {
+						function = "SGPSCK";
+						groups = "SGPSCK";
+					};
+
+					sgpsi0_default {
+						function = "SGPSI0";
+						groups = "SGPSI0";
+					};
+
+					sgpsi1_default {
+						function = "SGPSI1";
+						groups = "SGPSI1";
+					};
+
+					sgpsld_default {
+						function = "SGPSLD";
+						groups = "SGPSLD";
+					};
+
+					sioonctrl_default {
+						function = "SIOONCTRL";
+						groups = "SIOONCTRL";
+					};
+
+					siopbi_default {
+						function = "SIOPBI";
+						groups = "SIOPBI";
+					};
+
+					siopbo_default {
+						function = "SIOPBO";
+						groups = "SIOPBO";
+					};
+
+					siopwreq_default {
+						function = "SIOPWREQ";
+						groups = "SIOPWREQ";
+					};
+
+					siopwrgd_default {
+						function = "SIOPWRGD";
+						groups = "SIOPWRGD";
+					};
+
+					sios3_default {
+						function = "SIOS3";
+						groups = "SIOS3";
+					};
+
+					sios5_default {
+						function = "SIOS5";
+						groups = "SIOS5";
+					};
+
+					siosci_default {
+						function = "SIOSCI";
+						groups = "SIOSCI";
+					};
+
+					spi1_default {
+						function = "SPI1";
+						groups = "SPI1";
+					};
+
+					spi1debug_default {
+						function = "SPI1DEBUG";
+						groups = "SPI1DEBUG";
+					};
+
+					spi1passthru_default {
+						function = "SPI1PASSTHRU";
+						groups = "SPI1PASSTHRU";
+					};
+
+					spics1_default {
+						function = "SPICS1";
+						groups = "SPICS1";
+					};
+
+					timer3_default {
+						function = "TIMER3";
+						groups = "TIMER3";
+					};
+
+					timer4_default {
+						function = "TIMER4";
+						groups = "TIMER4";
+					};
+
+					timer5_default {
+						function = "TIMER5";
+						groups = "TIMER5";
+					};
+
+					timer6_default {
+						function = "TIMER6";
+						groups = "TIMER6";
+					};
+
+					timer7_default {
+						function = "TIMER7";
+						groups = "TIMER7";
+					};
+
+					timer8_default {
+						function = "TIMER8";
+						groups = "TIMER8";
+					};
+
+					txd1_default {
+						function = "TXD1";
+						groups = "TXD1";
+					};
+
+					txd2_default {
+						function = "TXD2";
+						groups = "TXD2";
+					};
+
+					txd3_default {
+						function = "TXD3";
+						groups = "TXD3";
+					};
+
+					txd4_default {
+						function = "TXD4";
+						groups = "TXD4";
+					};
+
+					uart6_default {
+						function = "UART6";
+						groups = "UART6";
+					};
+
+					usbcki_default {
+						function = "USBCKI";
+						groups = "USBCKI";
+					};
+
+					usb2h_default {
+						function = "USB2H1";
+						groups = "USB2H1";
+						phandle = <0x03>;
+					};
+
+					usb2d_default {
+						function = "USB2D1";
+						groups = "USB2D1";
+						phandle = <0x04>;
+					};
+
+					vgabios_rom_default {
+						function = "VGABIOS_ROM";
+						groups = "VGABIOS_ROM";
+					};
+
+					vgahs_default {
+						function = "VGAHS";
+						groups = "VGAHS";
+					};
+
+					vgavs_default {
+						function = "VGAVS";
+						groups = "VGAVS";
+					};
+
+					vpi18_default {
+						function = "VPI18";
+						groups = "VPI18";
+					};
+
+					vpi24_default {
+						function = "VPI24";
+						groups = "VPI24";
+					};
+
+					vpi30_default {
+						function = "VPI30";
+						groups = "VPI30";
+					};
+
+					vpo12_default {
+						function = "VPO12";
+						groups = "VPO12";
+					};
+
+					vpo24_default {
+						function = "VPO24";
+						groups = "VPO24";
+					};
+
+					wdtrst1_default {
+						function = "WDTRST1";
+						groups = "WDTRST1";
+					};
+
+					wdtrst2_default {
+						function = "WDTRST2";
+						groups = "WDTRST2";
+					};
+				};
+			};
+
+			hwrng@1e6e2078 {
+				compatible = "timeriomem_rng";
+				reg = <0x1e6e2078 0x04>;
+				period = <0x01>;
+				quality = <0x64>;
+			};
+
+			adc@1e6e9000 {
+				compatible = "aspeed,ast2400-adc";
+				reg = <0x1e6e9000 0xb0>;
+				clocks = <0x02 0x1a>;
+				resets = <0x02 0x02>;
+				#io-channel-cells = <0x01>;
+				status = "disabled";
+			};
+
+			sram@1e720000 {
+				compatible = "mmio-sram";
+				reg = <0x1e720000 0x8000>;
+			};
+
+			video@1e700000 {
+				compatible = "aspeed,ast2400-video-engine";
+				reg = <0x1e700000 0x1000>;
+				clocks = <0x02 0x03 0x02 0x00>;
+				clock-names = "vclk", "eclk";
+				interrupts = <0x07>;
+				status = "disabled";
+			};
+
+			sd-controller@1e740000 {
+				compatible = "aspeed,ast2400-sd-controller";
+				reg = <0x1e740000 0x100>;
+				#address-cells = <0x01>;
+				#size-cells = <0x01>;
+				ranges = <0x00 0x1e740000 0x10000>;
+				clocks = <0x02 0x16>;
+				status = "disabled";
+
+				sdhci@100 {
+					compatible = "aspeed,ast2400-sdhci";
+					reg = <0x100 0x100>;
+					interrupts = <0x1a>;
+					sdhci,auto-cmd12;
+					clocks = <0x02 0x1c>;
+					status = "disabled";
+				};
+
+				sdhci@200 {
+					compatible = "aspeed,ast2400-sdhci";
+					reg = <0x200 0x100>;
+					interrupts = <0x1a>;
+					sdhci,auto-cmd12;
+					clocks = <0x02 0x1c>;
+					status = "disabled";
+				};
+			};
+
+			gpio@1e780000 {
+				#gpio-cells = <0x02>;
+				gpio-controller;
+				compatible = "aspeed,ast2400-gpio";
+				reg = <0x1e780000 0x1000>;
+				interrupts = <0x14>;
+				gpio-ranges = <0x05 0x00 0x00 0xdc>;
+				clocks = <0x02 0x1a>;
+				interrupt-controller;
+				#interrupt-cells = <0x02>;
+			};
+
+			timer@1e782000 {
+				compatible = "aspeed,ast2400-timer";
+				reg = <0x1e782000 0x90>;
+				interrupts = <0x10 0x11 0x12 0x23 0x24 0x25 0x26 0x27>;
+				clocks = <0x02 0x1a>;
+				clock-names = "PCLK";
+			};
+
+			rtc@1e781000 {
+				compatible = "aspeed,ast2400-rtc";
+				reg = <0x1e781000 0x18>;
+				status = "disabled";
+			};
+
+			serial@1e783000 {
+				compatible = "ns16550a";
+				reg = <0x1e783000 0x20>;
+				reg-shift = <0x02>;
+				interrupts = <0x09>;
+				clocks = <0x02 0x0d>;
+				resets = <0x06 0x04>;
+				no-loopback-test;
+				status = "disabled";
+			};
+
+			serial@1e784000 {
+				compatible = "ns16550a";
+				reg = <0x1e784000 0x20>;
+				reg-shift = <0x02>;
+				interrupts = <0x0a>;
+				clocks = <0x02 0x0f>;
+				no-loopback-test;
+				status = "okay";
+			};
+
+			watchdog@1e785000 {
+				compatible = "aspeed,ast2400-wdt";
+				reg = <0x1e785000 0x1c>;
+				clocks = <0x02 0x1a>;
+				status = "okay";
+			};
+
+			watchdog@1e785020 {
+				compatible = "aspeed,ast2400-wdt";
+				reg = <0x1e785020 0x1c>;
+				clocks = <0x02 0x1a>;
+			};
+
+			pwm-tacho-controller@1e786000 {
+				compatible = "aspeed,ast2400-pwm-tacho";
+				#address-cells = <0x01>;
+				#size-cells = <0x00>;
+				reg = <0x1e786000 0x1000>;
+				clocks = <0x02 0x23>;
+				resets = <0x02 0x05>;
+				status = "disabled";
+			};
+
+			serial@1e787000 {
+				compatible = "aspeed,ast2400-vuart";
+				reg = <0x1e787000 0x40>;
+				reg-shift = <0x02>;
+				interrupts = <0x08>;
+				clocks = <0x02 0x1a>;
+				no-loopback-test;
+				status = "disabled";
+			};
+
+			lpc@1e789000 {
+				compatible = "aspeed,ast2400-lpc-v2", "simple-mfd", "syscon";
+				reg = <0x1e789000 0x1000>;
+				reg-io-width = <0x04>;
+				#address-cells = <0x01>;
+				#size-cells = <0x01>;
+				ranges = <0x00 0x1e789000 0x1000>;
+
+				lpc-ctrl@80 {
+					compatible = "aspeed,ast2400-lpc-ctrl";
+					reg = <0x80 0x10>;
+					clocks = <0x02 0x08>;
+					status = "disabled";
+				};
+
+				lpc-snoop@90 {
+					compatible = "aspeed,ast2400-lpc-snoop";
+					reg = <0x90 0x08>;
+					interrupts = <0x08>;
+					clocks = <0x02 0x08>;
+					status = "disabled";
+				};
+
+				lhc@a0 {
+					compatible = "aspeed,ast2400-lhc";
+					reg = <0xa0 0x24 0xc8 0x08>;
+				};
+
+				reset-controller@98 {
+					compatible = "aspeed,ast2400-lpc-reset";
+					reg = <0x98 0x04>;
+					#reset-cells = <0x01>;
+					phandle = <0x06>;
+				};
+
+				ibt@140 {
+					compatible = "aspeed,ast2400-ibt-bmc";
+					reg = <0x140 0x18>;
+					interrupts = <0x08>;
+					clocks = <0x02 0x08>;
+					status = "disabled";
+				};
+
+				uart-routing@9c {
+					compatible = "aspeed,ast2400-uart-routing";
+					reg = <0x9c 0x04>;
+					status = "disabled";
+				};
+			};
+
+			peci-controller@1e78b000 {
+				compatible = "aspeed,ast2400-peci";
+				reg = <0x1e78b000 0x60>;
+				interrupts = <0x0f>;
+				clocks = <0x02 0x06>;
+				resets = <0x02 0x06>;
+				cmd-timeout-ms = <0x3e8>;
+				clock-frequency = <0xf4240>;
+				status = "disabled";
+			};
+
+			serial@1e78d000 {
+				compatible = "ns16550a";
+				reg = <0x1e78d000 0x20>;
+				reg-shift = <0x02>;
+				interrupts = <0x20>;
+				clocks = <0x02 0x0e>;
+				resets = <0x06 0x05>;
+				no-loopback-test;
+				status = "disabled";
+			};
+
+			serial@1e78e000 {
+				compatible = "ns16550a";
+				reg = <0x1e78e000 0x20>;
+				reg-shift = <0x02>;
+				interrupts = <0x21>;
+				clocks = <0x02 0x14>;
+				resets = <0x06 0x06>;
+				no-loopback-test;
+				status = "disabled";
+			};
+
+			serial@1e78f000 {
+				compatible = "ns16550a";
+				reg = <0x1e78f000 0x20>;
+				reg-shift = <0x02>;
+				interrupts = <0x22>;
+				clocks = <0x02 0x15>;
+				resets = <0x06 0x07>;
+				no-loopback-test;
+				status = "disabled";
+			};
+
+			bus@1e78a000 {
+				compatible = "simple-bus";
+				#address-cells = <0x01>;
+				#size-cells = <0x01>;
+				ranges = <0x00 0x1e78a000 0x1000>;
+
+				interrupt-controller@0 {
+					#interrupt-cells = <0x01>;
+					compatible = "aspeed,ast2400-i2c-ic";
+					reg = <0x00 0x40>;
+					interrupts = <0x0c>;
+					interrupt-controller;
+					phandle = <0x07>;
+				};
+
+				i2c-bus@40 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x40 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x00>;
+					interrupt-parent = <0x07>;
+					status = "disabled";
+				};
+
+				i2c-bus@80 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x80 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x01>;
+					interrupt-parent = <0x07>;
+					status = "disabled";
+				};
+
+				i2c-bus@c0 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0xc0 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x02>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x08>;
+					status = "disabled";
+				};
+
+				i2c-bus@100 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x100 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x03>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x09>;
+					status = "disabled";
+				};
+
+				i2c-bus@140 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x140 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x04>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0a>;
+					status = "disabled";
+				};
+
+				i2c-bus@180 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x180 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x05>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0b>;
+					status = "disabled";
+				};
+
+				i2c-bus@1c0 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x1c0 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x06>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0c>;
+					status = "disabled";
+				};
+
+				i2c-bus@300 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x300 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x07>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0d>;
+					status = "disabled";
+				};
+
+				i2c-bus@340 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x340 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x08>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0e>;
+					status = "disabled";
+				};
+
+				i2c-bus@380 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x380 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x09>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x0f>;
+					status = "disabled";
+				};
+
+				i2c-bus@3c0 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x3c0 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x0a>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x10>;
+					status = "disabled";
+				};
+
+				i2c-bus@400 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x400 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x0b>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x11>;
+					status = "disabled";
+				};
+
+				i2c-bus@440 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x440 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x0c>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x12>;
+					status = "disabled";
+				};
+
+				i2c-bus@480 {
+					#address-cells = <0x01>;
+					#size-cells = <0x00>;
+					reg = <0x480 0x40>;
+					compatible = "aspeed,ast2400-i2c-bus";
+					clocks = <0x02 0x1a>;
+					resets = <0x02 0x07>;
+					bus-frequency = <0x186a0>;
+					interrupts = <0x0d>;
+					interrupt-parent = <0x07>;
+					pinctrl-names = "default";
+					pinctrl-0 = <0x13>;
+					status = "disabled";
+				};
+			};
+		};
+	};
+
+	chosen {
+		stdout-path = "/ahb/apb/serial@1e784000";
+		bootargs = "console=ttyS4,115200n8 earlyprintk";
+	};
+};

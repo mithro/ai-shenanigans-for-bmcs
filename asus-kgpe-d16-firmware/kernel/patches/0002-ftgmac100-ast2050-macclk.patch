@@ -1,0 +1,33 @@
+diff --git a/drivers/net/ethernet/faraday/ftgmac100.c b/drivers/net/ethernet/faraday/ftgmac100.c
+index 848e41a4b..c3344b746 100644
+--- a/drivers/net/ethernet/faraday/ftgmac100.c
++++ b/drivers/net/ethernet/faraday/ftgmac100.c
+@@ -1762,12 +1762,23 @@ static int ftgmac100_setup_clk(struct ftgmac100 *priv)
+ 
+ 	/* Aspeed specifies a 100MHz clock is required for up to
+ 	 * 1000Mbit link speeds. As NCSI is limited to 100Mbit, 25MHz
+-	 * is sufficient
++	 * is sufficient.
++	 *
++	 * AST2050 (G3) [ast2050-support]: leave MACCLK at the U-Boot default rather than
++	 * forcing 100MHz. NOTE (2026-07-09): tested on real HW -- this alone does NOT fix
++	 * the RMII-TX-dead problem (still 0 packets), so the MAC clock rate is not the
++	 * cause. Kept because it's the correct behaviour for the G3 (U-Boot's AST2050 path
++	 * never sets MACCLK) and harmless on QEMU. The real RMII-TX fix is still open --
++	 * needs a U-Boot-vs-Linux MAC register diff (see MODERN-KERNEL-STATUS.md).
+ 	 */
+-	rc = clk_set_rate(priv->clk, priv->use_ncsi ? FTGMAC_25MHZ :
+-			  FTGMAC_100MHZ);
+-	if (rc)
+-		goto cleanup_clk;
++	if (of_device_is_compatible(priv->dev->of_node, "aspeed,ast2050-mac")) {
++		dev_info(priv->dev, "AST2050: leaving MACCLK at the U-Boot default\n");
++	} else {
++		rc = clk_set_rate(priv->clk, priv->use_ncsi ? FTGMAC_25MHZ :
++				  FTGMAC_100MHZ);
++		if (rc)
++			goto cleanup_clk;
++	}
+ 
+ 	/* RCLK is for RMII, typically used for NCSI. Optional because it's not
+ 	 * necessary if it's the AST2400 MAC, or the MAC is configured for

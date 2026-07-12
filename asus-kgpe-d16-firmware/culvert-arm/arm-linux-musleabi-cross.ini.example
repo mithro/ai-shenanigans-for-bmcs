@@ -1,0 +1,18 @@
+[binaries]
+c = '/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/d16-qemu/tmp/arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc'
+cpp = '/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/d16-qemu/tmp/arm-linux-musleabi-cross/bin/arm-linux-musleabi-g++'
+ar = '/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/d16-qemu/tmp/arm-linux-musleabi-cross/bin/arm-linux-musleabi-ar'
+ld = '/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/d16-qemu/tmp/arm-linux-musleabi-cross/bin/arm-linux-musleabi-ld'
+strip = '/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/d16-qemu/tmp/arm-linux-musleabi-cross/bin/arm-linux-musleabi-strip'
+pkg-config = 'false'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'arm'
+cpu = 'armv5te'
+endian = 'little'
+
+[built-in options]
+c_args = ['-march=armv5te', '-I/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/culvert-g3-port/tmp/argp-standalone']
+c_link_args = ['-static', '-L/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/culvert-g3-port/tmp/argp-standalone/build-musl', '-largp']
+prefer_static = true
