@@ -38,26 +38,35 @@ full-duplex, CRC append, RX wide open — but **SPEED_100=0 (10 Mbps)**, i.e. th
 - ✓ **Ring base regs store the full [31:4] address** (`RXR_BADR=0x41B10000` reads back
   exactly — the datasheet-vs-DRAM [27:4] discrepancy is not present in QEMU).
 - ✓ **MDIO works** (PHYCR/PHYDATA read a PHY).
-- ✗ **PHY model is wrong for the D16.** The MDIO read returns PHY id **`0x001C_C915`
-  = Realtek RTL8211E** (a *gigabit* PHY, its BMSR advertises 1000-capable), but the
-  KGPE-D16 has the **RTL8201CP (10/100)**. The RTL8211E model was added for the Dell
-  C410X (C4) vendor firmware, which may use a different PHY. A faithful D16 machine
-  should present an RTL8201CP (10/100, no gigabit BMSR bits).
+- ✓ **PHY model is now RTL8201CP for the D16** (task #61). On the `aspeed-g3` MAC the
+  MDIO returns PHY id **PHYID1=`0x0000` / PHYID2=`0x8201`** (`0x0000_8201` = Realtek
+  **RTL8201CP**, a 10/100 transceiver — RTL8201CP datasheet MII reg 2/3; mainline
+  `drivers/net/phy/realtek.c` `PHY_ID_MATCH_EXACT(0x00008201)`), its BMSR clears the
+  extended-status/gigabit bit (0x786D-class, no reg-15), BMCR resets to `0x3100`
+  (autoneg + 100M + full-duplex), and the 1000BASE-T control/status registers read 0.
+  The AST2400+/Dell-C410X (C4) path keeps the RTL8211E gigabit identity
+  (`0x001C_C915`) — the change is gated on `silicon_rev == AST2050` so C4 is
+  unaffected (the reg-17 PHY-Specific-Status carrier is left intact).
+  `hw/net/ftgmac100.c::do_phy_read()`/`phy_reset()`.
 - The G3 ftgmac100 must **not** expose gigabit/RGMII, NC-SI hardware mode, or an
-  RCLK/RGMII delay register (all AST2400+). The RTL8211E gigabit PHY is the visible
-  edge of that gap.
+  RCLK/RGMII delay register (all AST2400+). Presenting the 10/100 RTL8201CP (no
+  gigabit BMSR/CTRL1000 bits) is the PHY-visible half of that G3 faithfulness.
 
 **Full TX/RX (DMA over descriptor rings)** is exercised by the boot tests — eth0 comes
 up 100M/full in the C2 boot, so the datapath is functional; only the PHY *identity* is
 unfaithful for the D16.
 
-## 4. Faithful-model plan (oracle-gated)
+## 4. Faithful-model plan (oracle-gated) — DONE (task #61)
 
-- Present the **RTL8201CP** (10/100) as the D16's PHY. Board-specific: the C410X (C4)
-  path may need RTL8211E, so this is a per-board PHY selection, and it must keep the
-  C4 vendor-firmware boot green (the oracle). Investigate whether the C4 RE patches
-  depend on the RTL8211E PHYSR; the ideal is per-board PHY + fewer patches.
-- Confirm no gigabit/RGMII/NCSI/RCLK surfaces on the G3 MAC.
+- ☑ **Present the RTL8201CP** (10/100) as the D16's PHY. Implemented in
+  `hw/net/ftgmac100.c` gated on the `aspeed-g3` device flag (set by the SoC when
+  `silicon_rev == AST2050`): PHY id 0x0000/0x8201, BMSR without EXTSTAT, BMCR reset
+  0x3100, gigabit CTRL1000/STAT1000 = 0. The **C410X (C4)** path keeps RTL8211E — the
+  investigation found C4's vendor ftgmac driver depends on the **reg-17 PHY-Specific
+  Status carrier**, not the PHY *identity*, so that register is left untouched and C4
+  stays green with no extra RE patches (per-board PHY, fewer patches — the ideal).
+- ☑ Confirmed no gigabit/RGMII/NCSI/RCLK surfaces on the G3 MAC (§5; the RTL8201CP is
+  the PHY-visible edge). `test_mac.py::test_phy_bmsr_no_gigabit` guards the BMSR.
 
 ## 5. Deliverable status
 
@@ -65,5 +74,5 @@ unfaithful for the D16.
 |---|---|---|
 | 1 | firmware test (`fwtest.c`) | ☑ MACCR RW, ring-base [31:4], MDIO/PHY-id |
 | 2 | doc (this + `DATASHEET-MAC.md`) | ☑ |
-| 3 | QEMU model | ◐ register + DMA faithful; **PHY = RTL8211E, should be RTL8201CP** (§4) |
-| 4 | integration test (`../../integration/test_mac.py`) | ☑ register checks; PHY-id recorded |
+| 3 | QEMU model | ☑ register + DMA faithful; **PHY = RTL8201CP (10/100) on the G3** (§4) |
+| 4 | integration test (`../../integration/test_mac.py`) | ☑ register checks; **PHY-id asserts RTL8201CP + no-gigabit BMSR (xfail→pass)** |
