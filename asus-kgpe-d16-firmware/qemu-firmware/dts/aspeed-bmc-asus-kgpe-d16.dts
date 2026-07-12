@@ -41,6 +41,30 @@
 		reg = <0x40000000 0x04000000>;	/* 64 MB */
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * VGA/graphics aperture: the AST2050's integrated VGA controller
+		 * (the host's video adapter on the KGPE-D16) frame-buffers out of
+		 * the top of BMC DRAM. Size is the SCU70[3:2] hardware strap
+		 * (datasheet §18.2 p.217, mirrored into MCR04[5:4] §17 p.185) —
+		 * hardware-verified 8 MB on this board: the live JTAG DDR2 init
+		 * computed "MCR04 = 0x00000585" from the real SCU70 (bits [5:4] =
+		 * 00 = 8 MB; JTAG-USAGE-GUIDE.md). no-map keeps the BMC kernel
+		 * out of the host's framebuffer; the video engine (F8) captures
+		 * from this region. Same pattern as the C410X vga_memory node and
+		 * mainline aspeed boards.
+		 */
+		vga_memory: region@43800000 {
+			no-map;
+			compatible = "shared-dma-pool";
+			reg = <0x43800000 0x00800000>;	/* 8 MB */
+		};
+	};
+
 	/*
 	 * Host power-control LEDs (F2). Active-low, per Raptor's board GPIO CSV
 	 * (HW-WIRING-power-sensors.md §1.1/§1.3). Only the board-authoritative

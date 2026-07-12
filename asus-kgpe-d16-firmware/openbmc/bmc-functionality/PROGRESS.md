@@ -540,3 +540,43 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   * **Regressions green:** F5b M1 PASS + C4 Dell vendor firmware → BMC web service
     PASS, both re-verified on the KCS-state-machine model (a broken oracle boot
     would mean the model is wrong).
+- 2026-07-12: **F8 VIDEO DATAPATH — actual pixels through the modelled video
+  engine** (branch `claude/bmc-video-datapath` off `claude/bmc-functionality`;
+  QEMU submodule branch `claude/video-datapath` off a010d69). Closed F8's honest
+  video boundary: "see the virtual VGA screen" is now demonstrated with a **real
+  captured frame**, not just a probing driver. Key faithful insight: on the
+  KGPE-D16 the AST2050 IS the host's VGA adapter — the host framebuffer lives in
+  BMC DRAM (VGA carve-out at the top of the 64 MB; **hardware-verified 8 MB**:
+  the live JTAG DDR2 init computed MCR04=0x00000585 from the real SCU70, bits
+  [5:4]=00 — JTAG-USAGE-GUIDE.md), so a faithful capture demo needs no host CPU.
+  * **QEMU model** (`aspeed_video_ast2050.c`): capture datapath per datasheet
+    §20 — VR004[0] mode detect (640x480 internal-VGA read-back VR090/094/098/
+    09C/0A0), VR004[1]/[4] capture+compress with [16]/[18] busy/idle, source
+    read from the SCU70[3:2]-strapped carve-out, JPEG (quality VR060[15:11]) to
+    the VR054 stream buffer (VR058-clamped; oversize→truncated like silicon),
+    VR070/078/07C read-back, **INT#7 wired to the G3 VIC** (irqmap 7, §10 p.99).
+    Documented contracts (DOC.md §2): linear 640x480 XRGB8888 scanout (no VGA
+    controller model), standard-JFIF bitstream (G3 bit-format not in the
+    datasheet — silicon capture is the remaining oracle). Machine strap fixed
+    VGA_16M→**VGA_8M** (was palmetto-copied; now HW-evidenced).
+  * **NO kernel patch needed**: the v6.6 `aspeed-video` register surface is
+    G3-layout-compatible for everything it touches; its two G4-isms (JPEG-header
+    table addr → 0x040 = VR040 CRC base on G3; VR004[8] G4 JPEG-mode vs G3
+    VR060[0]) are harmless on real G3 and stored-not-interpreted by the model.
+  * **DTS**: `vga_memory` no-map node (8 MB @0x43800000) keeps the kernel out of
+    the host framebuffer (C410X/mainline-aspeed pattern).
+  * **Demo**: initramfs `f8video` (static C) draws an 8-bar pattern into the
+    carve-out via /dev/mem, streams one frame from /dev/video0, emits the JPEG
+    as base64; `scripts/video-capture-test.py` decodes + pixel-verifies. **PASS:
+    dequeued 10696-byte 640x480 JPEG = the drawn pattern, all 8 bars within
+    3/255** (`evidence/video-datapath/`, incl. the frame itself).
+  * **Tests/CI**: video fwtest now runs the full §20.6 flow (13 checks PASS incl.
+    JPEG SOI in the stream buffer + INT#7 raw pending/clear in the G3 VIC);
+    integration/test_video.py asserts them (6 tests); `d16-kvm.yml` gains
+    `boot-video-capture` (frame re-captured, re-verified, uploaded as artifact).
+  * **Regressions all green** with the new model + strap: C2 (kernel→SSH) PASS,
+    **C4 (Dell vendor firmware→appweb HTTP 301) PASS**, F8 kvm-test PASS,
+    qemu-model integration 80 passed / 10 pre-existing xfail.
+  * Honest remaining boundary (F8-KVM.md §3.1): a real host GPU writing the
+    carve-out on silicon; the true G3 compressed-bitstream format; mode-set
+    variety beyond the contractual 640x480x32. No PRs.

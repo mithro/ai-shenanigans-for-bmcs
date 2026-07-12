@@ -10,7 +10,7 @@ machine, plus one userspace daemon:
 
 | Layer | AST2050 hardware | Base / IRQ | OpenBMC driver / daemon | F8 status |
 |---|---|---|---|---|
-| **1. Video capture** | Video Engine (JPEG/VQ compressor) | `0x1E700000`, VIC **INT#7** | `aspeed-video` (V4L2) → `/dev/video0` | **driver probes + `/dev/video0` in QEMU** |
+| **1. Video capture** | Video Engine (JPEG/VQ compressor) | `0x1E700000`, VIC **INT#7** | `aspeed-video` (V4L2) → `/dev/video0` | **REAL FRAME captured in QEMU: pattern in VGA DRAM → dequeued JPEG verified (§3.1)** |
 | **2. Virtual HID** | USB2.0 device / virtual-hub | `0x1E6A0000`, VIC **INT#5** | `aspeed-vhub` UDC + configfs `f_hid` → `/dev/hidgN` | **HID kbd+mouse gadget + keypress bytes in QEMU** |
 | **3. Stream+inject** | *(userspace)* | — | `obmc-ikvm` (RFB/VNC server) → Redfish `GraphicalConsole` | **assessed for 64 MB (see §4)** |
 
@@ -76,9 +76,10 @@ The `kgpe-d16-bmc` QEMU machine **already models both KVM silicon blocks** (subm
 - **`aspeed.video-ast2050`** (`hw/misc/aspeed_video_ast2050.c`) at `0x1E700000`:
   VR000 is a **protection-key lock latch** (write `0x1A038AA8` → reads back `1`
   unlocked / `0` locked; writes to other regs dropped while locked, RW while
-  unlocked). Replaces the AST2400 unimplemented stub for the G3. The **INT#7 line is
-  left unconnected** pending the capture behaviour (see §3 boundary). Verified by
-  `qemu-model/peripherals/video/fwtest.c` (`vr000.unlock` PASS) +
+  unlocked). Replaces the AST2400 unimplemented stub for the G3. *(F8 originally
+  left the INT#7 line unconnected pending the capture behaviour; the F8 video-
+  datapath follow-up implemented the capture datapath and wired INT#7 — see §3.1.)*
+  Verified by `qemu-model/peripherals/video/fwtest.c` +
   `integration/test_video.py`.
 - **`aspeed.udc-ast2050`** (`hw/misc/aspeed_udc_ast2050.c`) at `0x1E6A0000`: the
   USB2.0 device/vhub register block (RW), sized so `0x1E6A1000` stays unmapped (the
@@ -113,16 +114,66 @@ drivers, and the demonstrations.
    (`qemu-model/integration/test_video.py` already covers the video register model;
    `test_usb.py` covers the vhub).
 
+### 3.1 Video datapath — ACTUAL PIXELS through the modelled engine (boundary closed)
+
+The original F8 boundary was *"no host VGA source + no capture datapath in the
+model"*. The video-datapath follow-up closed it with the key faithful insight: **on
+the KGPE-D16 the AST2050 IS the host's VGA adapter** — the host framebuffer lives in
+**BMC DRAM**, in the VGA carve-out at the top of the 64 MB (§9 p.98: VGA/graphics
+memory at the top of the DRAM aperture, sized by SCU70[3:2]). The strap is
+**hardware-verified 8 MB**: the live JTAG DDR2 init computed `MCR04 = 0x00000585`
+from the real SCU70 (bits [5:4] = 00 = 8 MB; `JTAG-USAGE-GUIDE.md`), so the carve-out
+is `0x43800000–0x43FFFFFF`. Datasheet §20's engine captures from that "internal VGA"
+source (VR008[2]=0) — so a faithful capture demo needs **no host CPU**: anything that
+writes that DRAM region *is* "the host rendered something" (on real HW the host GPU
+path writes this same DRAM).
+
+What was added (QEMU submodule + this repo):
+
+- **QEMU model** (`aspeed_video_ast2050.c`): the full capture datapath — VR004[0]
+  mode detection (640x480 internal-VGA read-back via VR090/094/098/09C/0A0),
+  VR004[1]/[4] capture+compression triggers with [16]/[18] busy/idle status, source
+  read from the strapped VGA carve-out, JPEG compression (quality from VR060[15:11]),
+  stream written to the VR054 buffer (VR058-clamped; oversize = truncated JPEG like
+  silicon), VR070/078/07C read-back counters, and **VR304/VR308 completion on INT#7,
+  now wired to the G3 VIC** (irqmap 7, §10 p.99). Two documented modelling contracts
+  (`qemu-model/peripherals/video/DOC.md` §2): the scanout is contractually a linear
+  640x480 XRGB8888 frame at the carve-out base (no VGA-controller model), and the
+  bitstream is a standard JFIF JPEG (the datasheet does not document the G3 bitstream
+  format — real-silicon captures are the remaining oracle).
+- **DTS**: `vga_memory` reserved-memory node (no-map, 8 MB @0x43800000) keeps the BMC
+  kernel out of the host's framebuffer — same pattern as the C410X and mainline
+  aspeed boards.
+- **Demo** (`initramfs/f8video.c` + the `f8video` init gate + runner
+  `scripts/video-capture-test.py`): the guest writes an **8-bar colour test pattern**
+  into the carve-out via `/dev/mem`, then streams one frame from `/dev/video0`
+  (mmap, 3 buffers). The mainline `aspeed-video` driver detects 640x480, programs the
+  buffers, triggers VR004; the modelled engine reads the pattern out of DRAM,
+  JPEG-compresses it into the driver's vb2 buffer and raises INT#7; the driver's IRQ
+  thread completes the buffer; the dequeued JPEG is emitted as base64 and
+  **decoded + pixel-verified against the pattern on the host** (all 8 bars match).
+  That is "seeing the virtual VGA screen" in QEMU. Evidence:
+  `evidence/video-datapath/` (captured `frame.jpg`/`frame.png` + serial log); CI job
+  `boot-video-capture` in `d16-kvm.yml` re-captures and re-verifies on every push.
+- **No kernel patch was needed**: the v6.6 `aspeed-video` register surface
+  (VR000/004/008/030-058/060/078/090-0A0/304/308) is layout-compatible with the G3
+  for everything the driver touches. The two G4-isms the driver emits (JPEG-header
+  table address written to 0x040 = VR040 CRC-buffer base on the G3; VR004[8]
+  "AST2400 JPEG mode", where the documented G3 pure-JPEG select is VR060[0]) are
+  harmless register writes on the real G3 and are stored-not-interpreted by the
+  model; they are documented as the residual G3-vs-G4 tension to check on silicon.
+
 ### Honest boundary of each layer (what QEMU cannot show)
 
-- **Video — no host VGA source.** The `kgpe-d16-bmc` machine is BMC-only; nothing
-  drives the AST2050's integrated VGA controller, so the video engine has no
-  framebuffer to capture. `aspeed-video` **probes and opens `/dev/video0`**, but a
-  `VIDIOC_STREAMON` capture would report *no signal* — and the QEMU register model
-  defers real capture (VR004 trigger → read VGA memory → emit a JPEG/VQ stream →
-  INT#7) anyway. **Achievable QEMU bar = "driver probes the modeled engine + opens
-  the capture device."** Producing real pixels needs (a) a host emitting VGA and
-  (b) the deferred capture datapath + the INT#7 wiring in the QEMU device.
+- **Video — remaining boundary is silicon, not QEMU.** With the datapath modelled and
+  a real frame dequeued (§3.1), what QEMU still cannot show: (a) **a real host GPU
+  writing the framebuffer** — on silicon the x86 host renders through the AST2050 VGA
+  controller into the same carve-out the demo writes by hand; (b) the **true G3
+  compressed-bitstream format** (the datasheet documents buffers/triggers/IRQs, not
+  the bit-level stream; the model emits standard JFIF, which is what the G4-class
+  driver stack consumes — whether real G3 silicon does likewise needs a hardware
+  capture); (c) real-HW mode-set variety (the model's source is contractually
+  640x480x32).
 - **HID — no real server host.** The AST2050 vhub presents the virtual keyboard/mouse
   to the *managed x86 host*, which QEMU's BMC-only machine does not emulate. The
   keypress is therefore demonstrated over **`dummy_hcd`** (a software UDC+host
@@ -201,9 +252,12 @@ state-mutating action was taken on the board.
 - Read VR000/VR008 of the video engine at `0x1E700000` and HUB00 of the vhub at
   `0x1E6A0000` via the proven P2A / JTAG AHB backdoors (same read path as SCU7C) to
   confirm both regions decode — no boot slot needed.
-- Bringing up real capture (`/dev/video0` streaming a JPEG of the host screen) and
-  the host-facing HID keypress needs the deferred capture datapath + INT#7 wiring in
-  QEMU and, on silicon, a host driving the AST2050 VGA plus the G3 UDC driver.
+- Bringing up real capture on silicon (`/dev/video0` streaming a JPEG of the host
+  screen): the QEMU-side datapath + INT#7 wiring now exist (§3.1), so the silicon
+  session needs the host booted with its VGA mode set (the host GPU path then writes
+  the same 0x43800000 carve-out the QEMU demo patterns by hand) and a capture of the
+  real G3 bitstream to check the standard-JFIF contract. The host-facing HID
+  keypress still needs the G3 UDC driver.
 
 ---
 
@@ -214,9 +268,9 @@ state-mutating action was taken on the board.
 | 1 | Video | datasheet ground truth (§1) + `DATASHEET-VIDEO.md` | ☑ |
 | 1 | Video | DTS `&video` enabled; `CONFIG_VIDEO_ASPEED` | ☑ |
 | 1 | Video | `aspeed-video` probes → `/dev/video0` in QEMU | ☑ (evidence §3) |
+| 1 | Video | **capture datapath (VR004 → JPEG → INT#7) + real frame dequeued & pixel-verified** | ☑ (§3.1; `evidence/video-datapath/`; CI `boot-video-capture`) |
 | 2 | HID | DTS `&vhub` (7 ports/21-EP); F6 gadget + `f_hid` | ☑ |
 | 2 | HID | keyboard+mouse gadget + keypress byte-stream → host evdev | ☑ (evidence §3) |
 | 3 | obmc-ikvm | 64 MB fit assessment (§4) | ☑ (documented; not built — one-Yocto-build rule) |
-| — | Video capture datapath (VR004 → JPEG → INT#7) | — | ☐ deferred (QEMU behavioural add-on) |
 | — | Host-facing HID (vhub → real host) | — | ☐ needs G3 UDC driver + vhub datapath |
-| — | Real-HW KVM | — | ☐ needs host VGA + coordinated rig |
+| — | Real-HW KVM | — | ☐ needs a real host GPU writing the carve-out (host boots + VGA mode-set) + G3 bitstream capture to check the JFIF contract |
