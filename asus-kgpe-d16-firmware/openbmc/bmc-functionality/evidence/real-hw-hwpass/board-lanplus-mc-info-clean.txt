@@ -1,0 +1,22 @@
+Device ID                 : 1
+Device Revision           : 1
+Firmware Revision         : 0.00
+IPMI Version              : 2.0
+Manufacturer ID           : 2623
+Manufacturer Name         : ASUSTek Computer Inc.
+Product ID                : 3350 (0x0d16)
+Product Name              : Unknown (0xD16)
+Device Available          : no
+Provides Device SDRs      : no
+Additional Device Support :
+    Sensor Device
+    SDR Repository Device
+    SEL Device
+    FRU Inventory Device
+    Chassis Device
+Aux Firmware Rev Info     : 
+    0x00
+    0x00
+    0x00
+    0x00
+rc=0

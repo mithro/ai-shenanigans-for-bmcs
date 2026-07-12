@@ -344,6 +344,58 @@ cleared]; (3) the UARTCLK-gate + console-write + 2-min aspeed-WDT chain
 unnecessary; no evidence of DDR2/SoC degradation exists — attempt-10 runs
 clean on the same silicon.
 
+### C.10 THE FINAL DEMO — new kcsbridge image on real silicon (2026-07-12 evening)
+Boot: `uImage-kgpe-d16-hwpass` + **`kgpe-hwpass-safe.dtb`** (kcs@2c + w83795 +
+vuart + power-gpio; vhub/video off) + `clk_ignore_unused`, NFS root
+`/srv/nfs/openbmc-hwpass` (bisect masks removed, network file deleted, realhw
+masks kept). First TFTP load was the known flaky-DDR2 kind (kernel timed out
+once → script de-synced → clean `--skip-load` retry worked).
+
+**Stability: SOAK-PASS 144/144 pings, zero loss, 12 min** + serial login
+prompt (`quanta-q71l login:` on ttyS4) + `xyz.openbmc_project.Hwmon` slice up.
+
+**Demos captured on silicon (evidence/real-hw-hwpass/):**
+- **Host-KCS round-trip — THE flagship (host-kcs-mc-info-fru.txt):** the x86
+  host (SystemRescue) loaded `ipmi_si` (`type=kcs ports=0xca2` — the ASUS
+  SMBIOS type-38 entry mis-declares 0xCA2 as memory-mapped, forced I/O) and
+  the kernel handshake alone proved the channel:
+  `Found new BMC (man_id: 0x000a3f, prod_id: 0x0d16, dev_id: 0x01)`.
+  Then `ipmitool -I open mc info` **rc=0**: Manufacturer **2623 / "ASUSTek
+  Computer Inc."**, Product **3350 (0x0d16)** — the populated IDs, over the
+  real LPC KCS channel through the DTS `kcs@2c` → `/dev/ipmi-kcs3` →
+  kcsbridge stack. `fru print 0` **rc=0**: Board Mfg ASUSTeK Computer Inc.,
+  **Board Product KGPE-D16**, serial KGPED16-OPENBMC-0001, part
+  90-MSVDR0-G0UAY0Z.
+- **`sdr elist` over KCS rc=0 (host-kcs-sdr-chassis-sol.txt):** the full
+  KGPE-D16 sensor map enumerates (CPU_DIODE/CPU0_DTS/CPU1_DTS, VCORE0/1,
+  P12V/P5V/P3V3/P1V5/P1V1/P0V9/VBAT, FAN1-6). Readings are `ns/Disabled`:
+  see the I2C finding below.
+- **`sol info 1` rc=0** (both KCS + lanplus): full F-IMG2 SOL config —
+  Enabled true, Privilege ADMINISTRATOR, payload port 623 (closes the F4
+  SOL-config gap on silicon).
+- **`chassis status` rc=0** (reports "System Power: off" while the host is
+  demonstrably on — the STA_LINE_POWER GPIO input polarity/wiring remains an
+  open item; the command path itself works).
+- **IPMI-over-LAN (RMCP+) — root-caused + working (board-lanplus-*.txt):**
+  naive `ipmitool -I lanplus` fails with "Unexpected Open Session Response /
+  no response from RAKP 1" — the 200 MHz ARM926 answers RAKP slower than
+  ipmitool's default 1 s retransmit, so replies always arrive late.
+  **With `-N 5 -R 3` the session forms and `mc info` rc=0 shows the same
+  populated ASUSTeK 2623 / 0x0D16 over the LAN.** (F5's image answered
+  faster; the new image runs more daemons.)
+- **kcsbridge + /dev/ipmi-kcs3 live on the BMC** (dropbear check):
+  `phosphor-ipmi-kcs@ipmi-kcs3.service` active, device node present,
+  21.9 MB RAM available at steady state.
+
+**New genuine hardware finding (first-ever exercise of this path):** the
+BMC-side W83795 read fails — the w83795 driver binds at `1-002f` (DTS + udev
++ phosphor-hwmon all correct) but **every AST2050 I2C-bus-1 transaction times
+out (`Failed to set bank ... err -110`; `i2cdetect -y 1` hangs per address)**
+(`bmc-i2c1-scan.txt`). The G3 aspeed-i2c needs bring-up work on real silicon
+(clock divisor / IRQ on the G3 VIC / possible bus-sharing with the host
+SMBus master). NOT a regression — this path was never HW-tested before; the
+host-side W83795 values were captured earlier (`host-w83795-sensors.txt`).
+
 ## Phase B decision (safety-bounded)
 Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
 request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no
