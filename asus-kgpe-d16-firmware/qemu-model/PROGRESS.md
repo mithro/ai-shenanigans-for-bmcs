@@ -810,3 +810,49 @@ byte-identical to `eb2018b816`), so the legacy boots cannot regress by construct
   Remaining SCU §4 items (PLL post-divider [14:12], strap SCU70 assert) are
   deferred to the timer clock-rate work as before — they are clock-rate, not
   reset-value, fidelity and do not affect the flipped checks.
+
+## 2026-07-13 — FINAL consolidation: the faithful-model backlog is complete (0 xfails)
+
+**The three last feature branches are merged into `claude/bmc-functionality` and
+the combined model suite reaches its maximum — 108 passed / 0 xfailed / 0 failed.**
+This closes every remaining xfail in the AST2050 faithful-QEMU program.
+
+- **Superproject `--no-ff` merges** (in order, off `0b44e70`):
+  `claude/bmc-p2a-bar` → `5ada8b1`, `claude/bmc-i2c-eeprom` → `badd854`,
+  `claude/bmc-uboot-scu` → `8c2fa29`. Conflicts were PROGRESS.md only (unioned —
+  all three dated entries kept); the SCU DOC/test/CI/README auto-merged cleanly.
+- **QEMU submodule union → `ae204f8` on `mithro/qemu:claude/bmc-functionality`**
+  (off `eb2018b816`). Two `--no-ff` merges of disjoint single-commit branches:
+  `claude/p2a-bar` (`02060a8e`, the `hw/misc/aspeed_p2a_ast2050` P2A back-door
+  device + SoC wiring) and `claude/uboot-scu` (`0da49bd9`, the `aspeed_scu.c`
+  `g3-resets` reset-table property). `claude/i2c-eeprom` carried **no** submodule
+  delta (its faithful finding was a test-harness/datasheet-sequence fix, not a
+  model change), so the submodule union is exactly base + P2A + SCU — no shared
+  files, no conflicts. git's own submodule-merge resolver independently proposed
+  `ae204f8` as the resolution, confirming the union.
+- **One incremental `make -j4` (arm-softmmu)** rebuilt `aspeed_p2a_ast2050.c` +
+  `aspeed_scu.c` and relinked `qemu-system-arm`. The union binary carries, in one
+  image: `kgpe-d16-bmc`, `w83795`, `host-kcs`, `aspeed_video_ast2050`,
+  `aspeed.sdmc-ast2050`, `rtl8201cp`, **`aspeed.p2a-ast2050`**, the SCU
+  **`g3-resets`** property, and the bus-0/0x50 `smbus-eeprom` — every feature from
+  every merged branch coexisting.
+- **Combined integration suite: 108 passed / 0 xfailed / 0 failed** (`pytest
+  integration/`). All items the three branches flipped are green **together** on
+  the single union binary: the 9 `test_p2a.py` P2A back-door checks (incl.
+  SCU7C=0x0202-through-the-window == silicon, the write round-trip, and both
+  gates), `test_i2c.py::test_eeprom_probe_acks` (smbus_ee), and the four
+  `test_scu.py::test_reset_value_faithful[sysreset|clksel|clkstop|pinmux1]`
+  reset-table checks. **Zero xfails remain in the whole suite.**
+- **All three firmware oracles re-verified green on the union binary:**
+  - **C-UBOOT** — Raptor's G3 AST2050 U-Boot booted with
+    `-global aspeed.scu-ast2050.g3-resets=on`: `DRAM Init-DDR ...Done` →
+    `DRAM: 64 MiB` → `H/W: AST2050/AST2150 series chip` (SCU7C=0x0202 read back by
+    real firmware) → interactive `boot#`.
+  - **C2** — fresh `v6.6.70` g3-clk kernel + initramfs boots `-M kgpe-d16-bmc`
+    (`Linux armv5tejl`, hostname `kgpe-d16-bmc`), does **not** freeze at
+    `clk: Disabling unused clocks`, and `ssh` returns `SSH_OK`.
+  - **C4** — the unmodified Dell C410X vendor firmware boots to its BMC web
+    service: `HTTP/1.0 301 Moved Permanently … Server: Mbedthis-Appweb/2.4.2`.
+  The new devices are inert on the legacy paths (P2A: no MMIO/IRQ during boot,
+  driven only by the QOM back-channel; `g3-resets` default-off), so no legacy
+  boot regresses — the faithfulness oracle holds.
