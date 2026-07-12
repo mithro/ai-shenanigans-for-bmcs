@@ -46,6 +46,18 @@ def preconditions() -> str | None:
     return None
 
 
+def qemu_preconditions() -> str | None:
+    """Skip-reason for tests that only need the built QEMU (no cross-compiler)."""
+    if not (LOCAL_QEMU.exists() or SIBLING_QEMU.exists()):
+        return "no qemu-system-arm with kgpe-d16-bmc built (run scripts/build-qemu.sh)"
+    return None
+
+
+def qemu_path() -> Path:
+    """The qemu-system-arm carrying the kgpe-d16-bmc machine (see preconditions)."""
+    return LOCAL_QEMU if LOCAL_QEMU.exists() else SIBLING_QEMU
+
+
 def parse(text: str) -> Transcript:
     regs: dict[str, int] = {}
     kvs: dict[str, int] = {}

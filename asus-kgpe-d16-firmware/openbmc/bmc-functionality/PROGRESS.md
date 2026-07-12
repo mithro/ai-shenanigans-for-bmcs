@@ -508,3 +508,35 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   * Verified: working tree clean, no conflict markers; the image config selects
     `phosphor-ipmi-kcs` (bt dropped); all 6 workflow YAML files parse; the QEMU
     gitlink stays `a010d69` (none of the three touch QEMU source). No PRs.
+- 2026-07-12: **F5b M2 DONE — genuine host->BMC IPMI over LPC KCS in QEMU**
+  (branch `claude/bmc-kcs-m2` off `claude/bmc-functionality`; QEMU submodule
+  branch `claude/kcs-m2` @ mithro/qemu). F5b M1 proved the BMC-side channel alive;
+  M2 closes the honest boundary M1 flagged — a **real Get Device ID transaction**
+  from the host side, answered by `ipmid`.
+  * **Faithful model:** extended `hw/misc/aspeed_lpc_ast2050.c` (was a passive
+    register file) with the H8S/2168 **KCS OBF/IBF/C-D state machine** per the
+    AST2050 A3 datasheet STR1-3 tables (V1.05 p.313-316) — host IDRn write →
+    IBF+C/D, BMC IDRn read → IBF clear, BMC ODRn write → OBF, host ODRn read →
+    OBF clear, STRn slave DBU-RW/OBF-RW0C/IBF+C-D-RO, IDRn host-write-only; IBF →
+    VIC #8 (high-level, §10 p.99) gated on channel-enable + HICR2 IBFIF; no OBE
+    IRQ (silicon has none). Submodule @ 25611b3.
+  * **Honest host-drive:** the BMC-only machine has no LPC host, so the host half
+    of each channel is exposed as `host-kcs<N>-{data,cmdsts}` QOM properties on
+    `/machine/soc/lpc-g3` (like mainline `aspeed_lpc.c`'s QOM KCS registers, but
+    modelling both host I/O ports for the C/D distinction). They replace **only
+    the LPC bus wires**; every handshake effect is the datasheet state machine;
+    driving a disabled channel fails loudly.
+  * **Demo:** `f5b-kcs-m2-transaction-test.py` boots the kcsbridge OpenBMC image
+    over NFS at 64 MB, and drives Get Device ID (netfn 0x06 cmd 0x01) over
+    `model → kcs_bmc_aspeed → kcsbridged → ipmid`. A well-formed reply (netfn
+    0x07, cmd 0x01, cc 0x00) can only come from userspace `ipmid`, so **ipmid is
+    the answering layer** (top bar, not the kernel-only fallback), corroborated by
+    the BMC journal. Evidence under `evidence/host-kcs-m2/`.
+  * **Model test + CI:** `qemu-model/integration/test_lpc.py::TestKCS3HostHandshake`
+    (qtest MMIO + QMP QOM, incl. the VIC #8 line) — 12/12 LPC checks PASS, full
+    model suite 84 passed / 10 xfailed. New `host-kcs-m2` CI job (graceful-skip if
+    the kcsbridge rootfs asset is unpublished); the `host-kcs` job also runs the
+    model handshake test.
+  * **Regressions green:** F5b M1 PASS + C4 Dell vendor firmware → BMC web service
+    PASS, both re-verified on the KCS-state-machine model (a broken oracle boot
+    would mean the model is wrong).

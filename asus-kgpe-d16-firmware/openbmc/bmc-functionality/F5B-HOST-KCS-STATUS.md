@@ -3,9 +3,15 @@
 Sibling of F5 (which proved the **remote** half: `netipmid` RMCP+/LAN, in QEMU
 *and* on the real AST2050 at 64 MB). This task delivers the **local** half — a
 host OS/BIOS talking IPMI to the BMC over the AST2050 **LPC KCS** interface on the
-same board — and honestly bounds how far a BMC-only QEMU machine can carry it.
+same board.
 
-Branch `claude/bmc-f5b-hostkcs` (off `claude/bmc-functionality`).
+- **M1** (branch `claude/bmc-f5b-hostkcs`): the BMC-side channel is alive — DTS
+  `kcs@2c` → `/dev/ipmi-kcs3` → `ast-kcs-bmc` bound → faithful G3 LPC model
+  serviced the driver. See §3.
+- **M2** (branch `claude/bmc-kcs-m2`, 2026-07-12): a **genuine host->BMC IPMI Get
+  Device ID transaction** over the KCS channel, answered by `ipmid` — enabled by
+  a faithful KCS OBF/IBF/C-D state machine + an honest QOM host-drive back-channel
+  added to the QEMU G3 LPC model. See §5.
 
 ---
 
@@ -135,51 +141,144 @@ read-only status, RW output register, 32-bit APB access width).
 
 The complete host path is:
 ```
-host --LPC I/O--> KCS (/dev/ipmi-kcs3) --> kcsbridge (org.openbmc.HostIpmi)
+host --LPC I/O--> KCS (/dev/ipmi-kcs3) --> kcsbridged (phosphor-ipmi-kcs@ipmi-kcs3)
                                        --> ipmid (same D-Bus command router as netipmid)
 ```
-The BMC-side command handling is **identical to LAN** — once a KCS bridge opens
+The BMC-side command handling is **identical to LAN** — once the KCS bridge opens
 `/dev/ipmi-kcs3` and feeds `ipmid`, every command F5 proved over LAN also answers
-the host. `ipmid` (`phosphor-ipmi-host`) is present in the F0 image and proven up
-by F5 over LAN.
+the host. `ipmid` (`phosphor-ipmi-host`) is present in the image and proven up by
+F5 over LAN **and now by M2 over KCS** (§5).
 
-**But the staged F0 image ships the host-IPMI *BT* bridge (`btbridged`), not the
-KCS bridge (`kcsbridge`)** — `/export/openbmc-full/usr/bin/` has `btbridged` and no
-`kcsbridge`/`phosphor-ipmi-kcs`. This is the known `BUILD-NOTES.md` note 1: the
-runtime provider knob (`PREFERRED_RPROVIDER_virtual-obmc-host-ipmi-hw`) defaulted
-to the quanta-q71l BT choice. And per §1, **BT can't be faithfully wired on the G3
-anyway** (0x140 vs 0x48). So today no userspace daemon binds `/dev/ipmi-kcs3`.
-
-Per this task's guidance, that is **documented as an F-IMG2 follow-up, not a
-rebuild here**: switch the image to `kcsbridge` with the one-line
-`local.conf` knob already staged in BUILD-NOTES, then unmask
-`phosphor-ipmi-kcs@...` / wire it to `/dev/ipmi-kcs3`. `ipmid` is unchanged. This
-is a ~5-min cached OpenBMC rebuild owned by the image task, and needs no model,
-DTS, or kernel change beyond what this branch lands.
+**Resolved (F-HWPASS merge).** The earlier F0 image shipped the host-IPMI *BT*
+bridge (`btbridged`); the current image recipe installs **`kcsbridge`**
+(`phosphor-ipmi-kcs`, with `phosphor-ipmi-bt` removed) — the correct choice per
+§1 (BT is unfaithful on the G3: 0x140 vs 0x48). The staged
+`/export/openbmc-hwpass` (`= Pi:/srv/nfs/openbmc-hwpass`) has
+`/usr/libexec/kcsbridged` and `phosphor-ipmi-kcs@ipmi-kcs3.service` enabled in
+`multi-user.target.wants`. M2's transaction test boots exactly this image and
+confirms both `phosphor-ipmi-kcs@ipmi-kcs3` and `phosphor-ipmi-host` go active
+and answer a host Get Device ID. No model/DTS/kernel change beyond this branch.
 
 ---
 
-## 5. M2 — full host <-> BMC round-trip (the honest boundary)
+## 5. M2 — full host <-> BMC round-trip (DELIVERED 2026-07-12)
 
-Exchanging a real IPMI *message* over KCS needs something driving the **host** (LPC
-I/O-port) side of the channel. The `kgpe-d16-bmc` machine models **only the BMC**:
-there is no host CPU, and the LPC model is a register file with **no OBF/IBF
-handshake state machine**. Concretely, if a test writes `IDR3` from the AHB/BMC
-side (e.g. via `devmem` or the P2A/iLPC backdoor), the model just stores the byte;
-it does **not** set `STR3.IBF`, so the kernel's KCS driver — which waits on IBF —
-never sees a "host" byte. A from-AHB poke therefore cannot carry a KCS transaction
-through the current model, and **faking one would misrepresent the hardware**.
+M1 left the honest boundary: a real IPMI *message* over KCS needs something
+driving the **host** (LPC I/O-port) side, and the old LPC model was a register
+file with **no OBF/IBF handshake**. That gap is now closed by extending the
+faithful G3 model (option (a) of the task brief) — **not** by faking a host
+transaction from the AHB side.
 
-A genuine host<->BMC KCS round-trip in QEMU needs **either**:
-- (a) extend `aspeed_lpc_ast2050.c` with the KCS **OBF/IBF/C-D state machine** plus
-  a host-side back-channel a test can drive as the LPC peer (a faithful model
-  refinement the model header already flags), **or**
-- (b) a paired host-CPU QEMU machine / **real silicon**, where the powered host is
-  the KCS peer.
+### 5.1 The faithful KCS state machine (`hw/misc/aspeed_lpc_ast2050.c`)
 
-Delivered here is the honest **M1** bar (option (b) of the task brief): device
-present + driver bound + faithful model serviced the driver **and** a from-BMC-side
-KCS register poke — without a fabricated host transaction.
+Implemented the H8S/2168-style handshake exactly as the STR1-3 access tables
+specify (AST2050 A3 datasheet V1.05, **p.313-316**; the "defined by user" note is
+p.315):
+
+| Event | Model effect | Datasheet basis |
+|--|--|--|
+| host write to IDRn (data/cmd port) | IDRn latched, `STRn.IBF`=1, `C/D` = port | IDRn Host-W (p.315); STR bit1 IBF, bit3 C/D (p.315-316) |
+| BMC read of IDRn | `IBF`=0 (receive completion) | IDRn Slave-R; IBF Slave-R hardware-managed |
+| BMC write to ODRn | `STRn.OBF`=1 | ODRn Slave-RW (p.315); STR bit0 OBF |
+| host read of ODRn (data port) | `OBF`=0 | ODRn Host-R; OBF Host-R |
+| BMC write to STRn | bits 7:4,2 (DBU) set, `OBF` RW0C, `IBF`/`C/D` ignored | STR Slave access: DBU RW, OBF RW0C, IBF/C-D R (p.315-316) |
+| BMC write to IDRn | dropped | IDRn is Slave-**R** / Host-W (p.315) |
+
+`IBF` asserts the LPC line to **VIC #8** (high-level sensitive, §10 Table 36 p.99)
+while the channel is enabled (HICR0 `LPCnE`; + HICR4 `KCSENBL` for ch3, p.313-314)
+and its HICR2 `IBFIFn` receive-completion interrupt is enabled (p.313); a BMC IDRn
+read deasserts it. There is **no OBE interrupt** on this silicon (the mainline
+`kcs_bmc_aspeed` driver polls STR.OBF via a timer), so none is modelled — that
+absence is itself faithful.
+
+### 5.2 The honest host-drive back-channel
+
+The `kgpe-d16-bmc` machine has no host CPU, so the **host half** of each channel
+(the LPC I/O cycles a real BIOS/OS issues at the `LADRn` port pair) is exposed as
+QOM properties on `/machine/soc/lpc-g3` — the same technique mainline
+`hw/misc/aspeed_lpc.c` already uses to expose its KCS registers to tests, but
+modelling the host's **two I/O ports** so the command/data (`C/D`) distinction a
+real IPMI KCS transaction depends on is preserved:
+
+| Property | Host operation modelled |
+|--|--|
+| `host-kcs<N>-data`   write | OUT to the KCS **data** port → IDRn, IBF=1, C/D=0 |
+| `host-kcs<N>-data`   read  | IN from the **data** port → ODRn (clears OBF) |
+| `host-kcs<N>-cmdsts` write | OUT to the KCS **command** port → IDRn, IBF=1, C/D=1 |
+| `host-kcs<N>-cmdsts` read  | IN from the **status** port → STRn |
+
+**Why this is honest:** the properties replace **only the physical LPC bus wires**
+— nothing else. Every state transition they cause is the datasheet state machine
+in §5.1; the BMC-visible side (IDR/ODR/STR MMIO, the VIC #8 IRQ) is unchanged real
+silicon behaviour. Driving a channel the BMC has not enabled **fails loudly**
+(`error_setg`), because on real hardware an unclaimed LPC I/O cycle is simply not
+answered. This is the documented model refinement the header always flagged, now
+built.
+
+### 5.3 End-to-end demo — genuine host->BMC Get Device ID
+
+`f5b-kcs-m2-transaction-test.py` boots the OpenBMC stack (the F-HWPASS image that
+ships `kcsbridge` wired to `/dev/ipmi-kcs3`) over NFS on `kgpe-d16-bmc` **at
+64 MB**, waits for `phosphor-ipmi-kcs@ipmi-kcs3` + `phosphor-ipmi-host` (ipmid) to
+go active, then plays the **host** side of the IPMI v2.0 KCS SMS transfer flow
+(§9.15) against port pair `0xca2/0xca3` and sends **Get Device ID** (netfn `0x06`,
+cmd `0x01`) entirely through the QOM back-channel (one `qom-set` = one host OUT
+cycle, one `qom-get` = one host IN cycle).
+
+The full path exercised — **nothing on the BMC side is scripted**:
+
+```
+test (IPMI KCS host protocol, QMP = LPC wires)
+  -> aspeed_lpc_ast2050 KCS state machine (IDR3/ODR3/STR3, VIC #8 IRQ)
+    -> kernel kcs_bmc_aspeed / kcs_bmc_cdev_ipmi   (/dev/ipmi-kcs3)
+      -> kcsbridged (phosphor-ipmi-kcs@ipmi-kcs3)   (D-Bus)
+        -> ipmid (phosphor-ipmi-host)  = THE ANSWERING LAYER
+      <- response bytes flow back through ODR3/OBF, one KCS READ cycle each
+```
+
+Captured result (QEMU, 64 MB, 2026-07-12; transaction wall time 3.8 s on the
+emulated ARM926):
+
+```
+request  (host->BMC): 18 01          = netfn 0x06 (App) lun 0, cmd 0x01
+response (BMC->host): 1c 01 00 01 01 00 00 02 8f 3f 0a 00 16 0d 00 00 00 00
+  netfn 0x07 (App response), cmd 0x01, cc 0x00
+  device_id 0x01  device_rev 0x01  fw_rev 0x00/0x00  ipmi_version 0x02 (2.0)
+  additional_dev_support 0x8f
+  manufacturer IANA 0x000a3f = 2623 = ASUSTeK   <- the image's dev_id.json
+  product_id 0x0D16 = the KGPE-D16 board ID     <- (F-HWPASS populated IDs)
+```
+
+The byte trace (`evidence/host-kcs-m2/host-byte-trace.txt`) shows every LPC I/O
+cycle and STR poll: `WRITE_START(0x61)` → per-byte IBF handshakes in WRITE state
+→ `WRITE_END(0x62)` + last byte → state READ → 18 response bytes each pulled
+through **OBF** with a `KCS_READ(0x68)` ack → state IDLE + dummy byte. The first
+response byte appeared after ~178 status polls (~4 s) — that is `ipmid` actually
+computing the answer. BMC-side journal (`evidence/host-kcs-m2/bmc-journal.txt`):
+`Started Phosphor IPMI KCS DBus Bridge` (`Active: active (running)`,
+`/usr/libexec/kcsbridged -c ipmi-kcs3`), `ipmid: New interface mapping:
+xyz.openbmc_project.Ipmi.Channel.ipmi_kcs3 -> channel 15`, and `kcsbridged`
+holding fd `8 -> /dev/ipmi-kcs3` at capture time. At transaction time ipmid logs
+`No Object has implemented the interface: xyz.openbmc_project.State.BMC, NetFn:
+0x6, Cmd: 0x1` (+ a `map::at` line) — its lookup of the BMC-state object for the
+fw-rev "device available" bit, which is why `fw_rev1` bit7 can read 0x80 (busy)
+on a boot where that query lands differently; the reply is complete and correct
+either way.
+
+A well-formed reply **cannot** be synthesised by the KCS char-device path on its
+own (the kernel cdev only relays request bytes to userspace and returns the
+userspace-supplied response), and the ASUSTeK/0x0D16 payload matches the image's
+`dev_id.json` — so **`ipmid` answered**.
+
+**Which bar:** the top bar — a real `ipmid` answered over the faithful KCS state
+machine, not the kernel-only fallback.
+
+### 5.4 Model-level test
+
+`qemu-model/integration/test_lpc.py::TestKCS3HostHandshake` drives the same state
+machine with no kernel — BMC side over qtest MMIO, host side over the QMP QOM
+ports — and asserts every transition in the §5.1 table plus the VIC #8 line
+(via the G3 VIC raw-status register). Runs in <1 s in CI.
 
 ---
 
@@ -197,7 +296,12 @@ add a host-side KCS check once the host is up. Not run in this task.
 
 Note the DTS/kernel changes here are the **same artifacts** used on the real board
 (the KGPE-D16 DTB + kernel), so the `/dev/ipmi-kcs3` channel proven in QEMU is
-exactly what appears on silicon; only the host-side peer differs.
+exactly what appears on silicon; only the host-side peer differs. In QEMU the
+peer is the faithful KCS state machine driven through the QOM back-channel (§5);
+on silicon it is the real host CPU. Both exercise the identical BMC-side path
+(model → `kcs_bmc_aspeed` → `kcsbridged` → `ipmid`), so the M2 demo is the same
+transaction a powered host will run — with the LPC bus wires standing in for the
+one piece the BMC-only machine cannot have.
 
 ---
 
@@ -205,6 +309,16 @@ exactly what appears on silicon; only the host-side peer differs.
 
 - `qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts` — `&lpc/kcs@2c` node (added).
 - `qemu-firmware/kernel/kgpe-d16.config` — `CONFIG_IPMI_KCS_BMC_CDEV_IPMI=y` (added).
-- `openbmc/bmc-functionality/f5b-host-kcs-test.py` — the QEMU M1 test.
-- `openbmc/bmc-functionality/evidence/host-kcs/host-kcs.txt` — captured evidence.
-- `.github/workflows/d16-qemu-stack.yml` — `host-kcs` CI job (device + driver + model poke).
+- `qemu-firmware/qemu/qemu/hw/misc/aspeed_lpc_ast2050.c` — the faithful KCS
+  OBF/IBF/C-D state machine + `host-kcs<N>-{data,cmdsts}` QOM host ports (M2).
+- `openbmc/bmc-functionality/f5b-host-kcs-test.py` — the QEMU **M1** test.
+- `openbmc/bmc-functionality/f5b-kcs-m2-transaction-test.py` — the **M2**
+  host->BMC Get Device ID transaction test (ipmid answers over KCS).
+- `openbmc/bmc-functionality/f5_masked_daemons.py` — adds the `kcs` 64-MB profile.
+- `openbmc/bmc-functionality/evidence/host-kcs/host-kcs.txt` — M1 evidence.
+- `openbmc/bmc-functionality/evidence/host-kcs-m2/{host-byte-trace,bmc-journal}.txt`
+  — M2 evidence (host I/O cycle trace + BMC-side journal).
+- `qemu-model/integration/test_lpc.py` — `TestKCS3HostHandshake` (qtest+QMP model test).
+- `.github/workflows/d16-qemu-stack.yml` — `host-kcs` job (M1 + model test) and
+  `host-kcs-m2` job (the full transaction; graceful-skip if the kcsbridge rootfs
+  asset is unpublished).

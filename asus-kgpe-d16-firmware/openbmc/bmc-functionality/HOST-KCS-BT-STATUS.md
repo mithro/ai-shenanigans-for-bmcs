@@ -64,14 +64,14 @@ host. Only the *transport* differs.
    peer. The QEMU G3 LPC model already services the register reads/writes the
    driver issues.
 
-### M2 — full host->BMC round-trip (deep; follow-up)
-Needs an **emulated LPC host** driving the KCS/BT from the host I/O-port side, so
-`ipmitool -I open`/`-I bt` from a host context completes a real transaction. Two
-options: (a) QEMU's built-in IPMI host models (`isa-ipmi-kcs`/`isa-ipmi-bt`)
-wired to the BMC LPC — architecturally awkward across the single-SoC machine; or
-(b) extend `aspeed_lpc_ast2050.c` with the KCS/BT **OBF/IBF state machine** plus a
-back-channel a test can poke as the "host". This is the register state-machine
-refinement the model's header already flags as future work.
+### M2 — full host->BMC round-trip — **DONE for KCS (2026-07-12, `claude/bmc-kcs-m2`)**
+Delivered via option (b): `aspeed_lpc_ast2050.c` now implements the faithful KCS
+**OBF/IBF/C-D state machine** (datasheet p.313-316) with `host-kcs<N>-{data,cmdsts}`
+QOM properties as the honest host-side back-channel (they replace only the LPC bus
+wires). A host-driven **Get Device ID** went through `model → kcs_bmc_aspeed →
+kcsbridged → ipmid` at 64 MB and `ipmid` answered (ASUSTeK/0x0D16 IDs). See
+`F5B-HOST-KCS-STATUS.md` §5. BT remains out of scope (unfaithful on the G3 via
+mainline; the BT state machine is a separate model effort).
 
 ## Recommendation
 LAN IPMI already exposes system-id / power / sensors / SEL / FRU / users on the

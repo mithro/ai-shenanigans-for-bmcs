@@ -589,3 +589,28 @@ g3-vic kernel (zImage-kgpe-d16, aspeed,ast2050-vic DTB) on `-M kgpe-d16-bmc -m 6
 **HTTP 200, RedfishVersion 1.17.0**. Evidence: `../openbmc/results/redfish-64mb-g3vic-boot.log`.
 **The complete OpenBMC system now boots over NFS inside a QEMU faithfully emulating the AST2050
 (real single-bank G3 VIC + pulse timer + 64 MB DDR), verified end-to-end.**
+
+### 🎉 LPC KCS host handshake — faithful state machine + M2 host->BMC transaction (2026-07-12)
+The G3 LPC model (`hw/misc/aspeed_lpc_ast2050.c`) was a passive register file (STR
+read-only, no handshake). Implemented the H8S/2168-style **KCS OBF/IBF/C-D state
+machine** for channels 1-3 exactly per the STR1-3 access tables (AST2050 A3
+datasheet V1.05 **p.313-316**): host IDRn write sets IBF + C/D (data vs command
+port); BMC IDRn read clears IBF; BMC ODRn write sets OBF; host ODRn read clears
+OBF; STRn slave access = DBU bits (7:4,2) RW / OBF RW0C / IBF+C-D read-only; IDRn
+is host-write-only (BMC writes dropped). IBF drives **VIC #8** (high-level, §10
+p.99) while the channel + its HICR2 IBFIF are enabled; no OBE IRQ (silicon has
+none — the kernel polls). Since the `kgpe-d16-bmc` machine has no host CPU, the
+**host half** of each channel is exposed as `host-kcs<N>-{data,cmdsts}` QOM
+properties on `/machine/soc/lpc-g3` (mirroring mainline `aspeed_lpc.c`'s
+QOM-exposed KCS registers, but modelling both host I/O ports so C/D is preserved);
+they replace **only the LPC bus wires**, driving a disabled channel fails loudly.
+qemu submodule branch `claude/kcs-m2` @ 25611b3 (mithro/qemu).
+
+**Validated:** `integration/test_lpc.py::TestKCS3HostHandshake` (qtest MMIO on the
+BMC side + QMP QOM on the host side) asserts every datasheet transition incl. the
+VIC #8 line — 12/12 LPC checks PASS; full model suite **84 passed / 10 xfailed**.
+End-to-end (`openbmc/bmc-functionality/f5b-kcs-m2-transaction-test.py`): a host
+Get Device ID over `model → kcs_bmc_aspeed → kcsbridged → ipmid` at 64 MB gets a
+well-formed ipmid reply (F5b M2). **Faithful oracle boots stay green:** F5b M1
+PASS + C4 Dell vendor firmware boots to its BMC web service, both re-verified on
+the KCS-state-machine model.

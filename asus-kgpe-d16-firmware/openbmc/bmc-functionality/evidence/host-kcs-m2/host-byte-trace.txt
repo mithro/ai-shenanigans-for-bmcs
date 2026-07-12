@@ -1,0 +1,94 @@
+F5b M2 — host-side KCS byte trace (each line = one LPC I/O cycle via the QOM back-channel)
+request: 18 01
+
+--- KCS transaction: request 18 01 ---
+IN  0xca3 (status) -> 0x00  [IBF clear after 1 poll(s); state=IDLE]
+IN  0xca3 (status) -> 0x00  [state=IDLE]
+OUT 0xca3 (cmd)    <- 0x61
+IN  0xca3 (status) -> 0x89  [IBF clear after 1 poll(s); state=WRITE OBF]
+IN  0xca3 (status) -> 0x89  [state=WRITE OBF]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x18
+IN  0xca3 (status) -> 0x81  [IBF clear after 1 poll(s); state=WRITE OBF]
+IN  0xca3 (status) -> 0x81  [state=WRITE OBF]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca3 (cmd)    <- 0x62
+IN  0xca3 (status) -> 0x89  [IBF clear after 1 poll(s); state=WRITE OBF]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x01
+IN  0xca3 (status) -> 0x40  [IBF clear after 1 poll(s); state=READ]
+IN  0xca3 (status) -> 0x41  [OBF set after 178 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x1c
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x01
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x01
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x01
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x02
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x8f
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x3f
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x0a
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x16
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x0d
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x41  [IBF clear after 1 poll(s); state=READ OBF]
+IN  0xca3 (status) -> 0x41  [OBF set after 1 poll(s); state=READ]
+IN  0xca2 (data)   -> 0x00
+OUT 0xca2 (data)   <- 0x68
+IN  0xca3 (status) -> 0x01  [IBF clear after 1 poll(s); state=IDLE OBF]
+IN  0xca3 (status) -> 0x01  [OBF set after 1 poll(s); state=IDLE]
+IN  0xca2 (data)   -> 0x00
+--- KCS transaction: response 1c 01 00 01 01 00 00 02 8f 3f 0a 00 16 0d 00 00 00 00 ---
