@@ -20,12 +20,17 @@ DATASHEETS = [
     # Note: Aspeed datasheets are typically NDA-only. The verical.com copy
     # may be slow; Wayback Machine is a reliable fallback.
     (
-        "AST2050_AST1100_Datasheet.pdf",
+        "AST2050_AST1100_A3_Datasheet_V1.02.pdf",
         [
             "https://www.verical.com/datasheet/aspeed-technology-inc-interface-misc-ast2050a3-gp-4078885.pdf",
-            "https://web.archive.org/web/2024/https://www.verical.com/datasheet/aspeed-technology-inc-interface-misc-ast2050a3-gp-4078885.pdf",
+            "https://web.archive.org/web/2id_/https://www.verical.com/datasheet/aspeed-technology-inc-interface-misc-ast2050a3-gp-4078885.pdf",
         ],
-        "Aspeed AST2050/AST1100 - BMC SoC (ARM926EJ-S @ 266 MHz)",
+        "Aspeed AST2050/AST1100 A3 Datasheet V1.02 (Sep 2008) - BMC SoC (ARM926EJ-S @ 266 MHz)",
+    ),
+    (
+        "AST2050_AST1100_A3_Datasheet_V1.05.pdf",
+        ["https://raw.githubusercontent.com/erik-smit/oohhh-what-does-this-ipmi-doooo-no-deedee-nooooo/master/1-discovering/beetje-poepe-daan/ASPEED/AST2050%20iRMC%20A3%20Datasheet%20(1.05).pdf"],
+        "Aspeed AST2050/AST1100 A3 Datasheet V1.05 (May 2010) - newer revision of the same datasheet",
     ),
 
     # === Temperature Sensors ===
@@ -122,8 +127,11 @@ DATASHEETS = [
     ),
     (
         "W25X64_Datasheet.pdf",
-        ["https://www.winbond.com/productResource-files/DA05-0006.pdf"],
-        "W25X64 - 64Mbit SPI Flash with Dual Output (Winbond)",
+        [
+            "https://media.digikey.com/pdf/data%20sheets/winbond%20pdfs/w25x16,16a,32,64.pdf",
+            "https://web.archive.org/web/2id_/https://media.digikey.com/pdf/data%20sheets/winbond%20pdfs/w25x16,16a,32,64.pdf",
+        ],
+        "W25X64 - 64Mbit SPI NOR Flash, Dual Output (Winbond) - full datasheet (W25X16/16A/32/64, Rev I, 50pp)",
     ),
 
     # === PCIe Switches ===

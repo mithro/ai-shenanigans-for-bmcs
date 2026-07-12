@@ -1,0 +1,20 @@
+Bus 001 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+Bus 001 Device 002: ID 04b3:3016 IBM Corp. UltraNav Keyboard Hub
+Bus 001 Device 003: ID 04b3:3018 IBM Corp. UltraNav Keyboard
+Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 004 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+Bus 005 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+Bus 006 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+Bus 007 Device 001: ID 1d6b:0001 Linux Foundation 1.1 root hub
+===== lsusb -t =====
+/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/3p, 12M
+    |__ Port 002: Dev 002, If 0, Class=Hub, Driver=hub/4p, 12M
+        |__ Port 003: Dev 003, If 0, Class=Human Interface Device, Driver=usbhid, 1.5M
+        |__ Port 003: Dev 003, If 1, Class=Human Interface Device, Driver=usbhid, 1.5M
+/:  Bus 002.Port 001: Dev 001, Class=root_hub, Driver=ehci-pci/6p, 480M
+/:  Bus 003.Port 001: Dev 001, Class=root_hub, Driver=ehci-pci/6p, 480M
+/:  Bus 004.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 005.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 006.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/3p, 12M
+/:  Bus 007.Port 001: Dev 001, Class=root_hub, Driver=ohci-pci/2p, 12M

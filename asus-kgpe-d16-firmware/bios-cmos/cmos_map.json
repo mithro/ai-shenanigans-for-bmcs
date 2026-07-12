@@ -1,0 +1,361 @@
+{
+  "board": "ASUS KGP(M)E-D16",
+  "bios": "AMI95 v3309 (AMIBIOS8)",
+  "source": "static parse of module 1B (amibody_1b.rom), handles cross-validated by AMIBCP 3.51",
+  "cmos_access": "/dev/nvram (char 10,144) or I/O ports 70h/71h; index = byte & 0x7F (bit7 unused/NMI)",
+  "checksum": {
+    "algo": "AMIBIOS 16-bit sum (range+store UNVERIFIED - confirm by diff)",
+    "typical_range": "0x10..0x2D",
+    "typical_store": "0x2E-0x2F"
+  },
+  "confidence": "cmos_byte values are byte-index-verified (all 0x00-0x7F, LAN1/LAN2 match); exact BIT within a byte and the value-codes need one learn-by-diff each",
+  "simple_cmos_settings": {
+    "Memory Clock Speed": {
+      "handle": "0400",
+      "cmos_byte": 108,
+      "shown": false,
+      "region_tag": "0x11",
+      "options": [
+        "400 MHz",
+        "533 MHz",
+        "667 MHz",
+        "800 MHz"
+      ],
+      "byte_owner": true,
+      "shares_byte_with": [],
+      "bits": "low-bits (verify by diff)"
+    },
+    "SATA Port1 - Port4": {
+      "handle": "006B",
+      "cmos_byte": 46,
+      "shown": true,
+      "region_tag": "0x13",
+      "options": [
+        "IDE",
+        "RAID",
+        "AHCI"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "SATA-IDE Ports Auto Clk Ctrl",
+        "Sata-AHCI Ports Auto Clk Ctrl"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "ACPI 2.0 Support": {
+      "handle": "025B",
+      "cmos_byte": 58,
+      "shown": true,
+      "region_tag": "0x15",
+      "options": [
+        "ACPI v1.0",
+        "ACPI v2.0",
+        "ACPI v3.0"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "Suspend Mode",
+        "ACPI APIC support",
+        "BIOS-->AML ACPI table",
+        "Headless mode"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Suspend Mode": {
+      "handle": "03A5",
+      "cmos_byte": 58,
+      "shown": true,
+      "region_tag": "0x15",
+      "options": [
+        "S1 (POS) only",
+        "S3 only",
+        "Auto"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "ACPI 2.0 Support",
+        "ACPI APIC support",
+        "BIOS-->AML ACPI table",
+        "Headless mode"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "BMC Watch Dog Time Out": {
+      "handle": "0450",
+      "cmos_byte": 35,
+      "shown": false,
+      "region_tag": "0x0E",
+      "options": [
+        "5 Min",
+        "1 Min",
+        "30 Sec",
+        "10 Sec"
+      ],
+      "byte_owner": true,
+      "shares_byte_with": [],
+      "bits": "low-bits (verify by diff)"
+    },
+    "USB Mass Storage Reset Delay": {
+      "handle": "0460",
+      "cmos_byte": 19,
+      "shown": true,
+      "region_tag": "0x0E",
+      "options": [
+        "10 Sec",
+        "20 Sec",
+        "30 Sec",
+        "40 Sec"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "Port 64/60 Emulation",
+        "Legacy USB1.1 HC Support"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Onboard LAN1 Boot": {
+      "handle": "046A",
+      "cmos_byte": 86,
+      "shown": true,
+      "region_tag": "0x16",
+      "options": [
+        "Disabled",
+        "PXE",
+        "iSCSI"
+      ],
+      "byte_owner": true,
+      "shares_byte_with": [],
+      "bits": "low-bits (verify by diff)"
+    },
+    "Onboard LAN2 Boot": {
+      "handle": "046B",
+      "cmos_byte": 100,
+      "shown": true,
+      "region_tag": "0x16",
+      "options": [
+        "Disabled",
+        "PXE",
+        "iSCSI"
+      ],
+      "byte_owner": true,
+      "shares_byte_with": [],
+      "bits": "low-bits (verify by diff)"
+    },
+    "SATA-IDE Ports Auto Clk Ctrl": {
+      "handle": "04A3",
+      "cmos_byte": 46,
+      "shown": true,
+      "region_tag": "0x13",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "SATA Port1 - Port4",
+        "Sata-AHCI Ports Auto Clk Ctrl"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Sata-AHCI Ports Auto Clk Ctrl": {
+      "handle": "04A5",
+      "cmos_byte": 46,
+      "shown": true,
+      "region_tag": "0x13",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "SATA Port1 - Port4",
+        "SATA-IDE Ports Auto Clk Ctrl"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "ACPI APIC support": {
+      "handle": "039D",
+      "cmos_byte": 58,
+      "shown": true,
+      "region_tag": "0x15",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "ACPI 2.0 Support",
+        "Suspend Mode",
+        "BIOS-->AML ACPI table",
+        "Headless mode"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "BIOS-->AML ACPI table": {
+      "handle": "039F",
+      "cmos_byte": 58,
+      "shown": true,
+      "region_tag": "0x15",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "ACPI 2.0 Support",
+        "Suspend Mode",
+        "ACPI APIC support",
+        "Headless mode"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Headless mode": {
+      "handle": "039B",
+      "cmos_byte": 58,
+      "shown": true,
+      "region_tag": "0x15",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "ACPI 2.0 Support",
+        "Suspend Mode",
+        "ACPI APIC support",
+        "BIOS-->AML ACPI table"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Port 64/60 Emulation": {
+      "handle": "04DC",
+      "cmos_byte": 19,
+      "shown": true,
+      "region_tag": "0x0E",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "USB Mass Storage Reset Delay",
+        "Legacy USB1.1 HC Support"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    },
+    "Legacy USB1.1 HC Support": {
+      "handle": "04E4",
+      "cmos_byte": 19,
+      "shown": true,
+      "region_tag": "0x0E",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "byte_owner": false,
+      "shares_byte_with": [
+        "USB Mass Storage Reset Delay",
+        "Port 64/60 Emulation"
+      ],
+      "bits": "SHARED byte - learn bits by diff"
+    }
+  },
+  "extended_settings_of_interest": {
+    "Remote Access": {
+      "handle": "03B2",
+      "page": "Server/Remote Access",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Serial port number": {
+      "handle": "03B6",
+      "page": "Server/Remote Access",
+      "options": [
+        "COM1",
+        "COM2"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Serial Port Mode": {
+      "handle": "03BA",
+      "page": "Server/Remote Access",
+      "options": [
+        "115200 8,n,1",
+        "57600 8,n,1",
+        "38400 8,n,1",
+        "19200 8,n,1"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Flow Control": {
+      "handle": "0458",
+      "page": "Server/Remote Access",
+      "options": [
+        "Disabled",
+        "Enabled"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Redirection After BIOS POST": {
+      "handle": "0456",
+      "page": "Server/Remote Access",
+      "options": [
+        "Disabled",
+        "Boot Loader",
+        "Always"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Terminal Type": {
+      "handle": "03B4",
+      "page": "Server/Remote Access",
+      "options": [
+        "VT100",
+        "VT100+",
+        "VT-UTF8",
+        "ANSI"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Serial Port1 Address": {
+      "handle": "01C9",
+      "page": "Advanced/Onboard Devices",
+      "options": [
+        "Disabled",
+        "3F8/IRQ4",
+        "2F8/IRQ3",
+        "..."
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    },
+    "Restore on AC Power Loss": {
+      "handle": "0466",
+      "page": "Power",
+      "options": [
+        "Power On",
+        "Power Off",
+        "Last State"
+      ],
+      "ext_func": true,
+      "cmos_byte": null,
+      "note": "extended-handler setting; CMOS byte+bits via learn-by-diff"
+    }
+  }
+}

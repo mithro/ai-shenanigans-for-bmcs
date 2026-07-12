@@ -12,6 +12,10 @@
 	path = hpe-ipdu-firmware/uboot-port/qemu/qemu-10.0.7
 	url = https://github.com/mithro/qemu.git
 	branch = ns9360-machine
+[submodule "asus-kgpe-d16-firmware/culvert"]
+	path = asus-kgpe-d16-firmware/culvert
+	url = https://github.com/mithro/culvert.git
+	branch = ast2050-support
 [submodule "asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu"]
 	path = asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu
 	url = https://github.com/mithro/qemu.git

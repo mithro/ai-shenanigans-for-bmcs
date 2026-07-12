@@ -50,7 +50,8 @@ AST2050 BMC
 
 | Datasheet | Part | Qty | Manufacturer | Description |
 |-----------|------|-----|-------------|-------------|
-| [AST2050_AST1100_Datasheet.pdf](AST2050_AST1100_Datasheet.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz integrated BMC SoC with VGA, I2C, GPIO, Ethernet, USB, SPI |
+| [AST2050_AST1100_A3_Datasheet_V1.02.pdf](AST2050_AST1100_A3_Datasheet_V1.02.pdf) | AST2050 / AST1100 | 1 | Aspeed | ARM926EJ-S @ 266 MHz integrated BMC SoC with VGA, I2C, GPIO, Ethernet, USB, SPI. A3 Datasheet V1.02 (Sep 2008). |
+| [AST2050_AST1100_A3_Datasheet_V1.05.pdf](AST2050_AST1100_A3_Datasheet_V1.05.pdf) | AST2050 / AST1100 | — | Aspeed | Same SoC — A3 Datasheet V1.05 (May 2010), newer revision. |
 
 ### Temperature & Fan Control
 
@@ -106,7 +107,7 @@ actual part varies by board revision — all are 64 or 128 Mbit SPI NOR.
 | [M25P128_Datasheet.pdf](M25P128_Datasheet.pdf) | M25P128 (STM25P128) | STMicro / Micron | 128 Mbit | 50 MHz |
 | [S25FL128P_Datasheet.pdf](S25FL128P_Datasheet.pdf) | S25FL128P | Spansion / Infineon | 128 Mbit | 104 MHz |
 | [MX25L12835F_Datasheet.pdf](MX25L12835F_Datasheet.pdf) | MX25L12835F (MX25L128D) | Macronix | 128 Mbit | 133 MHz |
-| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 | Winbond | 64 Mbit | 104 MHz |
+| [W25X64_Datasheet.pdf](W25X64_Datasheet.pdf) | W25X64 (W25X16/16A/32/64 Rev I) | Winbond | 64 Mbit | 104 MHz |
 
 ### PCIe Switches
 

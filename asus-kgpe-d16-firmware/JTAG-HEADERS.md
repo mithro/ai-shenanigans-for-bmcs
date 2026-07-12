@@ -53,7 +53,9 @@ active signals).
 > **Wiring it to a Raspberry Pi 4B:** for the GPIO-to-pin mapping, the
 > Raptor-verified OpenOCD configs (`openocd/`), and aligned pinout diagrams,
 > see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md) and
-> [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md).
+> [`HEADER-PINOUTS.md`](HEADER-PINOUTS.md). To **drive the core once wired**
+> (halt, step, registers, memory, GDB — verified on real hardware), see
+> [`JTAG-USAGE-GUIDE.md`](JTAG-USAGE-GUIDE.md).
 
 ---
 
