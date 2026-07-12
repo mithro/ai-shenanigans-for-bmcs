@@ -49,12 +49,11 @@ Changes on this branch:
 
 - **M1 (QEMU-achievable):** kernel creates `/dev/ipmi-kcs3`, `kcs_bmc_aspeed` binds
   the G3 LPC model, channel enabled — demonstrated in QEMU at 64 MB.
-- **M2 (host peer — honest boundary):** a full host->BMC KCS *transaction* needs
-  something driving the LPC I/O-port (host) side. The `kgpe-d16-bmc` machine has no
-  host CPU and the LPC model is a pure register file (no OBF/IBF handshake), so a
-  real round-trip cannot be carried in QEMU today. Requires either extending
-  `aspeed_lpc_ast2050.c` with the KCS state machine + a host back-channel, or a
-  paired host-CPU QEMU / real silicon (where the powered host is the KCS peer).
+- **M2 (full round-trip):** DONE (2026-07-12, branch `claude/bmc-kcs-m2`). Extended
+  `aspeed_lpc_ast2050.c` with the faithful KCS OBF/IBF/C-D state machine + the
+  `host-kcs<N>-{data,cmdsts}` QOM host-drive back-channel, and drove a genuine host
+  Get Device ID answered by `ipmid` over `kcsbridged`. See `F5B-HOST-KCS-STATUS.md`
+  §5.
 
 ## Status log
 
@@ -65,7 +64,15 @@ Changes on this branch:
   model serviced the driver (HICR0.LPC3E=0x80, HICR4.KCSENBL=0x04, LADR3=0x0CA2,
   STR3 RO=0) + a BMC-side ODR3 poke (wrote 0x5a, read back 0x5a). Evidence in
   `evidence/host-kcs/host-kcs.txt`. Full write-up: `F5B-HOST-KCS-STATUS.md`.
-- **Daemon layer:** F0 image ships `btbridged` (BT), not `kcsbridge` — documented as
-  an F-IMG2 one-knob rebuild (BT is unfaithful on the G3, see status doc §1/§4).
-- **M2 / real-HW:** honestly bounded (no host peer in the BMC-only machine); real
-  host-side `ipmitool` deferred to F-HWPASS with the host powered.
+- **Daemon layer:** the current image (F-HWPASS merge) ships `kcsbridge`
+  (`phosphor-ipmi-kcs`, BT removed) — the faithful choice on the G3 (see status
+  doc §1/§4); M2 boots exactly this image.
+- **M2 DONE (QEMU, 64 MB, PASS):** `f5b-kcs-m2-transaction-test.py` — faithful KCS
+  OBF/IBF/C-D state machine (`aspeed_lpc_ast2050.c`, datasheet p.313-316) + honest
+  QOM host-drive back-channel; host-side Get Device ID (netfn 0x06 cmd 0x01) went
+  through `model → kcs_bmc_aspeed → kcsbridged → ipmid` and `ipmid` returned a
+  well-formed reply (netfn 0x07, cmd 0x01, cc 0x00). Model test:
+  `qemu-model/integration/test_lpc.py::TestKCS3HostHandshake`. QEMU submodule
+  branch `claude/kcs-m2` @ mithro/qemu.
+- **Real-HW:** the same BMC-side path runs on silicon; the real host CPU is the KCS
+  peer there. Deferred to F-HWPASS with the host powered (rig owned by F-HWPASS).
