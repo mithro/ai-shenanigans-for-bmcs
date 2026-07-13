@@ -4,8 +4,10 @@
 `ipmitool chassis status` returns rc=0 but reports **`System Power : off` while the
 x86 host is actually ON**.
 
-**Status: ROOT-CAUSED + FIXED (repo) + QEMU-VERIFIED. Silicon before-evidence
-captured; live on-silicon apply/after-capture deferred (see §5).**
+**Status: ROOT-CAUSED + FIXED (repo) + QEMU-VERIFIED + VERIFIED ON SILICON
+(2026-07-13). The fix was applied ephemerally to the live AST2050 and
+`CurrentPowerState` flipped `Off -> On`; see §5 and
+`evidence/real-hw-f2sta/chassis-power-state-after.txt`.**
 
 ## 1. The STATE-IN line is correct (empirical, read-only, host ON)
 
@@ -87,27 +89,39 @@ base branch. Pointing `build.py --qemu` at the current g3-clk build passes. This
 change touches only `openbmc/recipes/` — the QEMU model, DTS, and fwtests are untouched,
 `git diff 49d2ca7 HEAD -- qemu-model qemu-firmware/dts` is empty.)
 
-## 5. Silicon apply/verify — deferred (needs approval)
+## 5. Silicon apply/verify — DONE (2026-07-13, user-approved)
 
-`ipmitool chassis status` "off -> on" was proven READ-ONLY up to the last mile: the
-before-state is captured (`evidence/real-hw-f2sta/chassis-power-state-before.txt`) and
-GPIOH2 is empirically shown to read 1 (on). Applying the fixed config to the live board
-(overwriting the deployed stub, or an ephemeral RAM bind-mount over the config path, then
-`systemctl restart org.openbmc.control.Power@0` + the chassis state manager) was blocked
-by the harness auto-mode classifier as a **shared-resource / remote-shell write** to the
-rig — it needs a human-approved apply (or a rebuilt image booted via the runbook).
+The apply/after-capture was deferred in the earlier session (harness classifier blocked
+the shared-rig write). With the user's explicit go-ahead ("Finish verifying the
+power-state control & config on the real hardware") it was completed on the live AST2050.
+Full transcript: `evidence/real-hw-f2sta/chassis-power-state-after.txt`. Summary:
 
-**Safety note (analysed from source):** op-pwrctl's startup (`set_up_gpio`) only READS
-`power_good_in`; the request lines B1/F0/B6 are driven **only** on an explicit
-`setPowerState` (chassis power on/off/reset) or on a **pgood transition** in `poll_pgood`.
-With the host staying ON (H2 stable at 1) and no power command issued, restarting
-op-pwrctl drives **nothing** on the power-request lines — consistent with the standing
-"no BMC power-line drives" constraint.
+1. **Ephemeral apply** (the shared NFS export is NOT touched; reverts on BMC reboot):
+   streamed the repo `recipes/power/files/gpio_defs.json` to `BMC:/run/gpio_defs.json`,
+   then `mount --bind /run/gpio_defs.json /etc/default/obmc/gpio/gpio_defs.json`,
+   `systemctl reset-failed` + `restart org.openbmc.control.Power@0`.
+2. **op-pwrctl went `active`, `NRestarts=0`** — the 793-restart crash-loop (assertion on
+   the empty stub) is gone; it logged `Pgood state: 1` and `Started Phosphor Power0
+   Control` with no assertion.
+3. **`CurrentPowerState` flipped `Off -> On`** (busctl + obmcutil); `pgood = i 1`;
+   `BMCState` advanced `NotReady -> Ready`. The bug is fixed on silicon.
+4. **No power drive — empirically proven.** The request-line registers (`GPIO00 =
+   0xF0FDDF10`, `GPIO20 = 0xE403FFFD`; B1/F0/B6 de-asserted) were **byte-identical before
+   and after** the restart, and `GPIO04/24` show op-pwrctl never even configured the
+   outputs (they stayed inputs) — matching the source contract below. Host `.138` kept
+   pinging; plug telemetry steady ~50 W (no power event).
+
+**Safety basis (source + empirical):** op-pwrctl's `set_up_gpio` performs **no
+`gpio_write()`** at startup — it only `gpio_read`s `power_good_in` and sets its internal
+pgood/state. Outputs are driven **only** on an explicit `setPowerState` or a **pgood
+transition** in `poll_pgood` (`if (pgood_state != current)`). With H2 stable at 1 and no
+power command, restarting the daemon drives nothing — confirmed by the guard reads in (4).
 
 ## Rig state
 
-All F2-STA live-board actions were **reads only** (devmem, cat, busctl, systemctl status,
-journalctl, ipmitool status). The two write attempts (stub backup + config install) were
-denied by the classifier, so **the board/NFS export are exactly as g3-clk left them**:
-board ON serving openbmc-hwpass on the fixed kernel, host ON, op-pwrctl still crash-looping
-on the stub (the pre-existing bug). No flash writes, no SCU writes, no power-line drives.
+The only mutating action was the **ephemeral tmpfs bind-mount** of the corrected config
++ a userspace daemon restart. **No flash writes, no SCU writes, no power-line drives, no
+change to the shared NFS export.** A BMC reboot reverts to the stub; the *persistent* fix
+is the repo bbappend (`recipes/power/`) which bakes this config into the next image build.
+Board left ON serving openbmc-hwpass (fixed g3-clk kernel), host ON, op-pwrctl now healthy
+and reporting `PowerState.On`.

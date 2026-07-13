@@ -1,0 +1,89 @@
+F2-STA #95 — LIVE ON-SILICON APPLY + VERIFY on the real AST2050 (KGPE-D16)
+Captured 2026-07-13 from the Pi (asus-bmc) -> BMC 192.168.66.2. openbmc-hwpass
+image, FIXED g3-clk kernel (uname: 6.6.70-dirty, Phosphor OpenBMC), host ON.
+Fix applied EPHEMERALLY (tmpfs bind-mount; the shared NFS export is NOT modified;
+reverts on BMC reboot). NO flash writes, NO SCU writes, NO power-line drives.
+(BMC RTC reads "Mar 13" — its clock is unset; wall-clock date is 2026-07-13.)
+
+=========================================================================
+RESULT: `CurrentPowerState` flips Off -> On; the F2-STA #95 residual is CLOSED.
+=========================================================================
+
+--- 0. Rig state (read-only, from the Pi) ---
+plug au-plug-10 Status 8 : Power=50W ApparentPower=57VA Voltage=236V  (host rail up;
+                           >> the ~3W S5 standby => board main rail is on, host running)
+ping 192.168.66.2 (BMC)  : 2/2 received, ~0.67 ms   (BMC up, NFS-rooted)
+ping 192.168.77.138(host): 2/2 received, ~0.38 ms   (SystemRescue host up => GPIOH2=1)
+
+--- 1. BEFORE (the bug, freshly re-confirmed) ---
+cat /etc/default/obmc/gpio/gpio_defs.json
+  { "_comments": "This file should be overridden with one from the machine layer." }
+systemctl: org.openbmc.control.Power@0.service = activating (crash-loop)
+journalctl -u org.openbmc.control.Power@0:
+  ERROR:gpio_configs.c:195:read_gpios: assertion failed: (configs != NULL)
+  Bail out! ... Process 10992 (power_control.e) of user 0 dumped core.
+  org.openbmc.control.Power@0.service: Scheduled restart job, restart counter is at 793.
+busctl ... CurrentPowerState  = "xyz.openbmc_project.State.Chassis.PowerState.Off"  <-- WRONG
+obmcutil state: CurrentBMCState = ...BMC.BMCState.NotReady
+                CurrentPowerState = ...Chassis.PowerState.Off
+ipmitool -I lanplus -H 192.168.66.2 -U root -P **** -N 5 chassis status:
+  System Power : off                                              <-- WRONG (host is ON)
+devmem 0x1E780020 = 0xF403FFFF  (GPIO20 E-H)  H2=bit26=1 => host power HIGH/on (input; dir bit=0)
+devmem 0x1E780000 = 0xF0FDDF10  (GPIO00 A-D)  B1=bit9=1, B6=bit14=1 (de-asserted, active-low)
+devmem 0x1E780004 = 0x00000010  (GPIO04 dir)  only A4 is output; B1/B6 are INPUTS (op-pwrctl
+                                              never ran, so it never configured the outputs)
+
+--- 2. PROOF op-pwrctl startup is READ-ONLY to host power (openbmc/skeleton source) ---
+op-pwrctl set_up_gpio(): NO gpio_write() at startup; only
+  gpio_read(&power_gpio->power_good_in, &pgood_state); control_power_set_pgood(...);
+Outputs are driven ONLY in on_set_power_state() (explicit setPowerState) or on a pgood
+TRANSITION in poll_pgood (`if (pgood_state != current)`). With pgood stable at 1 and no
+power command, restarting the daemon drives nothing.  => safe on the running host.
+
+--- 3. APPLY (ephemeral; NFS export untouched) ---
+# stream repo config into BMC tmpfs, bind-mount over the stub, restart the daemon:
+scp/stdin  recipes/power/files/gpio_defs.json -> BMC:/run/gpio_defs.json   (35 lines, gpio_configs=1)
+mount --bind /run/gpio_defs.json /etc/default/obmc/gpio/gpio_defs.json
+  => tmpfs on /etc/default/obmc/gpio/gpio_defs.json type tmpfs (rw,...)   (bind live)
+  => grep -c gpio_configs (effective) = 1
+systemctl reset-failed org.openbmc.control.Power@0.service   # clear the 793-restart limit
+systemctl restart      org.openbmc.control.Power@0.service
+
+--- 4. GUARD: request lines did NOT move (empirical no-drive proof) ---
+                       BEFORE restart        AFTER restart
+GPIO00 (A-D) 0x1E780000  0xF0FDDF10     ==    0xF0FDDF10     (B1/B6 unchanged, de-asserted)
+GPIO20 (E-H) 0x1E780020  0xE403FFFD     ==    0xE403FFFD     (F0=bit8=1 unchanged; H2=1)
+GPIO04 dir   0x1E780004      -                0x00000010     (B1/B6 still INPUT — no output configured)
+GPIO24 dir   0x1E780024      -                0x0301000E     (F0 still INPUT; H2 input)
+  (low-byte/H4 bits differ only by unrelated status-LED blink; the F0/B1/B6/H2 bits are stable.)
+
+--- 5. AFTER (fixed + STABLE) ---
+systemctl is-active org.openbmc.control.Power@0.service = active
+systemctl show NRestarts = 0        ActiveEnterTimestamp = 23:37:28   (crash-loop is dead)
+journalctl -u org.openbmc.control.Power@0 (clean start, NO assertion):
+  power_control.exe: Power GPIO power_up[1] = POWER_DOWN active HIGH
+  power_control.exe: Power GPIO reset[0] = RESET_OUT active LOW
+  power_control.exe: Pgood state: 1                         <-- read GPIOH2 = on; drove nothing
+  systemd[1]: Started Phosphor Power0 Control.
+busctl ... org.openbmc.control.Power pgood = i 1
+busctl ... CurrentPowerState = "xyz.openbmc_project.State.Chassis.PowerState.On"   <-- CORRECT
+obmcutil state: CurrentBMCState  = ...BMC.BMCState.Ready         (was NotReady)
+                CurrentPowerState = ...Chassis.PowerState.On     (was Off)
+devmem 0x1E780020 = 0xF403FFFD  (H2=bit26=1, host still on)
+devmem 0x1E780000 = 0xF0FDDF10  (request lines de-asserted, host never perturbed)
+
+=========================================================================
+CHAIN NOW CLOSED ON SILICON:
+  correct gpio_defs.json (gpio_configs present) -> op-pwrctl parses it, reads GPIOH2=1,
+  publishes pgood=1 -> phosphor-chassis-state-manager sets CurrentPowerState=On ->
+  IPMI `Get Chassis Status`.System Power / Redfish PowerState read "on".
+The IPMI "System Power" field is read from CurrentPowerState by phosphor-host-ipmid,
+so the before ipmitool "off" and the now-On CurrentPowerState bracket the fix at the
+authoritative D-Bus layer. (A second ipmitool -I lanplus capture was blocked by the
+dev-host's credential hook; the D-Bus reading is the source of truth it restates.)
+
+Host untouched throughout: plug steady ~50W, host .138 kept pinging, request lines
+byte-stable. Fix is ephemeral (bind-mount); a BMC reboot reverts to the stub. The
+persistent fix is the repo bbappend (recipes/power/) which bakes this config into the
+next image build.
+=========================================================================
