@@ -52,6 +52,19 @@ dedicated DRAM (a real deployment) is not exposed to this. The power-control
 FIX (A4 reclaim + pulse) is independent of it and is proven above.
 =========================================================================
 
-The fix is implemented in kgpe-power.sh (setup() reclaims A4 + drives it high
-before every power op) and is wired into the OpenBMC image via the power recipe.
+--- eth0-SAFETY of the A4 reclaim (re-established BMC, 2026-07-13) ---
+The BMC was re-booted (P2A/NFS), `kgpe-power.sh a4` reclaimed A4 (SCU74
+0x4204D000 -> 0x4004D000, gpio-516 "bmc-ctl-lockout-n" out hi), and eth0 was
+monitored: **0/24 pings failed over ~2 min** after the SCU74[25] clear. So the A4
+reclaim does NOT disturb the BMC's NFS-root network — confirmed on silicon.
+(The BMC later hung again on its own from the shared-DRAM/host-VGA bench artifact
+noted above; that is not the power-control fix.)
+
+The fix is implemented in kgpe-power.sh (`a4` reclaims A4 + drives it high; on/off/
+reset re-assert A4 and pulse the request lines, then release B1/F0/B6 back to
+op-pwrctl) and is wired into the OpenBMC image via recipes/power/: a
+kgpe-power-gpio-init oneshot (runs `kgpe-power.sh init`=`a4` before any power
+transition) + obmc-power-{start,stop}@ drop-ins that stop op-pwrctl (to free the
+request lines), pulse via kgpe-power.sh, and restart op-pwrctl (pgood read). H2 is
+read via devmem (non-exclusive) so it never collides with op-pwrctl's GPIOH2 claim.
 See OPENBMC-POWER-INTEGRATION.md and recipes/power/.
