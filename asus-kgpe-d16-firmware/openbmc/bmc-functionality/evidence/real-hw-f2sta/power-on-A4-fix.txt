@@ -1,0 +1,57 @@
+F2 BMC power-ON SOLVED on the real AST2050 (KGPE-D16) — 2026-07-13
+The BMC toggled the host OFF then ON with NO AC-cycle, staying alive throughout
+the power-control operation. Root cause + fix below. Full session in this dir.
+
+=========================================================================
+ROOT CAUSE: the board only grants the BMC power-ON control when the
+BMC-control-lockout line A4 (GPIOA4 / ASUS_BMC_CTL_LOCKOUT_N) is a real GPIO
+output driven HIGH (=1, "BMC in control"). A4's pad defaults to the PHYLINK
+alt-function (SCU74[25]=1), so a stock image left A4 UN-controllable -> the board
+never handed the BMC power-on authority -> CTL_REQ_POWERUP_N (GPIOB1) was
+silently ignored (PSU stayed at standby), while force-OFF (GPIOF0) worked
+unconditionally. B1/F0/B6 were already GPIO-mode (SCU74[2]=0, SCU80[14]=0) — the
+gate was A4 alone. Raptor never hardware-validated power-on (its
+asus_power_on_board() wrapper is also buggy), so this A4 requirement was
+undocumented.
+=========================================================================
+
+FIX (hardware-verified):
+  1. Unlock SCU:            devmem 0x1e6e2000 32 0x1688A8A8
+  2. Reclaim A4 -> GPIO:    SCU74 (0x1e6e2074) &= ~(1<<25)      # clear PHYLINK
+  3. Drive A4 = 1:          gpioA4 out, value 1                 # BMC in control
+  4. Raptor pulse ON:       F0=1 ; B6=0 + B1=0 ; sleep 1 ; B6=1 + B1=1
+  (OFF is unchanged: F0 pulse low 1s; reset untouched.)
+eth0 is UNAFFECTED by the SCU74[25] clear — the ftgmac100 polls the RTL8201CP
+over MDIO (irq=POLL), not the PHYLINK pin.
+
+--- TRANSCRIPT (detached /run/pon-test.sh on the live BMC) ---
+=== unlock SCU + reclaim A4 (clear SCU74[25]) ===
+SCU74 was=0x4204D000 now=0x4004D000        (bit25 -> 0, A4 now GPIO)
+A4(lockout)=1  GPIO00=0xF0FF8E30           (A4 driven high = BMC in control)
+=== Raptor power-on: F0=1, RESET=0+POWERUP=0, 1s, RESET=1+POWERUP=1 ===
+H2=1  GPIO20=0xC403FFFF  GPIO00=0xF0FDFF30 (H2 bit26=1 => board power ON)
+DONE
+
+--- GROUND-TRUTH OBSERVATION (plug meter + pings, from the Pi) ---
+before (host off) : plug Power=3W (standby) ; GPIOH2=0 ; BMC .66.2 pinging
+after power-on    : plug Power=103W (active POST) -> 74W -> 46W (host idle)
+host .138         : HOST-UP after 14 tries (~56s) — PXE-booted SystemRescue
+BMC .66.2         : PINGING THE WHOLE TIME ("BMC still alive: YES", 0.714ms)
+  => the BMC drove the host from OFF to ON, no AC-cycle, staying alive.
+
+The earlier BMC-OFF (F0 pulse) was likewise proven: plug 46W->3W, GPIOH2 1->0,
+BMC alive. So the FULL on<->off toggle works from the BMC, standby preserved.
+
+=========================================================================
+KNOWN RIG CAVEAT (NOT a power-control problem): this BMC is booted into volatile
+DRAM over the P2A back-door (no BMC boot flash on the bench), and it SHARES DRAM
+with the x86 host's AST2050 VGA framebuffer. When the host's OS (SystemRescue)
+came fully up and drove the VGA, the DRAM-resident OpenBMC was corrupted and hung
+(eth0 + serial both went quiet ~1 min after power-on). A flash-resident BMC with
+dedicated DRAM (a real deployment) is not exposed to this. The power-control
+FIX (A4 reclaim + pulse) is independent of it and is proven above.
+=========================================================================
+
+The fix is implemented in kgpe-power.sh (setup() reclaims A4 + drives it high
+before every power op) and is wired into the OpenBMC image via the power recipe.
+See OPENBMC-POWER-INTEGRATION.md and recipes/power/.
