@@ -46,6 +46,28 @@
 		reg = <0x40000000 0x4000000>;
 	};
 
+	/*
+	 * VGA/graphics aperture (F8 / VGA-corruption fix, hardware-verified
+	 * 2026-07-13). On the AST2050 the BMC and the host's onboard VGA are the
+	 * SAME silicon sharing this one DRAM: the host's video adapter frame-buffers
+	 * out of the top of BMC DRAM. Size = SCU70[3:2] strap (mirrored MCR04[5:4]),
+	 * hardware-verified 8 MB here (MCR04=0x585, bits[5:4]=00). This node was
+	 * MISSING from the real-HW DTB build, so the BMC kernel allocated into the
+	 * framebuffer region and hung when the host wrote the VGA (BIOS POST / the
+	 * host `ast` DRM driver). no-map fences the BMC kernel out; the video engine
+	 * can still ioremap it to capture. Same pattern as the C410X vga_memory node.
+	 */
+	reserved-memory {
+		#address-cells = <0x01>;
+		#size-cells = <0x01>;
+		ranges;
+
+		vga_memory: region@43800000 {
+			no-map;
+			reg = <0x43800000 0x800000>;	/* top 8 MB */
+		};
+	};
+
 	ahb {
 		compatible = "simple-bus";
 		#address-cells = <0x01>;
