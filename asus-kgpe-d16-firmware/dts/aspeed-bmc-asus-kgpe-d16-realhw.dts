@@ -1027,13 +1027,20 @@
 				reg = <0x1e720000 0x8000>;
 			};
 
+			/*
+			 * AST2050 video/capture engine (KVM screen capture, F8). Enabled
+			 * so the aspeed-video V4L2 driver binds and exposes /dev/video0 to
+			 * capture the AST2050 VGA framebuffer (the host's BIOS/boot screen;
+			 * the OS runs on a discrete GPU so the AST2050 fb retains the BIOS
+			 * content). Was "disabled" here (matching the QEMU DTS's &video okay).
+			 */
 			video@1e700000 {
 				compatible = "aspeed,ast2400-video-engine";
 				reg = <0x1e700000 0x1000>;
 				clocks = <0x02 0x03 0x02 0x00>;
 				clock-names = "vclk", "eclk";
 				interrupts = <0x07>;
-				status = "disabled";
+				status = "okay";
 			};
 
 			sd-controller@1e740000 {
