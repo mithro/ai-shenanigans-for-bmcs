@@ -1,0 +1,87 @@
+F2 power-CONTROL DRIVE demo on the real AST2050 (KGPE-D16) — 2026-07-13
+User-authorized live off->on cycle. Driven from the BMC via op-pwrctl
+(org.openbmc.control.Power setPowerState), the tested OpenBMC path — NOT manual
+SCU/flash-pin writes. Observed at every step via plug meter + GPIOH2 + pings.
+
+Result headline:
+  * BMC-driven power-OFF  : WORKS, proven on silicon (3 independent signals).
+  * BMC-driven power-ON   : does NOT complete on this image (op-pwrctl held-level
+                            reset management deadlocks; board holds the reset net
+                            low while off). Host recovered via plug AC-restore.
+  * BMC survives host-off : CONFIRMED (standby power domain).
+
+=========================================================================
+T0  baseline (host running)
+=========================================================================
+plug au-plug-10           : Power=50W ApparentPower=57VA Voltage=237V Factor=0.87
+ping host .138 / BMC .66.2 : both 0% loss
+ipmitool -I lanplus chassis status : System Power : on   (front-end; -H hook fixed)
+busctl org.openbmc.control.Power pgood = 1 ; obmcutil CurrentPowerState = ...On
+GPIO20 0x1E780020 = 0xF403FFFD  (H2=bit26=1 host power sense HIGH)
+
+=========================================================================
+T1  DRIVE OFF  ->  busctl setPowerState i 0   (op-pwrctl)
+=========================================================================
+op-pwrctl journal:
+  PowerControl: setting power up POWER_UP   to 1     (B1 de-asserted)
+  PowerControl: setting power up POWER_DOWN to 0     (F0 = POWERDOWN_N ASSERTED low)
+  PowerControl: pgood: 0, setting reset RESET_OUT to 0  (B6 reset asserted on pgood drop)
+GPIO20 0xF403FFFF -> 0x8003FEFF  : H-byte F4->80 => H2(bit26)=0 (rail sense OFF);
+                                   F-byte FF->FE => F0(bit8)=0 (POWERDOWN_N low)
+GPIO24 dir 0x0301000E -> 0x0301010E : F0 became an output
+pgood = 0 ; state = 0
+
+T2  post-OFF confirmation (host is physically off):
+plug                       : Power=4W ApparentPower=14VA Factor=0.27   <-- PSU STANDBY (S5)
+ping host .138             : 100% packet loss           (host DOWN)
+ping BMC .66.2             : 0% packet loss             (BMC SURVIVED - standby power)
+  => BMC turned the host OFF for real. Three independent signals agree:
+     plug 50W->4W, host ping down, GPIOH2 1->0.
+  (IPMI/CurrentPowerState stayed "On" here: the phosphor chassis state manager does
+   NOT track op-pwrctl's live pgood 1->0 transition on this image -- a separate
+   state-manager wiring gap. op-pwrctl pgood=0 + the plug/GPIOH2 are ground truth.)
+
+=========================================================================
+T3  DRIVE ON  ->  busctl setPowerState i 1   (op-pwrctl)  -- DID NOT COMPLETE
+=========================================================================
+op-pwrctl journal:
+  PowerControl: setting power up POWER_UP   to 0     (B1 = POWERUP_N asserted low)
+  PowerControl: setting power up POWER_DOWN to 1     (F0 de-asserted, force-off released)
+  (RESET_OUT B6 stays asserted low; op-pwrctl only releases it when pgood -> 1)
+5s / 23s later: GPIO20 = 0x8003FFFF (H2 still 0), pgood still 0, plug still 4W.
+
+ROOT CAUSE (op-pwrctl held-level vs. board pulse expectation, exactly the caution in
+OPENBMC-POWER-INTEGRATION.md):
+  - op-pwrctl asserts RESET_OUT (B6) low whenever pgood=0 and only releases it when
+    pgood transitions to 1 -> chicken-and-egg: the board will not bring its rail up
+    while held in reset, so pgood never reaches 1, so reset is never released.
+  - Attempted the hardware-faithful Raptor pulse (assert reset+power-up, 1s, RELEASE
+    reset) directly via sysfs and via devmem after stopping op-pwrctl. Finding: with
+    the host OFF the board HOLDS the reset net (CTL_REQ_RESET_N / GPIOB6) LOW -- a GPIO
+    output-high write does not stick (reads back 0; the board out-drives the BMC), and
+    releasing to input reads 0 too (no effective pull-up while off). B1 (power-up) and
+    F0 (force-off) behave normally; only B6/reset is stuck. So the BMC cannot bring the
+    board out of reset from the off state on this image.
+  => BMC-driven power-ON needs (a) a pulse-based op-pwrctl config for real silicon and
+     (b) review of the GPIOB6/WDTRST reset-line pinmux+drive on the KGPE-D16 port.
+     No SCU/flash writes were made; only the documented GPIO request lines were driven.
+
+=========================================================================
+RECOVERY (host restored) -- plug AC-restore, host BIOS = Restore-on-AC-Power-On
+=========================================================================
+Tasmota: Power off -> {"POWER":"OFF"} ; wait 9s ; Power on -> {"POWER":"ON"}
+plug after ON: 71W (Factor 1.00, active POST) -> 77W -> settles 46W idle.
+host .138: back up, 0% loss; NEW dnsmasq lease 1783920336 (> pre-cycle 1783920194)
+  and a regenerated SSH host key => a clean fresh SystemRescue PXE re-boot into RAM.
+BMC .66.2: DOWN -- the P2A/NFS-booted OpenBMC image did not survive the standby-power
+  cut (expected; it was RAM/NFS-resident, re-bootable via the documented P2A sequence).
+
+=========================================================================
+Net: the BMC CAN power the KGPE-D16 host OFF on real silicon (fully proven). Powering
+it back ON via the BMC is blocked by op-pwrctl's held-level reset handling + the board
+reset-net-held-low-while-off behaviour -- a real, documented gap (fix = pulse driver +
+reset-line review), not a faked capability. The off->on cycle itself completed (host
+went off then came back on); the ON half was via the plug's AC-restore, not the BMC.
+QEMU still demonstrates the full on/off/reset drive (the modeled latch accepts the
+held level); silicon needs the pulse fix for the ON direction.
+=========================================================================

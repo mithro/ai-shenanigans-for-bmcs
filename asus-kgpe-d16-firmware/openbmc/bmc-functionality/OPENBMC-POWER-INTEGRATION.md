@@ -131,7 +131,36 @@ Both keep the host + chassis **state managers** +
 64-MB board use the **realhw** profile (Redfish dropped, power over IPMI); the
 QEMU Redfish loop uses the **qemu** profile.
 
-## Real-hardware bring-up (deferred — rig held by another agent)
+## Real-hardware DRIVE result (2026-07-13, user-authorized live off→on)
+
+Driven on the real AST2050 via op-pwrctl (`busctl … setPowerState i 0|1`), observed
+on the plug power meter + GPIOH2 + pings. Full transcript:
+`evidence/real-hw-f2sta/chassis-power-drive.txt`.
+
+- **Power-OFF WORKS on silicon** (proven by three independent signals): `setPowerState
+  i 0` → op-pwrctl drove `POWER_DOWN`(F0)→0 → plug **50 W → 4 W** (PSU standby / S5),
+  host stopped pinging, `GPIO20` H-byte `0xF4→0x80` (**GPIOH2 1→0**). The standby-powered
+  **BMC survived** the host power-off (kept pinging) — confirming the BMC/DDR2 is on the
+  always-on rail.
+- **Power-ON does NOT complete on silicon via op-pwrctl** — the held-level caution below
+  is real. op-pwrctl asserts `RESET_OUT`(B6) low while `pgood=0` and only releases it on
+  `pgood`→1, but the board won't raise its rail while held in reset → deadlock. The
+  hardware-faithful Raptor **pulse** (assert reset+power-up, 1 s, *release reset*) can't be
+  applied either: with the host off the **board holds the reset net (GPIOB6/`CTL_REQ_RESET_N`)
+  low** — a GPIO output-high write doesn't stick (board out-drives the BMC) and input-release
+  reads 0. B1/F0 behave normally; only B6/reset is stuck. **Fix needed:** a pulse-based
+  op-pwrctl drive for real silicon **+** review of the GPIOB6/WDTRST reset-line pinmux/drive
+  on the KGPE-D16 port. Host was recovered via the plug's **Restore-on-AC-Power-On** (fresh
+  SystemRescue PXE re-boot); this also cut BMC standby, so the P2A/NFS-booted OpenBMC is gone
+  (re-bootable via the documented P2A sequence).
+- **Also observed:** phosphor `CurrentPowerState`/IPMI front-end did **not** track op-pwrctl's
+  live `pgood` 1→0 transition (stayed "On" through the off) — a separate state-manager wiring
+  gap; op-pwrctl `pgood` + plug/GPIOH2 are the ground truth.
+
+QEMU still demonstrates the full on/off/reset drive (the modeled latch accepts the held
+level); real silicon needs the pulse fix for the ON direction.
+
+## Real-hardware bring-up — the intended IPMI path
 
 On the real 64-MB board boot the **realhw** profile (bmcweb masked) and drive
 power over **IPMI**:
