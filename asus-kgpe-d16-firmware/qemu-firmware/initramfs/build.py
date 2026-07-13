@@ -127,6 +127,16 @@ def build_f8video(build: Path, src: Path) -> Path:
     return out
 
 
+def build_f8capture(build: Path, src: Path) -> Path:
+    """Cross-compile the static real-HW capture-only tool (f8capture.c): grabs
+    one JPEG frame from /dev/video0 (whatever the host is displaying on the
+    AST2050 VGA) via a bounded poll() loop and writes it to a file. Used for the
+    real-silicon BIOS-VGA capture proof in a minimal (OpenBMC-free) initramfs."""
+    out = build / "f8capture"
+    run([CC, "-static", "-O2", "-Wall", str(src), "-o", str(out)])
+    return out
+
+
 def gen_test_key(out: Path) -> str:
     """Generate a throwaway ed25519 keypair; return the public key text."""
     priv = out / "id_kgpe_d16_test"
@@ -139,7 +149,7 @@ def gen_test_key(out: Path) -> str:
 
 
 def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
-                 pubkey: str, f8video: Path):
+                 pubkey: str, f8video: Path, f8capture: Path = None):
     for d in ("bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys",
               "etc/dropbear", "tmp", "run", "var/log", "root/.ssh"):
         (rootfs / d).mkdir(parents=True, exist_ok=True)
@@ -156,6 +166,9 @@ def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
     os.chmod(rootfs / "init", 0o755)
     shutil.copy2(f8video, rootfs / "usr/bin/f8video")
     os.chmod(rootfs / "usr/bin/f8video", 0o755)
+    if f8capture is not None:
+        shutil.copy2(f8capture, rootfs / "usr/bin/f8capture")
+        os.chmod(rootfs / "usr/bin/f8capture", 0o755)
     (rootfs / "etc/passwd").write_text(
         "root:x:0:0:root:/root:/bin/sh\n")
     (rootfs / "etc/group").write_text("root:x:0:\n")
@@ -226,12 +239,15 @@ def main():
     busybox = build_busybox(args.busybox_version, build)
     dropbearmulti = build_dropbear(args.dropbear_version, build)
     f8video = build_f8video(build, here / "f8video.c")
+    f8capture = build_f8capture(build, here / "f8capture.c") \
+        if (here / "f8capture.c").exists() else None
     pubkey = gen_test_key(out)
 
     rootfs = build / "rootfs"
     if rootfs.exists():
         shutil.rmtree(rootfs)
-    build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey, f8video)
+    build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey, f8video,
+                 f8capture)
     pack(rootfs, out)
     tar_rootfs(rootfs, out)
     print("\nInitramfs artifacts in", out)

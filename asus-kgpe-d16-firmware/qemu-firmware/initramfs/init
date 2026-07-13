@@ -251,5 +251,35 @@ if grep -q f8video /proc/cmdline; then
 	echo "=== F8-VIDEO-DEMO-END ==="
 fi
 
+# --- Real-silicon BIOS/host VGA capture (only when 'f8capture' is on the cmdline) ---
+# On the real AST2050 the aspeed-video engine captures the LIVE host VGA output
+# (the host's onboard VGA IS this SoC, framebuffer in shared DRAM). A minimal
+# initramfs (no OpenBMC) keeps the box idle + memory-rich, so the capture runs
+# without the M-bus/OOM starvation full OpenBMC hits in 64 MB. Reconfigure eth0
+# for the real BMC net, grab one JPEG from /dev/video0 and emit it as base64.
+if grep -q f8capture /proc/cmdline; then
+	echo "=== F8-CAPTURE-BEGIN ==="
+	ip addr del 10.0.2.15/24 dev eth0 2>&1 || true
+	ip addr add 192.168.66.2/24 dev eth0 2>&1 || true
+	ip route add default via 192.168.66.1 2>&1 || true
+	ip addr show eth0 2>&1 | sed -n 's/.*inet \([0-9.]*\).*/eth0: \1/p'
+	dmesg | grep -iE 'aspeed.?video|video-engine|1e700000' || echo "(no aspeed-video dmesg)"
+	if [ -e /dev/video0 ]; then
+		echo "F8-CAPTURE: /dev/video0 present"
+		F8_NBUFS=2 f8capture /tmp/bios.jpg 40 || echo "F8-CAPTURE: f8capture exited $?"
+		if [ -s /tmp/bios.jpg ]; then
+			echo "F8-CAPTURE-SIZE: $(wc -c < /tmp/bios.jpg) bytes"
+			echo "F8-FRAME-BEGIN"
+			base64 /tmp/bios.jpg
+			echo "F8-FRAME-END"
+		else
+			echo "F8-CAPTURE-FAIL: no /tmp/bios.jpg produced"
+		fi
+	else
+		echo "F8-CAPTURE-FAIL: no /dev/video0"
+	fi
+	echo "=== F8-CAPTURE-END ==="
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh
