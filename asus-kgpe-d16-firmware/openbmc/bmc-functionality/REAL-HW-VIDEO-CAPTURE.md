@@ -1,13 +1,36 @@
-# Real-silicon aspeed-video capture on the AST2050 — status & the compression boundary
+# Real-silicon aspeed-video capture on the AST2050 — WORKING (full pipeline)
 
-**Date:** 2026-07-13. **Board:** ASUS KGPE-D16, Aspeed AST2050 (G3), silicon rev
+**Date:** 2026-07-14. **Board:** ASUS KGPE-D16, Aspeed AST2050 (G3), silicon rev
 SCU7C=0x00000202. **Access:** P2A boot (culvert on the PXE host via the Pi bridge)
 → Linux over the BMC UART (ttyS4). Kernel: mainline v6.6.70 + our G3 patches,
-`aspeed,ast2400-video-engine` bound to the AST2050 video engine at `0x1E700000`.
+`aspeed,ast2050-video-engine` bound to the AST2050 video engine at `0x1E700000`.
 
-This extends [F8-KVM.md](F8-KVM.md) §5 (which was **QEMU-only**) with **real-silicon
-results**: the video-capture *front-end* is proven working on the AST2050; the one
-remaining gap is precisely localized to the **JPEG compression-complete** stage.
+This extends [F8-KVM.md](F8-KVM.md) §5 (which was **QEMU-only**) to a **fully working
+real-silicon capture**: the AST2050 video engine captures a live 1024×768 frame of
+the host's VGA output, JPEG-compresses it, and the mainline `aspeed-video` V4L2
+driver dequeues it — a **real image was reconstructed and viewed**
+(`evidence/real-hw-video/captured-frame-silicon.png`: a cyan panel over a gray body,
+the host's live screen). This required an aspeed-video **G3 compression fix**
+(patch `0006`, below) that was reverse-engineered from the datasheet + the AMI
+"videocap" driver and **verified register-by-register on silicon**.
+
+## TL;DR — the fix (patch 0006)
+
+The compression engine hung because mainline programs the G3 the AST2400 way. Three
+changes (behind a new `aspeed,ast2050-video-engine` compatible / `jpeg_only`):
+1. **Select pure JPEG via `VE_COMP_CTRL[0]` (VR060[0]=1)**, not `VE_SEQ_CTRL[8]`
+   (VR004[8] is reserved-must-be-0 on the G3; mainline poked it and never set VR060[0],
+   leaving the G3 in JPEG/VQ mixed mode).
+2. **Clamp the DCT quant-table selector to 0-7** — the G3 has only 8 *internal ROM*
+   quant tables; mainline's 0-11 range selected a nonexistent table (live dump showed
+   index 11) which **wedged the compressor** (COMP_BUSY stuck). This was THE hang.
+3. Clear the G4-only HQ fields (VR060[16],[31:22]) and AUTO_COMP (VR004[5]).
+
+Result on silicon: `COMPC060=0x00083DC1`, `COMPSZ078=0x6C80` (27776-byte frame),
+`COMP_COMPLETE` fires, `/dev/video0` DQBUF returns the frame. The engine emits the
+**raw ASPEED compressed stream (no JFIF header)** — a standard JPEG is reconstructed
+by prepending the header the driver already builds (`jpeg_header + jpeg_dct[q] +
+jpeg_quant`) with the SOF0 dimensions patched to 1024×768.
 
 ## What is PROVEN on silicon
 
@@ -22,36 +45,42 @@ video DTB, `f8capture` cmdline gate. Evidence: `evidence/real-hw-video/f8capture
 | Engine **mode-detects the real host resolution** | ✅ | `FMT: JPEG 1024x768 sizeimage=524288` — the actual host VGA mode, read off the live signal |
 | **Mode-detect interrupt** (VR308 bit) fires + is handled | ✅ | mode-detect must complete for `FMT` to report 1024x768; proves INT#7→virq23 delivery works |
 | `VIDIOC_REQBUFS` + `STREAMON` (contiguous DMA buffers) | ✅ | no `ENOMEM` (see the CMA fix below); streaming starts |
-| **Capture/compression completes → frame dequeued** | ❌ | `poll: no frame yet` ×12 over 12 s, `f8capture exited 2` — no `VE_INTERRUPT_COMP_COMPLETE` |
+| **Capture/compression completes → frame dequeued** | ✅ | after patch 0006: `COMPSZ078=0x6C80`, `COMP_COMPLETE`, `DQBUF` returns a 27776-byte frame (`f8capture rc=0`) |
+| **Reconstructed JPEG decodes as a real image** | ✅ | 1024×768, cyan panel + gray body — the host's live screen (`captured-frame-silicon.png`) |
 
-So on real silicon the AST2050 video engine **captures a live 1024×768 host-VGA
-signal and drives the whole path up to and including mode-detection**, with the
-interrupt infrastructure proven (mode-detect's own IRQ fires). The mainline driver
-then triggers capture+JPEG-compression and waits on `VE_INTERRUPT_COMP_COMPLETE`
-(0x308 bit 3) — which **never fires**.
+## How the compression fix was found (silicon register forensics)
 
-## The boundary: G3 JPEG compression-complete
+A `vediag` initramfs gate (busybox `devmem`) sampled the engine registers *during* a
+capture. The capture engine always completed (`VR004[16]` idle, `VR308[1]`
+CAPTURE_COMPLETE) but the compression engine wedged: `VR004[18]` COMP_BUSY stuck at 0,
+`VR078` size 0, `VR308[3]` COMP_COMPLETE never firing. The interrupt offsets match the
+datasheet and mode-detect's own IRQ works, so it was never an IRQ-routing problem —
+it was the **compression programming**. The decisive clue was `VR060` during capture:
 
-The interrupt-register offsets the mainline driver uses **match the AST2050
-datasheet** (`VE_INTERRUPT_CTRL=0x304`, `VE_INTERRUPT_STATUS=0x308` = datasheet
-VR304/VR308), and the mode-detect IRQ demonstrably works — so this is **not** an
-IRQ-routing problem. The gap is that the **G3 compression engine does not complete**
-when programmed the AST2400 way:
+```
+before fix:  COMPC060=0x04085EC1  (bit0 set OK, but DCT selector = 11)  -> COMP_BUSY stuck
+after  fix:  COMPC060=0x00083DC1  (DCT selector clamped to 7)          -> COMPSZ=0x6C80, done
+```
 
-- The driver selects JPEG mode via `AST2400_VE_SEQ_CTRL_JPEG_MODE = BIT(8)` of
-  VE_SEQ_CTRL (0x004) for the `ast2400-video-engine` compatible the G3 binds to.
-- The AST2050 datasheet §20.3 documents its compression control in **VR060**
-  (`VE_COMP_CTRL`) with a different layout, plus RC4 stream-encryption bits
-  (VR060[5]/VR300/VR400–4FC) the G4 driver knows nothing about.
-- This is the exact "residual G3-vs-G4 tension" [F8-KVM.md](F8-KVM.md) §3.1 flagged
-  ("dedicated G3 tuning is future work"): the driver's G4-isms are accepted as
-  register writes but the G3 compressor doesn't produce a completed JFIF frame.
+The AST2050 has only **8 internal ROM quant tables (index 0-7)**; mainline's 0-11
+quality range selected table 11, a nonexistent table, wedging the compressor. See the
+patch-0006 commit message and [F8-KVM.md](F8-KVM.md) §3.1 for the full datasheet/AMI-
+driver derivation. Register semantics match the AMI "videocap" G3 driver
+(`ya-mouse/openwrt-linux-aspeed`, `arch/arm/plat-aspeed/videocap/`).
 
-**Closing it = a G3-specific `aspeed-video` compression patch** (correct VR060 setup
-/ JPEG-mode select / quant-table + buffer programming so the engine finishes and
-raises `COMP_COMPLETE`). That needs the datasheet §20 compression detail (and ideally
-Raptor's working 2.6.28 AST2050 KVM driver as an oracle) and should be developed
-QEMU-first against the `aspeed.video-ast2050` model, then re-verified on silicon.
+## Remaining follow-up (not blocking capture)
+
+- **Driver-side JFIF wrapping.** The G3 engine emits the raw ASPEED compressed stream
+  (no JFIF header — `0x040` is the CRC buffer on the G3, so the G4's engine-prepended
+  header mechanism is inert). `/dev/video0` therefore returns headerless data; a
+  KVM client (obmc-ikvm) or a plain viewer needs the JFIF wrapper. We reconstruct it
+  offline (`evidence/real-hw-video/reconstruct-jpeg.py`: driver `jpeg_header+jpeg_dct[q]+
+  jpeg_quant`, SOF0 patched to the captured WxH). Making the *driver* prepend it for a
+  standards-compliant `V4L2_PIX_FMT_JPEG` is the clean next step.
+- **Capturing a specific BIOS screen.** The captured frame is whatever the host is
+  currently scanning out; to capture a specific POST screen, warm-reset the host
+  (`kgpe-power.sh reset`) after the BMC is up so a fresh POST re-renders the AST2050
+  VGA, then capture.
 
 ## Infrastructure solved along the way (all on real silicon)
 
