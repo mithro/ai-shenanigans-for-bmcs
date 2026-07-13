@@ -106,7 +106,7 @@ make aspeed_g4_defconfig
 scripts/kconfig/merge_config.sh -m .config \
     "$ROOT/kernel/kgpe-d16.config" "$ROOT/kernel/kgpe-d16-nfsroot.config" \
     "$ROOT/kernel/kgpe-d16-usb.config" "$ROOT/kernel/kgpe-d16-kvm.config" \
-    "$ROOT/kernel/kgpe-d16-swap.config"
+    "$ROOT/kernel/kgpe-d16-swap.config" "$ROOT/kernel/kgpe-d16-video-cma.config"
 make olddefconfig
 
 # Build.
