@@ -6,9 +6,12 @@ driving the active-low request lines per Raptor's asus_power.sh sequences moves
 a host-power latch that is reflected on the GPIOH2 power-state input —
 
   * off out of reset,
-  * on after the GPIOB1 POWERUP_N pulse,
+  * a GPIOB1 POWERUP_N pulse is IGNORED while GPIOA4 (ASUS_BMC_CTL_LOCKOUT_N)
+    is not driven high (stock image can't power on — HW-verified 2026-07-13),
+  * on after the SAME POWERUP_N pulse once GPIOA4 is reclaimed high,
   * still on across a GPIOB6 RESET_N pulse (warm reset keeps power),
-  * off after the GPIOF0 POWERDOWN_N pulse.
+  * off after the GPIOF0 POWERDOWN_N pulse,
+  * on again after a fresh POWERUP_N pulse (A4 still held high).
 
 This is the QEMU half of the OpenBMC "Redfish -> state-manager -> GPIO ->
 power-state" loop (feature F2). See peripherals/power/DOC.md. No hardware here.
@@ -45,6 +48,8 @@ def test_all_checks_pass(power):
     "label",
     [
         "power.off_at_reset",
+        "power.on_blocked_without_a4",
+        "power.on_after_a4_reclaim",
         "power.on_after_powerup",
         "power.on_after_reset",
         "power.off_after_powerdown",
