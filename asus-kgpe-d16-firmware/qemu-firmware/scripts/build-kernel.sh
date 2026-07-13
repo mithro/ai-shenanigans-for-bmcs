@@ -75,6 +75,20 @@ if ! grep -q "ASPEED_I2CD_TIME_TBUF_MASK, 0x7" drivers/i2c/busses/i2c-aspeed.c; 
     git apply "$ROOT/kernel/patches/0005-i2c-aspeed-program-full-ac-timing.patch"
 fi
 
+# AST2050 (G3) video-engine JPEG compression: mainline aspeed-video gets the G3
+# through mode-detect + capture but the compressor hangs (HW-verified on silicon:
+# VR004[18] COMP_BUSY stuck, VR308[3] COMP_COMPLETE never fires, VR078 size=0).
+# From the AST2050 datasheet §20 + the working AMI "videocap" G3 driver: mainline
+# selects JPEG mode via VR004[8] (reserved-must-be-0 on the G3) and never sets the
+# G3's real pure-JPEG select VR060[0]; and it programs the DCT quant-table index
+# from the 0-11 quality range, but the G3 has only 8 INTERNAL ROM tables (0-7) --
+# index >=8 wedges the compressor. Adds an "aspeed,ast2050-video-engine" compatible
+# (jpeg_mode=0, jpeg_only) that sets VR060[0], clamps the DCT selector to 0-7, and
+# clears the G4-only HQ fields + AUTO_COMP. Idempotent guard on jpeg_only.
+if ! grep -q "jpeg_only" drivers/media/platform/aspeed/aspeed-video.c; then
+    git apply "$ROOT/kernel/patches/0006-media-aspeed-video-ast2050-g3-jpeg.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

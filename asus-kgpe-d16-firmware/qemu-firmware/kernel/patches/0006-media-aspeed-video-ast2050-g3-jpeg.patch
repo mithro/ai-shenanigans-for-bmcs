@@ -1,0 +1,104 @@
+diff --git a/drivers/media/platform/aspeed/aspeed-video.c b/drivers/media/platform/aspeed/aspeed-video.c
+index a9c2c69b2..bf961c581 100644
+--- a/drivers/media/platform/aspeed/aspeed-video.c
++++ b/drivers/media/platform/aspeed/aspeed-video.c
+@@ -300,6 +300,7 @@ struct aspeed_video {
+ 
+ 	u32 jpeg_mode;
+ 	u32 comp_size_read;
++	bool jpeg_only;			/* G3: pure JPEG via VE_COMP_CTRL[0] */
+ 
+ 	wait_queue_head_t wait;
+ 	spinlock_t lock;		/* buffer list lock */
+@@ -333,6 +334,22 @@ struct aspeed_video {
+ struct aspeed_video_config {
+ 	u32 jpeg_mode;
+ 	u32 comp_size_read;
++	bool jpeg_only;		/* AST2050 (G3): pure JPEG via VE_COMP_CTRL[0] */
++};
++
++/*
++ * AST2050 (G3). VE_SEQ_CTRL[9:8] are reserved "must be always 0" on this SoC
++ * (AST2050/AST1100 A3 datasheet V1.05, p.234), so jpeg_mode = 0 -- the AST2400
++ * JPEG-mode bit (BIT(8)) does nothing here and must not be written. Pure JPEG is
++ * instead selected via VE_COMP_CTRL[0] "JPEG only encoding" (p.246); without it
++ * the engine stays in JPEG/VQ mixed mode and never raises comp-complete, which is
++ * why capture hangs on real AST2050 silicon while mode-detect works. comp size is
++ * read back from the same 0x078 offset as the AST2400.
++ */
++static const struct aspeed_video_config ast2050_config = {
++	.jpeg_mode = 0,
++	.comp_size_read = AST2400_VE_COMP_SIZE_READ_BACK,
++	.jpeg_only = true,
+ };
+ 
+ static const struct aspeed_video_config ast2400_config = {
+@@ -1116,11 +1133,16 @@ static void aspeed_video_get_resolution(struct aspeed_video *video)
+ 	/*
+ 	 * Enable mode-detect watchdog, resolution-change watchdog and
+ 	 * automatic compression after frame capture.
++	 *
++	 * G3 (AST2050): the working sequence software-triggers capture then
++	 * compression (jpeg_only path) and must NOT set AUTO_COMP -- leaving it
++	 * set wedges the compression engine. Keep only the watchdog on the G3.
+ 	 */
+ 	aspeed_video_update(video, VE_INTERRUPT_CTRL, 0,
+ 			    VE_INTERRUPT_MODE_DETECT_WD);
+ 	aspeed_video_update(video, VE_SEQ_CTRL, 0,
+-			    VE_SEQ_CTRL_AUTO_COMP | VE_SEQ_CTRL_EN_WATCHDOG);
++			    (video->jpeg_only ? 0 : VE_SEQ_CTRL_AUTO_COMP) |
++			    VE_SEQ_CTRL_EN_WATCHDOG);
+ 
+ 	v4l2_dbg(1, debug, &video->v4l2_dev, "Got resolution: %dx%d\n",
+ 		 det->width, det->height);
+@@ -1240,6 +1262,34 @@ static void aspeed_video_update_regs(struct aspeed_video *video)
+ 	if (video->format == VIDEO_FMT_STANDARD) {
+ 		comp_ctrl &= ~FIELD_PREP(VE_COMP_CTRL_EN_HQ, video->hq_mode);
+ 		seq_ctrl |= video->jpeg_mode;
++		/*
++		 * AST2050 (G3): VE_COMP_CTRL[0] = "JPEG only encoding" (1 = pure
++		 * JPEG, 0 = JPEG/VQ mixed; datasheet V1.05 p.246). Mainline names
++		 * this bit VE_COMP_CTRL_VQ_DCT_ONLY and clears it, which on the G3
++		 * leaves the engine in mixed mode so compression never completes.
++		 * Set it so the G3 runs the pure-JPEG path the driver polls for.
++		 */
++		if (video->jpeg_only) {
++			/*
++			 * G3 (AST2050): the compressor selects one of 8 INTERNAL
++			 * ROM quant tables (index 0-7) via VE_COMP_CTRL[15:6] --
++			 * there is no DRAM quant table. Mainline's 0-11 quality
++			 * range picks a nonexistent table (>=8) and wedges the
++			 * compression engine (COMP_BUSY never clears). Clamp the
++			 * selector and rebuild the DCT fields (bit10 = separate
++			 * luma/chroma tables). Select pure JPEG (bit0) and clear
++			 * the G4-only HQ fields ([16], [31:22]).
++			 * Working value e.g. VR060 = 0x00082501 (selector 4).
++			 */
++			u8 sel = min_t(u8, video->jpeg_quality, 7);
++
++			comp_ctrl &= ~(VE_COMP_CTRL_DCT_LUM | VE_COMP_CTRL_DCT_CHR |
++				       VE_COMP_CTRL_EN_HQ | VE_COMP_CTRL_HQ_DCT_LUM |
++				       VE_COMP_CTRL_HQ_DCT_CHR);
++			comp_ctrl |= VE_COMP_CTRL_VQ_DCT_ONLY |
++				     FIELD_PREP(VE_COMP_CTRL_DCT_LUM, sel) |
++				     FIELD_PREP(VE_COMP_CTRL_DCT_CHR, sel | 0x10);
++		}
+ 	}
+ 
+ 	if (video->yuv420)
+@@ -2149,6 +2199,7 @@ static int aspeed_video_init(struct aspeed_video *video)
+ }
+ 
+ static const struct of_device_id aspeed_video_of_match[] = {
++	{ .compatible = "aspeed,ast2050-video-engine", .data = &ast2050_config },
+ 	{ .compatible = "aspeed,ast2400-video-engine", .data = &ast2400_config },
+ 	{ .compatible = "aspeed,ast2500-video-engine", .data = &ast2500_config },
+ 	{ .compatible = "aspeed,ast2600-video-engine", .data = &ast2600_config },
+@@ -2176,6 +2227,7 @@ static int aspeed_video_probe(struct platform_device *pdev)
+ 
+ 	video->jpeg_mode = config->jpeg_mode;
+ 	video->comp_size_read = config->comp_size_read;
++	video->jpeg_only = config->jpeg_only;
+ 
+ 	video->frame_rate = 30;
+ 	video->jpeg_hq_quality = 1;

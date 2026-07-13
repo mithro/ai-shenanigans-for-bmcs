@@ -1035,7 +1035,7 @@
 			 * content). Was "disabled" here (matching the QEMU DTS's &video okay).
 			 */
 			video@1e700000 {
-				compatible = "aspeed,ast2400-video-engine";
+				compatible = "aspeed,ast2050-video-engine";
 				reg = <0x1e700000 0x1000>;
 				clocks = <0x02 0x03 0x02 0x00>;
 				clock-names = "vclk", "eclk";
