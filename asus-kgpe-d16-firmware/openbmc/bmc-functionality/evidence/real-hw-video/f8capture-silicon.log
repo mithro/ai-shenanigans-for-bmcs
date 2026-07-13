@@ -1,0 +1,31 @@
+=== F8-CAPTURE-BEGIN ===
+eth0: 192.168.66.2
+[    1.887096] aspeed-video 1e700000.video: irq 23
+[    1.890032] aspeed-video 1e700000.video: alloc mem size(24576) at 0x42840000 for jpeg header
+F8-CAPTURE: /dev/video0 present
+CAP: driver=aspeed-video card=Aspeed Video Engine
+INPUT: 'Host VGA capture' status=0x0 (SIGNAL)
+FMT: JPEG 1024x768 sizeimage=524288
+poll: no frame yet (11000 ms left)
+poll: no frame yet (10000 ms left)
+poll: no frame yet (9000 ms left)
+poll: no frame yet (8000 ms left)
+poll: no frame yet (7000 ms left)
+poll: no frame yet (6000 ms left)
+poll: no frame yet (5000 ms left)
+poll: no frame yet (4000 ms left)
+poll: no frame yet (3000 ms left)
+poll: no frame yet (2000 ms left)
+poll: no frame yet (1000 ms left)
+poll: no frame yet (0 ms left)
+F8-CAPTURE: f8capture exited 2
+F8-CAPTURE-FAIL: no /tmp/bios.jpg produced
+=== F8-CAPTURE-END ===
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] cma: Reserved 8 MiB at 0x42800000 on node -1
+[    1.573740] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at (ptrval)
+[    1.887096] aspeed-video 1e700000.video: irq 23
+[    1.890032] aspeed-video 1e700000.video: alloc mem size(24576) at 0x42840000 for jpeg header
+[    1.887096] aspeed-video 1e700000.video: irq 23
+[    1.890032] aspeed-video 1e700000.video: alloc mem size(24576) at 0x42840000 for jpeg header
+CAP: driver=aspeed-video card=Aspeed Video Engine
