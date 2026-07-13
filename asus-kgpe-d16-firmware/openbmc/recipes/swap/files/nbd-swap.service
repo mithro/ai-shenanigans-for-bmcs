@@ -1,0 +1,14 @@
+[Unit]
+Description=NBD swap for the memory-tight AST2050 (RAM-backed export on the Pi bridge)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/dev/nbd0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nbd-swap.sh on
+ExecStop=/usr/bin/nbd-swap.sh off
+
+[Install]
+WantedBy=multi-user.target
