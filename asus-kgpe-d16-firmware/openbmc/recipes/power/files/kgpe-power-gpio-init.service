@@ -1,0 +1,21 @@
+[Unit]
+Description=KGPE-D16 (AST2050) BMC power-control GPIO init
+Documentation=file:///usr/share/doc/kgpe-power/OPENBMC-POWER-INTEGRATION.md
+# Must run before any host/chassis power transition so the board has granted the
+# BMC power-on authority. Reclaims GPIOA4 (ASUS_BMC_CTL_LOCKOUT_N) from its
+# PHYLINK alt-function (clears SCU74[25]) and drives it HIGH (=1, "BMC in
+# control") — WITHOUT this the board silently ignores CTL_REQ_POWERUP_N and the
+# host can only be force-OFF, never powered ON (hardware-verified on the real
+# AST2050, 2026-07-13). Also de-asserts the three request lines. eth0 is
+# unaffected (ftgmac100 polls the RTL8201CP over MDIO, not the PHYLINK pin).
+DefaultDependencies=no
+After=sysinit.target
+Before=obmc-power-start@0.service obmc-power-stop@0.service org.openbmc.control.Power@0.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/kgpe-power.sh init
+
+[Install]
+WantedBy=multi-user.target

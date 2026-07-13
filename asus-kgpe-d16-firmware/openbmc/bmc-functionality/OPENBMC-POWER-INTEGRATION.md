@@ -142,17 +142,25 @@ on the plug power meter + GPIOH2 + pings. Full transcript:
   host stopped pinging, `GPIO20` H-byte `0xF4→0x80` (**GPIOH2 1→0**). The standby-powered
   **BMC survived** the host power-off (kept pinging) — confirming the BMC/DDR2 is on the
   always-on rail.
-- **Power-ON does NOT complete on silicon via op-pwrctl** — the held-level caution below
-  is real. op-pwrctl asserts `RESET_OUT`(B6) low while `pgood=0` and only releases it on
-  `pgood`→1, but the board won't raise its rail while held in reset → deadlock. The
-  hardware-faithful Raptor **pulse** (assert reset+power-up, 1 s, *release reset*) can't be
-  applied either: with the host off the **board holds the reset net (GPIOB6/`CTL_REQ_RESET_N`)
-  low** — a GPIO output-high write doesn't stick (board out-drives the BMC) and input-release
-  reads 0. B1/F0 behave normally; only B6/reset is stuck. **Fix needed:** a pulse-based
-  op-pwrctl drive for real silicon **+** review of the GPIOB6/WDTRST reset-line pinmux/drive
-  on the KGPE-D16 port. Host was recovered via the plug's **Restore-on-AC-Power-On** (fresh
-  SystemRescue PXE re-boot); this also cut BMC standby, so the P2A/NFS-booted OpenBMC is gone
-  (re-bootable via the documented P2A sequence).
+- **Power-ON — SOLVED on silicon (2026-07-13): the A4-lockout gate.** The board only grants
+  the BMC power-ON control when the control-lockout line **GPIOA4 (`ASUS_BMC_CTL_LOCKOUT_N`)**
+  is a real GPIO output driven **HIGH** (=1, "BMC in control"). A4's pad defaults to the
+  **PHYLINK** alt-function (`SCU74[25]=1`), so a stock image left A4 un-controllable → the
+  board never handed over power-on authority → `CTL_REQ_POWERUP_N` (B1) was silently ignored
+  (PSU stayed at standby) while force-OFF (F0) always worked. B1/F0/B6 were already GPIO-mode
+  (`SCU74[2]=0`, `SCU80[14]=0`) — A4 alone was the gate. **Fix:** reclaim A4 (unlock SCU
+  `0x1e6e2000=0x1688A8A8`; clear `SCU74[25]`), drive A4=1, then the Raptor **pulse**
+  (`F0=1; B6=0+B1=0; sleep 1; B6=1+B1=1`) — NOT op-pwrctl's held level (which deadlocks by
+  holding `RESET_OUT` asserted until pgood). The board *does* hold the reset net low while
+  off, but that's normal S5 behavior — once A4 grants control and POWERUP pulses, the board
+  raises the rail and releases reset itself. **Result on the real AST2050: plug 3 W → 103 W,
+  GPIOH2 → 1, host PXE-booted, and the BMC stayed alive throughout — a full BMC on↔off toggle
+  with NO AC-cycle.** eth0 is unaffected by the `SCU74[25]` clear (ftgmac100 polls the
+  RTL8201CP over MDIO, `irq=POLL`, not the PHYLINK pin). Evidence:
+  `evidence/real-hw-f2sta/power-on-A4-fix.txt`. Wired into the image via
+  `recipes/power/` (kgpe-power-gpio-init.service + kgpe-power.sh + the
+  obmc-power-{start,stop}@ drop-ins). Raptor never HW-validated power-on (its
+  `asus_power_on_board` wrapper is also buggy), so this A4 requirement was undocumented.
 - **Also observed:** phosphor `CurrentPowerState`/IPMI front-end did **not** track op-pwrctl's
   live `pgood` 1→0 transition (stayed "On" through the off) — a separate state-manager wiring
   gap; op-pwrctl `pgood` + plug/GPIOH2 are the ground truth.

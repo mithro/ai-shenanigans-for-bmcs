@@ -26,3 +26,56 @@
 # HW-WIRING-power-sensors.md,OPENBMC-POWER-INTEGRATION.md}; files/gpio_defs.json
 # here is a byte-identical build copy of that reference.
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
+
+# ---------------------------------------------------------------------------
+# F2 power-DRIVE fix (2026-07-13): the board only grants the BMC power-ON control
+# when the control-lockout line GPIOA4 (ASUS_BMC_CTL_LOCKOUT_N) is a real GPIO
+# output driven HIGH. Its pad defaults to PHYLINK (SCU74[25]=1), so a stock image
+# left it un-controllable -> the board ignored CTL_REQ_POWERUP_N and the host
+# could only be force-OFF, never powered ON. And op-pwrctl's held-level drive
+# DEADLOCKS the power-on (asserts RESET_OUT until pgood, which never arrives).
+#
+# FIX (hardware-verified on the real AST2050): reclaim A4 (clear SCU74[25]) + drive
+# it high at boot, and drive host power with the board-faithful Raptor PULSE
+# sequences (kgpe-power.sh) instead of op-pwrctl's held level.
+#   - kgpe-power-gpio-init.service : oneshot; reclaims A4 + de-asserts the request
+#                                    lines before any power transition.
+#   - kgpe-power.sh                : the on/off/reset PULSE driver (setup() reclaims
+#                                    A4 every op).
+#   - obmc-power-{start,stop}@.service.d drop-ins : route the phosphor-state-manager
+#                                    chassis power transitions through kgpe-power.sh.
+# op-pwrctl is kept only for the pgood READ (CurrentPowerState). See
+# OPENBMC-POWER-INTEGRATION.md and evidence/real-hw-f2sta/power-on-A4-fix.txt.
+
+SRC_URI:append = " \
+    file://kgpe-power.sh \
+    file://kgpe-power-gpio-init.service \
+    file://obmc-power-start-kgpe.conf \
+    file://obmc-power-stop-kgpe.conf \
+"
+
+SYSTEMD_SERVICE:${PN}:append = " kgpe-power-gpio-init.service"
+
+do_install:append() {
+    install -d ${D}${bindir}
+    install -m 0755 ${UNPACKDIR}/kgpe-power.sh ${D}${bindir}/kgpe-power.sh
+
+    install -d ${D}${systemd_system_unitdir}
+    install -m 0644 ${UNPACKDIR}/kgpe-power-gpio-init.service ${D}${systemd_system_unitdir}/
+
+    # systemd drop-ins overriding the phosphor-state-manager power transitions to
+    # use the board-faithful PULSE driver instead of op-pwrctl's held level.
+    install -d ${D}${systemd_system_unitdir}/obmc-power-start@.service.d
+    install -m 0644 ${UNPACKDIR}/obmc-power-start-kgpe.conf \
+        ${D}${systemd_system_unitdir}/obmc-power-start@.service.d/kgpe.conf
+    install -d ${D}${systemd_system_unitdir}/obmc-power-stop@.service.d
+    install -m 0644 ${UNPACKDIR}/obmc-power-stop-kgpe.conf \
+        ${D}${systemd_system_unitdir}/obmc-power-stop@.service.d/kgpe.conf
+}
+
+FILES:${PN}:append = " \
+    ${bindir}/kgpe-power.sh \
+    ${systemd_system_unitdir}/kgpe-power-gpio-init.service \
+    ${systemd_system_unitdir}/obmc-power-start@.service.d/kgpe.conf \
+    ${systemd_system_unitdir}/obmc-power-stop@.service.d/kgpe.conf \
+"
