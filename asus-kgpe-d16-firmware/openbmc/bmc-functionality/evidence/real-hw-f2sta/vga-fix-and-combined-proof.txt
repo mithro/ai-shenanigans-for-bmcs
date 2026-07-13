@@ -1,0 +1,51 @@
+VGA/DRAM-corruption crash FIXED + combined power+VGA proof — real AST2050 — 2026-07-13
+
+=========================================================================
+BUG: the P2A/NFS-booted BMC hung within ~minutes whenever the host wrote the
+AST2050 VGA (host reboot -> BIOS POST). On the AST2050 the BMC and the host's
+onboard VGA are the SAME silicon sharing one DRAM; the top 8 MB is the VGA
+framebuffer aperture. The kgpe-hwpass-safe.dtb the BMC booted was MISSING the
+reserved-memory node, so the BMC kernel allocated into the framebuffer region and
+was corrupted when the host wrote it.
+=========================================================================
+
+DIAGNOSIS
+- decompiled kgpe-hwpass-safe.dtb: memory@40000000=64MB but NO reserved-memory /
+  no framebuffer / no no-map node at all.
+- source fragmentation: dts/aspeed-bmc-asus-kgpe-d16-realhw.dts (what the real-HW
+  DTB is built from) had the video@1e700000 node but NOT the reserved node; the
+  qemu-firmware DTS had the reserved node but not video. The deployed DTB matched
+  the -realhw variant -> no fence.
+- host side: the host's ACTIVE console framebuffer is `nouveaudrmfb` on an NVIDIA
+  Quadro 600 (04:00.0), NOT the AST2050 (01:01.0). So the corruption is the host's
+  BIOS POST (and the host `ast` DRM driver) writing the AST2050 VGA, not a live
+  console overwrite. VGA size = SCU70[3:2]=00 => 8 MB (MCR04=0x585 bits[5:4]=00).
+
+FIX
+- Added the reserved-memory node to dts/aspeed-bmc-asus-kgpe-d16-realhw.dts:
+    reserved-memory { vga_memory: region@43800000 { no-map;
+                      reg=<0x43800000 0x800000>; }; }   (top 8 MB)
+  Compiles clean; DTB now carries BOTH the reserved node and video@1e700000.
+- Deployed DTB kgpe-hwpass-vgafix.dtb (proven safe DTB + this node).
+
+VERIFICATION on silicon
+1. Boot log with vgafix DTB:
+     OF: reserved mem: 0x43800000..0x43ffffff (8192 KiB) nomap non-reusable region@43800000
+     Memory: 44248K/57344K available  (64MB - 8MB VGA reserve)
+   /proc/iomem: "40000000-437fffff : System RAM" — usable RAM now STOPS at
+   0x437fffff; the top 8 MB is fenced out. No OOM in dmesg.
+2. Stability: the BMC ran for 1h38m with the fence (vs. crashing within ~5 min
+   before). A 12-min undisturbed ping monitor = 0/72 failures.
+3. *** COMBINED PROOF (both fixes together, the exact pre-fix crash scenario) ***
+   With the host OFF and the VGA-fixed BMC up, used the BMC's A4-reclaim
+   power-control to turn the host ON:
+     kgpe-power.sh on -> GPIOH2 0->1 ; plug 4W -> 102W -> 77W
+     host PXE-booted (HOST-UP after ~88s) -> BIOS POST WROTE the AST2050 VGA
+     BMC-SURVIVAL through the whole host boot = 0/40 pings failed.
+   => the BMC (a) powered the host on (A4 power-on fix) and (b) SURVIVED the host
+   BIOS-POST VGA write (reserved-memory fix) — the precise event that hung it
+   before. Both fixes validated in one shot.
+
+Fix committed: dts/aspeed-bmc-asus-kgpe-d16-realhw.dts (the reserved-memory node).
+Deployed DTB: Pi:/srv/tftp-bmc/kgpe-hwpass-vgafix.dtb.
+=========================================================================
