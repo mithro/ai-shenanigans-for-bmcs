@@ -1,23 +1,34 @@
 # BMC functionality — honest QEMU vs real-silicon status
 
-Last updated 2026-07-15, reconciled against an **independent skeptical review** of
-branch `claude/bmc-functionality`. This is the candid ground truth, not a summary
-of claims. Legend: ✅ demonstrated · ◐ partial/scoped · ✋ architecturally bounded
-(cannot be fully delivered on this board) · ✗ not yet on this target.
+Last updated 2026-07-15, reconciled against TWO **independent skeptical reviews** of
+branch `claude/bmc-functionality` (the second re-ran the USB F6 test both ways and
+confirmed the vhub QEMU verification live). This is the candid ground truth, not a
+summary of claims. Legend: ✅ demonstrated · ◐ partial/scoped · ✋ architecturally
+bounded (cannot be fully delivered on this board) · ✗ not yet on this target.
+
+**Bottom line (independent-review verdict):** strictly "demonstrated in BOTH QEMU
+AND on real silicon", the full PASS/PASS features are **#4 sensors, #7 IPMI
+(local KCS + remote LAN), and #3a VGA screen capture**. The rest are partial,
+rig-blocked, or architecturally impossible on this SoC/board (see per-row notes):
+**four features can never be fully delivered here** — #8 host-BIOS flash (no
+BMC→host-SPI master), #9 true NC-SI (dedicated PHY), #2's USB-*host* side
+(device-only controller), and #5's DIMM/memory inventory (SPDs on the host SMBus).
+So "all nine on both QEMU and silicon" is not achievable on this hardware; this
+doc is the honest map of what is, what's pending, and what's impossible.
 
 | # | Requested feature | QEMU | Silicon | Honest note |
 |---|---|---|---|---|
 | 1 | Power on/off | ◐ | ◐ | Silicon OFF fully proven (op-pwrctl, 3 signals). Silicon ON works only via a manual GPIOA4-lockout reclaim + devmem pulse — the *integrated* op-pwrctl ON path deadlocks on held-level reset (open issue #95). QEMU models the GPIO latch (`test_power` PASS) but Redfish PowerState readback is null. |
-| 2 | Connect USB devices | ✅ (fix QEMU-proven) | ◐ (fix ready, silicon retest rig-blocked) | QEMU: the faithful udc model now **reproduces the silicon hang** — the unfixed mainline driver **livelocks** (F6 FAIL), and the G3-ported driver (**patch 0007**: PHY-ready gate + ISR[18] de-livelock + `ast2050-usb-vhub`) **probes cleanly** (7 ports, gadget enumerates, F6 PASS). So the vhub hang is root-caused and the fix is verified against a hang-reproducing model (`VHUB-G3-PORT-PLAN.md`). Silicon: enabling the vhub hangs the mainline driver (`usb-vhub-silicon-boundary.txt`); the fixed-kernel retest is **rig-blocked** (P2A load degrades after ~15 boot cycles). Remaining: fresh-boot silicon retest of patch 0007; and host *enumeration* needs USB-host emulation (QEMU) / physical wiring (silicon). |
+| 2 | Connect USB devices | ✅ (fix QEMU-proven) | ✗ working / ◐ hang-only | QEMU: the faithful udc model now **reproduces the silicon hang** — the unfixed mainline driver **livelocks** (F6 FAIL), and the G3-ported driver (**patch 0007**: PHY-ready gate + ISR[18] de-livelock + `ast2050-usb-vhub`) **probes cleanly** (7 ports, gadget enumerates, F6 PASS). So the vhub hang is root-caused and the fix is verified against a hang-reproducing model (`VHUB-G3-PORT-PLAN.md`). Silicon: enabling the vhub hangs the mainline driver (`usb-vhub-silicon-boundary.txt`); the fixed-kernel retest is **rig-blocked** (P2A load degrades after ~15 boot cycles). Remaining: fresh-boot silicon retest of patch 0007; and host *enumeration* needs USB-host emulation (QEMU) / physical wiring (silicon). |
 | 3a | See virtual VGA screen | ✅ | ✅ | QEMU: real frame → `/dev/video0` → JPEG, 8 bars pixel-verified. Silicon: `/dev/video0` frame `bytesused=28418` (kernel-wrapped) decodes directly to the host's live screen. Evidence: `evidence/real-hw-video/silicon-f8capture-transcript.txt` + `silicon-direct-jpeg.png`. |
 | 3b | Send keyboard events | ◐ | ✗ | QEMU only, and a `dummy_hcd` loopback to the BMC's *own* evdev (`EV_KEY/KEY_A`), not delivered to a real host. Silicon: none. Depends on the same host-facing USB gadget path as #2. |
 | 4 | Full sensors | ✅ | ✅ | QEMU: W83795G model → 23 sensors over IPMI. Silicon: 18 live sensors over LAN **and** host-KCS — FAN1 2700 RPM, CPU_DIODE 52.12 °C, P12V 13.76 V, rails, VBAT (`evidence/real-hw-consolidated/`). Confirms the G3 i2c-timing (0005) + W83795 hwmon (0003) patches on silicon. |
 | 5 | System identification | ◐ | ◐ | Unique IDs + board FRU proven both sides (mc info 2623 / 0x0d16; FRU ASUSTeK KGPE-D16, serial, PN). **Gap:** no DIMM / CPU / memory-config inventory. `i2cdetect` on silicon (`evidence/real-hw-consolidated/bmc-i2c-topology-silicon.txt`) shows the BMC bus has the W83795 (0x2f) but **no DIMM SPDs at 0x50-0x57** — the SPDs are on the host memory SMBus, unreachable by the BMC. Memory inventory would need host SMBIOS ingestion, not a BMC I2C read. |
-| 6 | Serial-over-LAN | ✅\* | ◐ | QEMU: faithful VUART, host serial bytes captured over an SOL session. Silicon: SOL is *configured + enabled* (`sol info` rc=0) but no host serial **bytes** carried — the host COM console is not wired to the AST2050 VUART on this board. |
+| 6 | Serial-over-LAN | ✅\* | ◐ | QEMU: faithful VUART, host serial **byte-flow** captured (via `obmc-console-client` reading the VUART; `ipmitool sol activate` over LAN sometimes loses the RMCP+ race, so it's console/VUART byte-flow, not strictly an SOL-session capture). Silicon: SOL is *configured + enabled* (`sol info` rc=0) but no host serial **bytes** carried — the host COM console is not wired to the AST2050 VUART on this board. |
 | 7a | IPMI over LAN (remote) | ✅ | ✅ | Full `ipmitool -I lanplus` suite rc=0 both sides; silicon real MAC + populated IDs (`evidence/real-hw-consolidated/`). Strongest result. |
 | 7b | IPMI host-local (KCS) | ✅\* | ✅ | Silicon: **x86 host** `ipmitool -I open` over real LPC KCS → `Found new BMC (0x0d16)`, mc info + FRU rc=0. QEMU: host Get Device ID answered through the modeled KCS state machine. |
 | 8 | Update firmware / BIOS | ◐ | ✗ | QEMU: Redfish `UpdateService` ingest surface (POST → HTTP 202 async Task + phosphor-software-manager). No activation / MTD write / BIOS path. **BIOS update is architecturally impossible here** — the AST2050 has no host-SPI master to reach the host BIOS flash (that is AST2400+). BMC self-update is the only in-scope half. |
-| 9 | Piggyback host NIC | ✅\* | ✅\* | Faithful finding: the board uses a **dedicated RTL8201CP PHY, not NC-SI** (SCU40[15:14] is a software hint, not the strap). BMC is reachable on the shared physical network both sides; true NC-SI host-NIC sharing is architecturally absent on this board. |
+| 9 | Piggyback host NIC | ◐ ✋ | ◐ ✋ | Faithful finding: the board uses a **dedicated RTL8201CP PHY, not NC-SI** (SCU40[15:14] is a software hint, not the strap), so **true NC-SI host-NIC sharing is architecturally ABSENT on this board**. What IS shown (both sides): the BMC is reachable on the shared physical network. The literal feature (NC-SI sideband) cannot be delivered here. |
 
 `\*` = passes on the faithful/honest interpretation with the scoping caveat noted.
 
