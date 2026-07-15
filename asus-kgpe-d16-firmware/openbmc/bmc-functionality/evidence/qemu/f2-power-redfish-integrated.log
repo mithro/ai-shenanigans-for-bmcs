@@ -1,0 +1,7 @@
+434:[redfish] waiting for bmcweb + op-pwrctl ...
+435:[redfish] ServiceRoot up: RedfishVersion=1.17.0
+436:-q71l:~# [redfish] initial: QMP gpioH2=False PowerState=Off
+437:[redfish] Reset On -> HTTP 204 ; modeled gpioH2=True (want True) ; Redfish PowerState=On (want On) [PASS]
+438:[redfish] Reset ForceOff -> HTTP 204 ; modeled gpioH2=False (want False) ; Redfish PowerState=PoweringOff (want Off) [FAIL]
+439:[redfish] Reset On -> HTTP 204 ; modeled gpioH2=True (want True) ; Redfish PowerState=On (want On) [PASS]
+440:[redfish] Reset ForceRestart -> HTTP 204 ; modeled gpioH2=True (want True) ; Redfish PowerState=On (want On) [PASS]

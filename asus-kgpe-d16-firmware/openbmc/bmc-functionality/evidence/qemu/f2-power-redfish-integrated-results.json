@@ -1,0 +1,38 @@
+{
+  "guest_power_state": {},
+  "qmp_power_state": {},
+  "redfish": {
+    "final_PowerState": "On",
+    "initial": {
+      "PowerState": "Off",
+      "gpioH2": false
+    },
+    "reset_loop": {
+      "ForceOff": {
+        "PowerState": "PoweringOff",
+        "expected": "Off",
+        "gpioH2": false,
+        "gpio_ok": true,
+        "http": 204,
+        "ps_ok": false
+      },
+      "ForceRestart": {
+        "PowerState": "On",
+        "expected": "On",
+        "gpioH2": true,
+        "gpio_ok": true,
+        "http": 204,
+        "ps_ok": true
+      },
+      "On": {
+        "PowerState": "On",
+        "expected": "On",
+        "gpioH2": true,
+        "gpio_ok": true,
+        "http": 204,
+        "ps_ok": true
+      }
+    },
+    "service_root_version": "1.17.0"
+  }
+}
