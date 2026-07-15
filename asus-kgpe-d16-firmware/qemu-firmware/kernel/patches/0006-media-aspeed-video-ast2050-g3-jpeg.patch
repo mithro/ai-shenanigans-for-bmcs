@@ -1,16 +1,43 @@
 diff --git a/drivers/media/platform/aspeed/aspeed-video.c b/drivers/media/platform/aspeed/aspeed-video.c
-index a9c2c69b2..bf961c581 100644
+index a9c2c69b2..4c6117fb1 100644
 --- a/drivers/media/platform/aspeed/aspeed-video.c
 +++ b/drivers/media/platform/aspeed/aspeed-video.c
-@@ -300,6 +300,7 @@ struct aspeed_video {
+@@ -43,6 +43,15 @@
+ #define ASPEED_VIDEO_JPEG_QUANT_SIZE	116
+ #define ASPEED_VIDEO_JPEG_DCT_SIZE	34
+ 
++/*
++ * The software JFIF header the G3 (jpeg_only) path prepends to every raw entropy
++ * frame is exactly jpeg_header + jpeg_dct[sel] + jpeg_quant laid end to end, in
++ * bytes -- the same tables the G4 engine DMA-prepends in hardware.
++ */
++#define ASPEED_VIDEO_JFIF_HDR_SIZE	((ASPEED_VIDEO_JPEG_HEADER_SIZE + \
++					  ASPEED_VIDEO_JPEG_DCT_SIZE + \
++					  ASPEED_VIDEO_JPEG_QUANT_SIZE) * sizeof(u32))
++
+ #define MAX_FRAME_RATE			60
+ #define MAX_HEIGHT			1200
+ #define MAX_WIDTH			1920
+@@ -300,6 +309,18 @@ struct aspeed_video {
  
  	u32 jpeg_mode;
  	u32 comp_size_read;
 +	bool jpeg_only;			/* G3: pure JPEG via VE_COMP_CTRL[0] */
++
++	/*
++	 * G3 (jpeg_only) software JFIF wrapper: the pre-built header the IRQ
++	 * handler prepends to each raw entropy frame, plus the (w,h,sel) it was
++	 * built for so it is only rebuilt when resolution or quality changes.
++	 */
++	u8 jpeg_hdr[ASPEED_VIDEO_JFIF_HDR_SIZE];
++	u32 jpeg_hdr_len;
++	u16 jpeg_hdr_w;
++	u16 jpeg_hdr_h;
++	u8 jpeg_hdr_sel;
  
  	wait_queue_head_t wait;
  	spinlock_t lock;		/* buffer list lock */
-@@ -333,6 +334,22 @@ struct aspeed_video {
+@@ -333,6 +354,22 @@ struct aspeed_video {
  struct aspeed_video_config {
  	u32 jpeg_mode;
  	u32 comp_size_read;
@@ -33,7 +60,135 @@ index a9c2c69b2..bf961c581 100644
  };
  
  static const struct aspeed_video_config ast2400_config = {
-@@ -1116,11 +1133,16 @@ static void aspeed_video_get_resolution(struct aspeed_video *video)
+@@ -533,6 +570,106 @@ static void aspeed_video_update_jpeg_table(u32 *table, bool yuv420)
+ 	}
+ }
+ 
++/*
++ * Build the standard JFIF header for the G3 (jpeg_only) software wrapper.
++ *
++ * The AST2050 (G3) video engine emits a *headerless* raw entropy stream: unlike
++ * the AST2400+, register 0x040 is the CRC buffer (not the JPEG header buffer),
++ * so the engine never DMA-prepends the JFIF header the way the G4 does. To make
++ * /dev/video0 return a standards-compliant V4L2_PIX_FMT_JPEG, the driver builds
++ * the header itself -- jpeg_header + jpeg_dct[sel] + jpeg_quant, the very tables
++ * the G4 engine would have laid down -- and aspeed_video_irq() prepends it to
++ * each captured frame. The static tables ship SOF0 (FF C0) height/width = 0 (the
++ * G4 engine patches them in HW); we patch them here to the captured resolution.
++ *
++ * Rebuilt only when the resolution or JPEG quality changes.
++ */
++static void aspeed_video_build_jfif_header(struct aspeed_video *video)
++{
++	u8 sel = min_t(u8, video->jpeg_quality, 7);
++	u16 width = video->pix_fmt.width;
++	u16 height = video->pix_fmt.height;
++	u8 *h = video->jpeg_hdr;
++	u32 sof;
++
++	if (!video->jpeg_only)
++		return;
++
++	if (video->jpeg_hdr_len && video->jpeg_hdr_sel == sel &&
++	    video->jpeg_hdr_w == width && video->jpeg_hdr_h == height)
++		return;			/* already current */
++
++	memcpy(h, aspeed_video_jpeg_header, sizeof(aspeed_video_jpeg_header));
++	h += sizeof(aspeed_video_jpeg_header);
++	memcpy(h, aspeed_video_jpeg_dct[sel], sizeof(aspeed_video_jpeg_dct[sel]));
++	h += sizeof(aspeed_video_jpeg_dct[sel]);
++	memcpy(h, aspeed_video_jpeg_quant, sizeof(aspeed_video_jpeg_quant));
++
++	/*
++	 * SOF0 straddles the dct/quant boundary: jpeg_dct[] ends in 0xFF and
++	 * jpeg_quant[] starts with 0xC0. From the marker the layout is
++	 * FF C0 | len(2) | prec(1) | height(2,BE) | width(2,BE) | ncomp ... so
++	 * height is at +5 and width at +7. Patch the captured resolution in.
++	 */
++	sof = sizeof(aspeed_video_jpeg_header) +
++	      sizeof(aspeed_video_jpeg_dct[sel]) - 1;
++	h = video->jpeg_hdr;
++	if (h[sof] == 0xff && h[sof + 1] == 0xc0) {
++		h[sof + 5] = height >> 8;
++		h[sof + 6] = height & 0xff;
++		h[sof + 7] = width >> 8;
++		h[sof + 8] = width & 0xff;
++	} else {
++		v4l2_warn(&video->v4l2_dev,
++			  "JFIF SOF0 not at offset %u (%02x %02x); dims unpatched\n",
++			  sof, h[sof], h[sof + 1]);
++	}
++
++	video->jpeg_hdr_len = ASPEED_VIDEO_JFIF_HDR_SIZE;
++	video->jpeg_hdr_sel = sel;
++	video->jpeg_hdr_w = width;
++	video->jpeg_hdr_h = height;
++
++	v4l2_dbg(1, debug, &video->v4l2_dev,
++		 "built JFIF header: %ux%u sel=%u len=%u\n",
++		 width, height, sel, video->jpeg_hdr_len);
++}
++
++/*
++ * Wrap the engine's raw entropy stream into a standards-compliant JPEG: shift
++ * the entropy up by the header length, prepend the pre-built JFIF header, and
++ * append the EOI marker. The G3 writes the entropy verbatim (MSB-first byte
++ * stream -- no word-swap needed), so this is a pure rearrange. Returns the
++ * resulting payload size.
++ *
++ * Runs in aspeed_video_irq() threaded-IRQ context under video->lock; the
++ * memmove is bounded by the frame size and never sleeps.
++ */
++static u32 aspeed_video_wrap_jfif(struct aspeed_video *video,
++				  struct aspeed_video_buffer *buf, u32 frame_size)
++{
++	u8 *vaddr = vb2_plane_vaddr(&buf->vb.vb2_buf, 0);
++	u32 hlen = video->jpeg_hdr_len;
++	u32 total = hlen + frame_size + 2;	/* header + entropy + EOI */
++
++	if (!vaddr || !hlen)
++		return frame_size;
++
++	if (total > video->pix_fmt.sizeimage) {
++		v4l2_warn(&video->v4l2_dev,
++			  "frame %u + JFIF %u > buffer %u; emitting raw stream\n",
++			  frame_size, hlen, video->pix_fmt.sizeimage);
++		return frame_size;
++	}
++
++	memmove(vaddr + hlen, vaddr, frame_size);
++	memcpy(vaddr, video->jpeg_hdr, hlen);
++	vaddr[hlen + frame_size] = 0xff;	/* EOI marker */
++	vaddr[hlen + frame_size + 1] = 0xd9;
++
++	return total;
++}
++
+ static void aspeed_video_update(struct aspeed_video *video, u32 reg, u32 clear,
+ 				u32 bits)
+ {
+@@ -785,7 +922,19 @@ static irqreturn_t aspeed_video_irq(int irq, void *arg)
+ 					       struct aspeed_video_buffer,
+ 					       link);
+ 		if (buf) {
+-			vb2_set_plane_payload(&buf->vb.vb2_buf, 0, frame_size);
++			u32 payload = frame_size;
++
++			/*
++			 * G3 (jpeg_only): the engine wrote only the raw entropy
++			 * stream; wrap it in the JFIF header + EOI so userspace
++			 * gets a standards-compliant V4L2_PIX_FMT_JPEG frame.
++			 */
++			if (video->jpeg_only &&
++			    video->format == VIDEO_FMT_STANDARD)
++				payload = aspeed_video_wrap_jfif(video, buf,
++								 frame_size);
++
++			vb2_set_plane_payload(&buf->vb.vb2_buf, 0, payload);
+ 
+ 			/*
+ 			 * aspeed_jpeg requires continuous update.
+@@ -1116,11 +1265,16 @@ static void aspeed_video_get_resolution(struct aspeed_video *video)
  	/*
  	 * Enable mode-detect watchdog, resolution-change watchdog and
  	 * automatic compression after frame capture.
@@ -51,7 +206,7 @@ index a9c2c69b2..bf961c581 100644
  
  	v4l2_dbg(1, debug, &video->v4l2_dev, "Got resolution: %dx%d\n",
  		 det->width, det->height);
-@@ -1240,6 +1262,34 @@ static void aspeed_video_update_regs(struct aspeed_video *video)
+@@ -1240,6 +1394,34 @@ static void aspeed_video_update_regs(struct aspeed_video *video)
  	if (video->format == VIDEO_FMT_STANDARD) {
  		comp_ctrl &= ~FIELD_PREP(VE_COMP_CTRL_EN_HQ, video->hq_mode);
  		seq_ctrl |= video->jpeg_mode;
@@ -86,7 +241,41 @@ index a9c2c69b2..bf961c581 100644
  	}
  
  	if (video->yuv420)
-@@ -2149,6 +2199,7 @@ static int aspeed_video_init(struct aspeed_video *video)
+@@ -1259,6 +1441,13 @@ static void aspeed_video_update_regs(struct aspeed_video *video)
+ 			    VE_COMP_CTRL_HQ_DCT_CHR | VE_COMP_CTRL_VQ_4COLOR |
+ 			    VE_COMP_CTRL_VQ_DCT_ONLY,
+ 			    comp_ctrl);
++
++	/*
++	 * G3: keep the software JFIF header in lock-step with the DCT selector
++	 * just programmed above, so the header the IRQ handler prepends always
++	 * carries the quant tables the engine actually compressed with.
++	 */
++	aspeed_video_build_jfif_header(video);
+ }
+ 
+ static void aspeed_video_init_regs(struct aspeed_video *video)
+@@ -1317,6 +1506,9 @@ static void aspeed_video_start(struct aspeed_video *video)
+ 	video->pix_fmt.width = video->active_timings.width;
+ 	video->pix_fmt.height = video->active_timings.height;
+ 	video->pix_fmt.sizeimage = video->max_compressed_size;
++
++	/* G3: (re)build the JFIF header the IRQ handler prepends to each frame. */
++	aspeed_video_build_jfif_header(video);
+ }
+ 
+ static void aspeed_video_stop(struct aspeed_video *video)
+@@ -1535,6 +1727,9 @@ static int aspeed_video_set_dv_timings(struct file *file, void *fh,
+ 	video->pix_fmt.height = timings->bt.height;
+ 	video->pix_fmt.sizeimage = video->max_compressed_size;
+ 
++	/* G3: rebuild the JFIF header for the new resolution. */
++	aspeed_video_build_jfif_header(video);
++
+ 	timings->type = V4L2_DV_BT_656_1120;
+ 
+ 	v4l2_dbg(1, debug, &video->v4l2_dev, "set new timings(%dx%d)\n",
+@@ -2149,6 +2344,7 @@ static int aspeed_video_init(struct aspeed_video *video)
  }
  
  static const struct of_device_id aspeed_video_of_match[] = {
@@ -94,7 +283,7 @@ index a9c2c69b2..bf961c581 100644
  	{ .compatible = "aspeed,ast2400-video-engine", .data = &ast2400_config },
  	{ .compatible = "aspeed,ast2500-video-engine", .data = &ast2500_config },
  	{ .compatible = "aspeed,ast2600-video-engine", .data = &ast2600_config },
-@@ -2176,6 +2227,7 @@ static int aspeed_video_probe(struct platform_device *pdev)
+@@ -2176,6 +2372,7 @@ static int aspeed_video_probe(struct platform_device *pdev)
  
  	video->jpeg_mode = config->jpeg_mode;
  	video->comp_size_read = config->comp_size_read;
