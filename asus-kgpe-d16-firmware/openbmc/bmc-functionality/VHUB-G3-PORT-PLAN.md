@@ -115,6 +115,15 @@ outcome vs. the current state where a hung BMC is re-bootable). Since patch 0007
 already QEMU-verified against a hang-reproducing model AND independently re-confirmed,
 that marginal silicon retest does not justify risking all silicon access. The clean
 path is a fresh session (P2A un-degraded) or a flash-resident BMC — neither of which
-risks the rig. (A gentler reset via the JTAG run-control path — halt the ARM to stop
-it corrupting the siphon, then P2A-boot — is an untested alternative worth trying
-first next session.)
+risks the rig.
+
+**Empirical follow-up (2026-07-15, 3rd attempt):** retried the vhub-fixed boot with
+the BMC **quiescent** (net down, NOT running Linux) to rule out the
+running-BMC-corrupts-siphon theory — it was STILL flaky ("kernel did not start
+cleanly"). So the degradation is **persistent DDR2/rig state**, not live siphon
+corruption; the JTAG run-control "halt the ARM" idea therefore would NOT help (the
+ARM is not the corruptor), and only a power-cycle (catastrophic F1/F2 strand risk)
+resets it. Silicon retest of patch 0007 is thus genuinely blocked this session with
+no safe unblock. (A JTAG-based DDR2 re-init via `~/openocd-bmc/ddr2-init.tcl` is a
+possible independent path but needs a custom boot flow that skips the P2A DDR2 init
+and hands the JTAG-trained DRAM to U-Boot — untested, next-session work.)
