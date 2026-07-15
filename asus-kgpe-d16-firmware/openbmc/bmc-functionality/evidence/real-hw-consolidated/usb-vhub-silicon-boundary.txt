@@ -1,0 +1,26 @@
+# Host-facing USB on silicon — precise boundary (2026-07-15)
+#
+# GOAL: make the BMC present a USB device to the x86 host (the vKVM/virtual-media
+# path = features 2 'connect USB' and 3b 'send keyboard'). Requires the REAL
+# aspeed-vhub UDC (AST2050 USB device controller @0x1e6a0000, VIC INT#5) to bind,
+# not the dummy_hcd software UDC.
+#
+# FINDINGS (real silicon, kernel 6.6.70-dirty uImage-kgpe-d16-jfif):
+#  1. The aspeed_vhub driver IS in the kernel (CONFIG_USB_ASPEED_VHUB=y, registered
+#     at /sys/bus/platform/drivers/aspeed_vhub). But with the shipped video/OpenBMC
+#     DTBs the only UDC is dummy_udc.0 -> gadgets loop back to the BMC, never reach
+#     the host. That is why F6/F8 USB was 'dummy_hcd loopback only'.
+#  2. Root cause: the usb-vhub@1e6a0000 DT node was present but status="disabled"
+#     (already carrying the faithful G3 counts: 7 downstream ports, 21 endpoints).
+#  3. Enabling it (status="okay", DTB kgpe-hwpass-usb.dtb) and booting the SAME
+#     kernel + SAME initramfs => the box HANGS during boot: no network (No route to
+#     host), no serial/console response. The ONLY change vs a known-good boot is the
+#     vhub node, so the aspeed_vhub probe against the G3 hardware is the hang.
+#
+# CONCLUSION: the DT node is ready, but the mainline 'aspeed,ast2400-usb-vhub'
+# driver does NOT work on the AST2050 (G3) vhub -- its register layout differs
+# (7 ports/21 EP pool vs the G4's 5/15, per the AST2050 datasheet), and the probe
+# hangs the SoC. Real host-facing USB (device + HID keyboard) therefore needs a
+# G3-adapted vhub/UDC driver, not just a DT enable -- a kernel-driver port, the
+# single largest remaining item. The prepared DTB is kept as kgpe-hwpass-usb.dtb
+# (source: enable usb-vhub@1e6a0000 in the vgafix-video DTS) for that work.
