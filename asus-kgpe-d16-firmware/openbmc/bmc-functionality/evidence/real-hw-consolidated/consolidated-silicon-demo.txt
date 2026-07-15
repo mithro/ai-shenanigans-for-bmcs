@@ -1,0 +1,84 @@
+# Consolidated OpenBMC feature demo on the REAL AST2050 (KGPE-D16), over IPMI-LAN
+# Kernel: 6.6.70-dirty (uImage-kgpe-d16-jfif, patch 0006 video wrapping + g3 fixes)
+# Date: 2026-07-15. Remote client: the RPi4 bridge -> BMC 192.168.66.2 (RMCP+/lanplus).
+
+===== F5 IPMI-over-LAN + F1 system-id (mc info) =====
+Device ID                 : 1
+Device Revision           : 1
+Firmware Revision         : 0.00
+IPMI Version              : 2.0
+Manufacturer ID           : 2623
+Manufacturer Name         : ASUSTek Computer Inc.
+Product ID                : 3350 (0x0d16)
+Product Name              : Unknown (0xD16)
+Device Available          : no
+Provides Device SDRs      : no
+Additional Device Support :
+    Sensor Device
+    SDR Repository Device
+    SEL Device
+    FRU Inventory Device
+    Chassis Device
+Aux Firmware Rev Info     : 
+    0x00
+    0x00
+    0x00
+    0x00
+
+===== F1 system identification (FRU inventory) =====
+ Board Mfg Date        : Sun 01 Jan 2012 10:30:00 ACDT ACDT
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z
+
+===== F3 sensors (SDR, live values) =====
+CPU_DIODE        | 01h | ok  |  0.0 | 52.12 degrees C
+CPU0_DTS         | 02h | ok  |  0.0 | 6.13 degrees C
+CPU1_DTS         | 03h | ok  |  0.0 | 0 degrees C
+VCORE0           | 10h | ok  |  0.0 | 0.96 Volts
+VCORE1           | 11h | ok  |  0.0 | 0 Volts
+P12V             | 12h | ok  |  0.0 | 13.76 Volts
+P5V              | 13h | ok  |  0.0 | 3.26 Volts
+P3V3             | 14h | ok  |  0.0 | 3.26 Volts
+P1V5             | 15h | ok  |  0.0 | 1.34 Volts
+P1V1             | 16h | ok  |  0.0 | 0 Volts
+P0V9             | 17h | ok  |  0.0 | 1.22 Volts
+VBAT             | 18h | ok  |  0.0 | 3.33 Volts
+FAN1             | 30h | ok  |  0.0 | 2700 RPM
+FAN2             | 31h | ok  |  0.0 | 0 RPM
+FAN3             | 32h | ok  |  0.0 | 0 RPM
+FAN4             | 33h | ok  |  0.0 | 0 RPM
+FAN5             | 34h | ok  |  0.0 | 0 RPM
+FAN6             | 35h | ok  |  0.0 | 0 RPM
+
+===== F2 chassis power status =====
+System Power         : off
+Power Overload       : false
+Power Interlock      : inactive
+Main Power Fault     : false
+Power Control Fault  : false
+Power Restore Policy : always-off
+Last Power Event     : 
+Chassis Intrusion    : inactive
+Front-Panel Lockout  : inactive
+Drive Fault          : false
+Cooling/Fan Fault    : false
+Front Panel Control  : none
+
+===== F4 Serial-over-LAN configuration =====
+Info: SOL parameter 'Nonvolatile Bitrate (5)' not supported
+Info: SOL parameter 'Volatile Bitrate (6)' not supported
+Set in progress                 : set-complete
+Enabled                         : true
+Force Encryption                : true
+Force Authentication            : true
+Privilege Level                 : ADMINISTRATOR
+Character Accumulate Level (ms) : 100
+Character Send Threshold        : 1
+Retry Count                     : 7
+Retry Interval (ms)             : 1000
+Volatile Bit Rate (kbps)        : IPMI-Over-Serial-Setting
+Non-Volatile Bit Rate (kbps)    : IPMI-Over-Serial-Setting
+Payload Channel                 : 1 (0x01)
+Payload Port                    : 623
