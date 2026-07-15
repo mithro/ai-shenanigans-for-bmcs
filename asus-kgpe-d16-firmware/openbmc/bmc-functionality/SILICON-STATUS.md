@@ -66,8 +66,20 @@ this board (with the reason stated per row — a board-wiring limit vs a SoC lim
 3. **Host-facing USB (device + HID keyboard) on silicon** — drive the aspeed-vhub UDC to
    present a gadget to the host and confirm host enumeration / keystroke delivery.
 4. **Memory/hardware inventory** — needs **host SMBIOS ingestion** (host → BMC over IPMI):
-   `i2cdetect` on silicon confirms the DIMM SPDs are NOT on a BMC I2C bus, so this cannot
-   be a BMC-side I2C read on the KGPE-D16.
+   `i2cdetect` on silicon (bus 1 only, so far) shows the DIMM SPDs are NOT on that BMC
+   I2C bus, so this cannot be a BMC-side I2C read on the KGPE-D16. Follow-ups: scan all 7
+   BMC I2C engines to firm up the claim; add `smbios-mdr` to the image (absent today).
+
+### Audit-surfaced QEMU-only advances (deepen a demo; do NOT create new both-sides passes)
+5. **True SOL session in QEMU** — add the `xyz.openbmc_project.Ipmi.SOL` provider recipe so
+   `ipmitool sol activate` streams (today QEMU proves VUART byte-flow via `obmc-console-client`,
+   not a full RMCP+ SOL session). Bounded image-recipe work. (Silicon SOL stays rig-blocked —
+   host console not wired to the VUART — so this is a QEMU-side deepening only.)
+6. **BMC self-firmware-update in QEMU** — architecturally possible (the SMC SPI master can
+   write the BMC's own flash: `SMC00` write-enable + `SMC04` user-mode writes) but today only
+   the Redfish upload endpoint exists (no MTD write/activation). Would need the QEMU SMC model
+   to accept flash writes + phosphor-software-manager activation. (Silicon needs a flash-resident
+   BMC; the rig boots over NFS, so this is a QEMU-side deepening only.)
 
 ## Architecturally bounded (cannot be fully delivered on the AST2050 / KGPE-D16)
 - **Host BIOS flashing** — not wired on the KGPE-D16 (its BIOS SPI is on the AMD SB,
