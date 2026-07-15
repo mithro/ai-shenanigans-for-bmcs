@@ -416,9 +416,15 @@ def main():
                     # to know host power). The Redfish PowerState string is derived
                     # telemetry: an EXACT match is best; a string that is merely
                     # TRANSITIONAL toward the target ("PoweringOff"/"PoweringOn") is
-                    # accepted WITH A VISIBLE NOTE once GPIOH2 is already at target
-                    # (a hard OFF lingers at PoweringOff in QEMU — no real host to
-                    # confirm host-down); a None read is bmcweb TLS flakiness. A
+                    # accepted WITH A VISIBLE NOTE once GPIOH2 is already at target.
+                    # A hard OFF lingers at PoweringOff partly because there is no
+                    # real host in QEMU to confirm host-down, but ALSO because the
+                    # PowerState-reporting chain has a separately-tracked state-
+                    # manager gap seen on BOTH QEMU and REAL SILICON (on the board,
+                    # CurrentPowerState likewise did not track the live pgood 1->0 --
+                    # see OPENBMC-POWER-INTEGRATION.md); it is a telemetry gap, not a
+                    # control failure (GPIOH2/pgood is correct both places). A None
+                    # read is bmcweb TLS flakiness. A
                     # stable OPPOSITE PowerState (e.g. "On" when we forced Off) IS a
                     # failure and is NOT accepted — so this is not a relaxed gate.
                     toward = {"On": {"On", "PoweringOn"}, "Off": {"Off", "PoweringOff"}}
@@ -434,8 +440,10 @@ def main():
                         "ps_exact": ps_exact, "ps_toward": ps_toward}
                     note = "" if ps_exact or not step_ok else (
                         f"  [note: PowerState '{pstate}' is transitional toward "
-                        f"{want_rf}; GPIOH2 already at target — host-state telemetry "
-                        f"lag, no real host in QEMU]")
+                        f"{want_rf}; GPIOH2 already at target — a state-manager "
+                        f"PowerState-reporting lag tracked separately (seen on QEMU "
+                        f"AND silicon, OPENBMC-POWER-INTEGRATION.md), not a control "
+                        f"failure]")
                     print(f"[redfish] Reset {rtype} -> HTTP {st} ; "
                           f"modeled gpioH2={modeled} (want {want_on}) ; "
                           f"Redfish PowerState={pstate} (want {want_rf}) "

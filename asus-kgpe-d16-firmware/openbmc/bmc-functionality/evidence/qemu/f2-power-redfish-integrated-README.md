@@ -37,12 +37,16 @@ drive that deadlocks on this board); with it, it runs `kgpe-power.sh on`.
 
 `ForceOff`: gpioH2=False — **the host IS powered off** (hardware correct). The only
 imperfection is that the Redfish *Systems* `PowerState` string read `PoweringOff` (a
-host TransitioningToOff state) instead of settling to `Off`. This is a host-state-machine
-reporting artifact of running OpenBMC with NO real host in QEMU: the chassis power
-(pgood=gpioH2) drops correctly, but the *host* state manager has no host to confirm
-shutdown completion, so `/redfish/v1/Systems/system` PowerState lingers at
-`PoweringOff`. Note the very next `On` action reads `PowerState=On` correctly, and
-`On`/`ForceRestart` PowerState are correct — only the host-off *string* lags.
+host TransitioningToOff state) instead of settling to `Off`. This is a state-manager
+PowerState-**reporting** gap, not a control failure — and it is **tracked separately
+and reproduced on BOTH QEMU and real silicon**: on the board, `CurrentPowerState`
+likewise did not track the live pgood `1->0` transition on a drive (see
+`OPENBMC-POWER-INTEGRATION.md`, "Real-hardware DRIVE result"). In QEMU it is
+compounded by there being no real host to confirm shutdown completion, so
+`/redfish/v1/Systems/system` PowerState lingers at `PoweringOff` while the chassis
+power (pgood=gpioH2) has correctly dropped. Note the very next `On` action reads
+`PowerState=On` correctly, and `On`/`ForceRestart` PowerState are correct — only the
+host-off *string* lags.
 
 ## Honest scope
 
@@ -51,8 +55,10 @@ shutdown completion, so `/redfish/v1/Systems/system` PowerState lingers at
   and the direct-script QEMU PASS (`f2-power-sysfs-onoffreset-PASS.txt`), feature 1
   is solidly demonstrated both sides.
 - Remaining follow-up (telemetry only): the Redfish Systems `PowerState` string for
-  a hard OFF settling to `Off` needs the host state machine to observe host-down —
-  not observable BMC-only in QEMU. The chassis-level power is correct throughout.
+  a hard OFF settling to `Off` is a state-manager reporting gap tracked separately —
+  reproduced on QEMU AND silicon (`CurrentPowerState` not tracking live pgood on the
+  board), and in QEMU also lacking a real host to observe host-down. The chassis-level
+  power (pgood=gpioH2) is correct throughout on both.
 - Deployment note for the test/CI export: it must include the
   `obmc-power-{start,stop}@.service.d/kgpe.conf` drop-ins (the recipe provides them;
   deploy them onto any hand-assembled rootfs the way `kgpe-power.sh` is deployed).
