@@ -63,9 +63,25 @@ QEMU yet hangs on silicon. To reproduce silicon and regression-test the port:
   driver does not.
 - Grow `NR_REGS` to cover 0x34F.
 
-## Status
-Analysis complete + cited. Driver patch (fixes 1-4) implemented as
-`kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch` (see commit) — reviewed
-against the datasheet but **silicon-verification pending** a rig with a
-non-degraded P2A path (the bench P2A load degrades after ~15 boot cycles). QEMU
-faithfulness change is the recommended next step to gate the fix in CI.
+## Status (2026-07-15)
+- **Analysis:** complete + cited (above).
+- **Driver patch:** fixes 1 (PHY-ready gate), 2 (de-livelock on ISR[18]), and 4
+  (explicit `ast2050-usb-vhub` compatible) implemented in
+  `kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch`, wired into
+  `build-kernel.sh`. **Compiles clean** (arm cross). Fix 3 (widen DT `reg` to
+  0x350 + QEMU `NR_REGS`) is a runtime-robustness follow-up, not yet applied.
+- **Silicon verification:** ATTEMPTED but **blocked by P2A rig degradation** — the
+  bench BMC boots into volatile DRAM over the P2A siphon, which corrupts large
+  (~3.5 MB) kernel loads after ~15 boot cycles in a session ("kernel did not start
+  cleanly — flaky P2A load"). Both boot attempts of the vhub-fixed kernel +
+  vhub-enabled DTB (`uImage-kgpe-d16-vhubfix` + `kgpe-hwpass-usb.dtb`) hit flaky
+  loads and did not reach userspace, so it is **undetermined** whether the box now
+  survives the vhub probe. Resetting the P2A path needs a Tasmota `au-plug-10`
+  power-cycle, which was NOT done because the host can halt at F1/F2 on a cold boot
+  (dead CMOS battery, see the d16-host-pxe-boot notes) — that would strand the host
+  (no host → no P2A → unrecoverable remotely), a worse state than the current one.
+- **Recommended next step:** make the QEMU model faithful (CTRL[31] read-only +
+  ISR[18] on connect-into-dead-PHY, §"QEMU faithfulness" above) and gate the fix in
+  CI there — this verifies the port WITHOUT the fragile P2A rig. Then re-test on
+  silicon on a fresh boot (early in a session, before P2A degrades) or a
+  flash-resident BMC.
