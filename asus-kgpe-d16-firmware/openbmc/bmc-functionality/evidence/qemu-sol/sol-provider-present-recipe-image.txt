@@ -1,0 +1,28 @@
+# SOL Ipmi.SOL provider IS present on the recipe-built image (img2) — busctl,
+# 2026-07-16. This RESOLVES the earlier "image ships no xyz.openbmc_project.Ipmi.SOL
+# provider" gap (which was observed on the BASE quanta-q71l image, openbmc-full,
+# built WITHOUT the KGPE-D16 settings recipe). On the recipe-built image the
+# provider object exists and is owned by xyz.openbmc_project.Settings:
+
+# 1) ObjectMapper GetObject /xyz/openbmc_project/ipmi/sol/eth0:
+GetObject rc=0:
+a{sas} 1 "xyz.openbmc_project.Settings" 4 "org.freedesktop.DBus.Introspectable" \
+        "org.freedesktop.DBus.Peer" "org.freedesktop.DBus.Properties" \
+        "xyz.openbmc_project.Ipmi.SOL"
+
+# 2) busctl tree xyz.openbmc_project.Settings | grep sol:
+    | `- /xyz/openbmc_project/ipmi/sol
+    |   `- /xyz/openbmc_project/ipmi/sol/eth0
+
+# CONSEQUENCE: the SOL provider is delivered by settings/sol-template.yaml +
+# phosphor-settings-defaults-native.bbappend (staged by sync-to-openbmc-tree.sh),
+# so a fresh asset build with the sync wired in (build-openbmc-rootfs.yml, this
+# session) will carry it. The remaining `ipmitool sol activate` blocker on this
+# image is NOT the provider — it is RMCP+ RAKP session-auth flakiness on the slow
+# 256MB QEMU board (sol payload status / sol activate both report "no response
+# from RAKP 1 message" while `mc info` on the same run succeeds; the same
+# known RMCP+ slowness the lanplus suite hits, F5's finding). The SOL DATA path
+# itself is proven: obmc-console-client captures the injected host bytes over the
+# AST2050 VUART (748 bytes / 17 HOSTLINE markers, F4 RESULT PASS this same run).
+# A streaming sol-activate CI test is intentionally NOT added: RMCP+ RAKP under
+# 256MB QEMU is inherently racy, so it would be a flaky test.

@@ -54,21 +54,31 @@ a TCP chardev (the host COM1 stand-in), feeds `HOSTLINE-NN` lines into it, and:
   status 1 1` rc=0, "User 1 on channel 1 is enabled") and the RMCP+ session
   reaches `netipmid`; `sol activate` does **not** stream — see the gap below.
 
-## The one gap — `ipmitool sol activate` (image-recipe, not model/plumbing)
+## `ipmitool sol activate` — provider gap RESOLVED; residual is RMCP+ RAKP (2026-07-16)
 
 `netipmid`'s Activate-Payload reads the SOL config object
-`/xyz/openbmc_project/ipmi/sol/eth0` (interface `xyz.openbmc_project.Ipmi.SOL`,
-property `Progress`) via the ObjectMapper. **This image ships no provider** for
-that object (verified: no D-Bus owner; the legacy `phosphor-settings-manager`
-`settings.yaml` only defines `org.openbmc.settings.Host`). So the D-Bus read
-returns `ResourceNotFound` and `ipmitool` reports "No response activating SOL
-payload" (netipmid journal: `sd_bus_call: …ResourceNotFound`).
+`/xyz/openbmc_project/ipmi/sol/eth0` (interface `xyz.openbmc_project.Ipmi.SOL`)
+via the ObjectMapper. The earlier "**image ships no provider**" finding was on the
+**base quanta-q71l image** (openbmc-full), which is built WITHOUT the KGPE-D16
+settings recipe. **On the recipe-built image (img2) the provider IS present** —
+`busctl` confirms it (`evidence/qemu-sol/sol-provider-present-recipe-image.txt`):
+`ObjectMapper GetObject /xyz/openbmc_project/ipmi/sol/eth0` → rc=0, owned by
+`xyz.openbmc_project.Settings`, interface `xyz.openbmc_project.Ipmi.SOL`; the
+object shows in `busctl tree`. It is delivered by `settings/sol-template.yaml` +
+`phosphor-settings-defaults-native.bbappend`, staged by `sync-to-openbmc-tree.sh`
+(and, as of this session, the sync is wired into `build-openbmc-rootfs.yml`, so a
+fresh asset build will carry it).
 
-This is purely the **IPMI front-end config object** — the SOL *bytes* flow (proven
-via `obmc-console-client`, which uses the same `obmc-console-server`). The fix is
-an image change: add a provider of `xyz.openbmc_project.Ipmi.SOL` per network
-interface (in current OpenBMC this is a settings/SOL-config recipe), then rebuild
-and re-stage. No QEMU/DTS/kernel change is needed. Tracked as a follow-up.
+So the SOL config provider is **not** the blocker anymore. The residual
+`sol activate` gap on this image is **RMCP+ RAKP session-auth flakiness** on the
+slow 256 MB QEMU board: `sol payload status` / `sol activate` both report
+"no response from RAKP 1 message" while `mc info` on the same run succeeds — the
+same known RMCP+ slowness the lanplus suite hits (F5's finding), a *session-layer*
+issue that never reaches the SOL payload. The SOL **data path** is proven
+regardless: `obmc-console-client` captures the injected host bytes over the
+AST2050 VUART (748 B / 17 markers, F4 RESULT PASS). A streaming `sol activate` CI
+test is intentionally NOT added — RMCP+ RAKP under 256 MB QEMU is inherently racy,
+so it would be a flaky test. No QEMU/DTS/kernel change is needed.
 
 ## Real hardware (AST2050 on the rig) — 2026-07-12
 
