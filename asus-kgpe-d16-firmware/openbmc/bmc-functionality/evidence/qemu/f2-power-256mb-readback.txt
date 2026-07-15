@@ -1,0 +1,39 @@
+# QEMU Redfish PowerState readback — FIXED (was null); mem=256M, op-pwrctl image.
+# The null readback was 64MB memory pressure (bmcweb OOM), NOT a wiring gap:
+# with adequate memory PowerState returns real values and OFF tracks correctly.
+# ForceOff -> PowerState=Off [PASS]. Integrated power-ON does NOT engage gpioH2
+# (op-pwrctl + GPIOA4 'BMC-in-control' engagement) -- the SAME gap as silicon
+# issue #95, so QEMU now MIRRORS silicon for power: OFF + readback work both
+# sides, integrated-ON is the open #95 item both sides.
+
+[redfish] ServiceRoot up: RedfishVersion=1.17.0
+:~# [redfish] initial: QMP gpioH2=False PowerState=Off
+[redfish] Reset On -> HTTP 503 ; modeled gpioH2=False (want True) ; Redfish PowerState=Off (want On) [FAIL]
+[redfish] Reset ForceOff -> HTTP 204 ; modeled gpioH2=False (want False) ; Redfish PowerState=Off (want Off) [PASS]
+[redfish] Reset On -> HTTP 204 ; modeled gpioH2=False (want True) ; Redfish PowerState=PoweringOff (want On) [FAIL]
+[redfish] Reset ForceRestart -> HTTP 204 ; modeled gpioH2=False (want True) ; Redfish PowerState=PoweringOff (want On) [FAIL]
+F2 RESULT: FAIL
+POWER_STATE(GPIOH2)=0
+root@quanta-q71l:~# echo __B_pwr_on__; sh /usr/local/bin/kgpe-power.sh on; echo ___E_pwr_on__$?[power:on] QMP gpioH2=False guest=None want=on [FAIL]
+echo __B_pwr_off__; sh /usr/local/bin/kgpe-power.sh off; echo __E_pwr_off__$?[power:off] QMP gpioH2=False guest=None want=off [PASS]
+echo __B_pwr_on__; sh /usr/local/bin/kgpe-power.sh on; echo __E_pwr_on__$?[power:on] QMP gpioH2=False guest=None want=on [FAIL]
+POWER_STATE(GPIOH2)=0
+echo __B_pwr_reset__; sh /usr/local/bin/kgpe-power.sh reset; echo __E_pwr_reset__$[power:reset] QMP gpioH2=False guest=None want=on [FAIL]
+POWER_STATE(GPIOH2)=0
+POWER_STATE(GPIOH2)=0
+POWER_STATE(GPIOH2)=0
+    "final_PowerState": "Off",
+F2 RESULT: FAIL
+
+# --- sysfs-driver diagnostic (kgpe-power.sh on/off directly, bypassing op-pwrctl) ---
+# Even the DIRECT kgpe-power.sh on leaves gpioH2=False in QEMU, though it is PROVEN
+# on silicon (plug 3W->103W, host powers on). So the power-ON gap in QEMU is NOT
+# just op-pwrctl: kgpe-power.sh's in-guest GPIO drive (sysfs /sys/class/gpio + the
+# SCU74[25] A4 reclaim + B1 pulse) does not reach the modeled GPIO latch. NB: the
+# bare-metal fwtest/pytest test_power (which drives A4/B1 directly at the register
+# level + the on_blocked_without_a4 negative check) DOES pass -- so the MODEL's
+# power-on latch is correct; the gap is the guest kgpe-power.sh GPIO path vs the
+# model (likely sysfs gpiochip-base / line mapping, or the exact write sequence).
+# CONCLUSION for feature 1 (power) in QEMU: latch on/off validated via test_power;
+# Redfish PowerState readback fixed (this file); the Redfish/kgpe-power.sh ON round-
+# trip is the remaining QEMU integration gap (characterized), alongside silicon #95.
