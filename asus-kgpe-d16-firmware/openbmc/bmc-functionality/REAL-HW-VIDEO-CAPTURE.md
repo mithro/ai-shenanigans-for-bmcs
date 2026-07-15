@@ -88,6 +88,14 @@ entropy in pure-JPEG mode (VR060[0]) using the AST2050 ROM quant tables, and the
 QEMU DTS binds `aspeed,ast2050-video-engine`, so `video-capture-test.py` drives the real
 G3 wrapping path end to end (all 8 colour bars pixel-verify on the wrapped frame).
 
+**PROVEN ON REAL SILICON (2026-07-15).** Booted the wrapping kernel (`uImage-kgpe-d16-jfif`)
++ `kgpe-hwpass-vgafix-video.dtb` over P2A; `f8capture` on `/dev/video0` reported
+`bytesused=28418` = **640 (JFIF header) + 27776 (raw entropy) + 2 (EOI)** — the driver
+wrapped the frame in-kernel on the AST2050. The captured base64 decodes **directly** (no
+reconstruction): `ff d8` SOI, `ff d9` EOI, 1024×768, real host-screen content
+(`evidence/real-hw-video/silicon-direct-jpeg.png`, extracted by
+`evidence/real-hw-video/decode-silicon-frame.py`).
+
 ## Remaining follow-up (not blocking capture)
 - **Capturing a specific BIOS screen.** The captured frame is whatever the host is
   currently scanning out; to capture a specific POST screen, warm-reset the host
