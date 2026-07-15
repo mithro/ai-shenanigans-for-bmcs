@@ -70,6 +70,16 @@ QEMU yet hangs on silicon. To reproduce silicon and regression-test the port:
   `kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch`, wired into
   `build-kernel.sh`. **Compiles clean** (arm cross). Fix 3 (widen DT `reg` to
   0x350 + QEMU `NR_REGS`) is a runtime-robustness follow-up, not yet applied.
+- **QEMU verification:** the F6 USB test (`scripts/usb-test.py`) **PASSES with the
+  fixed kernel** — `aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2
+  mode`, all 7 G3 ports (p1-p7), and the mass-storage gadget enumerates. So patch
+  0007 is compile-clean and **QEMU-safe (no regression)**; its PHY-ready-wait +
+  ISR[18] de-livelock code paths execute without breaking the probe. CAVEAT: the
+  QEMU `aspeed_udc_ast2050` model is a passive register array that does NOT
+  reproduce the silicon deadlock, so this confirms the fix is *probe-safe/
+  non-regressing*, NOT that it *resolves* the silicon hang. A faithful model
+  (CTRL[31] RO + ISR[18], §"QEMU faithfulness") would close that, but needs the
+  confirmed silicon hang mechanism (not captured — serial buffering + rig degrade).
 - **Silicon verification:** ATTEMPTED but **blocked by P2A rig degradation** — the
   bench BMC boots into volatile DRAM over the P2A siphon, which corrupts large
   (~3.5 MB) kernel loads after ~15 boot cycles in a session ("kernel did not start
