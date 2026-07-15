@@ -19,6 +19,13 @@
 # GPIOH2 1, host PXE-boots; off -> 103W->4W), feature 1's power on/off is now
 # demonstrated on BOTH QEMU and real silicon via the same BMC power script.
 #
+# PATH NOTE (independent review 2026-07-16): re-verified with the script at the
+# REAL install path /usr/bin/kgpe-power.sh (= Yocto ${bindir}, the path the
+# recipe's do_install and the systemd units kgpe-power-gpio-init.service +
+# obmc-power-{start,stop}@ drop-ins actually invoke) -- still F2 RESULT: PASS on
+# all of init/on/off/on/reset. The test default and the CI deploy step now both
+# target /usr/bin (not /usr/local/bin), so the path under test matches the image.
+#
 # ---------------------------------------------------------------------------
 # WHAT WAS ACTUALLY WRONG (corrected 2026-07-16) — earlier rounds mis-diagnosed
 # this as an A4 sysfs/pinctrl model gap and even (wrongly) changed the firmware.

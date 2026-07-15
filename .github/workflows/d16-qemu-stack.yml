@@ -531,10 +531,13 @@ jobs:
         run: |
           sudo mkdir -p /export/openbmc-f2power
           sudo tar -C /export/openbmc-f2power -xf "obmc-out/$OBMC_ROOTFS_ASSET"
-          # Test THIS branch's power script regardless of the asset's age.
+          # Test THIS branch's power script regardless of the asset's age, at the
+          # REAL install path ${bindir}=/usr/bin that the recipe + systemd
+          # drop-ins invoke (not /usr/local/bin) so the path under test matches
+          # the one the running image actually uses.
           sudo install -D -m 0755 \
             asus-kgpe-d16-firmware/openbmc/recipes/power/files/kgpe-power.sh \
-            /export/openbmc-f2power/usr/local/bin/kgpe-power.sh
+            /export/openbmc-f2power/usr/bin/kgpe-power.sh
           echo '/export/openbmc-f2power *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
             | sudo tee /etc/exports
           sudo nfsconf --set nfsd vers3 y

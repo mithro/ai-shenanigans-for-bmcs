@@ -231,8 +231,10 @@ def main():
     ap.add_argument("--mem", type=int, default=64)
     ap.add_argument("--user", default="root")
     ap.add_argument("--password", default="0penBmc")
-    ap.add_argument("--power-script", default="/usr/local/bin/kgpe-power.sh",
-                    help="path of kgpe-power.sh inside the guest (staged via NFS)")
+    ap.add_argument("--power-script", default="/usr/bin/kgpe-power.sh",
+                    help="path of kgpe-power.sh inside the guest — the real install "
+                         "path (${bindir}) the recipe + systemd drop-ins use "
+                         "(kgpe-power-gpio-init.service, obmc-power-{start,stop}@)")
     ap.add_argument("--driver", choices=["redfish", "sysfs"], default="redfish",
                     help="redfish = drive Redfish ComputerSystem.Reset and let "
                          "op-pwrctl toggle the GPIO (fully-automated loop); "
