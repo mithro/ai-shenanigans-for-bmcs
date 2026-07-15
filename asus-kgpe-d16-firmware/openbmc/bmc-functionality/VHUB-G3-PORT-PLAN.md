@@ -99,4 +99,22 @@ QEMU yet hangs on silicon. To reproduce silicon and regression-test the port:
   ISR[18] on connect-into-dead-PHY, §"QEMU faithfulness" above) and gate the fix in
   CI there — this verifies the port WITHOUT the fragile P2A rig. Then re-test on
   silicon on a fresh boot (early in a session, before P2A degrades) or a
-  flash-resident BMC.
+  flash-resident BMC.  **[DONE 2026-07-15 — the faithful model + CI gating is
+  implemented and verified; see "QEMU verification" above.]**
+
+## Why the silicon retest was NOT forced (power-cycle risk analysis)
+Resetting the degraded P2A siphon needs a Tasmota `au-plug-10` power-cycle. That was
+deliberately NOT done: on a cold boot the host halts at **F1/F2** (dead CMOS battery,
+confirmed — the COM1 serial log shows `Intel Boot Agent GE v1.3.24` at the last cold
+boot). Recovering past F1/F2 needs driving the host BIOS over the COM1 serial
+(`seriald.py` + `com1.tx` under the Pi's `tim` user) — a path that could not be
+verified without first being AT an F1/F2 prompt (chicken-and-egg). If that recovery
+failed, the host would halt forever → no host → no P2A → **the entire rig's silicon
+access is lost for the whole program** (a catastrophic, physically-unrecoverable
+outcome vs. the current state where a hung BMC is re-bootable). Since patch 0007 is
+already QEMU-verified against a hang-reproducing model AND independently re-confirmed,
+that marginal silicon retest does not justify risking all silicon access. The clean
+path is a fresh session (P2A un-degraded) or a flash-resident BMC — neither of which
+risks the rig. (A gentler reset via the JTAG run-control path — halt the ARM to stop
+it corrupting the siphon, then P2A-boot — is an untested alternative worth trying
+first next session.)
