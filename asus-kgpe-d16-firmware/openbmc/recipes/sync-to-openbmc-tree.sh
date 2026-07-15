@@ -78,6 +78,17 @@ install -D -m0644 "$HERE/entity-manager/entity-manager_%.bbappend" \
 # installs the real KGPE-D16 map (PGOOD=GPIOH2 in / B1,F0,B6 out) instead.
 install -D -m0644 "$HERE/power/files/gpio_defs.json" \
     "$PH_SKEL/files/gpio_defs.json"
+# The power bbappend's SRC_URI ALSO needs these (F2 integrated power control): the
+# on/off/reset pulse driver, the A4-reclaim gpio-init oneshot, and the two
+# phosphor-state-manager obmc-power-{start,stop}@ drop-ins that route chassis power
+# transitions through kgpe-power.sh. Without copying them, bitbake do_fetch fails on
+# the missing file:// sources (or the drop-ins never reach the image, so the
+# integrated Redfish power-ON path silently falls back to op-pwrctl's deadlocking
+# held-level setPowerState). Keep this list in lock-step with the bbappend SRC_URI.
+for f in kgpe-power.sh kgpe-power-gpio-init.service \
+         obmc-power-start-kgpe.conf obmc-power-stop-kgpe.conf; do
+    install -D -m0644 "$HERE/power/files/$f" "$PH_SKEL/files/$f"
+done
 install -D -m0644 "$HERE/power/obmc-libobmc-intf_%.bbappend" \
     "$PH_SKEL/obmc-libobmc-intf_%.bbappend"
 

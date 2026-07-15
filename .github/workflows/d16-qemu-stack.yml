@@ -54,6 +54,24 @@ jobs:
             --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
             --timeout 15
 
+  sync-lint:
+    name: Recipe sync completeness (static — every SRC_URI file:// is staged)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Fast static guard (no build): sync-to-openbmc-tree.sh must stage every
+    # file:// SRC_URI source of the recipes it installs, or a bitbake of the
+    # published asset fails do_fetch (or silently ships a stale file). This caught
+    # the power drop-ins (kgpe-power.sh + obmc-power-{start,stop}@ conf) being
+    # referenced by the bbappend SRC_URI but not synced. Runs on every push so a
+    # future bbappend edit that forgets the sync is caught before the multi-hour
+    # asset build (build-openbmc-rootfs.yml) ever runs.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Verify sync-to-openbmc-tree.sh stages all SRC_URI sources
+        run: uv run asus-kgpe-d16-firmware/openbmc/recipes/verify-sync-complete.py
+
   power-control-test:
     name: F2 host power-control loop (fwtest under QEMU)
     runs-on: ubuntu-latest

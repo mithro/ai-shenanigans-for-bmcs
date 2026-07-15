@@ -75,6 +75,15 @@ jobs:
           fi
           echo "Bitbaking obmc-phosphor-image-ast2050-full in $OPENBMC_TREE (memory-capped)"
           [ -d "$OPENBMC_TREE" ] || { echo "::error::OpenBMC tree not found: $OPENBMC_TREE (register the build machine as the openbmc-builder runner, or pass squashfs_path)"; exit 1; }
+          # Build from THIS repo's current board recipes, not a hand-maintained
+          # (drift-prone) tree: fail-fast verify the sync is complete (a bbappend
+          # referencing an unstaged file:// source would otherwise fail do_fetch
+          # deep into the multi-hour build), then stage the recipes into the tree.
+          # verify-sync-complete.py is stdlib-only, so plain python3 (the builder
+          # already has it for bitbake) suffices here.
+          REC="$GITHUB_WORKSPACE/asus-kgpe-d16-firmware/openbmc/recipes"
+          python3 "$REC/verify-sync-complete.py"
+          bash "$REC/sync-to-openbmc-tree.sh" "$OPENBMC_TREE"
           cd "$OPENBMC_TREE"
           # shellcheck disable=SC1091
           . setup quanta-q71l build/quanta-q71l
