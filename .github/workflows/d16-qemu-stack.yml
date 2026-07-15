@@ -478,6 +478,87 @@ jobs:
           name: f5-ipmi-evidence
           path: f5-evidence/
 
+  f2-power-sysfs:
+    name: F2 — host power on/off/reset via kgpe-power.sh (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # The bare-metal `power-control-test` job asserts the modeled pwrseq latch at
+    # the register level; THIS job exercises the SAME latch through the full
+    # in-guest OpenBMC GPIO path — the real BMC power script kgpe-power.sh (the one
+    # hardware-proven on silicon) driving the GPIOB1/F0/B6 request lines + the
+    # GPIOA4 lockout over sysfs, read back on GPIOH2 both in-band (devmem) and
+    # out-of-band (QMP gpioH2). Needs the fuller OpenBMC rootfs Release asset;
+    # fetches it and RUNS when present, or SKIPS with a visible warning (never a
+    # silent green) when absent. Deploys the CURRENT in-repo kgpe-power.sh over the
+    # asset so the script under test is always this branch's version.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F2 power on/off::rootfs '$OBMC_ROOTFS_ASSET' fetched — RUNNING the host power on/off/reset QEMU test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F2 power on/off SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the host power on/off/reset QEMU test. Publish it via build-openbmc-rootfs.yml; see .github/workflows/CI-README.md."
+            { echo "## F2 host power on/off/reset — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the host power on/off/reset QEMU test could not run. Visible skip, not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC rootfs over NFS + deploy the current kgpe-power.sh
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-f2power
+          sudo tar -C /export/openbmc-f2power -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          # Test THIS branch's power script regardless of the asset's age.
+          sudo install -D -m 0755 \
+            asus-kgpe-d16-firmware/openbmc/recipes/power/files/kgpe-power.sh \
+            /export/openbmc-f2power/usr/local/bin/kgpe-power.sh
+          echo '/export/openbmc-f2power *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc + drive host power on/off/reset via kgpe-power.sh
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f2-power-control-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-f2power --mem 256 \
+            --driver sysfs --qmp-sock "$RUNNER_TEMP/f2q.sock" \
+            --evidence-dir f2-power-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f2-power-evidence
+          path: f2-power-evidence/
+
   f4-sol:
     name: F4 — Serial-over-LAN on the AST2050 VUART in 64 MB (OpenBMC NFS root)
     runs-on: ubuntu-latest
