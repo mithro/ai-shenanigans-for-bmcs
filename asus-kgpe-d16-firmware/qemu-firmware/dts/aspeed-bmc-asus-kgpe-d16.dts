@@ -279,6 +279,15 @@
  * capture device". See F8-KVM.md for the host-VGA-source boundary.
  */
 &video {
+	/*
+	 * Bind the G3 compatible (not the g4.dtsi default) so the driver takes
+	 * the jpeg_only path: pure-JPEG via VE_COMP_CTRL[0], DCT selector clamped
+	 * to the 8 ROM tables, and software JFIF wrapping of the headerless
+	 * entropy the AST2050 engine emits -- exactly as on real silicon (the
+	 * real-HW DTB uses the same compatible). The QEMU model emits headerless
+	 * entropy when VR060[0] is set, so QEMU now mirrors silicon end to end.
+	 */
+	compatible = "aspeed,ast2050-video-engine";
 	status = "okay";
 };
 
