@@ -46,11 +46,15 @@ F2 RESULT: FAIL
 # update the kernel pinctrl view, so the sysfs `gpio export` of A4 fails -> A4 is
 # never driven. PROOF the model is correct: driving A4 AND B1 via DEVMEM directly
 # (bypassing sysfs) -> QMP gpioA4=True, gpioB1=False, gpioH2=True (power ON).
-# FIX applied to setup_a4: drive A4 out+high via devmem (banks-A-D dir/data regs),
-# not sysfs -- reaches the pin on both silicon and QEMU regardless of pinctrl.
-# REMAINING op-pwrctl-Redfish gap: op-pwrctl drives B1 via the kernel GPIO
-# framework (sysfs), whose shadow-register write for bank A-D clobbers the raw
-# devmem A4 back low -> integrated Redfish ON still does not latch. Clean fix =
-# free GPIOA4 in the DTB pinctrl (so A4 is a real sysfs GPIO, matching the silicon
-# DTB where kgpe-power.sh on is proven), OR have op-pwrctl drive A4. That is the
-# #95-class integration item, now precisely root-caused, on both silicon and QEMU.
+# WHERE THE FIX BELONGS (corrected 2026-07-16): a devmem A4 drive in the firmware
+# was TRIED and REVERTED -- it would REGRESS silicon. On silicon A4 is driven via
+# SYSFS at gpio-init, which places A4 in the kernel's bank-A-D output *shadow*, so
+# it SURVIVES op-pwrctl's later sysfs B1 writes to the same register (0x1E780000).
+# A raw devmem A4 sits OUTSIDE that shadow and would be clobbered the instant
+# op-pwrctl drives B1 -> it breaks the hardware-verified (2026-07-13) integrated
+# power-ON. Per the project's faithfulness oracle rule, the QEMU model NOT honoring
+# the sysfs A4 drive (that silicon honors) is a MODEL-SIDE gap to fix in QEMU/DTB
+# (e.g. free GPIOA4 in the modeled pinctrl so a sysfs export succeeds), never a
+# reason to change this silicon-proven script. setup_a4 therefore KEEPS the sysfs
+# drive. Net feature-1 state: OFF + readback proven both sides; integrated ON is
+# the #95 item both sides; the QEMU-model sysfs-A4 faithfulness gap is the fix site.

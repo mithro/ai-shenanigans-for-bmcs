@@ -28,8 +28,6 @@ set -eu
 
 SCU_KEY=0x1e6e2000     # SCU protection key register (write 0x1688A8A8 to unlock)
 SCU74=0x1e6e2074       # multi-function pin control #5 (bit25 = GPIOA4 / PHYLINK)
-GPIO00=0x1E780000      # GPIO data,      banks A-D (GPIOA4 = bit 4)
-GPIO04=0x1E780004      # GPIO direction, banks A-D
 GPIO20=0x1E780020      # GPIO data, banks E-H (GPIOH2 = bit 26 = STA_LINE_POWER)
 
 # Resolve the aspeed GPIO controller's sysfs base (label "1e780000.gpio").
@@ -69,18 +67,15 @@ setup_a4() {
 		devmem "$SCU_KEY" 32 0x1688A8A8                 # unlock SCU
 		s=$(devmem "$SCU74")
 		devmem "$SCU74" 32 $(( s & ~0x02000000 ))       # clear bit25 (PHYLINK) -> GPIO
-		# Drive A4 out+high via DEVMEM, not sysfs: clearing SCU74[25] with devmem
-		# does NOT update the kernel pinctrl view, so a sysfs `gpio export` of A4
-		# fails wherever the pad's pinctrl still claims A4 for PHYLINK (observed in
-		# the faithful QEMU model -- A4 never reached the modeled GPIO latch, so
-		# power-ON silently never engaged; hardware-verified fix). devmem writes the
-		# banks-A-D direction+data registers directly, reaching the pin on both
-		# silicon and QEMU regardless of pinctrl.
-		d=$(devmem "$GPIO04"); devmem "$GPIO04" 32 $(( d | 0x10 ))   # A4 (bit4) -> output
-		v=$(devmem "$GPIO00"); devmem "$GPIO00" 32 $(( v | 0x10 ))   # A4 (bit4) -> high
-	else
-		_exp "$A4"; _dir "$A4" out; _val "$A4" 1        # fallback: sysfs (no devmem)
 	fi
+	# Drive A4 via SYSFS (NOT devmem): the sysfs path places A4 in the kernel's
+	# bank-A-D output shadow, so it SURVIVES op-pwrctl's later sysfs B1 writes to
+	# the same register. A raw devmem A4 would be outside that shadow and get
+	# clobbered the moment op-pwrctl drives B1 -> breaks the silicon-proven
+	# (2026-07-13) integrated power-ON. The QEMU model NOT honoring this sysfs
+	# drive is a model-faithfulness gap tracked on the QEMU side, never a reason
+	# to change this hardware-verified firmware. See f2-power-256mb-readback.txt.
+	_exp "$A4"; _dir "$A4" out; _val "$A4" 1            # A4 -> output, high (BMC in control)
 }
 
 # Claim + de-assert the three request lines (call only when op-pwrctl is stopped).
