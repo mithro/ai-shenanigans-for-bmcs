@@ -1,0 +1,24 @@
+# Real-silicon f8capture transcript — proves the KERNEL DRIVER wrapped the frame
+# AST2050 (KGPE-D16), kernel 6.6.70-dirty = uImage-kgpe-d16-jfif (patch 0006 JFIF wrapping).
+# Captured 2026-07-15 over P2A boot + SSH (ssh -i id_kgpe_d16_test root@192.168.66.2).
+#
+# KEY: 'bytesused' is what VIDIOC_DQBUF returned = the payload size the KERNEL driver set.
+#   unwrapped G3 driver  -> raw entropy only            = 27776 bytes
+#   wrapped   G3 driver  -> 27776 + 640 JFIF hdr + 2 EOI = 28418 bytes  <-- observed
+# So bytesused=28418 (not 27776) is the in-kernel wrapping, observed live on silicon.
+
+$ F8_NBUFS=2 f8capture /run/bios.jpg 40
+6.6.70-dirty
+CAP: driver=aspeed-video card=Aspeed Video Engine
+INPUT: 'Host VGA capture' status=0x0 (SIGNAL)
+FMT: JPEG 1024x768 sizeimage=524288
+FRAME: buffer=0 sequence=0 bytesused=28418
+WROTE 28418 bytes -> /run/bios.jpg
+RC=0
+
+# first 4 + last 2 bytes of the DQBUF'd buffer:
+first4:  ff d8 ff e0
+last2:  ff d9
+
+# Direct decode of those exact bytes (base64 in silicon-direct-jpeg.jpg, NO offline wrapping):
+#   decoded (1024, 768) spread=19 -> REAL CONTENT (the host's live VGA screen)

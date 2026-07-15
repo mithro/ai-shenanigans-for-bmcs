@@ -96,6 +96,15 @@ reconstruction): `ff d8` SOI, `ff d9` EOI, 1024×768, real host-screen content
 (`evidence/real-hw-video/silicon-direct-jpeg.png`, extracted by
 `evidence/real-hw-video/decode-silicon-frame.py`).
 
+The `bytesused=28418` value is the decisive proof that the **kernel driver** (not any
+offline tool) did the wrapping: it is the payload size `VIDIOC_DQBUF` returned. An
+unwrapped G3 driver returns the raw entropy size **27776**; the wrapped driver returns
+**27776 + 640 + 2 = 28418**. The full live `f8capture` stdout is committed at
+[`evidence/real-hw-video/silicon-f8capture-transcript.txt`](evidence/real-hw-video/silicon-f8capture-transcript.txt)
+(`FRAME … bytesused=28418`, `first4: ff d8 ff e0`, `last2: ff d9`). NB: the older
+`f8capture-silicon.log` in that dir is a **pre-fix (Jul 13) FAILED capture** kept only as
+the historical "compression hung" record — the transcript above supersedes it.
+
 ## Remaining follow-up (not blocking capture)
 - **Capturing a specific BIOS screen.** The captured frame is whatever the host is
   currently scanning out; to capture a specific POST screen, warm-reset the host
