@@ -37,3 +37,20 @@ F2 RESULT: FAIL
 # CONCLUSION for feature 1 (power) in QEMU: latch on/off validated via test_power;
 # Redfish PowerState readback fixed (this file); the Redfish/kgpe-power.sh ON round-
 # trip is the remaining QEMU integration gap (characterized), alongside silicon #95.
+
+# --- ROOT CAUSE of the QEMU power-ON gap (QMP-verified) ---
+# After kgpe-power.sh init + on, QMP qom-get on the model showed: gpioA4=False,
+# gpioB1/F0/B6=True, gpioH2=False. So A4 (the BMC-in-control gate) never reaches
+# the modeled GPIO latch, while B1/F0/B6 (banks B/F) do. Cause: A4 defaults to the
+# PHYLINK pinmux; kgpe-power.sh clears SCU74[25] with devmem, but that does NOT
+# update the kernel pinctrl view, so the sysfs `gpio export` of A4 fails -> A4 is
+# never driven. PROOF the model is correct: driving A4 AND B1 via DEVMEM directly
+# (bypassing sysfs) -> QMP gpioA4=True, gpioB1=False, gpioH2=True (power ON).
+# FIX applied to setup_a4: drive A4 out+high via devmem (banks-A-D dir/data regs),
+# not sysfs -- reaches the pin on both silicon and QEMU regardless of pinctrl.
+# REMAINING op-pwrctl-Redfish gap: op-pwrctl drives B1 via the kernel GPIO
+# framework (sysfs), whose shadow-register write for bank A-D clobbers the raw
+# devmem A4 back low -> integrated Redfish ON still does not latch. Clean fix =
+# free GPIOA4 in the DTB pinctrl (so A4 is a real sysfs GPIO, matching the silicon
+# DTB where kgpe-power.sh on is proven), OR have op-pwrctl drive A4. That is the
+# #95-class integration item, now precisely root-caused, on both silicon and QEMU.
