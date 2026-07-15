@@ -127,3 +127,13 @@ resets it. Silicon retest of patch 0007 is thus genuinely blocked this session w
 no safe unblock. (A JTAG-based DDR2 re-init via `~/openocd-bmc/ddr2-init.tcl` is a
 possible independent path but needs a custom boot flow that skips the P2A DDR2 init
 and hands the JTAG-trained DRAM to U-Boot — untested, next-session work.)
+
+**Controlled diagnostic (2026-07-15, 4th attempt) — rules out a vhub-specific cause:**
+booted the *same* vhub-fixed kernel with the KNOWN-GOOD **video DTB** (no vhub node —
+the DTB that booted fine many times earlier this session). It **also** failed with
+"kernel did not start cleanly — flaky P2A load." Since the only variable vs the
+working earlier boots is the accumulated boot-cycle count, this is **DTB-independent
+rig degradation**, confirming the vhub boots did NOT fail because of patch 0007 or the
+vhub node — the rig simply cannot complete a P2A kernel load anymore this session. The
+silicon retest is definitively rig-blocked until a power-cycle (not safely doable) or
+a fresh session.
