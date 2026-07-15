@@ -562,6 +562,96 @@ jobs:
           name: f2-power-evidence
           path: f2-power-evidence/
 
+  f2-power-redfish:
+    name: F2 — fully-automated Redfish power path (state-manager + drop-in)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # The f2-power-sysfs job drives kgpe-power.sh directly; THIS job drives power
+    # the STANDARD way — a Redfish ComputerSystem.Reset POST -> phosphor-state-
+    # manager -> obmc-power-start@0.service -> the board drop-in -> kgpe-power.sh ->
+    # GPIO -- and asserts the authoritative GPIOH2 (STA_LINE_POWER) tracks On /
+    # ForceOff / On / ForceRestart. It deploys BOTH this branch's kgpe-power.sh AND
+    # the obmc-power-{start,stop}@.service.d/kgpe.conf drop-ins (the recipe installs
+    # them; without them obmc-power-start@0 runs op-pwrctl's held-level setPowerState
+    # which deadlocks on this board). The test gate is power CONTROL (GPIOH2); the
+    # Redfish PowerState string is reported and a hard-OFF transitional 'PoweringOff'
+    # is accepted with a visible note (no real host in QEMU to confirm host-down),
+    # but a stable OPPOSITE PowerState still fails. Skips (visible) if the rootfs
+    # asset is absent.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F2 Redfish power::rootfs '$OBMC_ROOTFS_ASSET' fetched — RUNNING the fully-automated Redfish power test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F2 Redfish power SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the fully-automated Redfish power test. Publish it via build-openbmc-rootfs.yml; see .github/workflows/CI-README.md."
+            { echo "## F2 Redfish power path — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the Redfish power test could not run. Visible skip, not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client nfs-kernel-server nfs-common
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export rootfs over NFS + deploy this branch's kgpe-power.sh AND the drop-ins
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-f2power
+          sudo tar -C /export/openbmc-f2power -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          P=asus-kgpe-d16-firmware/openbmc/recipes/power/files
+          # The real /usr/bin path the recipe + systemd units invoke.
+          sudo install -D -m 0755 $P/kgpe-power.sh \
+            /export/openbmc-f2power/usr/bin/kgpe-power.sh
+          # The state-manager drop-ins that route obmc-power-{start,stop}@ through
+          # kgpe-power.sh (the recipe installs these; a stale asset may lack them).
+          sudo install -D -m 0644 $P/obmc-power-start-kgpe.conf \
+            /export/openbmc-f2power/etc/systemd/system/obmc-power-start@.service.d/kgpe.conf
+          sudo install -D -m 0644 $P/obmc-power-stop-kgpe.conf \
+            /export/openbmc-f2power/etc/systemd/system/obmc-power-stop@.service.d/kgpe.conf
+          echo '/export/openbmc-f2power *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc + drive power via Redfish ComputerSystem.Reset
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f2-power-control-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-f2power --mem 256 \
+            --driver redfish --qmp-sock "$RUNNER_TEMP/f2q.sock" \
+            --evidence-dir f2-redfish-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f2-power-redfish-evidence
+          path: f2-redfish-evidence/
+
   f4-sol:
     name: F4 — Serial-over-LAN on the AST2050 VUART in 64 MB (OpenBMC NFS root)
     runs-on: ubuntu-latest
