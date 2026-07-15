@@ -70,16 +70,21 @@ QEMU yet hangs on silicon. To reproduce silicon and regression-test the port:
   `kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch`, wired into
   `build-kernel.sh`. **Compiles clean** (arm cross). Fix 3 (widen DT `reg` to
   0x350 + QEMU `NR_REGS`) is a runtime-robustness follow-up, not yet applied.
-- **QEMU verification:** the F6 USB test (`scripts/usb-test.py`) **PASSES with the
-  fixed kernel** — `aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2
-  mode`, all 7 G3 ports (p1-p7), and the mass-storage gadget enumerates. So patch
-  0007 is compile-clean and **QEMU-safe (no regression)**; its PHY-ready-wait +
-  ISR[18] de-livelock code paths execute without breaking the probe. CAVEAT: the
-  QEMU `aspeed_udc_ast2050` model is a passive register array that does NOT
-  reproduce the silicon deadlock, so this confirms the fix is *probe-safe/
-  non-regressing*, NOT that it *resolves* the silicon hang. A faithful model
-  (CTRL[31] RO + ISR[18], §"QEMU faithfulness") would close that, but needs the
-  confirmed silicon hang mechanism (not captured — serial buffering + rig degrade).
+- **QEMU verification — DONE (faithful model reproduces the hang; fix resolves it).**
+  The QEMU udc model is now faithful (QEMU submodule: `aspeed_udc_ast2050.c` models
+  CTRL[31] read-only PHY-ready + the level-triggered, unmaskable ISR[18] deadlock on
+  connect-into-not-ready-PHY; the udc IRQ is wired to VIC INT#5; reg window widened
+  to 0x350). Result via the F6 USB test (`scripts/usb-test.py`):
+  - **UNFIXED mainline driver → livelocks in QEMU** (no `Initialized virtual hub` →
+    FAIL) — reproduces the silicon hang.
+  - **FIXED driver (patch 0007) → probes cleanly** (`Initialized virtual hub`, 7
+    ports p1-p7, mass-storage gadget enumerates → PASS).
+  So QEMU now mirrors silicon for the vhub, and patch 0007 is verified against a
+  model that actually reproduces the hang (not just a permissive stub). The F6 CI
+  job now effectively gates the fix (the unfixed driver would fail it). The PHY
+  ready-on-poll modeling is deterministic across host speeds (QEMU w/o icount does
+  not advance virtual time through guest `udelay()`), and captures the essential
+  semantic: a driver that polls PHY-ready succeeds; one that connects blind deadlocks.
 - **Silicon verification:** ATTEMPTED but **blocked by P2A rig degradation** — the
   bench BMC boots into volatile DRAM over the P2A siphon, which corrupts large
   (~3.5 MB) kernel loads after ~15 boot cycles in a session ("kernel did not start
