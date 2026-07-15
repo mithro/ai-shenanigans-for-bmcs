@@ -37,7 +37,13 @@ for rec in sorted(ROOT.rglob("*.bb")) + sorted(ROOT.rglob("*.bbappend")):
     if rec.name not in STAGED:          # sync does not stage this recipe -> skip
         continue
     staged_recipes += 1
-    text = rec.read_text()
+    # Strip bitbake comments (# to end-of-line) FIRST so a file:// that appears
+    # only inside an explanatory comment is NOT counted as a real SRC_URI source
+    # (which would give accidental, fragile "coverage"). Scope note: a file staged
+    # for a BASE recipe's SRC_URI via a .bbappend's FILESEXTRAPATHS — where the
+    # .bbappend itself declares no file:// — is outside this static check (the
+    # file:// lives in the upstream base recipe, which this repo does not contain).
+    text = "\n".join(ln.split("#", 1)[0] for ln in rec.read_text().splitlines())
     for m in re.findall(r"file://([A-Za-z0-9._@%+-]+)", text):
         name = m.split("/")[-1]
         if name in IGNORE:

@@ -723,14 +723,20 @@ jobs:
           sudo tar -C /export/openbmc-f3sensors -xf "obmc-out/$OBMC_ROOTFS_ASSET"
           # Deploy the KGPE-D16 W83795G phosphor-hwmon config (the recipe
           # kgpe-d16-hwmon-config.bb installs it; the published quanta-q71l asset
-          # does not carry it). This lets the kernel W83795 driver bind + report a
-          # non-zero fan RPM (test tier 1). NOTE: the FULL IPMI-SDR surfacing with
-          # KGPE-D16 rail names (tier 2) additionally needs the kgpe-d16 IPMI
-          # *sensor map* (q71l-ipmi-sensor-map-native), which is COMPILED into the
-          # image — not runtime-deployable. So on the generic quanta-q71l asset
-          # tier 2 warns (SDR shows generic fanN=na); tier 1 is the enforced gate.
-          # Full IPMI-SDR CI needs the published asset rebuilt with the kgpe-d16
-          # sensor recipes (build-openbmc-rootfs.yml follow-up).
+          # does not carry it). NB this is a USERSPACE config: it makes the
+          # phosphor-hwmon DAEMON publish the W83795 D-Bus sensor objects (a tier-2
+          # prerequisite) — it does NOT affect tier 1. Tier 1 (the ENFORCED gate)
+          # is the kernel `w83795` driver binding + reporting non-zero fan RPM over
+          # raw sysfs, which is driven ENTIRELY by the DTB `nuvoton,w83795` node +
+          # the QEMU W83795 model (build artifacts), independent of this file and of
+          # the OpenBMC rootfs asset. NOTE: FULL IPMI-SDR surfacing with KGPE-D16
+          # rail names (tier 2) ALSO needs the kgpe-d16 IPMI *sensor map*
+          # (q71l-ipmi-sensor-map-native), which is COMPILED into the image — not
+          # runtime-deployable — so on the generic quanta-q71l asset tier 2 still
+          # warns (SDR shows generic fanN=na) even with this config deployed. Full
+          # IPMI-SDR CI needs the published asset rebuilt with the kgpe-d16 sensor
+          # recipes (build-openbmc-rootfs.yml follow-up). The deploy is kept because
+          # it is the correct (necessary-but-not-sufficient) tier-2 piece.
           sudo install -D -m 0644 \
             asus-kgpe-d16-firmware/openbmc/recipes/hwmon/files/hwmon@2f.conf \
             "/export/openbmc-f3sensors/etc/default/obmc/hwmon/ahb/apb/bus@1e78a000/i2c-bus@80/hwmon@2f.conf"
