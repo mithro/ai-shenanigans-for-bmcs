@@ -633,3 +633,68 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
     smoke on the merged tree's prebuilt qemu-system-arm: `kgpe-d16-bmc`
     boots to BMC-READY, eth0 DHCP lease, dropbear on :22, F7 boot
     invariants 12/12 PASS (exit 0).
+
+## Log — 2026-07-13 → 2026-07-16 (consolidated; see SILICON-STATUS.md for the honest matrix)
+
+- **2026-07-13 — power ON + video on real silicon.** BMC drives host power on/off with
+  no AC-cycle: the missing piece was the **GPIOA4 BMC-control-lockout** (defaults to
+  PHYLINK alt-func SCU74[25]=1); unlock SCU + clear SCU74[25] + drive A4=1 + Raptor pulse
+  (F0/B6/B1) -> plug 3W->103W, GPIOH2->1, host PXE-boots, BMC survives (eth0 polls the PHY
+  over MDIO, not PHYLINK). `kgpe-power.sh` + recipes/power drop-ins + faithful QEMU pwrseq
+  model (gates power-up on A4-high). VGA-DRAM-corruption crash fixed (added VGA
+  `reserved-memory` no-map fence @0x43800000/8MB to the real-HW DTS). NBD-swap over eth0.
+- **2026-07-14/15 — G3 video capture, standards-compliant, both sides.** aspeed-video on
+  the AST2050 captures the live host VGA -> JPEG. Patch 0006 (`ast2050-video-engine`
+  compatible): select pure-JPEG via VR060[0] (not VR004[8], reserved on G3); THE HANG =
+  clamp the DCT quant-table selector to 0-7 (G3 has 8 ROM tables; mainline's 11 wedged
+  COMP_BUSY). Driver now emits a directly-decodable `V4L2_PIX_FMT_JPEG` (JFIF wrap in the
+  threaded IRQ, SOF0 dims patched at offset 175). Silicon: `/dev/video0` `bytesused=28418`
+  decodes to the real host screen. QEMU model made faithful (headerless entropy + 8 ROM
+  quant tables) -> mirrors silicon end to end (8 colour bars pixel-verified). #3a PASS/PASS.
+- **2026-07-15 — consolidated real-HW demo** on this session's kernel: IPMI-LAN + host-KCS,
+  18 live sensors, FRU/ID, SOL config, chassis power — all together on one silicon boot.
+- **2026-07-16 — power PASS in QEMU (phantom root-cause).** The "QEMU power-ON doesn't
+  latch" that had derailed several rounds was THREE non-model bugs: (1) the sysfs test ran
+  `kgpe-power.sh` without stopping op-pwrctl (which held B1/F0/B6 via libgpiod -> EBUSY ->
+  no B1 pulse); (2) a harness console-sync bug (TTY-echoed end-marker matched before the
+  cmd ran); (3) a real `setup_lines` glitch (`direction=out;value 1` drove GPIOF0 low ->
+  cleared the latch on warm reset; fixed with atomic `direction=high`). `f2-power-control
+  --driver sysfs` -> `F2 RESULT: PASS` (init/on/off/on/reset). REVERTED a wrong devmem-A4
+  firmware "fix" (would sit outside the kernel bank-A-D shadow and be clobbered by
+  op-pwrctl's sysfs B1 -> regress silicon). Readback null bug fixed (64MB bmcweb OOM ->
+  `--mem 256`). Integrated **Redfish** power path also works: the missing piece was the
+  `obmc-power-{start,stop}@.service.d/kgpe.conf` drop-ins (recipe installs them; a stale
+  export lacked them) -> gpioH2 tracks On/ForceOff/On/ForceRestart. New CI: `f2-power-sysfs`
+  + `f2-power-redfish` (honest gpioH2-authoritative gate). #1 PASS/PASS.
+- **2026-07-16 — comprehensive completion audit.** Independently re-verified the 4/9
+  PASS/PASS + adversarially challenged the 4 "impossible" claims vs the datasheet.
+  CORRECTED #8's reasoning: the AST2050 SoC *does* have host-flash-master paths (LPC-Master
+  /FWH §2.20 p34 + a spare SMC CE) — the blocker is KGPE-D16 board wiring (BIOS SPI on the
+  AMD SB), not a SoC absence. #2/#9/#5 impossibility confirmed sound.
+- **2026-07-16 — sensors CI + build-pipeline fixes.** New `f3-sensors` CI job (W83795 model
+  -> kernel hwmon bind, tier-1 gate; tier-2 IPMI-SDR needs the compiled sensor map, absent
+  on the generic asset). ROOT-CAUSE of the published asset lagging the repo: `sync-to-openbmc
+  -tree.sh` dropped the 4 power SRC_URI files (only synced gpio_defs.json) -> a build would
+  fail do_fetch or ship without the drop-ins. Fixed + added `verify-sync-complete.py` (static
+  guard: every synced recipe's file:// SRC_URI must be staged; comments stripped) + wired
+  verify+sync into `build-openbmc-rootfs.yml` before bitbake + a push-time `sync-lint` job.
+- **2026-07-16 — SOL + IPMI refinements.** RMCP+ RAKP flakiness (netipmid slow under 256MB
+  -> "no response from RAKP 1") FIXED in the harness with `-N 5 -R 3`; verified `mc info`
+  now authenticates (F5 FAIL->PASS on the kgpe-d16 image, which also shows POPULATED IDs:
+  Manufacturer 2623/ASUSTek, Product 0x0d16, FRU KGPE-D16 — matching silicon, closing the
+  audit's "QEMU unpopulated IDs" soft-spot). SOL `sol activate` gap walked down layer by
+  layer: RAKP (fixed) -> Ipmi.SOL provider (busctl-confirmed present on the recipe image)
+  -> residual = netipmid "Failed to get service path in registerSOLService" (a netipmid<->
+  obmc-console binding issue; QEMU-only, #6 stays board-blocked on silicon). Byte-flow SOL
+  data path still PASS.
+- **2026-07-16 — independent reviews.** Multiple skeptical sub-agent reviews confirmed the
+  power win, the honest-gate redfish test (not gaming), the completion state, and the recent
+  infra/test commits — each real finding acted on (e.g. bare-python3->uv run, a factually
+  wrong CI comment, verifier comment-coverage).
+
+**HONEST STATE (7x independently reviewed):** 4/9 features demonstrated BOTH in QEMU AND on
+real silicon — #1 power on/off/reset, #4 sensors, #7 IPMI (KCS+LAN), #3a VGA capture. The
+other 5 are board/SoC-impossible (#8 host-BIOS flash, #9 true NC-SI, #2 USB-host side, #5
+DIMM/memory inventory), rig-blocked (#2 USB silicon retest), or need host cooperation /
+deeper QEMU-only work (#3b keyboard-to-host, #6 SOL host-serial). This is the hardware
+ceiling of the AST2050/KGPE-D16, not unimplemented work. See SILICON-STATUS.md.
