@@ -1,0 +1,71 @@
+# Porting `aspeed-vhub` to the AST2050 (G3) — actionable plan
+
+Goal: make the BMC present a USB device to the x86 host on real silicon (features
+2 "connect USB devices" + 3b "send keyboard events" — the vKVM/virtual-media
+datapath). This is the single largest remaining silicon gap. Analysis below is
+from a driver+datasheet review (2026-07-15); file:line refer to
+`asus-kgpe-d16-firmware/qemu-firmware/kernel/linux/drivers/usb/gadget/udc/aspeed-vhub/`,
+page cites to `dell-c410x-firmware/datasheets/AST2050_AST1100_A3_Datasheet_V1.05.pdf`
+(USB = §10 p.99, §15 p.154-178) and `asus-kgpe-d16-firmware/qemu-model/peripherals/usb/DATASHEET-USB.md`.
+
+## The hang is NOT a stuck poll
+`ast_vhub_probe` (core.c:294-413) is straight-line — there is no `readl_poll`/
+`while` busy-wait in the probe path. On silicon the whole SoC locks up (console +
+network dead — `evidence/real-hw-consolidated/usb-vhub-silicon-boundary.txt`).
+That is an **IRQ livelock**, triggered in `ast_vhub_init_hw` (core.c:168-254).
+
+## Register offsets are IDENTICAL G3 vs G4
+HUB/DEV/EPP offsets match the datasheet exactly (that is why the driver binds at
+all). The differences are **semantic**, three of them:
+
+1. **`CTRL`[31] `VHUB_CTRL_PHY_CLK` is READ-ONLY on the G3** — a PHY-clock-ready
+   status mirroring SCU0C[14] (datasheet p.156-157). The driver *writes* it
+   (core.c:175,198) expecting to enable the PHY; on the G3 that is a no-op, so the
+   PHY only runs if the clock gate is already on.
+2. **`ISR`[18] `VHUB_IRQ_USB_CMD_DEADLOCK` is a fatal, level-triggered condition**
+   (clock stopped / PHY failed / stuck in Suspend, datasheet §15.3.2 p.159-160).
+   `ast_vhub_irq` (core.c:93-166) W1C-acks the whole ISR (core.c:109) but has **no
+   corrective branch for bit 18**, so if the underlying condition persists the
+   level line never drops → CPU spins 100% in the ISR → console+network die.
+3. **The 21-endpoint pool extends to 0x34F** (EPP#16-#20 at 0x300-0x34F, p.155),
+   but the DT `reg` is `<0x1e6a0000 0x300>` (aspeed-g4.dtsi:172) → `ast_vhub_alloc_epn`
+   (epn.c:831) computes register addresses past the ioremap for the 17th+ generic
+   EP. Runtime fault (heavy gadget use), not the probe hang.
+
+The **count** difference (7 ports/21 EP vs 5/15) is already DT-driven and correct
+(core.c:306-328, DTS sets `<7>`/`<21>`) — not a bug.
+
+## Trigger
+`ast_vhub_init_hw` tail (core.c:242-253): assert `UPSTREAM_CONNECT` then unmask
+IER, with the handler already installed and INT#5 unmasked. Connecting into a
+not-yet-ready G3 PHY sets ISR[18] → livelock (item 2).
+
+## Minimal fixes (probe-survival first)
+1. **PHY-ready gate** — before `UPSTREAM_CONNECT`, bounded-wait for `CTRL`[31] to
+   read set (don't rely on *writing* it). On the G4 it reads back what we wrote
+   (immediate); on the G3 it reflects SCU0C[14]. Prevents connecting into a dead PHY.
+2. **De-livelock the deadlock IRQ** — in `ast_vhub_irq`, on `VHUB_IRQ_USB_CMD_DEADLOCK`
+   drop `UPSTREAM_CONNECT` (quiesce the bus) + rate-limited warn, so a bad PHY state
+   can't wedge the CPU (safety net even after fix 1).
+3. **Widen the register window** — DT `reg = <0x1e6a0000 0x350>` + QEMU
+   `ASPEED_UDC_AST2050_NR_REGS >= 0x350/4` so EPP#16-#20 are mapped.
+4. **Clean G3 binding** — add `"aspeed,ast2050-usb-vhub"` to `ast_vhub_dt_ids`
+   (core.c:415) + a per-SoC config (default 7/21, the PHY-ready + deadlock handling)
+   so the G3 path is explicit instead of borrowing the ast2400 compatible.
+
+## QEMU faithfulness (so the fix is testable without silicon)
+The model `hw/misc/aspeed_udc_ast2050.c` is a passive RW `uint32_t[]` (never raises
+IRQ#5, never sets ISR[18]) — which is why the *unfixed* driver "binds cleanly" in
+QEMU yet hangs on silicon. To reproduce silicon and regression-test the port:
+- Make `CTRL`[31] read-only, driven by the SCU0C[14] USB clock gate (PHY-ready).
+- On `UPSTREAM_CONNECT` while the PHY clock is off, set ISR[18] and raise INT#5
+  (level) — so the unfixed driver livelocks in QEMU too, and the PHY-ready-gated
+  driver does not.
+- Grow `NR_REGS` to cover 0x34F.
+
+## Status
+Analysis complete + cited. Driver patch (fixes 1-4) implemented as
+`kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch` (see commit) — reviewed
+against the datasheet but **silicon-verification pending** a rig with a
+non-degraded P2A path (the bench P2A load degrades after ~15 boot cycles). QEMU
+faithfulness change is the recommended next step to gate the fix in CI.

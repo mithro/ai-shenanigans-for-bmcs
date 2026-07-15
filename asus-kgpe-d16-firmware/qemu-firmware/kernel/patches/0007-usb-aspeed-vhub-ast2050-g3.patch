@@ -1,0 +1,80 @@
+diff --git a/drivers/usb/gadget/udc/aspeed-vhub/core.c b/drivers/usb/gadget/udc/aspeed-vhub/core.c
+index f60a019bb..88e0cc3e5 100644
+--- a/drivers/usb/gadget/udc/aspeed-vhub/core.c
++++ b/drivers/usb/gadget/udc/aspeed-vhub/core.c
+@@ -160,6 +160,25 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
+ 			ast_vhub_hub_reset(vhub);
+ 	}
+ 
++	/*
++	 * "USB command bus dead-lock" (ISR[18]) is a fatal, level-triggered
++	 * condition on the AST2050 (G3): PHY failure / clock stopped / stuck in
++	 * Suspend (datasheet Sec 15.3.2). W1C-acking it above does NOT clear the
++	 * underlying condition, so the level line re-asserts and this handler
++	 * re-enters forever, wedging the CPU (a hard boot hang on real G3
++	 * silicon). Quiesce the bus by dropping the upstream connect so the
++	 * condition can clear; a subsequent bus reset re-inits the HW. The G4
++	 * never reaches this because its PHY comes up from the CTRL[31] write.
++	 */
++	if (istat & VHUB_IRQ_USB_CMD_DEADLOCK) {
++		u32 ctrl = readl(vhub->regs + AST_VHUB_CTRL);
++
++		writel(ctrl & ~VHUB_CTRL_UPSTREAM_CONNECT,
++		       vhub->regs + AST_VHUB_CTRL);
++		dev_warn_ratelimited(&vhub->pdev->dev,
++			"USB command bus dead-lock; dropped upstream connect\n");
++	}
++
+  bail:
+ 	spin_unlock(&vhub->lock);
+ 	return iret;
+@@ -198,6 +217,32 @@ void ast_vhub_init_hw(struct ast_vhub *vhub)
+ 	writel(ctrl, vhub->regs + AST_VHUB_CTRL);
+ 	udelay(1);
+ 
++	/*
++	 * On the AST2050 (G3) CTRL[31] (VHUB_CTRL_PHY_CLK) is a READ-ONLY
++	 * PHY-clock-ready status that mirrors SCU0C[14]; the write above does not
++	 * enable the PHY there (it is driven by the clock gate the probe already
++	 * turned on). Asserting UPSTREAM_CONNECT (below) into a PHY that is not
++	 * yet running drops the controller into the fatal, level-triggered "USB
++	 * command bus dead-lock" state (ISR[18]) which re-fires forever and
++	 * livelocks the CPU -- observed as a hard boot hang on real G3 silicon.
++	 * Bounded-wait for the PHY clock to read back set before continuing. On
++	 * the G4 the bit reads back what we just wrote, so this completes
++	 * immediately and is harmless.
++	 */
++	{
++		unsigned int i;
++
++		for (i = 0; i < 1000; i++) {
++			if (readl(vhub->regs + AST_VHUB_CTRL) & VHUB_CTRL_PHY_CLK)
++				break;
++			udelay(10);
++		}
++		if (i == 1000)
++			dev_warn(&vhub->pdev->dev,
++				 "USB PHY clock not ready (CTRL=%08x); USB may be unavailable\n",
++				 readl(vhub->regs + AST_VHUB_CTRL));
++	}
++
+ 	/* Set descriptor ring size */
+ 	if (AST_VHUB_DESCS_COUNT == 256) {
+ 		ctrl |= VHUB_CTRL_LONG_DESC;
+@@ -413,6 +458,16 @@ static int ast_vhub_probe(struct platform_device *pdev)
+ }
+ 
+ static const struct of_device_id ast_vhub_dt_ids[] = {
++	{
++		/*
++		 * AST2050 (G3): identical register offsets to the ast2400, but
++		 * CTRL[31] PHY-clock is read-only and the USB-command-deadlock
++		 * IRQ is fatal/level-triggered -- both handled unconditionally in
++		 * ast_vhub_init_hw()/ast_vhub_irq(). Port/EP counts (7/21) come
++		 * from the DT. See openbmc/bmc-functionality/VHUB-G3-PORT-PLAN.md.
++		 */
++		.compatible = "aspeed,ast2050-usb-vhub",
++	},
+ 	{
+ 		.compatible = "aspeed,ast2400-usb-vhub",
+ 	},

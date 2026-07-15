@@ -89,6 +89,21 @@ if ! grep -q "jpeg_only" drivers/media/platform/aspeed/aspeed-video.c; then
     git apply "$ROOT/kernel/patches/0006-media-aspeed-video-ast2050-g3-jpeg.patch"
 fi
 
+# AST2050 (G3) USB2.0 vhub UDC: the mainline aspeed-vhub (ast2400-targeted) HANGS
+# the SoC when it probes the real G3 vhub -- confirmed on silicon (enabling the
+# usb-vhub@1e6a0000 node -> no console/network; a clean A/B whose only variable is
+# the node). Register offsets are identical G3<->G4, but two semantics differ:
+# CTRL[31] PHY-clock is READ-ONLY on the G3 (mirrors SCU0C[14], so the driver's
+# write is a no-op), and ISR[18] "USB command bus dead-lock" is a fatal,
+# level-triggered IRQ the handler never acts on -> asserting UPSTREAM_CONNECT into
+# a not-ready PHY livelocks the CPU. Adds a bounded PHY-clock-ready wait before
+# connect + a de-livelock branch that drops UPSTREAM_CONNECT on ISR[18], plus an
+# explicit "aspeed,ast2050-usb-vhub" compatible. Datasheet §15 p.154-178; see
+# openbmc/bmc-functionality/VHUB-G3-PORT-PLAN.md. Idempotent guard on a patch string.
+if ! grep -q "USB command bus dead-lock" drivers/usb/gadget/udc/aspeed-vhub/core.c; then
+    git apply "$ROOT/kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then
