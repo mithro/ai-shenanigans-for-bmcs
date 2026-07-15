@@ -251,6 +251,30 @@ if grep -q f8video /proc/cmdline; then
 	echo "=== F8-VIDEO-DEMO-END ==="
 fi
 
+# --- VE register diagnostic (only when 'vediag' is on the cmdline) ---
+# Sample the AST2050 video-engine registers *during* a capture to localize the
+# G3 compression stall: does CAP_BUSY(SEQ bit16) set/clear? does COMP_BUSY(bit18)
+# stick? does any interrupt latch in INT_STATUS(308: CAPTURE_COMPLETE bit1 /
+# COMP_COMPLETE bit3)? does COMP_SIZE(078) ever go non-zero? See REAL-HW-VIDEO-CAPTURE.md.
+if grep -q vediag /proc/cmdline; then
+	echo "=== VEDIAG-BEGIN ==="
+	ip addr del 10.0.2.15/24 dev eth0 2>&1 || true
+	ip addr add 192.168.66.2/24 dev eth0 2>&1 || true
+	echo "pre : SEQ004=$(devmem 0x1e700004) CTRL008=$(devmem 0x1e700008) COMPC060=$(devmem 0x1e700060) JPGA040=$(devmem 0x1e700040) INTC304=$(devmem 0x1e700304) INTS308=$(devmem 0x1e700308)"
+	F8_NBUFS=2 f8capture /tmp/bios.jpg 40 > /tmp/f8.log 2>&1 &
+	CPID=$!
+	i=0
+	while [ $i -lt 14 ]; do
+		echo "t$i: SEQ004=$(devmem 0x1e700004) INTS308=$(devmem 0x1e700308) COMPSZ078=$(devmem 0x1e700078) COMPADDR054=$(devmem 0x1e700054) COMPC060=$(devmem 0x1e700060)"
+		i=$((i + 1))
+		sleep 1
+	done
+	wait $CPID
+	echo "f8capture rc=$?; log:"; cat /tmp/f8.log
+	echo "post: SEQ004=$(devmem 0x1e700004) INTS308=$(devmem 0x1e700308) COMPSZ078=$(devmem 0x1e700078)"
+	echo "=== VEDIAG-END ==="
+fi
+
 # --- Real-silicon BIOS/host VGA capture (only when 'f8capture' is on the cmdline) ---
 # On the real AST2050 the aspeed-video engine captures the LIVE host VGA output
 # (the host's onboard VGA IS this SoC, framebuffer in shared DRAM). A minimal
