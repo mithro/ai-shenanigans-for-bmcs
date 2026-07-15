@@ -1,0 +1,14 @@
+# BMC I2C topology on real silicon (i2cdetect -y -r 1), 2026-07-15
+# Kernel 6.6.70-dirty on the AST2050. Shows what the BMC's I2C reaches.
+#
+#      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+# 20: ... 2f=UU  <- W83795G hwmon (driver-bound; source of the live sensors)
+# 60: ... 69     <- (clock/other)
+# 50-57: all '--' -> NO DIMM SPD EEPROMs on the BMC bus.
+#
+# CONCLUSION: DIMM SPDs live on the HOST memory-controller SMBus, not a BMC
+# I2C engine. So 'memory configuration inventory' cannot come from a BMC I2C
+# read on the KGPE-D16 -- it would require host SMBIOS ingestion (host sends
+# DMI to the BMC over IPMI). Board FRU (ASUSTeK/KGPE-D16/serial/PN) IS provided.
+#
+# Probe of 0x50-0x57 confirms absence (i2cget byte 0x02 = SPD memory-type):
