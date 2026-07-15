@@ -42,6 +42,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import selectors
 import socket
 import ssl
@@ -97,6 +98,7 @@ class Console:
     def __init__(self, proc):
         self.proc = proc
         self.buf = b""
+        self._n = 0
         self.sel = selectors.DefaultSelector()
         self.sel.register(proc.stdout, selectors.EVENT_READ)
 
@@ -139,6 +141,31 @@ class Console:
         # everything between the begin echo result and end sentinel
         text = pre.decode("utf-8", "replace")
         return text
+
+    def capture(self, cmd, deadline):
+        """Robustly run cmd on a laggy console and return its OUTPUT.
+
+        Two subtleties on a slow serial console: (1) commands pipeline, so a
+        per-call unique marker + first-occurrence find (not rfind) is needed;
+        (2) the TTY ECHOES the command line, so a literal marker in the command
+        would be matched in the echo BEFORE the command runs, returning the
+        previous step's output. We therefore build the marker from a shell var
+        (`echo CAPEND${__m}`) so the echoed source never contains the joined
+        literal `CAPENDn` — only the command's actual output does. Returns ""
+        on timeout."""
+        self._n += 1
+        marker = f"CAPEND{self._n}"
+        self.send(f"__m={self._n}; {cmd}; echo CAPEND${{__m}}=$?")
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                break
+            self._pump(1.0)
+            idx = self.buf.find(marker.encode())
+            if idx != -1:
+                out = self.buf[:idx].decode("utf-8", "replace")
+                self.buf = self.buf[idx + len(marker):]
+                return out
+        return ""
 
 
 # ---------------------------------------------------------------- Redfish -----
@@ -299,27 +326,42 @@ def main():
             return modeled, pstate
 
         if args.driver == "sysfs":
-            # Direct sysfs drive (image without op-pwrctl): kgpe-power.sh moves
-            # the request lines; H2 is confirmed over QMP.
+            # Direct sysfs drive: kgpe-power.sh moves the request lines; H2 is
+            # confirmed over QMP. On the real board the obmc-power-{start,stop}@
+            # drop-ins STOP op-pwrctl around each pulse so it does not hold
+            # B1/F0/B6 via libgpiod — which would block kgpe-power.sh's sysfs
+            # export of those lines (EBUSY) and silently skip the B1 power-up
+            # pulse. Replicate that ownership here; without it the script cannot
+            # drive the request lines and H2 never latches (a test artefact, not a
+            # model gap: diag proved the latch is correct once the lines are free).
+            con.run("systemctl stop org.openbmc.control.Power@0.service 2>&1 | cat; "
+                    "systemctl stop op-pwrctl@0.service 2>&1 | cat; true",
+                    "stop_oppwrctl", time.time() + 40)
             steps = [("init", False), ("on", True), ("off", False),
                      ("on", True), ("reset", True)]
             for step, want_on in steps:
-                out = con.run(f"sh {args.power_script} {step}", f"pwr_{step}",
-                              time.time() + 90)
-                time.sleep(1.0)
-                modeled = qmp.power_state()
+                # capture() blocks until the script truly finishes (the 256 MB
+                # console echoes seconds late), so the GPIOH2 read below is not
+                # stale. The guest's own POWER_STATE(GPIOH2) is the in-band
+                # authoritative read (the script reading the same pin the model
+                # drives); QMP is an out-of-band cross-check.
+                out = con.capture(f"sh {args.power_script} {step}", time.time() + 150)
                 guest = None
-                if out:
-                    for ln in out.splitlines():
-                        if "POWER_STATE(GPIOH2)=" in ln:
-                            guest = ln.split("=")[-1].strip()
+                mm = re.findall(r"POWER_STATE\(GPIOH2\)=(\d)", out)
+                if mm:
+                    guest = "on" if mm[-1] == "1" else "off"
+                time.sleep(2.0)
+                modeled = qmp.power_state()
+                want = "on" if want_on else "off"
                 results["qmp_power_state"][step] = modeled
                 results["guest_power_state"][step] = guest
-                if modeled != want_on:
+                # PASS requires BOTH the in-band guest read and the modeled latch
+                # to agree with the intent (guest!=None means the step ran).
+                step_ok = (guest == want) and (modeled == want_on)
+                if not step_ok:
                     ok = False
-                print(f"[power:{step}] QMP gpioH2={modeled} guest={guest} "
-                      f"want={'on' if want_on else 'off'} "
-                      f"[{'PASS' if modeled == want_on else 'FAIL'}]")
+                print(f"[power:{step}] guest(GPIOH2)={guest} QMP gpioH2={modeled} "
+                      f"want={want} [{'PASS' if step_ok else 'FAIL'}]")
 
         # --- Fully-automated Redfish -> state-manager -> op-pwrctl -> GPIO loop --
         print("\n[redfish] waiting for bmcweb + op-pwrctl ...")

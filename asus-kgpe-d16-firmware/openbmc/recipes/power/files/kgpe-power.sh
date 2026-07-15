@@ -81,8 +81,14 @@ setup_a4() {
 # Claim + de-assert the three request lines (call only when op-pwrctl is stopped).
 setup_lines() {
 	_exp "$B1"; _exp "$F0"; _exp "$B6"
-	_dir "$B1" out; _dir "$F0" out; _dir "$B6" out
-	_val "$B1" 1; _val "$F0" 1; _val "$B6" 1            # all de-asserted
+	# Atomic output-HIGH (all request lines de-asserted). direction=high drives
+	# the pin high in the SAME operation it becomes an output; `direction=out`
+	# then `value 1` instead momentarily drives the pin at its latched data (0
+	# after a fresh export) -- on GPIOF0 (active-low force-off) that transient LOW
+	# spuriously clears the power latch, so a warm `reset` while powered on drops
+	# the host. `high`/`low` are generic gpiolib sysfs (not Aspeed-specific), so
+	# this is glitch-free on both silicon and the QEMU model.
+	_dir "$B1" high; _dir "$F0" high; _dir "$B6" high
 }
 
 case "${1:-status}" in

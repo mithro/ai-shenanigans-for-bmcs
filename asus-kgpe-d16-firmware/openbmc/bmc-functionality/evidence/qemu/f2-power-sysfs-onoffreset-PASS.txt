@@ -1,0 +1,52 @@
+# Feature 1 (power) — host power ON / OFF / RESET demonstrated in QEMU  [PASS]
+#
+# f2-power-control-test.py --driver sysfs, machine kgpe-d16-bmc, mem=256M, over
+# the OpenBMC NFS image. Each step runs the real BMC power script
+# /usr/local/bin/kgpe-power.sh (the same one hardware-proven on silicon
+# 2026-07-13) and reads GPIOH2 two independent ways: the guest's own in-band
+# devmem read, and the modeled power-state pin over QMP (qom-get gpioH2). BOTH
+# agree on every step:
+#
+#   [power:init]  guest(GPIOH2)=off  QMP gpioH2=False  want=off  [PASS]
+#   [power:on]    guest(GPIOH2)=on   QMP gpioH2=True   want=on   [PASS]
+#   [power:off]   guest(GPIOH2)=off  QMP gpioH2=False  want=off  [PASS]
+#   [power:on]    guest(GPIOH2)=on   QMP gpioH2=True   want=on   [PASS]
+#   [power:reset] guest(GPIOH2)=on   QMP gpioH2=True   want=on   [PASS]
+#   F2 RESULT: PASS — modeled host power on/off/reset via the OpenBMC GPIO path,
+#                     confirmed on GPIOH2 over QMP
+#
+# Combined with the silicon proof (2026-07-13: kgpe-power.sh on -> plug 3W->103W,
+# GPIOH2 1, host PXE-boots; off -> 103W->4W), feature 1's power on/off is now
+# demonstrated on BOTH QEMU and real silicon via the same BMC power script.
+#
+# ---------------------------------------------------------------------------
+# WHAT WAS ACTUALLY WRONG (corrected 2026-07-16) — earlier rounds mis-diagnosed
+# this as an A4 sysfs/pinctrl model gap and even (wrongly) changed the firmware.
+# Two real causes, neither in the model or the A4 drive:
+#
+# 1. op-pwrctl GPIO OWNERSHIP CONTENTION (test faithfulness). The --driver sysfs
+#    path ran kgpe-power.sh WITHOUT first stopping op-pwrctl. op-pwrctl holds
+#    B1/F0/B6 via libgpiod, so the script's sysfs export of those request lines
+#    failed (EBUSY) and the B1 power-up pulse was silently skipped -> no latch.
+#    On the real board the obmc-power-{start,stop}@ drop-ins STOP op-pwrctl
+#    around each pulse; the test now does the same. (Diagnostic diag2 proved the
+#    model latch is correct: with op-pwrctl stopped, driving A4 high + pulsing B1
+#    low over sysfs -> QMP gpioH2 False->True, and it HOLDS as a latch.)
+#
+# 2. HARNESS CONSOLE SYNC. The 256 MB console echoes seconds late; the old
+#    Console.run() captured the wrong buffer slice (guest read always None) and
+#    the TTY echo of the end-marker matched before the command ran, lagging the
+#    QMP read by one step. Fixed with Console.capture(): a per-call marker built
+#    from a shell var so the echoed command never contains the literal marker.
+#
+# 3. RESET F0 GLITCH (real latent bug, fixed). setup_lines used `direction=out`
+#    then `value 1`, which momentarily drove GPIOF0 (active-low force-off) LOW
+#    before setting it high -> spuriously cleared the power latch during a warm
+#    `reset` while powered on. Switched to atomic `direction=high` (generic
+#    gpiolib sysfs, glitch-free on silicon and QEMU) -> reset keeps power on.
+#
+# The QEMU model (hw/gpio/aspeed_gpio.c kgpe_d16_pwrseq) was correct all along:
+# power_up = out_low(B1), bmc_in_control = out_high(A4); on == (power_up &&
+# bmc_in_control), off == out_low(F0) force-off wins. The bare-metal pytest
+# test_power already validated that latch; this test now exercises it through
+# the full in-guest OpenBMC GPIO path.

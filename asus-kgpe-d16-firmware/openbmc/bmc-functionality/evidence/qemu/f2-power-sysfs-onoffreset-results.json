@@ -1,0 +1,22 @@
+{
+  "guest_power_state": {
+    "init": "off",
+    "off": "off",
+    "on": "on",
+    "reset": "on"
+  },
+  "qmp_power_state": {
+    "init": false,
+    "off": false,
+    "on": true,
+    "reset": true
+  },
+  "redfish": {
+    "final_PowerState": "Off",
+    "initial": {
+      "PowerState": "Off",
+      "gpioH2": true
+    },
+    "service_root_version": "1.17.0"
+  }
+}
