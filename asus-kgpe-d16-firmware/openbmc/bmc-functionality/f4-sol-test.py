@@ -162,9 +162,15 @@ def capture_via_console_client(ssh_port, user, password, feeder, seconds=8):
     return captured.decode("utf-8", "replace")
 
 
-def ipmi(port, args, user, password, timeout=15):
+def ipmi(port, args, user, password, timeout=35):
+    # -N 5 -R 3: the AST2050 netipmid RMCP+ RAKP handshake is slow under the
+    # 256 MB QEMU load; ipmitool's default 1 s/4-retry gives up before RAKP 1
+    # responds ("no response from RAKP 1 message"), intermittently failing the
+    # session. A 5 s per-message timeout with 3 retries makes RMCP+ auth reliable
+    # (same workaround as f5-ipmi-test.py). SOL payload activation is interactive
+    # and still bounded by the subprocess `timeout`.
     cmd = ["ipmitool", "-I", "lanplus", "-H", "127.0.0.1", "-p", str(port),
-           "-U", user, "-P", password, "-C", "17"] + args
+           "-U", user, "-P", password, "-C", "17", "-N", "5", "-R", "3"] + args
     try:
         p = subprocess.run(cmd, stdin=subprocess.DEVNULL,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

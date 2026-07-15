@@ -93,10 +93,17 @@ def tail_log(path, markers, deadline, echo=True):
     return None
 
 
-def ipmi(port, args, user, password, host="127.0.0.1", timeout=25):
-    """Run one ipmitool lanplus command; return (rc, combined_output)."""
+def ipmi(port, args, user, password, host="127.0.0.1", timeout=35):
+    """Run one ipmitool lanplus command; return (rc, combined_output).
+
+    `-N 5 -R 3`: the AST2050 netipmid's RMCP+ RAKP handshake is slow under the
+    256 MB QEMU load (and on real silicon) — with ipmitool's default 1 s / 4
+    retries the RAKP 1 response often arrives too late and the session fails
+    ("no response from RAKP 1 message") intermittently. A 5 s per-message timeout
+    with 3 retries (<= the 35 s subprocess budget) makes the auth reliable. This
+    is the documented workaround for the lanplus suite's RAKP slowness (F5)."""
     cmd = ["ipmitool", "-I", "lanplus", "-H", host, "-p", str(port),
-           "-U", user, "-P", password, "-C", "17"] + args
+           "-U", user, "-P", password, "-C", "17", "-N", "5", "-R", "3"] + args
     try:
         p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                            timeout=timeout)
@@ -110,7 +117,7 @@ def wait_ipmi_up(port, user, password, deadline, logpath):
     """Poll `mc info` until RMCP+ auth succeeds or the deadline passes."""
     last = ""
     while time.time() < deadline:
-        rc, out = ipmi(port, ["mc", "info"], user, password, timeout=15)
+        rc, out = ipmi(port, ["mc", "info"], user, password, timeout=35)
         if rc == 0 and "Device ID" in out:
             print(f"\n[ipmi] netipmid answered RMCP+: `mc info` rc=0")
             return True

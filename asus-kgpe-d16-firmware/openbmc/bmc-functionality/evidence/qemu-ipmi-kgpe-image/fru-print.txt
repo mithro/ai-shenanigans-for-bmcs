@@ -1,0 +1,52 @@
+$ ipmitool -I lanplus -H <bmc> -U root -P <pw> fru print
+# exit code: 1
+
+FRU Device Description : Builtin FRU Device (ID 0)
+ Board Mfg Date        : Sun 01 Jan 2012 10:30:00 ACDT
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z
+
+FRU Device Description : memory_riser (ID 32)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 33)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 34)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 35)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 36)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 37)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 38)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : memory_riser (ID 39)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : bmc (ID 80)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : pdb (ID 82)
+ Device not present (Requested sensor, data, or record not found)
+
+FRU Device Description : motherboard (ID 86)
+ Chassis Type          : Rack Mount Chassis
+ Chassis Serial        : KGPED16-CH-0001
+ Board Mfg Date        : Sun 01 Jan 2012 10:30:00 ACDT
+ Board Mfg             : ASUSTeK Computer Inc.
+ Board Product         : KGPE-D16
+ Board Serial          : KGPED16-OPENBMC-0001
+ Board Part Number     : 90-MSVDR0-G0UAY0Z
+
+FRU Device Description : fp (ID 87)
+ Device not present (Requested sensor, data, or record not found)
+
