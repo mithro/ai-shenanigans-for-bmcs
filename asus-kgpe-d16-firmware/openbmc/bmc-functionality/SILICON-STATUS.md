@@ -1,9 +1,11 @@
 # BMC functionality — honest QEMU vs real-silicon status
 
-Last updated 2026-07-15, reconciled against TWO **independent skeptical reviews** of
+Last updated 2026-07-16, reconciled against THREE **independent skeptical reviews** of
 branch `claude/bmc-functionality` (the second re-ran the USB F6 test both ways and
-confirmed the vhub QEMU verification live). This is the candid ground truth, not a
-summary of claims. Legend: ✅ demonstrated · ◐ partial/scoped · ✋ architecturally
+confirmed the vhub QEMU verification live; the third traced the feature-1 power
+fixes down to the `gpio-aspeed.c` dcache/bank mechanics and confirmed the QEMU
+`F2 RESULT: PASS` is substantiated + silicon-safe). This is the candid ground
+truth, not a summary of claims. Legend: ✅ demonstrated · ◐ partial/scoped · ✋ architecturally
 bounded (cannot be fully delivered on this board) · ✗ not yet on this target.
 
 **Bottom line (independent-review verdict):** strictly "demonstrated in BOTH QEMU
