@@ -1,0 +1,31 @@
+$ ipmitool -I lanplus ... sensor
+# rc=0
+
+fan1             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan2             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan3             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan4             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan5             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan6             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan7             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan8             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan1             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan2             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan3             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fan4             | na         |            | na    | na        | na        | na        | na        | na        | na        
+fleeting0        | na         |            | na    | na        | na        | na        | na        | na        | na        
+p3v3_scaled      | na         |            | na    | na        | na        | na        | na        | na        | na        
+p5v_scaled       | na         |            | na    | na        | na        | na        | na        | na        | na        
+p12v_aux_scaled  | na         |            | na    | na        | na        | na        | na        | na        | na        
+p1v1_ssb         | na         |            | na    | na        | na        | na        | na        | na        | na        
+pvcc_cpu0        | na         |            | na    | na        | na        | na        | na        | na        | na        
+pvcc_cpu1        | na         |            | na    | na        | na        | na        | na        | na        | na        
+p3v3_aux_scaled  | na         |            | na    | na        | na        | na        | na        | na        | na        
+p5v_aux_scaled   | na         |            | na    | na        | na        | na        | na        | na        | na        
+pvcc_cpu2        | na         |            | na    | na        | na        | na        | na        | na        | na        
+pvcc_cpu3        | na         |            | na    | na        | na        | na        | na        | na        | na        
+p12v_scaled      | na         |            | na    | na        | na        | na        | na        | na        | na        
+p3v_vbat         | na         |            | na    | na        | na        | na        | na        | na        | na        
+temp2_inlet      | na         |            | na    | na        | na        | na        | na        | na        | na        
+temp1            | na         |            | na    | na        | na        | na        | na        | na        | na        
+temp3            | na         |            | na    | na        | na        | na        | na        | na        | na        

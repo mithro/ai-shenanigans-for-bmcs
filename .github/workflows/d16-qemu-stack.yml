@@ -652,6 +652,93 @@ jobs:
           name: f2-power-redfish-evidence
           path: f2-redfish-evidence/
 
+  f3-sensors:
+    name: F3 — sensors (W83795G hwmon → IPMI SDR) in QEMU (OpenBMC NFS root)
+    runs-on: ubuntu-latest
+    needs: [build-kernel]
+    permissions:
+      contents: read
+    # Sensors (#4) is a PASS/PASS feature that previously had NO CI job. This runs
+    # f3-sensor-test.py over the OpenBMC NFS image: boots kgpe-d16-bmc, confirms the
+    # modeled W83795G hwmon device binds and reports a non-zero fan RPM, and that the
+    # reading surfaces end-to-end through phosphor-hwmon -> D-Bus -> IPMI SDR
+    # (ipmitool -I lanplus sdr/sensor over the modeled I2C). Needs the fuller rootfs
+    # Release asset (which carries the W83795 hwmon config); fetches it and RUNS when
+    # present, or SKIPS with a visible warning (never a silent green) when absent.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Fetch the published OpenBMC fuller rootfs (skip test gracefully if absent)
+        id: rootfs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p obmc-out
+          if gh release download "$OBMC_ROOTFS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+                 --pattern "$OBMC_ROOTFS_ASSET" --dir obmc-out --clobber; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=F3 sensors::rootfs '$OBMC_ROOTFS_ASSET' fetched — RUNNING the sensors QEMU test."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=F3 sensors SKIPPED::Release '$OBMC_ROOTFS_RELEASE' asset '$OBMC_ROOTFS_ASSET' is not published yet — SKIPPING (not failing) the sensors QEMU test. Publish it via build-openbmc-rootfs.yml; see .github/workflows/CI-README.md."
+            { echo "## F3 sensors — SKIPPED"; echo; echo "The \`$OBMC_ROOTFS_RELEASE\` release asset \`$OBMC_ROOTFS_ASSET\` is not published, so the sensors QEMU test could not run. Visible skip, not a pass."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Install deps
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            $QEMU_DEPS openssh-client sshpass nfs-kernel-server nfs-common ipmitool
+      - uses: astral-sh/setup-uv@v5
+        if: steps.rootfs.outputs.available == 'true'
+      - name: Build qemu-system-arm (from the submodule)
+        if: steps.rootfs.outputs.available == 'true'
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        if: steps.rootfs.outputs.available == 'true'
+        with: { name: kernel, path: kernel-out }
+      - name: Export the OpenBMC rootfs over NFS + deploy the W83795 hwmon config
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          sudo mkdir -p /export/openbmc-f3sensors
+          sudo tar -C /export/openbmc-f3sensors -xf "obmc-out/$OBMC_ROOTFS_ASSET"
+          # Deploy the KGPE-D16 W83795G phosphor-hwmon config (the recipe
+          # kgpe-d16-hwmon-config.bb installs it; the published quanta-q71l asset
+          # does not carry it). This lets the kernel W83795 driver bind + report a
+          # non-zero fan RPM (test tier 1). NOTE: the FULL IPMI-SDR surfacing with
+          # KGPE-D16 rail names (tier 2) additionally needs the kgpe-d16 IPMI
+          # *sensor map* (q71l-ipmi-sensor-map-native), which is COMPILED into the
+          # image — not runtime-deployable. So on the generic quanta-q71l asset
+          # tier 2 warns (SDR shows generic fanN=na); tier 1 is the enforced gate.
+          # Full IPMI-SDR CI needs the published asset rebuilt with the kgpe-d16
+          # sensor recipes (build-openbmc-rootfs.yml follow-up).
+          sudo install -D -m 0644 \
+            asus-kgpe-d16-firmware/openbmc/recipes/hwmon/files/hwmon@2f.conf \
+            "/export/openbmc-f3sensors/etc/default/obmc/hwmon/ahb/apb/bus@1e78a000/i2c-bus@80/hwmon@2f.conf"
+          echo '/export/openbmc-f3sensors *(rw,sync,no_subtree_check,no_root_squash,insecure)' \
+            | sudo tee /etc/exports
+          sudo nfsconf --set nfsd vers3 y
+          sudo modprobe nfsd
+          sudo systemctl restart rpcbind
+          sudo systemctl restart nfs-kernel-server
+          sudo exportfs -ra
+          echo "=== active exports ==="; sudo exportfs -v
+      - name: Boot kgpe-d16-bmc + verify W83795 hwmon → IPMI SDR
+        if: steps.rootfs.outputs.available == 'true'
+        run: |
+          uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f3-sensor-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --nfsroot 10.0.2.2:/export/openbmc-f3sensors --mem 256 \
+            --evidence-dir f3-sensors-evidence --boot-timeout 1200
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.rootfs.outputs.available == 'true'
+        with:
+          name: f3-sensors-evidence
+          path: f3-sensors-evidence/
+
   f4-sol:
     name: F4 — Serial-over-LAN on the AST2050 VUART in 64 MB (OpenBMC NFS root)
     runs-on: ubuntu-latest

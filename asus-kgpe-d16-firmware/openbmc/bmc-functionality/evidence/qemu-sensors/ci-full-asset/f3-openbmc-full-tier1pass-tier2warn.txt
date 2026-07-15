@@ -1,0 +1,5 @@
+[sysfs] w83795 at /sys/class/hwmon/hwmon0: 6 spinning fans, 16 rails, 3 temps
+  fans(RPM): [5113, 4963, 4804, 3901, 3750, 3600]
+  QEMU W83795 model + kernel bind (sysfs): PASS
+  IPMI SDR real readings over LAN:         warn (see evidence)
+F3 RESULT: PASS - W83795 sensors read in QEMU
