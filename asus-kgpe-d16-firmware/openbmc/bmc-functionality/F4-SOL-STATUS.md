@@ -69,16 +69,27 @@ object shows in `busctl tree`. It is delivered by `settings/sol-template.yaml` +
 (and, as of this session, the sync is wired into `build-openbmc-rootfs.yml`, so a
 fresh asset build will carry it).
 
-So the SOL config provider is **not** the blocker anymore. The residual
-`sol activate` gap on this image is **RMCP+ RAKP session-auth flakiness** on the
-slow 256 MB QEMU board: `sol payload status` / `sol activate` both report
-"no response from RAKP 1 message" while `mc info` on the same run succeeds — the
-same known RMCP+ slowness the lanplus suite hits (F5's finding), a *session-layer*
-issue that never reaches the SOL payload. The SOL **data path** is proven
-regardless: `obmc-console-client` captures the injected host bytes over the
-AST2050 VUART (748 B / 17 markers, F4 RESULT PASS). A streaming `sol activate` CI
-test is intentionally NOT added — RMCP+ RAKP under 256 MB QEMU is inherently racy,
-so it would be a flaky test. No QEMU/DTS/kernel change is needed.
+So the SOL config provider is **not** the blocker anymore. The `sol activate` gap
+has been walked down layer by layer (each fix exposes the next):
+
+1. **RAKP session-auth** — was "no response from RAKP 1 message" (netipmid RAKP
+   slow under 256 MB load). **FIXED** by `-N 5 -R 3` in the harness (2026-07-16):
+   `sol payload status` now returns rc=0 "User 1 on channel 1 is enabled".
+2. **Ipmi.SOL provider** — present on the recipe-built image (busctl-confirmed).
+3. **netipmid registerSOLService** — the *current* residual: `sol activate` now
+   reaches netipmid, which logs **"Failed to get service path in
+   registerSOLService"** and tells the client "BMC requests SOL session on
+   different port", so activation still doesn't stream. This is a netipmid↔
+   obmc-console SOL **service-registration** binding issue (deeper than the config
+   object) — a phosphor-net-ipmid / obmc-console wiring follow-up, not RAKP and not
+   the provider.
+
+The SOL **data path** is proven regardless: `obmc-console-client` captures the
+injected host bytes over the AST2050 VUART (748 B / 17 markers, F4 RESULT PASS).
+The harness now bumps the `sol activate` timeout past the RAKP window and scans the
+output for the streamed host markers, so it will report a **TRUE SOL SESSION**
+automatically once the registerSOLService gap is closed. No QEMU/DTS/kernel change
+is needed.
 
 ## Real hardware (AST2050 on the rig) — 2026-07-12
 

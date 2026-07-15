@@ -283,8 +283,16 @@ def main():
             time.sleep(3)
         rc_ps, ps = ipmi(args.ipmi_port, ["sol", "payload", "status", "1", "1"],
                          args.user, args.password)
+        # 30 s so the -N 5 -R 3 RAKP handshake (up to ~15 s) can complete AND the
+        # SOL session then streams for a while before the subprocess timeout.
         rc_act, act = ipmi(args.ipmi_port, ["sol", "activate"],
-                           args.user, args.password, timeout=10)
+                           args.user, args.password, timeout=30)
+        # A TRUE SOL session streams the host (VUART) bytes back over RMCP+: the
+        # feeder is still injecting HOSTLINE markers, so if activation actually
+        # succeeds they appear in `act`. This is only reachable now that the RAKP
+        # handshake is reliable (-N/-R) AND the xyz.openbmc_project.Ipmi.SOL
+        # provider is present (recipe-built image) — see F4-SOL-STATUS.md.
+        sol_markers = [ln for ln in act.splitlines() if MARKER in ln]
         # Grab netipmid's own log line for the activation — the genuine gap.
         cj = ssh_connect(args.ssh_port, args.user, args.password)
         _, jo, _ = cj.exec_command(
@@ -302,26 +310,40 @@ def main():
             f.write(f"# rc={rc_act}\n{act}\n")
             f.write("# netipmid journal during activation:\n")
             f.write(jtail + "\n")
-            f.write("\n# NOTE: SOL payload is *enabled* (status above), but this "
-                    "image ships no\n# xyz.openbmc_project.Ipmi.SOL config-object "
-                    "provider, so netipmid's Activate\n# Payload does a D-Bus read "
-                    "of /xyz/openbmc_project/ipmi/sol/eth0 that returns\n# "
-                    "ResourceNotFound -> 'No response activating SOL payload'. The "
-                    "SOL *bytes*\n# flow regardless (proven by capture-A via "
-                    "obmc-console-client); only the IPMI\n# front-end config object "
-                    "is absent (an image-recipe follow-up).\n")
+            f.write("\n# NOTE: SOL payload is *enabled* (status above). Whether "
+                    "`sol activate` streams depends on the image + RMCP+; the gap "
+                    "has been walked down layer by layer:\n"
+                    "#  - RAKP session-auth: reliable with -N 5 -R 3 (this harness) "
+                    "-- previously failed 'no response from RAKP 1 message'.\n"
+                    "#  - xyz.openbmc_project.Ipmi.SOL provider: PRESENT on the "
+                    "recipe-built image (busctl GetObject rc=0), absent only on the "
+                    "base quanta-q71l asset.\n"
+                    "#  - netipmid registerSOLService: on the recipe image the "
+                    "residual is 'Failed to get service path in registerSOLService' "
+                    "(+ 'BMC requests SOL session on different port'; see journal "
+                    "above) -- a netipmid<->obmc-console SOL service-registration "
+                    "binding issue, deeper than the config object.\n"
+                    "# The SOL *bytes* flow regardless (capture-A via "
+                    "obmc-console-client proves the same VUART data path).\n")
         print(f"[capture-B] sol payload status rc={rc_ps}: {ps.strip()[:80]}")
-        print(f"[capture-B] sol activate rc={rc_act}: {act.strip()[:80]}")
+        if sol_markers:
+            print(f"[capture-B] sol activate rc={rc_act}: TRUE SOL SESSION — "
+                  f"{len(sol_markers)} HOSTLINE markers streamed over RMCP+")
+        else:
+            print(f"[capture-B] sol activate rc={rc_act}: {act.strip()[:80]}")
         if jtail.strip():
             print(f"[capture-B] netipmid: {jtail.strip().splitlines()[-1][:90]}")
 
         ok = len(markers) >= 3 and feeder.sent >= 3
+        sol_session = len(sol_markers) >= 3
         print("\n=== F4 Serial-over-LAN ===")
         print(f"  VUART host bytes fed        : {feeder.sent}")
         print(f"  captured over obmc-console  : {len(markers)} markers")
         print(f"  ipmitool sol payload status : rc={rc_ps} "
               f"({'enabled' if 'enabled' in ps else 'see evidence'})")
-        print(f"  ipmitool sol activate       : rc={rc_act} (known image gap)")
+        print(f"  ipmitool sol activate       : "
+              + (f"TRUE SOL SESSION ({len(sol_markers)} markers streamed)"
+                 if sol_session else f"rc={rc_act} (no session — see evidence)"))
         result = 0 if ok else 1
         print("\nF4 RESULT:", "PASS — host serial captured over SOL "
               "(obmc-console on the AST2050 VUART) in 64 MB" if result == 0

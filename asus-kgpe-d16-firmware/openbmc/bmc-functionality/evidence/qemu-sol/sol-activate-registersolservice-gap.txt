@@ -1,0 +1,9 @@
+[capture-A] obmc-console-client (OpenBMC SOL client) over SSH ...
+[capture-A] captured 748 bytes, 17 'HOSTLINE' markers
+[capture-B] ipmitool -I lanplus SOL (RMCP+) ...
+[capture-B] sol payload status rc=0: User 1 on channel 1 is enabled
+[capture-B] sol activate rc=1: Error: BMC requests SOL session on different port
+[capture-B] netipmid: Jul 15 17:57:48 quanta-q71l netipmid[328]: Failed to get service path in registerSOLServic
+  ipmitool sol payload status : rc=0 (enabled)
+  ipmitool sol activate       : rc=1 (no session — see evidence)
+F4 RESULT: PASS — host serial captured over SOL (obmc-console on the AST2050 VUART) in 64 MB
