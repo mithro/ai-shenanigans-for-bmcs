@@ -68,15 +68,27 @@ patch-0006 commit message and [F8-KVM.md](F8-KVM.md) §3.1 for the full datashee
 driver derivation. Register semantics match the AMI "videocap" G3 driver
 (`ya-mouse/openwrt-linux-aspeed`, `arch/arm/plat-aspeed/videocap/`).
 
-## Remaining follow-up (not blocking capture)
+## Standards-compliant JPEG — done in the driver (patch 0006)
 
-- **Driver-side JFIF wrapping.** The G3 engine emits the raw ASPEED compressed stream
-  (no JFIF header — `0x040` is the CRC buffer on the G3, so the G4's engine-prepended
-  header mechanism is inert). `/dev/video0` therefore returns headerless data; a
-  KVM client (obmc-ikvm) or a plain viewer needs the JFIF wrapper. We reconstruct it
-  offline (`evidence/real-hw-video/reconstruct-jpeg.py`: driver `jpeg_header+jpeg_dct[q]+
-  jpeg_quant`, SOF0 patched to the captured WxH). Making the *driver* prepend it for a
-  standards-compliant `V4L2_PIX_FMT_JPEG` is the clean next step.
+The G3 engine emits the raw ASPEED compressed stream (no JFIF header — `0x040` is the
+CRC buffer on the G3, so the G4's engine-prepended header mechanism is inert). The
+driver now wraps it: `aspeed_video_build_jfif_header()` assembles the header the G4
+would have prepended (`jpeg_header + jpeg_dct[sel] + jpeg_quant`) with the SOF0 (`FF C0`)
+dimensions patched to the captured WxH (deterministic offset 175), and
+`aspeed_video_wrap_jfif()` — in the threaded COMP_COMPLETE IRQ — memmoves the entropy up,
+prepends the header, and appends the EOI marker. `/dev/video0` therefore returns a
+directly-decodable `V4L2_PIX_FMT_JPEG` (FFD8..FFD9, correct SOF0 dims) that obmc-ikvm or
+any viewer opens as-is; no offline reconstruction needed. The G3 engine writes the
+entropy MSB-first, so no word-swap is required (the `as-is` variant of the real-silicon
+capture decodes; `wordswap` is flat grey). The offline
+`evidence/real-hw-video/reconstruct-jpeg.py` remains only as the pre-driver-fix reference.
+
+**QEMU mirrors silicon.** The `aspeed.video-ast2050` model now emits the same headerless
+entropy in pure-JPEG mode (VR060[0]) using the AST2050 ROM quant tables, and the kgpe-d16
+QEMU DTS binds `aspeed,ast2050-video-engine`, so `video-capture-test.py` drives the real
+G3 wrapping path end to end (all 8 colour bars pixel-verify on the wrapped frame).
+
+## Remaining follow-up (not blocking capture)
 - **Capturing a specific BIOS screen.** The captured frame is whatever the host is
   currently scanning out; to capture a specific POST screen, warm-reset the host
   (`kgpe-power.sh reset`) after the BMC is up so a fresh POST re-renders the AST2050
