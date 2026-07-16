@@ -139,7 +139,9 @@ Enables GCC 6.x compilation.
 
 ### Target Boards
 - ASUS KGPE-D16 (server motherboard)
-- ASUS KCMA-D8 (server motherboard)
+- ASUS KCMA-D8 (server motherboard) — board reference: [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md)
+  (mirror of the 15h.org wiki page; its linked PDFs are committed in
+  [datasheets/15h.org/](datasheets/15h.org/))
 
 ---
 
