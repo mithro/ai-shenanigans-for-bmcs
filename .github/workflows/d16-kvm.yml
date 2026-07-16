@@ -156,3 +156,59 @@ jobs:
           name: captured-frame
           path: captured-frame/
           if-no-files-found: ignore
+
+  boot-usbip-host:
+    # Two-VM USB/IP full-enumeration test (#2 virtual media + #3b keyboard): the BMC
+    # exports its gadget over USB/IP; a second qemu-system-x86_64 "virtual host" (the
+    # runner's own kernel + kernel-matched modules) imports it via vhci-hcd and
+    # enumerates it. Best-effort: skips with a visible warning if the runner lacks a
+    # readable vmlinuz or the required modules. See openbmc/.../F6-USB-HOST.md.
+    name: Two-VM USB/IP full enumeration (#2 virtual media + #3b keyboard)
+    runs-on: ubuntu-latest
+    needs: [build-qemu, build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/download-artifact@v4
+        with: { name: qemu, path: qemu-out }
+      - uses: actions/download-artifact@v4
+        with: { name: kernel, path: kernel-out }
+      - uses: actions/download-artifact@v4
+        with: { name: initramfs, path: initramfs-out }
+      - name: Install qemu-system-x86 + kernel-matched modules for the virtual host
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 || true
+          sudo apt-get install -y --no-install-recommends "linux-modules-extra-$(uname -r)" || true
+      - name: Preflight (need the runner vmlinuz + vhci-hcd/usb-storage/... modules)
+        id: pre
+        run: |
+          ok=yes
+          [ -r "/boot/vmlinuz-$(uname -r)" ] || ok=no
+          for m in vhci-hcd usb-storage sd_mod usbhid e1000; do
+            find "/lib/modules/$(uname -r)" -name "$m.ko*" | grep -q . || ok=no
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          [ "$ok" = yes ] || echo "::warning title=USB/IP host test skipped::runner lacks a readable vmlinuz or the required modules"
+      - name: Build the x86 virtual-host initramfs (runner kernel + modules)
+        if: steps.pre.outputs.ok == 'yes'
+        run: uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/build-x86-vhost.py --output-dir kernel-out
+      - name: Run the two-VM USB/IP enumeration test
+        if: steps.pre.outputs.ok == 'yes'
+        run: |
+          chmod +x qemu-out/qemu-system-arm
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/usbip-host-test.py \
+            --qemu-arm qemu-out/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --vhost-initrd kernel-out/vhost-x86-initramfs.cpio.gz \
+            --logdir .
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.pre.outputs.ok == 'yes'
+        with:
+          name: usbip-host-logs
+          path: |
+            usbip-bmc.log
+            usbip-x86.log
+          if-no-files-found: ignore
