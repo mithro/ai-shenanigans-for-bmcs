@@ -362,6 +362,15 @@ if grep -q usbiphost /proc/cmdline; then
 	else
 		echo "USBIP-BIND-FAIL"
 	fi
+	# Confirm the mass-storage backing file actually attached (the dmesg at
+	# function-create time prints "(no medium)" before the file is set; read it
+	# back after bind to prove the medium is present for the host to read).
+	LUNFILE=$(cat "$G/functions/mass_storage.0/lun.0/file" 2>&1)
+	if [ -n "$LUNFILE" ]; then
+		echo "USBIP-LUN-MEDIUM-OK (lun.0 file=$LUNFILE)"
+	else
+		echo "USBIP-LUN-NO-MEDIUM (backing file not attached)"
+	fi
 
 	# Start the USB/IP device-mode daemon: exports the bound vudc gadget on TCP:3240
 	# for a remote 'usbip attach'. -D daemonises; --device = device (vudc) mode.
