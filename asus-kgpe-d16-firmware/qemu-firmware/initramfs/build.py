@@ -15,6 +15,7 @@ public key in /root/.ssh/authorized_keys, so CI can SSH in over the QEMU
 user-net hostfwd. stdlib only; cross-compiles with arm-linux-gnueabi-.
 """
 import argparse
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -137,6 +138,19 @@ def build_f8capture(build: Path, src: Path) -> Path:
     return out
 
 
+def build_usbip_userspace(here: Path, build: Path):
+    """Cross-build the fully-static ARM USB/IP userspace (usbipd + usbip) via the
+    sibling build-usbip.py (hyphenated filename -> load by path). Returns
+    (usbipd, usbip) or (None, None) if the build is skipped. Used by the
+    'usbiphost' initramfs gate to export the BMC gadget over USB/IP to a virtual
+    x86 host (features #2/#3b). See build-usbip.py for the libudev-zero recipe."""
+    spec = importlib.util.spec_from_file_location(
+        "build_usbip", here / "build-usbip.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.build_usbip(build / "usbip")
+
+
 def gen_test_key(out: Path) -> str:
     """Generate a throwaway ed25519 keypair; return the public key text."""
     priv = out / "id_kgpe_d16_test"
@@ -149,7 +163,8 @@ def gen_test_key(out: Path) -> str:
 
 
 def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
-                 pubkey: str, f8video: Path, f8capture: Path = None):
+                 pubkey: str, f8video: Path, f8capture: Path = None,
+                 usbipd: Path = None, usbip: Path = None):
     for d in ("bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys",
               "etc/dropbear", "tmp", "run", "var/log", "root/.ssh"):
         (rootfs / d).mkdir(parents=True, exist_ok=True)
@@ -169,6 +184,13 @@ def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
     if f8capture is not None:
         shutil.copy2(f8capture, rootfs / "usr/bin/f8capture")
         os.chmod(rootfs / "usr/bin/f8capture", 0o755)
+    # USB/IP userspace (server side): usbipd exports the configfs gadget over
+    # USB/IP; usbip is included for symmetry/diagnostics. Consumed by the
+    # 'usbiphost' init gate (features #2/#3b).
+    for tool in (usbipd, usbip):
+        if tool is not None:
+            shutil.copy2(tool, rootfs / "usr/sbin" / tool.name)
+            os.chmod(rootfs / "usr/sbin" / tool.name, 0o755)
     (rootfs / "etc/passwd").write_text(
         "root:x:0:0:root:/root:/bin/sh\n")
     (rootfs / "etc/group").write_text("root:x:0:\n")
@@ -231,6 +253,9 @@ def main():
     ap.add_argument("--dropbear-version", default="2024.86")
     ap.add_argument("--output-dir", default=str(here / "out"))
     ap.add_argument("--build-dir", default=str(here / "build"))
+    ap.add_argument("--no-usbip", action="store_true",
+                    help="skip the USB/IP userspace cross-build (usbiphost gate "
+                         "will then be inert)")
     args = ap.parse_args()
 
     out = Path(args.output_dir); out.mkdir(parents=True, exist_ok=True)
@@ -241,13 +266,16 @@ def main():
     f8video = build_f8video(build, here / "f8video.c")
     f8capture = build_f8capture(build, here / "f8capture.c") \
         if (here / "f8capture.c").exists() else None
+    usbipd = usbip = None
+    if not args.no_usbip:
+        usbipd, usbip = build_usbip_userspace(here, build)
     pubkey = gen_test_key(out)
 
     rootfs = build / "rootfs"
     if rootfs.exists():
         shutil.rmtree(rootfs)
     build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey, f8video,
-                 f8capture)
+                 f8capture, usbipd, usbip)
     pack(rootfs, out)
     tar_rootfs(rootfs, out)
     print("\nInitramfs artifacts in", out)
