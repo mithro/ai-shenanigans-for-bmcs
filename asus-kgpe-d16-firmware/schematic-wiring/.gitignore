@@ -1,0 +1,13 @@
+# Secrets: the FZ decryption key lives only in a local .env (see .env.example).
+.env
+
+# Raw ASUS schematic material and bulk netlist dumps derived from it are NOT
+# redistributed here. Regenerate locally from the .FZ with tools/ (see README).
+*.FZ
+*.sqlite3
+data/*.json
+tmp/
+# mermaid-cli render artifacts
+tmp_*
+*-[0-9].svg
+tools/*.json
