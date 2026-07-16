@@ -376,12 +376,38 @@ if grep -q usbiphost /proc/cmdline; then
 	# for a remote 'usbip attach'. -D daemonises; --device = device (vudc) mode.
 	usbipd -D --device 2>&1 || echo "usbipd start rc=$?"
 	sleep 2
+	if grep -q usbipdiag /proc/cmdline; then
+		echo "--- VUDC-DIAG: udc class ---"; ls -la /sys/class/udc/ 2>&1
+		echo "--- VUDC-DIAG: platform usbip-vudc.0 (dev_desc?) ---"
+		ls -la /sys/devices/platform/usbip-vudc.0/ 2>&1
+		echo "--- VUDC-DIAG: usbip_status ---"
+		cat /sys/devices/platform/usbip-vudc.0/usbip_status 2>&1
+		echo "--- VUDC-DIAG: udc device uevent (USB_UDC_NAME?) ---"
+		cat /sys/class/udc/usbip-vudc.0/uevent 2>&1
+		echo "--- VUDC-DIAG: usbip list -r 127.0.0.1 (self-query) ---"
+		usbip list -r 127.0.0.1 2>&1
+	fi
 	if netstat -tln 2>&1 | grep -q ':3240'; then
 		echo "USBIP-DAEMON-LISTENING (:3240)"
 	else
 		echo "USBIP-DAEMON-FAIL (:3240 not listening)"
 	fi
 	echo "USBIP-MAGIC=$USBIP_MAGIC@512"
+
+	# Drive periodic KEY_A press/release on /dev/hidg0 so a host that imports this
+	# gadget (usbip attach) observes keystrokes on its evdev (feature #3b). Gated on
+	# a separate 'usbipkbd' token so the plain export (Stage 0) stays quiet; the
+	# two-VM runner passes both. Backgrounded; retries (writes fail with -ESHUTDOWN
+	# until a host is enumerated). stderr -> a file (kept visible, not /dev/null).
+	if grep -q usbipkbd /proc/cmdline; then
+		( while true; do
+			printf '\x00\x00\x04\x00\x00\x00\x00\x00' > /dev/hidg0
+			sleep 1
+			printf '\x00\x00\x00\x00\x00\x00\x00\x00' > /dev/hidg0
+			sleep 1
+		done ) 2> /tmp/hidkbd.log &
+		echo "USBIP-HIDKBD-LOOP started (periodic KEY_A on /dev/hidg0)"
+	fi
 	echo "=== USBIP-EXPORT-END ==="
 fi
 

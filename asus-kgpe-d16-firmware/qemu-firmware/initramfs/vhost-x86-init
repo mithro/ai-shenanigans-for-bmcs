@@ -1,0 +1,97 @@
+#!/bin/busybox sh
+# NB shebang: /bin/sh does not exist yet — busybox applet symlinks are created by
+# the `--install` below — so the interpreter must be /bin/busybox itself.
+# x86 virtual-host init (feature #2/#3b): import the BMC's exported USB gadget over
+# USB/IP and verify FULL enumeration against this INDEPENDENT Linux USB stack —
+# #2 mass-storage data read + #3b keyboard event delivery. Boots on
+# qemu-system-x86_64 with the host kernel + its kernel-matched modules.
+# Driven by scripts/usbip-host-test.py. See openbmc/bmc-functionality/F6-USB-HOST.md.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+/bin/busybox --install -s /bin
+mount -t proc     proc     /proc
+mount -t sysfs    sysfs    /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /tmp
+mount -t devpts devpts /dev/pts
+echo "=== X86-VHOST-BEGIN ==="
+
+# Load modules FIRST (the NIC driver e1000 must be up before we configure eth0),
+# in dependency order.
+echo "--- loading NIC/USB/vhci/storage/hid modules (dependency order) ---"
+while read m; do
+	[ -n "$m" ] || continue
+	if insmod "/modules/$m"; then echo "insmod $m ok"; else echo "insmod $m FAIL"; fi
+done < /modules/load.order
+
+# QEMU user-net: guest 10.0.2.15, the BMC's forwarded usbipd is reachable at the
+# SLIRP host alias 10.0.2.2:3240.
+ip link set lo up
+ip link set eth0 up
+ip addr add 10.0.2.15/24 dev eth0
+ip route add default via 10.0.2.2
+
+echo "--- usbip list + attach (BMC usbipd at host alias 10.0.2.2:3240) ---"
+usbip list -r 10.0.2.2 || echo "(usbip list failed)"
+# NB: `usbip attach` imports the device but then returns a non-fatal error
+# ("record connection") when it fails to write its port record file in this
+# minimal initramfs — the device IS attached regardless. So do NOT key success on
+# its exit code; verify actual ENUMERATION below.
+usbip attach -r 10.0.2.2 -b usbip-vudc.0 || echo "(usbip attach rc=$? — verifying enumeration anyway)"
+sleep 4
+echo "--- enumerated USB devices ---"
+ATTACHED=no
+for p in /sys/bus/usb/devices/*/product; do
+	[ -f "$p" ] || continue
+	echo "$p = $(cat "$p")"
+	case "$(cat "$p")" in *vKVM*) ATTACHED=yes ;; esac
+done
+if [ "$ATTACHED" = yes ]; then echo "X86-USBIP-ATTACHED"; else echo "X86-USBIP-ATTACH-FAIL"; fi
+dmesg | grep -iE 'new .*USB device|usb-storage|Direct-Access|hid-generic|input:' | tail -20
+
+# feature #2: read the known magic the BMC placed at offset 512 of the LUN.
+echo "--- #2 mass-storage data read ---"
+sleep 2
+for d in /dev/sda /dev/sdb /dev/sdc; do
+	[ -b "$d" ] || continue
+	GOT=$(dd if="$d" bs=1 skip=512 count=24)
+	echo "X86-MASS-READ $d = '$GOT'"
+	case "$GOT" in
+		*KGPE-D16-USBIP-VMEDIA-OK*) echo "X86-MASS-OK ($d)" ;;
+	esac
+done
+
+# feature #3b: capture one input_event on the HID keyboard's evdev. The BMC's
+# usbipkbd loop drives KEY_A press/release; a 64-bit input_event is 24 bytes:
+# 16-byte timeval, then type(2) code(2) value(4). EV_KEY KEY_A press =
+# 01 00 1e 00 01 00 00 00.
+echo "--- #3b keyboard event ---"
+KBDEV=""
+for e in /sys/class/input/event*; do
+	[ -e "$e/device/name" ] || continue
+	n=$(cat "$e/device/name")
+	case "$n" in *vKVM*|*AST2050*) KBDEV="/dev/input/$(basename "$e")"; break ;; esac
+done
+echo "kbd evdev node: ${KBDEV:-<none>}"
+if [ -n "$KBDEV" ]; then
+	# A key press emits several input_events (EV_MSC scancode, EV_KEY, EV_SYN), so
+	# capture a burst and search all of them for the EV_KEY KEY_A press. bs=24 =
+	# one 64-bit input_event; count=64 grabs up to 64 events over the window.
+	( dd if="$KBDEV" bs=24 count=64 of=/tmp/ev.bin ) &
+	RP=$!
+	sleep 10
+	kill "$RP" 2>&1 || true
+	if [ -s /tmp/ev.bin ]; then
+		echo "X86-KEY-EVENT bytes (first events):"
+		hexdump -C /tmp/ev.bin | head -6
+		# EV_KEY(01 00) KEY_A(1e 00) value=1 (01 00 00 00), anywhere in the burst.
+		if hexdump -C /tmp/ev.bin | grep -qE '01 00 1e 00 01 00 00 00'; then
+			echo "X86-KEY-OK (EV_KEY KEY_A press delivered to the host)"
+		else
+			echo "X86-KEY-EVENT-UNEXPECTED"
+		fi
+	else
+		echo "X86-KEY-NONE"
+	fi
+fi
+echo "=== X86-VHOST-END ==="
+poweroff -f
