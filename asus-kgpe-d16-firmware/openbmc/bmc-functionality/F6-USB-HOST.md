@@ -68,9 +68,18 @@ USB; usbip is the CI-hermetic stand-in for "a real host is on the other end."
 | Initramfs ships usbipd/usbip | `qemu-firmware/initramfs/build.py` | ✅ verified in packed cpio |
 | BMC kernel `USBIP_VUDC` | `qemu-firmware/kernel/kgpe-d16-usbip.config` + `build-kernel.sh` | ✅ merge verified (`USBIP_VUDC=y`) |
 | BMC-side export gate | `qemu-firmware/initramfs/init` (`usbiphost`) | ✅ **runtime PASS** on kgpe-d16-bmc QEMU (Stage 0) |
-| Two-VM runner | `qemu-firmware/scripts/usbip-host-test.py` | ⏳ pending (needs x86 host image) |
-| x86 virtual-host image | `qemu-firmware/kernel/vhost-x86.config` + initramfs | ⏳ pending |
+| x86 client build blocks | static x86 usbip + static x86 busybox | ✅ built (de-risk `evidence/f6-usb-host/02-…`) |
+| Two-VM runner | `qemu-firmware/scripts/usbip-host-test.py` | ⏳ pending (assemble x86 initramfs + orchestrate) |
+| x86 virtual-host image | reuse host kernel + kernel-matched `.ko.xz` modules | ⏳ pending (bundle module dep-tree + init) |
 | CI job | `.github/workflows/d16-kvm.yml` (or sibling) | ⏳ pending |
+
+The x86 host side needs **no x86 kernel build**: `qemu-system-x86_64` boots the host
+`vmlinuz` and the guest loads the host's kernel-matched `vhci-hcd`/`usb-storage`/
+`usbhid`/`usbip-core` modules. The static x86 usbip client + static x86 busybox both
+build (same libudev-zero recipe as ARM). Remaining: bundle the module dep-tree
+(`usbcore`/`hid` are modules here) into an x86 initramfs, an x86 `/init` that
+`usbip attach`es (`-r 10.0.2.2` via the SLIRP host alias) and asserts the magic read
+(#2) + evdev keypress (#3b), and the runner + CI job.
 
 ### The static-libudev crux — SOLVED
 

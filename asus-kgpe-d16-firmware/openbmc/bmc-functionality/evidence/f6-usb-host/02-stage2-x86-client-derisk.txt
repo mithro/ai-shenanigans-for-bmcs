@@ -1,0 +1,25 @@
+# Stage-2 x86 virtual-host — component de-risk (2026-07-16)
+# The client side (a qemu-system-x86_64 guest importing the BMC gadget via
+# vhci-hcd) is buildable here WITHOUT a multi-hour x86 kernel build: reuse the
+# host kernel + its kernel-matched modules. Components proven to build/exist:
+
+## static x86 usbip client (libudev-zero, same recipe as ARM):
+usbip: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), statically linked, BuildID[sha1]=0307f678983584d3a441fcb0cd1de1dc5cd43d01, for GNU/Linux 3.2.0, with debug_info, not stripped
+
+## static x86 busybox (CONFIG_TC disabled, as build.py does for ARM):
+busybox: ELF 64-bit LSB executable, x86-64, version 1 (GNU/Linux), statically linked, BuildID[sha1]=12b1f0f35ccc19e9e85604ad5d68dc51163f443e, for GNU/Linux 3.2.0, stripped
+
+## host x86 QEMU + kernel + kernel-matched modules available:
+/usr/bin/qemu-system-x86_64
+/boot/vmlinuz-6.12.94+deb13-amd64
+modules (as .ko.xz under /lib/modules/6.12.94+deb13-amd64): usbip-core, vhci-hcd, usb-storage, usbhid, usbcore, hid
+
+## REMAINING for the two-VM enumeration run:
+#  - bundle the module dep-tree (usbcore+hid are modules, not built-in) into
+#    an x86 initramfs + insmod in dep order (or a minimal depmod tree);
+#  - x86 /init: attach usbip (-r 10.0.2.2 via SLIRP host alias -b usbip-vudc.0),
+#    read /dev/sda offset 512 == magic (#2), read a keypress on evdev (#3b);
+#  - scripts/usbip-host-test.py: launch arm BMC (usbiphost + hostfwd :3240) +
+#    x86 guest, assert; wire into a new CI job.
+#  - cross-version protocol interop (BMC usbipd 6.6.70 <-> client vhci 6.12.94)
+#    -- usbip proto is stable but verify at first run.
