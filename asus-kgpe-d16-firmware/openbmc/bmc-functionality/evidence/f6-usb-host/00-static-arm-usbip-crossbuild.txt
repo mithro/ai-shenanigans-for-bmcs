@@ -1,0 +1,20 @@
+# USB/IP static-ARM userspace cross-build — de-risk result (2026-07-16)
+#
+# Reproduce:  uv run asus-kgpe-d16-firmware/qemu-firmware/initramfs/build-usbip.py
+# Recipe: libudev-zero (static ARM libudev.a) + usbip 2.0 (in-tree, kernel 6.6.70)
+#         ./configure --without-tcp-wrappers ... ; make LDFLAGS='-all-static'
+#
+## file(1) on the stripped binaries that land in the initramfs:
+/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/tmp/usbip-clean-verify/usbip-bin/usbipd: ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), statically linked, BuildID[sha1]=e455707c023e779513e6a193dcd613be81a3023e, for GNU/Linux 3.2.0, stripped
+/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/tmp/usbip-clean-verify/usbip-bin/usbip:  ELF 32-bit LSB executable, ARM, EABI5 version 1 (SYSV), statically linked, BuildID[sha1]=6c362ea2d91085201fd397bd3c1dd29cfb70323d, for GNU/Linux 3.2.0, stripped
+
+## fully static — no dynamic section:
+
+There is no dynamic section in this file.
+
+## sizes:
+-rwxrwxr-x 1 tim tim 857376 Jul 16 15:47 /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/tmp/usbip-clean-verify/usbip-bin/usbip
+-rwxrwxr-x 1 tim tim 857508 Jul 16 15:47 /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/tmp/usbip-clean-verify/usbip-bin/usbipd
+
+## usbip version (matches BMC kernel submodule tools/usb/usbip):
+PACKAGE_VERSION 2.0
