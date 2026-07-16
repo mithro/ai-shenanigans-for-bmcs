@@ -737,3 +737,35 @@ that schematic — do not build on the inferred wiring.
 **Revised ceiling:** not "4 done, 5 impossible." #2/#3b are emulation-provable (harness
 foundation done); #5 has a viable smbios-mdr path; #8 has a tractable self-update half; the
 host-facing halves of #8/#5/#9 + the mux lead await the schematic.
+
+---
+
+## Log — 2026-07-16 (later still): USB #2/#3b FULL ENUMERATION — QEMU PASS
+
+Goal "finish all USB items, verify in QEMU AND on real hardware." **QEMU: DONE.**
+The two-VM USB/IP harness passes end-to-end (`evidence/f6-usb-host/03-…`,
+`USBIP-HOST RESULT: PASS`):
+- BMC (emulated AST2050) exports its configfs gadget (HID keyboard + mass-storage)
+  over USB/IP; a **separate qemu-system-x86_64 host** imports it via vhci-hcd and
+  enumerates it (`vhci_hcd: Device attached`, `usb 1-1: AST2050 vKVM export`).
+- **#2**: `/dev/sda` enumerates; offset 512 reads back `KGPE-D16-USBIP-VMEDIA-OK`.
+- **#3b**: a BMC `/dev/hidg0` write arrives on the host evdev as `EV_KEY KEY_A`
+  (`01 00 1e 00 01 00 00 00`).
+Key fix: **libudev-zero only enumerates /sys/dev/{block,char}** (devnode devices), so
+usbipd couldn't see the devnode-less `udc` class device — patched to also scan
+`/sys/class/<subsystem>/`. Plus `sd_mod` (for /dev/sda) and an enumeration-based
+attach check (usbip attach imports OK but returns a non-fatal "record connection"
+error). New: `build-usbip.py` (patch), `kgpe-d16-usbip.config`, `usbiphost` gate,
+`build-x86-vhost.py`, `vhost-x86-init`, `usbip-host-test.py`, CI `boot-usbip-host`.
+Stage-0 BMC export also runtime-PASS (`01-…`); static-ARM usbip crux de-risked (`00-…`).
+
+**Real hardware: PREPARED but NOT executable from this sandbox.** The AST2050 rig
+(BMC `192.168.66.2` behind the Pi bridge `asus-bmc`) is **unreachable from the build
+environment** (ping 100 % loss; `asus-bmc` SSH times out; bridge names don't resolve)
+— the same constraint the earlier real-HW work hit. `USB-REAL-HW-VERIFICATION.md`
+gives the ready-to-run silicon procedure reusing this exact stack: **Test A** =
+USB/IP over the rig network (function half, no cabling, fully reversible — run from
+the Pi that routes to the board); **Test B** = physical USB to a real host (full G3
+vhub datapath; blocked on the patch-0007 vhub fresh-boot retest + USB cabling).
+Completing the silicon half requires running that procedure from a host with rig
+access — it cannot be driven from here.
