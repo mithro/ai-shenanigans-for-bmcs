@@ -15,8 +15,9 @@ both the KGPE-D16 and the KCMA-D8
 > last edited 8 July 2026, retrieved 2026-07-16). 15h.org content is licensed
 > **CC BY-SA 4.0**; this file is therefore CC BY-SA 4.0 (an exception to the
 > repository's default Apache-2.0). All PDFs the page links to are committed
-> in [`datasheets/15h.org/`](datasheets/15h.org/) — see that directory's
-> README for the file-by-file mapping.
+> in [`datasheets/`](datasheets/) — see
+> [`datasheets/15H-ORG-MIRROR.md`](datasheets/15H-ORG-MIRROR.md) for the
+> link-by-link mapping.
 
 ---
 
@@ -143,13 +144,14 @@ Processors in the AMD Opteron 4100 Series were designed with the **K10**
 microarchitecture and are compatible with the C32 socket.
 
 Official source code and documentation (PDFs mirrored in
-[`datasheets/15h.org/`](datasheets/15h.org/)):
+[`datasheets/`](datasheets/)):
 
 - [AGESA Source Code](https://review.coreboot.org/c/coreboot/+/95) (coreboot Gerrit change 95)
 - AGESA Interface Specification — `44065_Arch2008.pdf`
-- BIOS and Kernel Developer's Guide (fam10h) — `31116.pdf`
-- Product Data Sheet — `40036.pdf`
-- Power and Thermal Data Sheet — `43374.pdf`
+- BIOS and Kernel Developer's Guide (fam10h) — `AMD_Family_10h_BKDG_31116.pdf`
+- Product Data Sheet — `AMD_Family_10h_Opteron_PDS_40036.pdf`
+- Power and Thermal Data Sheet — `AMD_Family_10h_Power_Thermal_Data_Sheet_43374.pdf`
+  (the page's direct link is stale on the wiki; see the mirror map)
 
 #### AMD Opteron 4200 and 4300 Series
 
@@ -288,10 +290,12 @@ Raptor Engineering
 ([kgpe-d16-bmc-port-status](https://www.raptorengineering.com/coreboot/kgpe-d16-bmc-port-status.php))
 — the same port analysed throughout this directory.
 
-Official documentation (mirrored in [`datasheets/15h.org/`](datasheets/15h.org/)):
+Official documentation (mirrored in [`datasheets/`](datasheets/)):
 
-- AST2050 Datasheet — `AST2050_Data_Sheet.pdf`
-- S25FL128P Datasheet — `Infineon-s25fl128p-128-mbit-3.0-v-flash-memory-datasheet-en.pdf`
+- AST2050 Datasheet — the page's copy is byte-identical to
+  `AST2050_AST1100_A3_Datasheet_V1.05.pdf` (the A3 Datasheet V1.05 this repo
+  already relies on)
+- S25FL128P Datasheet — byte-identical to `S25FL128P_Datasheet.pdf`
   (the SPI-NOR flash on the BMC module)
 
 Remote administration features on the AST2050 are only activated when a
@@ -315,12 +319,13 @@ performance and reliability in a compact 29mm x 29mm package.
 Official source code and documentation:
 
 - [CIMx Source Code](https://review.coreboot.org/c/coreboot/+/557) (coreboot Gerrit change 557)
-- BIOS Developer's Guide — `AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf`
-- IOMMU Specification — `48882-2.62.pdf`
-- Register Reference Guide — `AMD_SR5690_5670_5650_Register_Reference_Guide.pdf`
-- Register Programming Requirements — `AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf`
-- Product Databook — `AMD_SR5670_Databook.pdf`
-- Product Errata — `SR56x0_Product_Errata.pdf`
+- BIOS Developer's Guide — `AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf` (pub 43870)
+- IOMMU Specification — `AMD_IOMMU_Spec_48882_v2.62.pdf`
+- Register Reference Guide — byte-identical to
+  `AMD_SR5690_Register_Reference_Guide_43871.pdf` (already committed)
+- Register Programming Requirements — `AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf` (pub 43872)
+- Product Databook — `AMD_SR5670_Databook.pdf` (pub 44549)
+- Product Errata — `SR56x0_Product_Errata.pdf` (pub 46303)
 
 ### AMD SP5100
 
@@ -332,11 +337,12 @@ for advanced server platforms into a single device.
 Official source code and documentation:
 
 - [CIMx Source Code](https://review.coreboot.org/c/coreboot/+/560) (coreboot Gerrit change 560)
-- BIOS Developer's Guide — `AMD_SP5100_BIOS_Developers_Guide.pdf`
-- Register Reference Guide — `AMD_SP5100_Register_Reference_Guide.pdf`
-- Register Programming Requirements — `AMD_SP5100_Register_Programming_Requirements.pdf`
-- Product Databook — `AMD_SP5100_Databook.pdf`
-- Product Errata — `SP5100_Product_Errata.pdf`
+- BIOS Developer's Guide — `AMD_SP5100_BIOS_Developers_Guide.pdf` (pub 44415)
+- Register Reference Guide — byte-identical to
+  `AMD_SP5100_Register_Reference_Guide_44413.pdf` (already committed)
+- Register Programming Requirements — `AMD_SP5100_Register_Programming_Requirements.pdf` (pub 44414)
+- Product Databook — `AMD_SP5100_Databook.pdf` (pub 44409)
+- Product Errata — `SP5100_Product_Errata.pdf` (pub 46836)
 
 Part numbers:
 
@@ -405,7 +411,8 @@ Board views are available for the KCMA-D8; the files can be opened with
 [OpenBoardView](https://openboardview.org/):
 
 - [Asus KCMA-D8 1.02 Schematics.zip](https://15h.org/index.php/File:Asus_KCMA-D8_1.02_Schematics.zip)
-  (wiki file page; not a PDF, so not part of the `datasheets/15h.org/` mirror)
+  (wiki file page; not a PDF, so not part of the in-repo PDF mirror — see
+  `datasheets/15H-ORG-MIRROR.md`)
 
 ## References (as cited on the wiki page)
 

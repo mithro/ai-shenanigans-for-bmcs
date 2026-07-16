@@ -20,12 +20,15 @@ as this board — see [Provenance](#provenance--evidence).
 > them). See [Still missing](#still-missing--nda-restricted) for confirmed
 > parts with no public datasheet.
 >
-> **Sibling board / more docs.** [`15h.org/`](15h.org/) mirrors every PDF
-> linked from the 15h.org **ASUS KCMA-D8** wiki page (the KGPE-D16's
-> Socket-C32 sibling — same chipset, Super I/O, hwmon, and the same AST2050
-> BMC on an ASMB4/ASMB5 module): AMD fam10h/fam15h BKDGs, SR5670/SP5100
-> databooks + errata, the IOMMU spec, and the previously-missing
-> **W83667HG-A full Data Book**. Page content: [`../ASUS-KCMA-D8.md`](../ASUS-KCMA-D8.md).
+> **Sibling board / 15h.org mirror.** This directory also holds a committed
+> copy of every PDF linked from the 15h.org **ASUS KCMA-D8** wiki page (the
+> KGPE-D16's Socket-C32 sibling — same chipset, Super I/O, hwmon, and the
+> same AST2050 BMC on an ASMB4/ASMB5 module): AMD fam10h/fam15h BKDGs and
+> Opteron data sheets, the full SR56x0/SP5100 doc sets (BIOS developer's
+> guides, databooks, errata), the AMD IOMMU spec, and the previously-missing
+> **W83667HG-A full Data Book**. Link→file provenance map:
+> [`15H-ORG-MIRROR.md`](15H-ORG-MIRROR.md); page content:
+> [`../ASUS-KCMA-D8.md`](../ASUS-KCMA-D8.md).
 
 ---
 
@@ -110,24 +113,56 @@ port shares this repo's SoC bring-up goal. **These are not on the BMC's I2C bus.
 | Datasheet | Part | Role | coreboot driver |
 |-----------|------|------|-----------------|
 | [W83795G_W83795ADG_Datasheet.pdf](W83795G_W83795ADG_Datasheet.pdf) | Nuvoton/Winbond W83795G/ADG | Hardware monitor, host SMBus 0x2f (fans/voltages/temps) | `drivers/i2c/w83795` |
+| [Nuvoton_W83795G_W83795ADG_Datasheet_V1.43.pdf](Nuvoton_W83795G_W83795ADG_Datasheet_V1.43.pdf) | Nuvoton/Winbond W83795G/ADG | Same V1.43 datasheet, 15h.org copy (different PDF build — kept to complete the [15h.org mirror](15H-ORG-MIRROR.md)) | `drivers/i2c/w83795` |
+| [W83667hg-a-datasheet-v1-2.pdf](W83667hg-a-datasheet-v1-2.pdf) | Winbond W83667HG-A | Host LPC Super I/O. **Full 319 pp Data Book v1.2** (via 15h.org — previously listed below as NDA-gated/unavailable) | `superio/winbond/w83667hg-a` |
 | [AMD_SR5690_Register_Reference_Guide_43871.pdf](AMD_SR5690_Register_Reference_Guide_43871.pdf) | AMD SR5690 (RD890) | Northbridge / IOMMU; HyperTransport→PCIe. 282 pp register guide (pub 43871, rev 3.04) | `southbridge/amd/sr5650` |
+| [AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf](AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf) | AMD SR5690/5670/5650 | BIOS Developer's Guide, 44 pp (pub 43870, rev 3.00) | `southbridge/amd/sr5650` |
+| [AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf](AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf) | AMD SR5690/5670/5650 | Register Programming Requirements, 192 pp (pub 43872, rev 3.05) | `southbridge/amd/sr5650` |
+| [AMD_SR5670_Databook.pdf](AMD_SR5670_Databook.pdf) | AMD SR5670 | Databook, 80 pp (pub 44549, rev 2.20) — the KCMA-D8's northbridge; same RD890 family as the KGPE-D16's SR5690 | `southbridge/amd/sr5650` |
+| [SR56x0_Product_Errata.pdf](SR56x0_Product_Errata.pdf) | AMD SR5690/5670/5650 | Silicon errata, 33 pp (pub 46303, rev 3.10) | `southbridge/amd/sr5650` |
+| [AMD_IOMMU_Spec_48882_v2.62.pdf](AMD_IOMMU_Spec_48882_v2.62.pdf) | AMD IOMMU | I/O Virtualization Technology (IOMMU) Specification rev 2.62, 266 pp (pub 48882) — the SR56x0's IOMMU programming model | `southbridge/amd/sr5650` |
 | [AMD_SP5100_Register_Reference_Guide_44413.pdf](AMD_SP5100_Register_Reference_Guide_44413.pdf) | AMD SP5100 | Southbridge (SB700 family), embedded 8051 SMBus core, LPC. 317 pp register guide (pub 44413) | `southbridge/amd/sb700` |
+| [AMD_SP5100_BIOS_Developers_Guide.pdf](AMD_SP5100_BIOS_Developers_Guide.pdf) | AMD SP5100 | BIOS Developer's Guide, 114 pp (pub 44415, rev 3.01) | `southbridge/amd/sb700` |
+| [AMD_SP5100_Register_Programming_Requirements.pdf](AMD_SP5100_Register_Programming_Requirements.pdf) | AMD SP5100 | Register Programming Requirements, 74 pp (pub 44414, rev 3.02) | `southbridge/amd/sb700` |
+| [AMD_SP5100_Databook.pdf](AMD_SP5100_Databook.pdf) | AMD SP5100 | Databook, 90 pp (pub 44409, rev 1.70; AES-encrypted with empty user password) | `southbridge/amd/sb700` |
+| [SP5100_Product_Errata.pdf](SP5100_Product_Errata.pdf) | AMD SP5100 | Silicon errata, 32 pp (pub 46836, rev 3.00) | `southbridge/amd/sb700` |
+
+### Host CPUs (Opteron, via the 15h.org mirror)
+
+The KGPE-D16 takes Socket-G34 Opteron 6100/6200/6300 (fam10h/fam15h); the
+KCMA-D8 takes Socket-C32 Opteron 4100/4200/4300 (same silicon families in a
+different package). The fam10h/fam15h programming docs therefore cover both
+boards' host CPUs.
+
+| Datasheet | Family | Notes |
+|-----------|--------|-------|
+| [44065_Arch2008.pdf](44065_Arch2008.pdf) | fam10h+fam15h | AGESA Interface Specification for Arch2008 (pub 44065), 368 pp |
+| [AMD_Family_10h_BKDG_31116.pdf](AMD_Family_10h_BKDG_31116.pdf) | fam10h | BIOS and Kernel Developer's Guide (pub 31116), 475 pp |
+| [AMD_Family_10h_Opteron_PDS_40036.pdf](AMD_Family_10h_Opteron_PDS_40036.pdf) | fam10h | Opteron Product Data Sheet (pub 40036), 8 pp |
+| [AMD_Family_10h_Power_Thermal_Data_Sheet_43374.pdf](AMD_Family_10h_Power_Thermal_Data_Sheet_43374.pdf) | fam10h | Server/Workstation Power and Thermal Data Sheet (pub 43374), 98 pp |
+| [42301_15h_Mod_00h-0Fh_BKDG.pdf](42301_15h_Mod_00h-0Fh_BKDG.pdf) | fam15h 00h-0Fh | BIOS and Kernel Developer's Guide (pub 42301), 639 pp |
+| [49687_15h_Mod_00h-0Fh_Opteron_PDS.pdf](49687_15h_Mod_00h-0Fh_Opteron_PDS.pdf) | fam15h 00h-0Fh | Opteron Product Data Sheet (pub 49687), 7 pp |
+| [47414_15h_sw_opt_guide.pdf](47414_15h_sw_opt_guide.pdf) | fam15h | Software Optimization Guide (pub 47414), 396 pp |
 
 ---
 
 ## Summary
 
-| Category | ICs | Files |
-|----------|-----|-------|
+| Category | ICs / docs | Files |
+|----------|-----------|-------|
 | BMC SoC | AST2050 / AST1100 (A3 Datasheet V1.02 + V1.05) | 2 |
 | SPI NOR flash (BMC boot) | M25P64 / M25P128 / S25FL128P / MX25L12835F / W25X64 | 5 |
 | BMC I2C sensor / EEPROM | LM75, AT24C256 | 2 |
-| Host-side board context | W83795G, AMD SR5690, AMD SP5100 | 3 |
-| **Total committed** | **12 documents** | **~68 MiB** |
+| Host-side board context | W83795G (×2 builds), W83667HG-A, SR56x0 doc set (5) + IOMMU spec, SP5100 doc set (5) | 14 |
+| Host CPUs (fam10h/fam15h Opteron) | AGESA spec, 2 BKDGs, 2 PDS, power/thermal, sw-opt guide | 7 |
+| **Total committed** | **30 documents** | **~101 MiB** |
 
 Files shared byte-for-byte with the C410X collection: **both AST2050 A3 Datasheet
-revisions, the 5 SPI-NOR flash chips, LM75, AT24C256** (9 of 12). KGPE-D16-specific
-additions: **W83795G, AMD SR5690, AMD SP5100** (3 of 12).
+revisions, the 5 SPI-NOR flash chips, LM75, AT24C256** (9 of 30). 18 of the 30
+were mirrored from the 15h.org ASUS KCMA-D8 page (see
+[`15H-ORG-MIRROR.md`](15H-ORG-MIRROR.md)); 4 further links on that page proved
+byte-identical to files already here (AST2050 A3 V1.05, S25FL128P, and both
+register reference guides), independently cross-validating both copies.
 
 ---
 
@@ -144,6 +179,7 @@ repo's evidence standard:
 | FRU EEPROM @ 0x50 | `../ast2050.h:213-214` (`CONFIG_SYS_I2C_EEPROM_ADDR 0xa0`, 2-byte len) + `../RAPTOR-UBOOT-ANALYSIS.md:134` ("Channel 5 for AST2050 (ASUS EEPROM)") |
 | W83795G, W83667HG-A, SR5690, SP5100, TPM | coreboot `4.11 src/mainboard/asus/kgpe-d16/devicetree.cb` (`chip drivers/i2c/w83795`, `superio/winbond/w83667hg-a`, `southbridge/amd/sr5650`, `southbridge/amd/sb700`) |
 | SR5690 / SP5100 JTAG relevance | `../JTAG-HEADERS.md:378-415` (HDT scan chain, embedded microcontrollers) |
+| 18× 15h.org mirror docs (Opteron, SR56x0/SP5100 sets, W83667HG-A, W83795G) | Linked from the 15h.org ASUS KCMA-D8 wiki page (board applicability: `../ASUS-KCMA-D8.md`); per-file provenance, page counts, and SHA-256 cross-checks in [`15H-ORG-MIRROR.md`](15H-ORG-MIRROR.md) |
 
 ---
 
@@ -155,17 +191,22 @@ run so the gaps stay visible.
 
 | Part | Status | Best available |
 |------|--------|----------------|
-| **Winbond W83667HG-A (host Super I/O)** | ~~Registration/NDA-gated~~ **GAP CLOSED (2026-07-16)** | Full 319 pp Data Book v1.2 is committed at [`15h.org/W83667hg-a-datasheet-v1-2.pdf`](15h.org/W83667hg-a-datasheet-v1-2.pdf), mirrored from the CC BY-SA 15h.org KCMA-D8 page. (Distributor mirrors still 403; alldatasheet still serves a truncated ~19 pp preview. Open reference: coreboot `src/superio/winbond/w83667hg-a/`.) |
+| **Winbond W83667HG-A (host Super I/O)** | ~~Registration/NDA-gated~~ **GAP CLOSED (2026-07-16)** | Full 319 pp Data Book v1.2 is committed as [`W83667hg-a-datasheet-v1-2.pdf`](W83667hg-a-datasheet-v1-2.pdf), mirrored from the CC BY-SA 15h.org KCMA-D8 page. (Distributor mirrors still 403; alldatasheet still serves a truncated ~19 pp preview. Open reference: coreboot `src/superio/winbond/w83667hg-a/`.) |
 | **BMC Ethernet PHY** (ASMB4/5, RMII) | **Unidentified** | `../RAPTOR-PORTING-GUIDE.md:958` flags it as an open question. RTL8201EL/RTL8211BN/RTL8201N in the analysis are the AST2050 driver's *supported* PHY list, **not** a board ID. Needs a board photo / ASMB schematic. Candidate if later confirmed as an RTL8201-class part: `http://realtek.info/pdf/rtl8201.pdf`. |
 | **BMC FRU EEPROM (exact part)** | Class ref committed | Present per `ast2050.h` / U-Boot but density/vendor unread; `AT24C256_Datasheet.pdf` stands in until the marking is read off the chip. |
 | **AST2050 on-module DDR2 SDRAM** (64 MB) | Part unidentified | Generic behaviour covered by JEDEC **JESD79-2**; specific SDRAM part unknown (needs a package marking). JEDEC standards are free but not redistributable here. |
 
-**Additional public AMD docs** (not committed, but useful for coreboot bring-up),
-same `amd.com/content/dam/amd/en/documents/archived-tech-docs/programmer-references/`
-base:
+**Additional public AMD docs** — this list previously named four uncommitted
+docs. Three are now committed via the 15h.org mirror: the SR56x0 BIOS
+Developer's Guide (actual pub number **43870**, not 43366 as guessed here
+before — verified from the cover page), the SR56x0 Register Programming
+Requirements (43872), and the SP5100 BIOS Developer's Guide (44415). Still
+not committed:
 
-- SR5690 BIOS Developer's Guide — `43366.pdf`; Register Programming Requirements — `43872.pdf`
-- SP5100 BIOS Developer's Guide — `44415.pdf`; SB800-series Register Reference — `45482.pdf`
+- SB800-series Register Reference — `45482.pdf`, same
+  `amd.com/content/dam/amd/en/documents/archived-tech-docs/programmer-references/`
+  base (the SP5100's SB700-family docs above cover this board; the SB800 doc
+  is only occasionally useful for cross-reference).
 
 ---
 
