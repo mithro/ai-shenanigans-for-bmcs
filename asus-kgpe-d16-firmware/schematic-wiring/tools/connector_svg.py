@@ -145,11 +145,12 @@ def render_dual(spec):
     step = 60
     x0 = 96
     w = max(620, x0 + step * (cols - 1) + 130)
-    ytop, ybot = 236, 284
-    h = 500
+    ytop, ybot = 250, 298
+    h = 548
+    board_top, board_bot = ytop - 26, ybot + 26
     parts = [svg_open(w, h, spec["title"], spec["sub"])]
-    parts.append(f'<rect class="board" x="{x0-30}" y="{ytop-26}" '
-                 f'width="{step*(cols-1)+60}" height="{ybot-ytop+52}" rx="10"/>')
+    parts.append(f'<rect class="board" x="{x0-30}" y="{board_top}" '
+                 f'width="{step*(cols-1)+60}" height="{board_bot-board_top}" rx="10"/>')
     used = []
     for c in range(cols):
         cx = x0 + c * step
@@ -163,8 +164,10 @@ def render_dual(spec):
                 used.append(cls)
             parts.append(pin1square(cx, cy, num, cls) if num == 1
                          else pad(cx, cy, cls, num, r=12))
-            parts.append(vlabel(cx, ytop - 26 if up else ybot + 26, p["sig"], cls, up))
-    leg, _ = legend(28, h - 44, used)
+            # keep a clear gap between the label and the connector body
+            parts.append(vlabel(cx, board_top - 16 if up else board_bot + 16,
+                                 p["sig"], cls, up))
+    leg, _ = legend(28, h - 42, used)
     parts.append(leg)
     parts.append(f'<text class="m" x="{w-24}" y="{h-20}" text-anchor="end">'
                  f'odd pins top row · even bottom · pin 1 = square pad</text>')
