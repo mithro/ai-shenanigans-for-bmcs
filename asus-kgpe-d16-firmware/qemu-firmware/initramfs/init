@@ -305,5 +305,76 @@ if grep -q f8capture /proc/cmdline; then
 	echo "=== F8-CAPTURE-END ==="
 fi
 
+# --- USB/IP host-export gate (only when 'usbiphost' is on the kernel cmdline) ---
+# Export the BMC's USB gadget (HID keyboard = feature #3b + mass-storage = feature
+# #2) over USB/IP so a SEPARATE qemu-system-x86_64 "virtual host" can import it
+# (usbip attach / vhci-hcd) and perform FULL enumeration against an independent USB
+# stack -- the piece the in-guest dummy_hcd loopback (F6/F8) structurally cannot
+# show. The gadget binds to the usbip-vudc UDC, NOT the faithful aspeed.udc-ast2050
+# vhub: a gadget binds ONE UDC at a time, so this is the UDC-agnostic FUNCTION /
+# descriptor / enumeration test, COMPLEMENTARY to (not a replacement for) the
+# patch-0007 vhub probe test. usbipd serialises the gadget's URBs on TCP:3240; the
+# runner (scripts/usbip-host-test.py) forwards that to the x86 guest.
+# See openbmc/bmc-functionality/F6-USB-HOST.md.
+if grep -q usbiphost /proc/cmdline; then
+	echo "=== USBIP-EXPORT-BEGIN ==="
+	echo "--- UDCs present (expect usbip-vudc.0) ---"
+	ls -1 /sys/class/udc/ 2>&1 || echo "(none)"
+
+	mount -t configfs none /sys/kernel/config 2>&1 || echo "(configfs already mounted)"
+	G=/sys/kernel/config/usb_gadget/usbipexport
+	mkdir -p "$G"
+	echo 0x1d6b > "$G/idVendor"     # Linux Foundation
+	echo 0x0104 > "$G/idProduct"    # Multifunction Composite Gadget
+	mkdir -p "$G/strings/0x409"
+	echo "ASUS-KGPE-D16-BMC"                 > "$G/strings/0x409/manufacturer"
+	echo "AST2050 vKVM export (usbip)"       > "$G/strings/0x409/product"
+	echo "0000A5T2050"                       > "$G/strings/0x409/serialnumber"
+	mkdir -p "$G/configs/c.1/strings/0x409"
+	echo "usbip-export-config" > "$G/configs/c.1/strings/0x409/configuration"
+
+	# HID keyboard (feature #3b): boot keyboard, 8-byte reports. Same standard
+	# 63-byte boot-keyboard report descriptor as the F8 vKVM gadget.
+	mkdir -p "$G/functions/hid.usb0"
+	echo 1 > "$G/functions/hid.usb0/protocol"      # keyboard
+	echo 1 > "$G/functions/hid.usb0/subclass"      # boot interface
+	echo 8 > "$G/functions/hid.usb0/report_length"
+	printf '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x03\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x03\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0' \
+		> "$G/functions/hid.usb0/report_desc"
+
+	# Mass storage (feature #2 virtual media): a backing image carrying a known
+	# magic at a fixed offset, so the host proves data transport by reading it back
+	# from /dev/sdX (no mkfs needed in the minimal initramfs).
+	USBIP_MAGIC="KGPE-D16-USBIP-VMEDIA-OK"
+	dd if=/dev/zero of=/tmp/vmedia.img bs=4096 count=256 2>&1
+	printf '%s' "$USBIP_MAGIC" | dd of=/tmp/vmedia.img bs=1 seek=512 conv=notrunc 2>&1
+	mkdir -p "$G/functions/mass_storage.0"
+	echo /tmp/vmedia.img > "$G/functions/mass_storage.0/lun.0/file"
+
+	ln -s "$G/functions/hid.usb0"       "$G/configs/c.1/"
+	ln -s "$G/functions/mass_storage.0" "$G/configs/c.1/"
+
+	# Bind the gadget to the usbip virtual UDC.
+	VUDC=$(ls /sys/class/udc | grep -i usbip | head -1)
+	echo "binding export gadget -> UDC '$VUDC'"
+	if [ -n "$VUDC" ] && echo "$VUDC" > "$G/UDC"; then
+		echo "USBIP-BIND-OK (gadget bound to $(cat "$G/UDC"))"
+	else
+		echo "USBIP-BIND-FAIL"
+	fi
+
+	# Start the USB/IP device-mode daemon: exports the bound vudc gadget on TCP:3240
+	# for a remote 'usbip attach'. -D daemonises; --device = device (vudc) mode.
+	usbipd -D --device 2>&1 || echo "usbipd start rc=$?"
+	sleep 2
+	if netstat -tln 2>&1 | grep -q ':3240'; then
+		echo "USBIP-DAEMON-LISTENING (:3240)"
+	else
+		echo "USBIP-DAEMON-FAIL (:3240 not listening)"
+	fi
+	echo "USBIP-MAGIC=$USBIP_MAGIC@512"
+	echo "=== USBIP-EXPORT-END ==="
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh
