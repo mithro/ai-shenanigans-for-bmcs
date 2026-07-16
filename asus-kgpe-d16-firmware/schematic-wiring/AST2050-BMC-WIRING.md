@@ -418,6 +418,21 @@ Full ball detail (with the auto-generated Connected-components list):
 The complete board-wide bus map (all masters, plus per-bus topology diagrams) is
 in **[I2C-SMBUS-TOPOLOGY.md](I2C-SMBUS-TOPOLOGY.md)**.
 
+### 10.5 Per-bus topology diagrams
+
+The BMC's individual buses (device breakdowns and access sequences are in
+[I2C-SMBUS-TOPOLOGY.md §3](I2C-SMBUS-TOPOLOGY.md#3-per-bus-topology)):
+
+![I2C1 — PSU SMBus](diagrams/kgpe-d16-i2c-bus-psu.svg)
+
+![Shared platform sensor bus (I2C2/3/6 + SP5100)](diagrams/kgpe-d16-i2c-bus-sensor.svg)
+
+![DIMM SPD / TSOD buses via the QU9/QU5 mux](diagrams/kgpe-d16-i2c-bus-dimm-spd.svg)
+
+![I2C4 — CPU thermal (SB-TSI)](diagrams/kgpe-d16-i2c-bus-cputemp.svg)
+
+![I2C5 — board inventory + DIMM-LED expanders](diagrams/kgpe-d16-i2c-bus-inventory.svg)
+
 ---
 
 ## 11. Power / reset / platform control (GPIO)
@@ -546,6 +561,32 @@ a dedicated document:
 | [`PSUSMB1`](BMC-CONNECTORS.md#psusmb1--psu-smbus) | 1×5 header | PSU SMBus on BMC I²C1 |
 | [`TPM1`](BMC-CONNECTORS.md#tpm1--tpm-module-header-lpc-shared-with-the-bmc) | 2×10 header | TPM module — shares the BMC's LPC bus |
 | [`VGA_SW1`](BMC-CONNECTORS.md#vga_sw1--vga-reset-source-jumper) · [`IPMI_SEL1`](BMC-CONNECTORS.md#ipmi_sel1--ipmi-enable-jumper) · [`RECOVERY1`](BMC-CONNECTORS.md#recovery1--bios-recovery-jumper) | 1×3 jumpers | Reset-source / IPMI / recovery straps |
+
+### Pinout diagrams
+
+Full signal tables for each are in [BMC-CONNECTORS.md](BMC-CONNECTORS.md).
+
+![VGA1 pinout](diagrams/kgpe-d16-vga1.svg)
+
+![AST_UART1 pinout](diagrams/kgpe-d16-ast-uart1.svg)
+
+![AST_JTAG1 pinout](diagrams/kgpe-d16-ast-jtag1.svg)
+
+![BMC_FW1 pinout](diagrams/kgpe-d16-bmc-fw1.svg)
+
+![PANEL1 pinout](diagrams/kgpe-d16-panel1.svg)
+
+![AUX_PANEL1 pinout](diagrams/kgpe-d16-aux-panel1.svg)
+
+![PSUSMB1 pinout](diagrams/kgpe-d16-psusmb1.svg)
+
+![TPM1 pinout](diagrams/kgpe-d16-tpm1.svg)
+
+![VGA_SW1 pinout](diagrams/kgpe-d16-vga-sw1.svg)
+
+![IPMI_SEL1 pinout](diagrams/kgpe-d16-ipmi-sel1.svg)
+
+![RECOVERY1 pinout](diagrams/kgpe-d16-recovery1.svg)
 
 ---
 
