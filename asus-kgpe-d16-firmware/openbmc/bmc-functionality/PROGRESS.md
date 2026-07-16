@@ -698,3 +698,42 @@ other 5 are board/SoC-impossible (#8 host-BIOS flash, #9 true NC-SI, #2 USB-host
 DIMM/memory inventory), rig-blocked (#2 USB silicon retest), or need host cooperation /
 deeper QEMU-only work (#3b keyboard-to-host, #6 SOL host-serial). This is the hardware
 ceiling of the AST2050/KGPE-D16, not unimplemented work. See SILICON-STATUS.md.
+
+---
+
+## Log — 2026-07-16 (later): "impossible" verdicts challenged + USB/IP host-enum harness
+
+**The user challenged the "impossible" framing above, correctly.** Three parallel
+evidence-cited investigations (datasheet + board DTS + coreboot source) revised it:
+- **#8 host-BIOS: board-wiring-limited, NOT SoC-impossible.** AST2050 datasheet §2.20/§30.2
+  DO give the LPC controller a Master mode "for updating LPC-based system BIOS flash" (FWH
+  cycles). But the KGPE-D16 BIOS is a W25Q16 SPI-NOR on the SP5100 FCH SPI bus (not LPC/FWH)
+  with no BMC-driven SPI mux → board-dead here. BMC *self*-update is the in-scope half.
+- **#5 memory inventory:** AST2050 has 7 master-capable I2C/SMBus engines and the BMC even
+  drives SPD-mux GPIOs (GPIOF4/F5) — but coreboot `romstage.c` reads SPD via the SP5100 HOST
+  SMBus and the BMC only *mirrors* the mux select. `smbios-mdr` over the working IPMI/KCS is
+  the viable QEMU-first path. "Impossible" softened to "not the SPD data path; unproven as a
+  BMC read (all-7-engine × mux-position scan not yet run)."
+- **#2/#3b:** the enumeration gap is a *software-harness* gap, not hardware — closeable with
+  USB/IP + a second (virtual) x86 host.
+
+⚠️ **User states a number of my hardware-connectivity assertions are wrong; a real
+motherboard-schematic connectivity chart is incoming.** #5/#8/mux-lead work is HELD pending
+that schematic — do not build on the inferred wiring.
+
+**USB/IP host-enumeration harness — connectivity-independent, BUILT + partly runtime-verified:**
+- Crux de-risked: static-ARM `usbipd`/`usbip` cross-build via **libudev-zero** +
+  `--without-tcp-wrappers` + `-all-static` (the agent-flagged "biggest unknown"). Codified in
+  `initramfs/build-usbip.py`; initramfs ships it; `kgpe-d16-usbip.config` adds `USBIP_VUDC`.
+- **Stage-0 BMC export = RUNTIME PASS in QEMU:** `usbiphost` init gate binds the HID-keyboard
+  + mass-storage gadget to `usbip-vudc.0`, static-ARM `usbipd` listens :3240, LUN medium
+  attached. Bonus: patch-0007 `ast2050-usb-vhub` also registered (7 ports) alongside.
+  Evidence `evidence/f6-usb-host/{00,01}`.
+- Stage-2 x86 client de-risked (static x86 usbip + busybox; host qemu-x86 + kernel + modules).
+  Evidence `02`. Remaining: x86-guest initramfs + two-VM runner + CI. See `F6-USB-HOST.md`.
+- Caveat kept honest: usbip binds the gadget to `usbip-vudc` (one UDC at a time), so it tests
+  the FUNCTION/enumeration half — COMPLEMENTARY to the patch-0007 faithful-vhub probe.
+
+**Revised ceiling:** not "4 done, 5 impossible." #2/#3b are emulation-provable (harness
+foundation done); #5 has a viable smbios-mdr path; #8 has a tractable self-update half; the
+host-facing halves of #8/#5/#9 + the mux lead await the schematic.
