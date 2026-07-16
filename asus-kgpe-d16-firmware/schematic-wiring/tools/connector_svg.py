@@ -301,6 +301,17 @@ CONNECTORS = {
            P(12,"NC","nc"), P(13,"BMCLOC-BTN#","data"), P(14,"LAN1LINK#","data"),
            P(15,"GND","gnd"), P(16,"LAN1ACT#","data"), P(17,"BMCLOC-LED#","data"),
            P(18,"LAN2ACT#","data"), P(19,"LOCLED2","data"), P(20,"LAN2LINK#","data")]},
+
+"kgpe-d16-tpm1": {"layout": "dual",
+  "title": "TPM1 — TPM module header (LPC, shared with BMC)",
+  "sub": "LPC bus peripheral · pins 3/7/8/10/11/16 on the BMC's LAD/LFRAME#/SERIRQ nets · 2×10 (pin 4 keyed)",
+  "pins": [P(1,"LCLK","data"), P(2,"GND","gnd"), P(3,"LFRAME#","data"),
+           P(5,"LRESET#","data"), P(6,"rsvd","nc"), P(7,"LAD3","data"),
+           P(8,"LAD2","data"), P(9,"+3V3","pwr"), P(10,"LAD1","data"),
+           P(11,"LAD0","data"), P(12,"GND","gnd"), P(13,"rsvd","nc"),
+           P(14,"rsvd","nc"), P(15,"rsvd","nc"), P(16,"SERIRQ","data"),
+           P(17,"GND","gnd"), P(18,"rsvd","nc"), P(19,"rsvd","nc"),
+           P(20,"rsvd","nc")]},
 }
 
 

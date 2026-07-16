@@ -203,15 +203,18 @@ Full detail: [pinmaps/QU1 → SPI / ROM flash](pinmaps/QU1_pins.md#spi--rom-flas
 ## 5. LPC host bus → SP5100 (SU1) + Super-I/O (OU1)
 
 The AST2050 is an **LPC peripheral** on the SP5100 southbridge's LPC bus, sharing
-it with the Nuvoton W83667HG Super-I/O (`OU1`). This carries the host's KCS/IPMI,
-mailbox and virtual-UART register access. (The Super-I/O is documented in full in
-[W83667HG-SUPERIO-WIRING.md](W83667HG-SUPERIO-WIRING.md).)
+it with the Nuvoton W83667HG Super-I/O (`OU1`) and the **TPM module header**
+(`TPM1`). This carries the host's KCS/IPMI, mailbox and virtual-UART register
+access. (The Super-I/O is documented in full in
+[W83667HG-SUPERIO-WIRING.md](W83667HG-SUPERIO-WIRING.md); the TPM header pinout is
+in [BMC-CONNECTORS.md](BMC-CONNECTORS.md#tpm1--tpm-module-header-lpc-shared-with-the-bmc).)
 
 ```mermaid
 flowchart LR
     SB["SP5100 · SU1<br/>(LPC host)"] --- LPC(("LPC bus"))
     LPC --- BMC["AST2050 · QU1<br/>(peripheral)"]
     LPC --- SIO["W83667HG Super-I/O · OU1"]
+    LPC --- TPM["TPM header · TPM1"]
 ```
 
 | AST2050 ball | Pin name | Net | To SP5100 (SU1) | To Super-I/O (OU1) |
@@ -557,6 +560,7 @@ a dedicated document:
 | [`PANEL1`](BMC-CONNECTORS.md#panel1--system-front-panel) | 2×10 header | Power/reset buttons, message LED, NMI |
 | [`AUX_PANEL1`](BMC-CONNECTORS.md#aux_panel1--auxiliary-panel-q-connector) | 2×10 header | BMC locator LED/button, I²C8, LAN LEDs |
 | [`PSUSMB1`](BMC-CONNECTORS.md#psusmb1--psu-smbus) | 1×5 header | PSU SMBus on BMC I²C1 |
+| [`TPM1`](BMC-CONNECTORS.md#tpm1--tpm-module-header-lpc-shared-with-the-bmc) | 2×10 header | TPM module — shares the BMC's LPC bus |
 | [`VGA_SW1`](BMC-CONNECTORS.md#vga_sw1--vga-reset-source-jumper) · [`IPMI_SEL1`](BMC-CONNECTORS.md#ipmi_sel1--ipmi-enable-jumper) · [`RECOVERY1`](BMC-CONNECTORS.md#recovery1--bios-recovery-jumper) | 1×3 jumpers | Reset-source / IPMI / recovery straps |
 
 ---
