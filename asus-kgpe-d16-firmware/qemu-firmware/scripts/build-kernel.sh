@@ -134,7 +134,8 @@ make aspeed_g4_defconfig
 # host-side HID/input layers (F8). See F6-USB.md and F8-KVM.md.
 scripts/kconfig/merge_config.sh -m .config \
     "$ROOT/kernel/kgpe-d16.config" "$ROOT/kernel/kgpe-d16-nfsroot.config" \
-    "$ROOT/kernel/kgpe-d16-usb.config" "$ROOT/kernel/kgpe-d16-kvm.config" \
+    "$ROOT/kernel/kgpe-d16-usb.config" "$ROOT/kernel/kgpe-d16-usbip.config" \
+    "$ROOT/kernel/kgpe-d16-kvm.config" \
     "$ROOT/kernel/kgpe-d16-swap.config" "$ROOT/kernel/kgpe-d16-video-cma.config"
 make olddefconfig
 
