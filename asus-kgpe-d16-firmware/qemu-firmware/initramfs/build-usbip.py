@@ -61,6 +61,70 @@ def run(cmd, cwd=None, env=None, stdin=None):
     subprocess.run(cmd, cwd=cwd, env=env, check=True, stdin=stdin)
 
 
+# libudev-zero upstream only enumerates /sys/dev/{block,char} (devnode devices), so
+# it cannot see class devices without a devnode — notably the usbip 'udc' vhub
+# (usbip-vudc.0), which usbipd --device must enumerate to export the bound gadget.
+# This patch additionally scans /sys/class/<matched subsystem>/. Applied to the
+# pinned commit (stable text); fail-loud if the expected text is absent.
+_UEV_OLD = """int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
+{
+    const char *path[] = { "/sys/dev/block", "/sys/dev/char", NULL };
+    int i;
+
+    if (!udev_enumerate) {
+        return -1;
+    }
+
+    for (i = 0; path[i]; i++) {
+        if (!scan_devices(udev_enumerate, path[i])) {
+            return -1;
+        }
+    }
+
+    return 0;
+}"""
+_UEV_NEW = """int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
+{
+    const char *path[] = { "/sys/dev/block", "/sys/dev/char", NULL };
+    struct udev_list_entry *m;
+    char classpath[PATH_MAX];
+    int i;
+
+    if (!udev_enumerate) {
+        return -1;
+    }
+
+    for (i = 0; path[i]; i++) {
+        if (!scan_devices(udev_enumerate, path[i])) {
+            return -1;
+        }
+    }
+
+    /* Also scan /sys/class/<subsystem>/ for each matched subsystem so class
+       devices WITHOUT a devnode (e.g. usbip 'udc') are enumerable. */
+    for (m = udev_list_entry_get_next(&udev_enumerate->subsystem_match);
+         m != NULL; m = udev_list_entry_get_next(m)) {
+        snprintf(classpath, sizeof(classpath), "/sys/class/%s",
+                 udev_list_entry_get_name(m));
+        scan_devices(udev_enumerate, classpath);
+    }
+
+    return 0;
+}"""
+
+
+def patch_libudev_zero_class_scan(src: Path):
+    """Make libudev-zero enumerate /sys/class/<subsystem>/ (idempotent, fail-loud)."""
+    f = src / "udev_enumerate.c"
+    text = f.read_text()
+    if _UEV_NEW in text:
+        return
+    if _UEV_OLD not in text:
+        raise SystemExit("libudev-zero udev_enumerate_scan_devices text changed — "
+                         "update the class-scan patch in build-usbip.py")
+    f.write_text(text.replace(_UEV_OLD, _UEV_NEW))
+
+
 def build_libudev_zero(build: Path) -> Path:
     """Cross-build static ARM libudev.a and stage libudev.h + libudev.a; return
     the stage prefix (with include/ and lib/)."""
@@ -68,6 +132,7 @@ def build_libudev_zero(build: Path) -> Path:
     if not src.exists():
         run(["git", "clone", LIBUDEV_ZERO_URL, str(src)])
         run(["git", "-C", str(src), "checkout", LIBUDEV_ZERO_COMMIT])
+    patch_libudev_zero_class_scan(src)
     run(["make", f"CC={CC}", "libudev.a"], cwd=src)
     stage = build / "stage"
     (stage / "include").mkdir(parents=True, exist_ok=True)
