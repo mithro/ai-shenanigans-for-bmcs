@@ -1,0 +1,40 @@
+# REAL SILICON: U-Boot brought up on the AST2050 via JTAG (2026-07-16)
+# Authorized: JTAG use + power control. Path: sandbox -> wg -> Pi 10.1.90.222 -> JTAG.
+#
+## 1. JTAG first contact (board alive):
+#   JTAG tap: ast2050.cpu tap/device found: 0x07926f0f (ARM926EJ-S)
+#   Embedded ICE version 6 ; 2 breakpoint/watchpoint units ; Examination succeed
+#
+## 2. CPU state before bring-up (dead stock firmware -- executing floating-bus garbage):
+#   target halted ... current mode: Undefined instruction
+#   cpsr: 0x000000db pc: 0x0509f344      (pc wanders un-backed space)
+#
+## 3. DDR2 trained over JTAG (openocd -f rpi4-jtag.cfg -f kgpe-d16-bmc.cfg -f ddr2-init.tcl):
+#   straps: SCU70=0x00819582 SCU40=0x00000000
+#   MCR04 = 0x00000585 (from SCU70 strap)     <- 4-bank / 64 MB
+#   0x40000000 <- 0xdeadbeef  read=0xdeadbeef  OK
+#   0x40000004 <- 0x12345678  read=0x12345678  OK
+#   0x40100000 <- 0xa5a5a5a5  read=0xa5a5a5a5  OK
+#   0x43f00000 <- 0x5a5a5a5a  read=0x5a5a5a5a  OK
+#   >>> DDR2 TRAINED: all read-backs match. DRAM is usable.
+#
+## 4. U-Boot loaded + booted over JTAG (boot-uboot.tcl):
+#   load_image raptor-uboot.bin 0x40000000    (native window; never wrote 0x0 pre-remap)
+#   AHB unlock 0xAEED1A03 -> 0x1E600000
+#   remap before = 0x00000000                 (AHB_ADDR_REMAP_REG 0x1E60008C)
+#   remap after  = 0x00000001                 <- DRAM now aliases to 0x0
+#   reg cpsr 0x000000d3 ; reg pc 0x00000000 ; resume
+#   (JTAG sets PC directly, so the P2A watchdog reset-boot trick is not needed.)
+#
+## 5. RESULT -- U-Boot interactive on the real BMC, console @115200 (ttyAMA0/PL011):
+#   $ stty -F /dev/serial-bmc-console 115200 raw -echo ; printf '\r\n\r\n' > ...
+#   bytes=36
+#   boot# 
+#   boot# 
+#   boot# 
+#
+# (At 1200 the capture is framing garbage -- this raptor-uboot.bin build is 186096 B,
+#  not the ~164 KB CONFIG_BAUDRATE=1200 patched build, so its console is 115200.)
+#
+# NEXT: TFTP-boot the USBIP_VUDC kernel + usbip initramfs from this U-Boot, then run
+# Test A (usbip attach from the Pi -> #2 /dev/sda magic, #3b KEY_A evdev).
