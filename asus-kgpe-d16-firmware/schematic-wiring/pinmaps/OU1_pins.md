@@ -45,7 +45,7 @@
 
 **Connected components** (chips / connectors these pins reach):
 
-- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `SU1` (528 pins, 2 nets) — C.S SP5100 (A15) FCBGA528//AMD 218-0660026
 - `SU2` (8 pins, 2 nets) — LOGIC 74LVC2G74DC VSSOP-8//NXP
 - `U12` (20 pins, 2 nets) — INTERFACE AZ75232GTR-E1//BCD TSSOP-20
@@ -66,11 +66,11 @@
 - `SU1` (528 pins, 4 nets) — C.S SP5100 (A15) FCBGA528//AMD 218-0660026
 - `QU4` (64 pins, 1 net) — C.S W83795G LQFP-64//WINBOND
 - `TPM1` (19 pins, 1 net)
-- `U27` (20 pins, 1 net) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
-- `U28` (20 pins, 1 net) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
-- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD           S-14//PHILIPS
+- `U27` (20 pins, 1 net) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U28` (20 pins, 1 net) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD S-14//PHILIPS
 - `U7` (14 pins, 1 net) — LOGIC TC74LCX74FT(EK2,M)//TOSHIBA TSSOP-14
-- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -96,11 +96,11 @@
 
 - `SU1` (528 pins, 6 nets) — C.S SP5100 (A15) FCBGA528//AMD 218-0660026
 - `U12` (20 pins, 6 nets) — INTERFACE AZ75232GTR-E1//BCD TSSOP-20
-- `CN23` (8 pins, 4 nets) — MLCC A 150PF/50V(1206) NPO 10%//WALSIN/Y4C3N151K500LT    <G>
+- `CN23` (8 pins, 4 nets) — MLCC A 150PF/50V(1206) NPO 10%//WALSIN/Y4C3N151K500LT
 - `PS2_KBMS1` (17 pins, 4 nets)
 - `U13` (20 pins, 4 nets) — INTERFACE AZ75232GTR-E1//BCD TSSOP-20
 - `PCI6` (122 pins, 2 nets)
-- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `TPM1` (19 pins, 2 nets)
 - `ATXPWR1` (26 pins, 1 net)
 - `CU1` (73 pins, 1 net) — CLOCK Gen. ICS932S890CKLFT//IDT MLF72
@@ -116,7 +116,7 @@
 - `PIKE2` (66 pins, 1 net)
 - `QU1` (355 pins, 1 net) — C.S AST2050A3-GP TFBGA355//ASPEED
 - `QU4` (64 pins, 1 net) — C.S W83795G LQFP-64//WINBOND
-- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 - `ZU1` (100 pins, 1 net) — C.S L-FW322-07-T100-DB TQFP100//LSI 1394A/711008303
 
 | Ball | Pin name (function) | Net | Connects to |

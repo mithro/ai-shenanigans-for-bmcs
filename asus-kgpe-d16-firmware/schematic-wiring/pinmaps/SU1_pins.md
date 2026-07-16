@@ -233,17 +233,17 @@
 
 **Connected components** (chips / connectors these pins reach):
 
-- `D22` (6 pins, 4 nets) — DIODE IP4220CZ6         SOT457//PHILIPS                 <G>
-- `D23` (6 pins, 4 nets) — DIODE IP4220CZ6         SOT457//PHILIPS                 <G>
-- `D28` (6 pins, 4 nets) — DIODE IP4220CZ6         SOT457//PHILIPS                 <G>
-- `D39` (6 pins, 4 nets) — DIODE IP4220CZ6         SOT457//PHILIPS                 <G>
+- `D22` (6 pins, 4 nets) — DIODE IP4220CZ6 SOT457//PHILIPS
+- `D23` (6 pins, 4 nets) — DIODE IP4220CZ6 SOT457//PHILIPS
+- `D28` (6 pins, 4 nets) — DIODE IP4220CZ6 SOT457//PHILIPS
+- `D39` (6 pins, 4 nets) — DIODE IP4220CZ6 SOT457//PHILIPS
 - `SJ8` (13 pins, 4 nets)
 - `USB12_LAN3` (30 pins, 4 nets)
 - `USB34` (9 pins, 4 nets)
 - `USB56` (9 pins, 4 nets)
 - `USB78` (9 pins, 4 nets)
 - `QU1` (355 pins, 3 nets) — C.S AST2050A3-GP TFBGA355//ASPEED
-- `D38` (6 pins, 2 nets) — DIODE IP4220CZ6         SOT457//PHILIPS                 <G>
+- `D38` (6 pins, 2 nets) — DIODE IP4220CZ6 SOT457//PHILIPS
 - `L12` (4 pins, 2 nets)
 - `L13` (4 pins, 2 nets)
 - `L16` (4 pins, 2 nets)
@@ -341,16 +341,16 @@
 **Connected components** (chips / connectors these pins reach):
 
 - `QU1` (355 pins, 4 nets) — C.S AST2050A3-GP TFBGA355//ASPEED
-- `U23` (14 pins, 2 nets) — LOGIC 74LVC125APW     TSSOP-14//PHILIPS
+- `U23` (14 pins, 2 nets) — LOGIC 74LVC125APW TSSOP-14//PHILIPS
 - `BMC_FW1` (13 pins, 1 net)
 - `FU1` (8 pins, 1 net)
 - `OU1` (128 pins, 1 net) — C.S W83667HG-A-FAC QFP-128//NUVOTON (0.18UM) REV-FAC
 - `PCIE1` (166 pins, 1 net)
 - `QU4` (64 pins, 1 net) — C.S W83795G LQFP-64//WINBOND
-- `QU8` (16 pins, 1 net) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 1 net) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `SU2` (8 pins, 1 net) — LOGIC 74LVC2G74DC VSSOP-8//NXP
 - `TPM1` (19 pins, 1 net)
-- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD           S-14//PHILIPS
+- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD S-14//PHILIPS
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -377,15 +377,15 @@
 - `QU1` (355 pins, 4 nets) — C.S AST2050A3-GP TFBGA355//ASPEED
 - `TPM1` (19 pins, 3 nets)
 - `U3` (20 pins, 3 nets) — LOGIC 74LVC244APW TSS-20//PHILIPS
-- `NU2` (14 pins, 2 nets) — LOGIC 74LVC125APW     TSSOP-14//PHILIPS
+- `NU2` (14 pins, 2 nets) — LOGIC 74LVC125APW TSSOP-14//PHILIPS
 - `PIKE2` (66 pins, 2 nets)
-- `U8` (14 pins, 2 nets) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U8` (14 pins, 2 nets) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 - `AU1` (20 pins, 1 net) — ANALOG SW. PI3B3244LEX//PERICOM TSSOP-20
 - `QU4` (64 pins, 1 net) — C.S W83795G LQFP-64//WINBOND
 - `SU2` (8 pins, 1 net) — LOGIC 74LVC2G74DC VSSOP-8//NXP
-- `U27` (20 pins, 1 net) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
-- `U28` (20 pins, 1 net) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
-- `U30` (5 pins, 1 net) — LOGIC 74LVC1G08GW       SOT353//PHILIPS
+- `U27` (20 pins, 1 net) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U28` (20 pins, 1 net) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U30` (5 pins, 1 net) — LOGIC 74LVC1G08GW SOT353//PHILIPS
 - `U7` (14 pins, 1 net) — LOGIC TC74LCX74FT(EK2,M)//TOSHIBA TSSOP-14
 
 | Ball | Pin name (function) | Net | Connects to |
@@ -436,7 +436,7 @@
 - `SGPIO4` (7 pins, 4 nets)
 - `OU1` (128 pins, 2 nets) — C.S W83667HG-A-FAC QFP-128//NUVOTON (0.18UM) REV-FAC
 - `PIKE1` (100 pins, 2 nets)
-- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 2 nets) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `U13` (20 pins, 2 nets) — INTERFACE AZ75232GTR-E1//BCD TSSOP-20
 - `LU1` (65 pins, 1 net) — C.S WG82574L A1 QFN64//INTEL 898553/SLBA9
 - `LU2` (65 pins, 1 net) — C.S WG82574L A1 QFN64//INTEL 898553/SLBA9

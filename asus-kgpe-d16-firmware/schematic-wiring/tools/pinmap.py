@@ -205,6 +205,14 @@ def ball_key(pn):
 ENDPOINT_PART = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\[")
 
 
+def clean_desc(s):
+    """Tidy a raw schematic part-description field for display: drop the ASUS
+    BOM annotation markers like `<G>` (a "Green"/RoHS procurement tag, not an
+    electrical property) and collapse the field-padding whitespace."""
+    s = re.sub(r"<[^>]*>", "", s or "")     # strip <G> and any other <...> tags
+    return re.sub(r"\s{2,}", " ", s).strip()
+
+
 def connected_components(rows):
     """Distinct endpoint parts referenced in a group's rows, keyed by refdes,
     each with its description and how many of this group's nets reach it.
@@ -222,7 +230,7 @@ def connected_components(rows):
     return hits
 
 
-print(f"# {PART} pin map  ({len(records)} pins)  {desc.get(PART,'') or ''}\n")
+print(f"# {PART} pin map  ({len(records)} pins)  {clean_desc(desc.get(PART,''))}\n")
 for g in ORDER:
     rows = groups.get(g)
     if not rows:
@@ -242,7 +250,7 @@ for g in ORDER:
     if comps:
         print("**Connected components** (chips / connectors these pins reach):\n")
         for refdes, n in sorted(comps.items(), key=lambda kv: (-kv[1], kv[0])):
-            dsc = desc.get(refdes, "")
+            dsc = clean_desc(desc.get(refdes, ""))
             dsc = f" — {dsc}" if dsc else ""
             print(f"- `{refdes}` ({len(by_part[refdes])} pins, {n} net"
                   f"{'s' if n != 1 else ''}){dsc}")

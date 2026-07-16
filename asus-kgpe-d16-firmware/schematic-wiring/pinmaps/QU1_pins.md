@@ -5,7 +5,7 @@
 
 **Connected components** (chips / connectors these pins reach):
 
-- `QU2` (84 pins, 46 nets) — DDR2 32M*16-2.5 1.8V   FBGA-84//HYNIX/HY5PS121621CFP-25
+- `QU2` (84 pins, 46 nets) — DDR2 32M*16-2.5 1.8V FBGA-84//HYNIX/HY5PS121621CFP-25
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -251,10 +251,10 @@
 - `QU4` (64 pins, 5 nets) — C.S W83795G LQFP-64//WINBOND
 - `PSUSMB1` (7 pins, 3 nets)
 - `QU9` (16 pins, 2 nets) — ANALOG SW. SN74CBTLV3125DBQR@G//TI QSOP-16
-- `U23` (14 pins, 2 nets) — LOGIC 74LVC125APW     TSSOP-14//PHILIPS
-- `U25` (8 pins, 2 nets) — EEPROM HT24LC08-SOP-NPB-TR SO8//HOLTEK 8K 2.7V             <G>
-- `U27` (20 pins, 2 nets) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
-- `U28` (20 pins, 2 nets) — C.S W83601G  SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U23` (14 pins, 2 nets) — LOGIC 74LVC125APW TSSOP-14//PHILIPS
+- `U25` (8 pins, 2 nets) — EEPROM HT24LC08-SOP-NPB-TR SO8//HOLTEK 8K 2.7V
+- `U27` (20 pins, 2 nets) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
+- `U28` (20 pins, 2 nets) — C.S W83601G SSOP20//WINBOND MULTI-FUNCTION G.P.I/O
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -279,7 +279,7 @@
 
 **Connected components** (chips / connectors these pins reach):
 
-- `QU8` (16 pins, 4 nets) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 4 nets) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `AST_UART1` (4 pins, 2 nets)
 - `BMC_FW1` (13 pins, 1 net)
 
@@ -303,9 +303,9 @@
 
 - `AST_JTAG1` (20 pins, 6 nets)
 - `SU1` (528 pins, 2 nets) — C.S SP5100 (A15) FCBGA528//AMD 218-0660026
-- `NU2` (14 pins, 1 net) — LOGIC 74LVC125APW     TSSOP-14//PHILIPS
+- `NU2` (14 pins, 1 net) — LOGIC 74LVC125APW TSSOP-14//PHILIPS
 - `U3` (20 pins, 1 net) — LOGIC 74LVC244APW TSS-20//PHILIPS
-- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -331,10 +331,10 @@
 - `TPM1` (19 pins, 2 nets)
 - `AST_JTAG1` (20 pins, 1 net)
 - `BMC_FW1` (13 pins, 1 net)
-- `QU8` (16 pins, 1 net) — ANALOG SW. PI5C3257QE    QS-16//PERICOM                    <G>
+- `QU8` (16 pins, 1 net) — ANALOG SW. PI5C3257QE QS-16//PERICOM
 - `U5` (65 pins, 1 net) — C.S RTL8201N-GR QFN64//REALTEK
-- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD           S-14//PHILIPS
-- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U6` (14 pins, 1 net) — LOGIC 74LVC07AD S-14//PHILIPS
+- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
@@ -363,7 +363,7 @@
 - `AUX_PANEL1` (18 pins, 2 nets)
 - `PANEL1` (19 pins, 1 net)
 - `QU4` (64 pins, 1 net) — C.S W83795G LQFP-64//WINBOND
-- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T    TSSOP-14//PHILIPS                    <G>
+- `U8` (14 pins, 1 net) — LOGIC 74LVC14APW-T TSSOP-14//PHILIPS
 
 | Ball | Pin name (function) | Net | Connects to |
 |---|---|---|---|
