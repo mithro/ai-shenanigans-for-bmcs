@@ -1,0 +1,35 @@
+# Real-hardware attempt at the USB (#2/#3b) silicon test — board state (2026-07-16)
+#
+# ACCESS: reached the rig from the build sandbox via the WireGuard -> welland IoT
+# route: ssh tim@10.1.90.222 (rpi4-asus-aspeed2050-dev). The Pi has eth-bmc =
+# 192.168.66.1 and bridges to the board's BMC net. (An earlier conclusion that the
+# rig was unreachable was WRONG -- this path works.)
+#
+# AUTHORIZED ACTION TAKEN: cold power-cycle via the Tasmota plug au-plug-10
+# (power on/off only). No JTAG/P2A memory operations were performed.
+#
+# OBSERVED (the finding):
+#   plug before: {"POWER":"ON"}   ->  off  {"POWER":"OFF"}  ->  on  {"POWER":"ON"}
+#   BMC serial console (/dev/serial-bmc-console, ttyAMA0): NO output in a 55s
+#     window from cold power-on at 115200; also nothing at 1200 or 38400.
+#   BMC network: 192.168.66.2 unreachable for 60s after power-on
+#     (6 x 10s probes, all "no ping"); `ip neigh show dev eth-bmc` -> 192.168.66.2 FAILED
+#     (no ARP entry => the BMC MAC never appeared on the wire).
+#
+# CONCLUSION: the AST2050 BMC does NOT self-boot from its own flash -- AC power
+# alone yields no console and no network. This is consistent with the project's
+# established boot story: the BMC is brought up EXTERNALLY, either
+#   (a) P2A/culvert -- requires the x86 HOST booted first (blocked: dead CMOS
+#       battery halts every host boot at F1/F2; Intel Boot Agent cannot multi-file
+#       TFTP -- see d16-host-pxe-boot notes), or
+#   (b) JTAG (openocd, ~/openocd-bmc, proven 2026-07-10: IDCODE 0x07926f0f, halt,
+#       AHB mdw) -- DDR2 init + load kernel.
+#
+# THEREFORE the silicon USB test (Test A in USB-REAL-HW-VERIFICATION.md) cannot be
+# reached with power-on/off authority alone: there is no running BMC to export the
+# gadget. Completing it requires bringing the BMC up via JTAG/P2A, i.e. run-control
+# + memory operations on the board -- a more invasive class than power on/off and
+# NOT covered by the current authorization (an openocd first-contact/scan_chain was
+# attempted and correctly gated).
+#
+# Board left in its prior state: plug ON, BMC not booted (same as found).
