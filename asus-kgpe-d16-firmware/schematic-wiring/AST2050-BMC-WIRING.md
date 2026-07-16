@@ -402,19 +402,21 @@ device datasheets); where an address is set by strap pins, that is noted. The
 
 ### 10.4 BMC I²C bus assignments (quick reference)
 
-| Bus | SDA / SCL balls | Reaches |
-|---|---|---|
-| I2C1 | A15 / B15 | PSU SMBus (`PSUSMB1`); alert on B12 |
-| I2C2 | C14 / D14 | hwmon `QU4` (W83795G); switch `QU9` → DIMM buses |
-| I2C3 | A14 / B14 | SP5100 `SU1` |
-| I2C4 | C13 / D13 | `QU4` TSI / CPU SB-TSI (via FETs) |
-| I2C5 | A13 / B13 | EEPROM `U25` + DIMM-LED expanders `U27`, `U28` |
-| I2C6 | C12 / D12 | SP5100 `SU1`, hwmon `QU4` |
-| I2C7 | A12 / B12 | SMBus ALERT (`SALT1/2`); mux common via `QU9`/`QU5` |
-| I2C8 | (muxed) | via `QU9` / `QU5` → aux panel |
+| Bus | SDA / SCL balls | Reaches | Diagram |
+|---|---|---|---|
+| I2C1 | A15 / B15 | PSU SMBus (`PSUSMB1`); alert on B12 | [PSU](I2C-SMBUS-TOPOLOGY.md#31-bmc-i2c1--psu-smbus-pmbus) |
+| I2C2 | C14 / D14 | hwmon `QU4` (W83795G); switch `QU9` → DIMM buses | [sensor](I2C-SMBUS-TOPOLOGY.md#32-shared-platform-sensor-bus-multi-master) · [DIMM SPD](I2C-SMBUS-TOPOLOGY.md#33-dimm-spd--tsod-buses-via-mux) |
+| I2C3 | A14 / B14 | SP5100 `SU1` | [sensor](I2C-SMBUS-TOPOLOGY.md#32-shared-platform-sensor-bus-multi-master) |
+| I2C4 | C13 / D13 | `QU4` TSI / CPU SB-TSI (via FETs) | [CPU thermal](I2C-SMBUS-TOPOLOGY.md#34-cpu-thermal-sb-tsi) |
+| I2C5 | A13 / B13 | EEPROM `U25` + DIMM-LED expanders `U27`, `U28` | [inventory](I2C-SMBUS-TOPOLOGY.md#35-bmc-i2c5--board-inventory--dimm-led-expanders) |
+| I2C6 | C12 / D12 | SP5100 `SU1`, hwmon `QU4` | [sensor](I2C-SMBUS-TOPOLOGY.md#32-shared-platform-sensor-bus-multi-master) |
+| I2C7 | A12 / B12 | SMBus ALERT (`SALT1/2`); mux common via `QU9`/`QU5` | [DIMM SPD](I2C-SMBUS-TOPOLOGY.md#33-dimm-spd--tsod-buses-via-mux) |
+| I2C8 | (muxed) | via `QU9` / `QU5` → aux panel | [DIMM SPD](I2C-SMBUS-TOPOLOGY.md#33-dimm-spd--tsod-buses-via-mux) |
 
 Full ball detail (with the auto-generated Connected-components list):
 [pinmaps/QU1 → I²C / SMBus](pinmaps/QU1_pins.md#i2c--smbus-16).
+The complete board-wide bus map (all masters, plus per-bus topology diagrams) is
+in **[I2C-SMBUS-TOPOLOGY.md](I2C-SMBUS-TOPOLOGY.md)**.
 
 ---
 
