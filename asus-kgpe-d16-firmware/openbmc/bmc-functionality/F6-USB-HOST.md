@@ -69,9 +69,19 @@ USB; usbip is the CI-hermetic stand-in for "a real host is on the other end."
 | BMC kernel `USBIP_VUDC` | `qemu-firmware/kernel/kgpe-d16-usbip.config` + `build-kernel.sh` | ✅ merge verified (`USBIP_VUDC=y`) |
 | BMC-side export gate | `qemu-firmware/initramfs/init` (`usbiphost`) | ✅ **runtime PASS** on kgpe-d16-bmc QEMU (Stage 0) |
 | x86 client build blocks | static x86 usbip + static x86 busybox | ✅ built (de-risk `evidence/f6-usb-host/02-…`) |
-| Two-VM runner | `qemu-firmware/scripts/usbip-host-test.py` | ⏳ pending (assemble x86 initramfs + orchestrate) |
-| x86 virtual-host image | reuse host kernel + kernel-matched `.ko.xz` modules | ⏳ pending (bundle module dep-tree + init) |
-| CI job | `.github/workflows/d16-kvm.yml` (or sibling) | ⏳ pending |
+| Two-VM runner | `qemu-firmware/scripts/usbip-host-test.py` | ✅ **PASS** (`evidence/f6-usb-host/03-…`) |
+| x86 virtual-host image | `qemu-firmware/scripts/build-x86-vhost.py` (host kernel + modules) | ✅ boots + imports + enumerates |
+| CI job | `.github/workflows/d16-kvm.yml` `usbip-host` | ⏳ best-effort (needs runner vmlinuz + modules) |
+
+**🎉 FULL TWO-VM ENUMERATION PASSES IN QEMU (2026-07-16).** The x86 virtual host
+imports the BMC gadget (`vhci_hcd: Device attached`, `usb 1-1: Product: AST2050 vKVM
+export (usbip)`), and BOTH capabilities verify end-to-end against the independent USB
+stack: **#2** — `/dev/sda` enumerates and offset 512 reads back the exact magic
+`KGPE-D16-USBIP-VMEDIA-OK`; **#3b** — a BMC `/dev/hidg0` write arrives on the host's
+evdev as `EV_KEY KEY_A` (`01 00 1e 00 01 00 00 00`). Two fixes were needed after the
+libudev-zero enumeration patch: bundle `sd_mod` (the block-device driver that makes
+`/dev/sda`), and key the attach marker on actual enumeration (usbip attach imports
+the device but returns a non-fatal "record connection" error in a minimal rootfs).
 
 The x86 host side needs **no x86 kernel build**: `qemu-system-x86_64` boots the host
 `vmlinuz` and the guest loads the host's kernel-matched `vhci-hcd`/`usb-storage`/
@@ -131,9 +141,9 @@ URB-level transport; nothing below it is exercised.
 
 ## Status
 
-Foundation **built and verified** (static ARM usbip userspace; initramfs
-integration; `USBIP_VUDC` kernel config; the `usbiphost` init gate). The two-VM
-runner, the x86 virtual-host image, and the CI job are the remaining pieces; the
-Stage-0 BMC-side gate is runtime-verifiable as soon as a `USBIP_VUDC` kernel is
-built. This moves #2/#3b from "QEMU-blocked" to "harness foundation done, crux
-de-risked, enumeration proof pending the x86 host image + CI wiring."
+**#2/#3b are now proven end-to-end in QEMU.** The BMC (emulated AST2050) presents a
+virtual USB keyboard + mass-storage device and a separate x86 host enumerates it,
+reads the disk data, and receives keystrokes — the complete vKVM/virtual-media
+capability, in emulation. Evidence: `evidence/f6-usb-host/{01,03}-…`. Remaining:
+a best-effort CI job, and **real-hardware** verification (the patch-0007 vhub UDC on
+silicon + a physical host on the USB port — rig-dependent).

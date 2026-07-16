@@ -1,0 +1,55 @@
+# Two-VM USB/IP FULL ENUMERATION — QEMU PASS (2026-07-16)
+# BMC (kgpe-d16-bmc ARM) exports its USB gadget over USB/IP; a separate
+# qemu-system-x86_64 host imports it via vhci-hcd and enumerates it.
+# Runner: scripts/usbip-host-test.py
+#
+## BMC export self-query (usbipd --device, patched libudev-zero):
+  usbip-vudc.0: (1d6b:0104)  <- the composite HID-kbd + mass-storage gadget
+#
+## x86 host enumeration (from usbip-x86.log):
+hid-generic 0003:1D6B:0104.0001: input,hidraw0: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM export (usbip)] on usb-vhci_hcd.0-1/input0
+scsi 0:0:0:0: Direct-Access     Linux    File-Stor Gadget 0606 PQ: 0 ANSI: 2
+sd 0:0:0:0: [sda] 2048 512-byte logical blocks: (1.05 MB/1.00 MiB)
+sd 0:0:0:0: [sda] Attached SCSI removable disk
+sd 0:0:0:0: [sda] Synchronizing SCSI cache
+sd 0:0:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Write Protect is off
+usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+usb 1-1: Product: AST2050 vKVM export (usbip)
+usb-storage 1-1:1.1: USB Mass Storage device detected
+usb usb10: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb11: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb12: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb13: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb14: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb15: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb16: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb2: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb3: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb4: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb5: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb6: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb7: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+usb usb8: New USB device found, idVendor=1d6b, idProduct=0003, bcdDevice= 6.12
+usb usb9: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.12
+vhci_hcd vhci_hcd.0: Device attached
+#
+## #2 mass-storage data read by the host:
+X86-MASS-READ /dev/sda = 'KGPE-D16-USBIP-VMEDIA-OK'
+X86-MASS-OK (/dev/sda)
+## #3b KEY_A press delivered to the host evdev (EV_KEY 01 00 KEY_A 1e 00 value 01):
+X86-KEY-EVENT bytes (first events):
+00000000  95 95 58 6a 00 00 00 00  4d 64 01 00 00 00 00 00  |..Xj....Md......|
+00000010  04 00 04 00 04 00 07 00  95 95 58 6a 00 00 00 00  |..........Xj....|
+00000020  4d 64 01 00 00 00 00 00  01 00 1e 00 01 00 00 00  |Md..............|
+00000030  95 95 58 6a 00 00 00 00  4d 64 01 00 00 00 00 00  |..Xj....Md......|
+00000040  00 00 00 00 00 00 00 00  95 95 58 6a 00 00 00 00  |..........Xj....|
+00000050  5c 3d 05 00 00 00 00 00  01 00 1e 00 02 00 00 00  |\=..............|
+X86-KEY-OK (EV_KEY KEY_A press delivered to the host)
+#
+## Runner verdict:
+  [PASS] host attached the remote gadget (X86-USBIP-ATTACHED)
+  [PASS] #2 mass-storage magic read by the host (X86-MASS-OK)
+  [PASS] #3b KEY_A delivered to the host evdev (X86-KEY-OK)
+USBIP-HOST RESULT: PASS
