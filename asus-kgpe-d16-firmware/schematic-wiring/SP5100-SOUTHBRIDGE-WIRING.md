@@ -234,13 +234,69 @@ host off. Full detail:
 
 ## 9. SMBus / I²C
 
-The SP5100 has its own SMBus controllers (`SCL0–3`/`SDA0–3`), which overlap the
-BMC's I²C fabric (both reach the hardware monitor `QU4`, the DIMMs and each other
-— the `U23` source-select buffer arbitrates ownership; see
-[BMC §10](AST2050-BMC-WIRING.md#10-i²c--smbus-topology-traced-through-every-mux--expander)).
-The key cross-domain signal is `SB_THERMTRIP#` (`SMBALERT_L/THRMTRIP_L`, ball J6):
-a CPU fatal-thermal event that both the SP5100 **and** the BMC (QU1 V3/V4) see.
-11 balls — [pinmaps/SU1 → I²C / SMBus](pinmaps/SU1_pins.md#i2c--smbus-11).
+The SP5100 exposes **four SMBus segments** (`SCL0–3`/`SDA0–3`), plus a repurposed
+DDC pair and the shared thermal-alert line. Two of the segments are the platform
+management bus it **shares with the BMC**; one is a private link to the CPU
+voltage-regulator controllers. This is the southbridge's half of the sensor and
+power-management fabric — the BMC's half is in
+[BMC §10](AST2050-BMC-WIRING.md#10-i²c--smbus-topology-traced-through-every-mux--expander),
+and the **complete board-wide map** (all masters/buses/devices with a diagram per
+bus) is in [I2C-SMBUS-TOPOLOGY.md](I2C-SMBUS-TOPOLOGY.md).
+
+```mermaid
+flowchart TB
+    SB["SP5100 · SU1<br/>4× SMBus + SVI"]
+
+    SB -->|"SMBus0 (AA18/W18)"| VR["CPU/NB VR PWM controllers<br/>PU2 ASP0902QG · PU7 ASP0906QG"]
+    SB -->|"SMBus1 (K1/K2)"| SHARE(("shared mgmt bus"))
+    SB -->|"SMBus2 (D21/F19)"| SHARE
+    SB -->|"SMBus3_LV (E20/E21)"| RSVD["level-shifted seg<br/>(reserved / unpopulated)"]
+    SB -->|"DDC1 (Y18/AA20)"| FAN["FANCURVE0/1 straps"]
+    SB -->|"SMBALERT#/THRMTRIP# (J6)"| ALERT["CPU THERMTRIP# + BMC"]
+
+    SHARE --> HWM["W83795G hwmon · QU4"]
+    SHARE --> SW["I²C switch QU9 → DIMM SPD fabric"]
+    SHARE --> BMC["AST2050 BMC · QU1"]
+    SEL["source-select U23<br/>SB_I2CS0/1 vs AST_I2CS0/1"] -. arbitrates .-> SHARE
+```
+
+### 9.1 Segment-by-segment
+
+| Segment | SP5100 balls | Reaches | Purpose |
+|---|---|---|---|
+| **SMBus0** | `SCL0`=AA18, `SDA0`=W18 | `PU2` (UPI **ASP0902QG**) + `PU7` (UPI **ASP0906QG**) VR PWM controllers | Private **SVI/PMBus** link to the CPU & northbridge voltage regulators — VID set, voltage/current/temperature telemetry |
+| **SMBus1** | `SCL1`=K1, `SDA1`=K2 | hwmon `QU4` (W83795G), switch `QU9`, BMC `QU1` | Shared platform-management bus (sensors + DIMM-SPD fabric) |
+| **SMBus2** | `SCL2`=D21, `SDA2`=F19 | BMC `QU1` (+ shared sensor bus) | Second shared segment |
+| **SMBus3** (LV) | `SCL3_LV`=E20, `SDA3_LV`=E21 | level-shifted (`SB_SCL3/SB_SDA3`) — reserved | A low-voltage SMBus segment, unpopulated on this board |
+| **DDC1** | `DDC1_SCL`=AA20, `DDC1_SDA`=Y18 | `FANCURVE0/1` | GPIO **straps**, not an active bus — select the fan curve |
+| **Alert** | `SMBALERT#/THRMTRIP#`=J6 | CPU `THERMTRIP#` + BMC `QU1` V3/V4 | Shared fatal-thermal / SMBus-alert line |
+
+### 9.2 Shared with the BMC (arbitration)
+
+`SMBus1` and `SMBus2` are electrically the **same wires** the BMC drives on its
+own I²C fabric — both hosts can reach the W83795G hardware monitor (`QU4`), and
+both can drive the DIMM-SPD mux (`QU9`→`QU5`) to read the 16 DIMMs. Ownership is
+arbitrated by the **`U23` (74LVC125) source-select buffer**: the QU5 channel-select
+lines are driven from either the southbridge (`SB_I2CS0/1`) or the BMC
+(`AST_I2CS0/1`), whichever buffer pair is enabled. In practice the BMC owns the
+bus for out-of-band monitoring while the host is off; the SP5100/host takes it
+during POST. The full mux topology and the DIMM-SPD access sequence are in
+[BMC §10.1–10.3](AST2050-BMC-WIRING.md#10-i²c--smbus-topology-traced-through-every-mux--expander).
+
+### 9.3 CPU voltage regulators (SMBus0 / SVI)
+
+`SMBus0` is the SP5100's private serial-VID / PMBus link to the two UPI PWM
+controllers that make the CPU and northbridge core rails:
+
+- **`PU2` — UPI ASP0902QGK** (VQFN-48): multi-phase CPU-core VR controller.
+- **`PU7` — UPI ASP0906QGK** (VQFN-48): second CPU / northbridge VR controller.
+- (Supporting: `PU1` ASP0910 analog SVI switch; `PU4`/`PU9`/`PU10` UP6282 buck
+  regulators for the lower rails.)
+
+This is how the platform reads/sets processor VID and pulls VR
+voltage/current/temperature telemetry.
+
+11 SMBus balls total — [pinmaps/SU1 → I²C / SMBus](pinmaps/SU1_pins.md#i2c--smbus-11).
 
 ---
 
