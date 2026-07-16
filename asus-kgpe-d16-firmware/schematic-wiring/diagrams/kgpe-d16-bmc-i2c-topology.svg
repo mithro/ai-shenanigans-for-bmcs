@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 740" role="img" aria-labelledby="t-title t-desc" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 802" role="img" aria-labelledby="t-title t-desc" preserveAspectRatio="xMidYMid meet">
   <title id="t-title">ASUS KGPE-D16 AST2050 BMC I2C bus topology</title>
   <desc id="t-desc">Tree from the AST2050 BMC I2C engine across its eight controllers (I2C1-I2C8) to the leaf devices: PSU SMBus, W83795G hardware monitor (0x2F), CPU SB-TSI (0x4C/0x4D), HT24LC08 FRU EEPROM (0x50), two W83601G DIMM-error-LED GPIO expanders (U27/U28), and - through the SN74CBTLV3125 FET switch QU9 and the 74HC4052 mux QU5 - the 16 DIMM SPD (0x50-0x57) and TSOD (0x18-0x1F) sensors, plus the SP5100 southbridge shared segments.</desc>
   <style>
@@ -31,6 +31,7 @@
   <text class="t" x="24" y="34">ASUS KGPE-D16 &#8212; AST2050 BMC I2C bus topology</text>
   <text class="st" x="24" y="54">W83795G&#215;1 &#183; W83601G&#215;2 &#183; HT24LC08&#215;1 &#183; SN74CBTLV3125 switch &#183; 74HC4052 mux &#183; 16&#215; DIMM SPD+TSOD &#183; SB-TSI &#183; PSU PMBus</text>
 
+  <g transform="translate(0,46)">
   <!-- BMC root -->
   <rect class="box neu" x="24" y="300" width="150" height="150" rx="10"/>
   <text class="h" x="99" y="365" text-anchor="middle">AST2050 BMC</text>
@@ -153,6 +154,7 @@
   <rect class="sw gold"   x="130" y="710" width="18" height="14" rx="3"/><text class="l" x="154" y="722">I2C mux / switch</text>
   <rect class="sw purple" x="300" y="710" width="18" height="14" rx="3"/><text class="l" x="324" y="722">GPIO expander</text>
   <rect class="sw neu"    x="460" y="710" width="18" height="14" rx="3"/><text class="l" x="484" y="722">EEPROM / host / PSU</text>
-  <text class="l cr" x="690" y="722">I2CMUX_EN# / S1:S0 = mux control</text>
-  <text class="m" x="1156" y="722" text-anchor="end">addresses are 7-bit (datasheet defaults)</text>
+  <text class="l cr" x="700" y="722">I2CMUX_EN# / S1:S0 = mux control</text>
+  <text class="m" x="1156" y="740" text-anchor="end">addresses are 7-bit (datasheet defaults)</text>
+  </g>
 </svg>
