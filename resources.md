@@ -65,7 +65,7 @@ The choice between OpenBMC and u-bmc may differ per target:
 
 | Generation | CPU | Target Boards | Upstream Linux | Notes |
 |---|---|---|---|---|
-| **AST2050** | ARM (older core) | Dell C410x, ASUS KGPE-D16, ASUS P8B-M | **No** — needs porting | Most constrained; first OpenBMC port target |
+| **AST2050** | ARM (older core) | Dell C410x, ASUS KGPE-D16, ASUS KCMA-D8, ASUS P8B-M | **No** — needs porting | Most constrained; first OpenBMC port target. The KCMA-D8 is the KGPE-D16's Socket-C32 sibling (same ASMB4/ASMB5 BMC module) — see `asus-kgpe-d16-firmware/ASUS-KCMA-D8.md` |
 | **AST2400** | ARM | Supermicro X10, most X11 boards | **Yes** | Primary Supermicro target |
 | **AST2500** | 2× ARM Cortex A7 + Cortex M3 | Some X11 boards (e.g., X11SCH-F) | **Yes** | DDR4 1600Mbps, Quad GbE, 16-ch ADC |
 | **AST2600** | 2× ARM Cortex A7, 1.2 GHz | Supermicro X12 series | **Yes** | Future target |
@@ -522,7 +522,7 @@ This matters because the BMC manages PCIe topology (hot-swap, power, error repor
 ## 12. Known Gaps
 
 1. **No u-bmc resources in Google Drive.** Upstream repo: https://github.com/u-root/u-bmc
-2. **AST2050 datasheet:** Aspeed datasheets are typically NDA-restricted. May need to work from AST2400/2500 kernel code and the ASUS KGPE-D16 abandoned port.
+2. **AST2050 datasheet:** ~~Aspeed datasheets are typically NDA-restricted. May need to work from AST2400/2500 kernel code and the ASUS KGPE-D16 abandoned port.~~ **RESOLVED** — the full AST2050/AST1100 A3 Datasheet (V1.02 + V1.05) is committed in-repo (`dell-c410x-firmware/datasheets/`, `asus-kgpe-d16-firmware/datasheets/`, `datasheets/aspeed/`); the V1.05 copy circulated by 15h.org is byte-identical (see `asus-kgpe-d16-firmware/datasheets/15H-ORG-MIRROR.md`), independently corroborating its provenance.
 3. **Zephyr on Aspeed:** No existing Zephyr BSP found for any Aspeed SoC.
 4. **I2C device identification:** The i2cdetect results (Section 5.5) need to be mapped to specific ICs. Tentative assignments provided but need verification against board schematics or firmware DTBs.
 5. **Dell C410x firmware availability:** Need to verify if Dell publishes standalone BMC firmware updates for the C410x chassis.

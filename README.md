@@ -39,6 +39,12 @@ Key files:
   Detailed analysis of Raptor's repositories (kernel, U-Boot, Yocto/OpenBMC).
 - [`RAPTOR_AST2050_SUMMARY.md`](asus-kgpe-d16-firmware/RAPTOR_AST2050_SUMMARY.md) --
   Quick reference summary.
+- [`ASUS-KCMA-D8.md`](asus-kgpe-d16-firmware/ASUS-KCMA-D8.md) --
+  Board reference for the ASUS KCMA-D8, the KGPE-D16's Socket-C32 sibling
+  (same chipset and the same AST2050 BMC on an ASMB4/ASMB5 module), mirrored
+  from the 15h.org wiki; every PDF that page links is committed in
+  [`datasheets/`](asus-kgpe-d16-firmware/datasheets/) (see
+  [`15H-ORG-MIRROR.md`](asus-kgpe-d16-firmware/datasheets/15H-ORG-MIRROR.md)).
 - [`RAPTOR-UBOOT-ANALYSIS.md`](asus-kgpe-d16-firmware/RAPTOR-UBOOT-ANALYSIS.md) --
   Analysis of Raptor's U-Boot port and board bring-up.
 - [`DDR2-INIT-REVERSE-ENGINEERING.md`](asus-kgpe-d16-firmware/DDR2-INIT-REVERSE-ENGINEERING.md) --

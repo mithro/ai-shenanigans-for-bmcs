@@ -326,14 +326,25 @@ support both single and multi-socket configurations natively.
   AMD patent describing DBREQ/DBRDY debug signals
 
 ### AMD Processor Documentation
-- [BKDG for AMD Family 15h Models 00h-0Fh](https://www.amd.com/content/dam/amd/en/documents/archived-tech-docs/programmer-references/42300_15h_Mod_10h-1Fh_BKDG.pdf) --
-  BIOS and Kernel Developer's Guide for Opteron 6200 series
+- [BKDG for AMD Family 15h Models 00h-0Fh](datasheets/42301_15h_Mod_00h-0Fh_BKDG.pdf) --
+  BIOS and Kernel Developer's Guide (pub 42301, 639 pp) for the Orochi
+  silicon in Opteron 4200/6200 (Bulldozer) and 4300/6300 (Piledriver);
+  committed in-repo via the 15h.org mirror. (An earlier revision of this
+  list linked an amd.com URL whose file is actually pub 42300, the
+  Models **10h-1Fh** BKDG, despite carrying a Models 00h-0Fh label.)
+- [BKDG for AMD Family 10h](datasheets/AMD_Family_10h_BKDG_31116.pdf) --
+  BIOS and Kernel Developer's Guide (pub 31116, 475 pp) for the K10
+  silicon in Opteron 4100/6100; committed in-repo via the 15h.org mirror.
 - [BKDG for AMD Family 15h Models 30h-3Fh](https://manualzz.com/doc/25989967/-bkdg--for-amd-family-15h-models-30h) --
   BKDG for Opteron 6300 series
 
 ### Community Resources
 - [15h.org KGPE-D16 Wiki](https://15h.org/index.php/KGPE-D16) --
   Active coreboot development for the KGPE-D16
+- [15h.org KCMA-D8 Wiki](https://15h.org/index.php/ASUS_KCMA-D8) --
+  The KGPE-D16's Socket-C32 sibling board (same chipset / BMC module);
+  mirrored in-repo at [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md) with all linked
+  PDFs committed in [datasheets/](datasheets/)
 - [Vikings Wiki: KGPE-D16](https://wiki.vikings.net/hardware:kgpe-d16) --
   Hardware documentation including SR5690 firmware notes
 - [Dasharo KGPE-D16 Setup](https://docs.dasharo.com/variants/asus_kgpe_d16/setup/) --
@@ -398,6 +409,13 @@ The SR5690 is likely accessible via the HDT JTAG chain, either as a
 separate TAP in the daisy chain or through the CPU's internal JTAG
 routing.
 
+The full public SR56x0 documentation set is committed in
+[`datasheets/`](datasheets/): the Register Reference Guide (pub 43871),
+BIOS Developer's Guide (pub 43870), Register Programming Requirements
+(pub 43872), SR5670 Databook (pub 44549), silicon errata (pub 46303), and
+the AMD IOMMU Specification rev 2.62 (pub 48882) that governs the IOMMU
+the embedded microcontroller initialises.
+
 ### SP5100 Southbridge
 
 The AMD SP5100 southbridge contains an embedded **8051
@@ -415,6 +433,11 @@ The SP5100 provides:
 - General purpose I/O
 
 The SP5100's 8051 core may also be accessible through the JTAG chain.
+
+The full public SP5100 documentation set is committed in
+[`datasheets/`](datasheets/): the Register Reference Guide (pub 44413),
+BIOS Developer's Guide (pub 44415), Register Programming Requirements
+(pub 44414), Databook (pub 44409), and silicon errata (pub 46836).
 
 ### Security Considerations
 
