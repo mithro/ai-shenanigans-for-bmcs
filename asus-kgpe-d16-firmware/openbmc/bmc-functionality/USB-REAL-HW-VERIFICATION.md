@@ -6,13 +6,18 @@ BMC gadget and reads `/dev/sda` + a `KEY_A` evdev event). This document is the
 **ready-to-run** procedure for the **real AST2050 (KGPE-D16)** half.
 
 > **Why it is not run from the build sandbox:** the AST2050 rig lives on the
-> `192.168.66.0/24` BMC net behind the Raspberry-Pi bridge `asus-bmc`, which is the
-> *only* host with a route to the board (`192.168.66.2`). That network is **not
-> reachable from the CI/build sandbox** (ping 192.168.66.2 → 100 % loss; the bridge
-> hostname does not resolve), so the steps below must be run from the Pi / a host on
-> the rig net — exactly like `f3-realhw-sensors.py --pi asus-bmc` and the other
-> real-HW scripts here. Nothing below is state-mutating beyond loading modules +
-> attaching a USB/IP device (fully reversible: `usbip detach` + `modprobe -r`).
+> `192.168.66.0/24` BMC net behind the Raspberry-Pi bridge `asus-bmc` (=192.168.66.1),
+> the *only* host with a route to the board (`192.168.66.2`). That network is **not
+> reachable from the CI/build sandbox by any path**, exhaustively verified 2026-07-16:
+> direct ping to 192.168.66.1/.2 → 100 % loss; the reachable WireGuard endpoint
+> `ten64.welland.mithis.com` (the welland site router) routes the rig net out its
+> *public* gateway and cannot reach it — no wg tunnel carries `192.168.66.0/24`; the
+> `desktop` host and the other wg peers are offline. The rig is on a LAN reachable
+> only from the user's real workstation via the local `ssh asus-bmc` alias. So the
+> steps below must be run from the Pi / a host on the rig net — exactly like
+> `f3-realhw-sensors.py --pi asus-bmc` and the other real-HW scripts here. Nothing
+> below is state-mutating beyond loading modules + attaching a USB/IP device (fully
+> reversible: `usbip detach` + `modprobe -r`).
 
 The AST2050 has exactly one USB block — the USB2.0 device/vhub @`0x1E6A0000` (no host
 controller; `F6-USB.md`). So there are two silicon tests, in increasing fidelity:
