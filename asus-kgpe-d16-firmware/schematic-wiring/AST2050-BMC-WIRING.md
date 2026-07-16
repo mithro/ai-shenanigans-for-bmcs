@@ -327,33 +327,15 @@ dual 4-channel analog mux, and a source-select buffer. This section documents
 each device — part number, address, protocol, and the **exact steps** to reach
 it.
 
+> **Board-wide view:** this section covers the BMC's eight controllers. For the
+> *complete* board I²C/SMBus/PMBus map — including the SP5100, the SR5690
+> PCIe-hot-plug SMBus, the CPU VR PMBus and the FireWire EEPROM bus, with a
+> topology diagram per bus — see
+> **[I2C-SMBUS-TOPOLOGY.md](I2C-SMBUS-TOPOLOGY.md)**.
+
 ### 10.1 The switching fabric
 
-```mermaid
-flowchart TB
-    BMC["AST2050 · QU1<br/>8× I²C controllers"]
-
-    BMC -->|"I2C1 (A15/B15)"| PSU["PSU SMBus · PSUSMB1"]
-    BMC -->|"I2C2 (C14/D14)"| QU9["I²C bus switch · QU9<br/>SN74CBTLV3125 (FET, OE-gated)"]
-    BMC -->|"I2C2/I2C6"| QU4["hwmon · QU4<br/>W83795G"]
-    BMC -->|"I2C3 (A14/B14)"| SB["SP5100 · SU1"]
-    BMC -->|"I2C5 (A13/B13)"| I2C5(("I2C5 bus"))
-    BMC -->|"I2C6 (C12/D12)"| SB
-
-    I2C5 --> EE["FRU EEPROM · U25<br/>HT24LC08 (8 Kbit)"]
-    I2C5 --> X1["DIMM-LED exp · U27<br/>W83601G"]
-    I2C5 --> X2["DIMM-LED exp · U28<br/>W83601G"]
-
-    QU9 -->|"I2C7"| QU5["dual 4-ch mux · QU5<br/>74HC4052 (S0/S1 select)"]
-    QU9 -->|"I2C8"| QU5
-    SEL["source-select · U23 (74LVC125)<br/>drives S0/S1 from BMC or SP5100"] --> QU5
-
-    QU5 -->|"ch Y2 = I2C10"| DAD["DIMM A–D SPD + TSOD"]
-    QU5 -->|"ch Y3 = I2C11"| DEH["DIMM E–H SPD + TSOD"]
-    QU5 -->|"ch Y0 = I2C8"| AUX["AUX_PANEL1"]
-
-    ENA["I2CMUX_ENABLE# (U8 inverter)"] -. "OE#" .-> QU9
-```
+![BMC I2C bus topology](diagrams/kgpe-d16-bmc-i2c-topology.svg)
 
 ### 10.2 Device-by-device breakdown
 

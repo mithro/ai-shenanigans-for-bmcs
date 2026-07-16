@@ -24,6 +24,7 @@ I²C/GPIO/LPC assumptions must match.
 | **[SP5100-SOUTHBRIDGE-WIRING.md](SP5100-SOUTHBRIDGE-WIRING.md)** | AMD SP5100 southbridge (`SU1`) | 528 |
 | **[W83667HG-SUPERIO-WIRING.md](W83667HG-SUPERIO-WIRING.md)** | Nuvoton W83667HG-A Super-I/O (`OU1`) | 128 |
 | **[BMC-CONNECTORS.md](BMC-CONNECTORS.md)** | Connectors/headers/jumpers wired to the BMC — physical pinout diagrams + tables | — |
+| **[I2C-SMBUS-TOPOLOGY.md](I2C-SMBUS-TOPOLOGY.md)** | Complete board I²C/SMBus/PMBus map — all masters, muxes, sensors, addresses; topology diagram per bus | — |
 | [pinmaps/QU1_pins.md](pinmaps/QU1_pins.md) · [SU1_pins.md](pinmaps/SU1_pins.md) · [OU1_pins.md](pinmaps/OU1_pins.md) | machine-generated exhaustive per-pin tables (each section lists the components those pins connect to) | — |
 
 ## Confirmed chip inventory (from the schematic)

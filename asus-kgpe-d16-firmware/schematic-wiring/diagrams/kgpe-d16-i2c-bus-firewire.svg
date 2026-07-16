@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 574 214" role="img" aria-label="FireWire config EEPROM (private bus)" preserveAspectRatio="xMidYMid meet">
+  <title>FireWire config EEPROM (private bus)</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#555;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:18px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .h{font-size:13px;font-weight:700;}
+    .m{font-size:11.5px;fill:var(--muted);}
+    .l{font-size:12px;}
+    .box{fill:var(--box);stroke-width:1.8;}
+    .wire{fill:none;stroke:var(--ink);stroke-width:1.4;}
+    .fillink{fill:var(--ink);}
+    .sw{stroke-width:1.8;fill:var(--box);}
+  </style>
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+    </marker>
+  </defs>
+<text class="t" x="24" y="34">FireWire config EEPROM (private bus)</text>
+<text class="st" x="24" y="56">LSI FW322 1394a controller · self-programming from its EEPROM</text>
+<line class="wire" x1="254" y1="136" x2="300" y2="136" marker-end="url(#arw)"/>
+<rect class="box" stroke="var(--ink)" x="24" y="113" width="230" height="46" rx="8"/>
+<text class="h" x="36" y="132">LSI FW322 · ZU1</text>
+<text class="m" x="36" y="149">ROM_CLK/ROM_AD</text>
+<rect class="box" stroke="var(--ink)" x="300" y="113" width="250" height="46" rx="8"/>
+<text class="h" x="312" y="132">HT24LC02 EEPROM · ZU2 · 0x50</text>
+<text class="m" x="312" y="149">1394 GUID / config</text>
+<line class="wire" x1="24" y1="172" x2="550" y2="172"/>
+<rect class="sw" stroke="var(--ink)" x="24" y="177" width="16" height="13" rx="3"/>
+<text class="l" x="46" y="188">master (I2C controller)</text>
+<rect class="sw" stroke="var(--ink)" x="229.6" y="177" width="16" height="13" rx="3"/>
+<text class="l" x="251.6" y="188">EEPROM / host / PSU</text>
+</svg>

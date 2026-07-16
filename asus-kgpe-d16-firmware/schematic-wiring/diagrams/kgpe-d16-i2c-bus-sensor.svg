@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 594 280" role="img" aria-label="Shared platform sensor bus (multi-master)" preserveAspectRatio="xMidYMid meet">
+  <title>Shared platform sensor bus (multi-master)</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#555;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:18px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .h{font-size:13px;font-weight:700;}
+    .m{font-size:11.5px;fill:var(--muted);}
+    .l{font-size:12px;}
+    .box{fill:var(--box);stroke-width:1.8;}
+    .wire{fill:none;stroke:var(--ink);stroke-width:1.4;}
+    .fillink{fill:var(--ink);}
+    .sw{stroke-width:1.8;fill:var(--box);}
+  </style>
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+    </marker>
+  </defs>
+<text class="t" x="24" y="34">Shared platform sensor bus (multi-master)</text>
+<text class="st" x="24" y="56">BMC (I2C2/3/6) and SP5100 (SMBus1/2) share the hardware monitor + DIMM-mux entry</text>
+<line class="wire" x1="224" y1="134" x2="270" y2="134" marker-end="url(#arw)"/>
+<line class="wire" x1="224" y1="134" x2="270" y2="204" marker-end="url(#arw)"/>
+<line class="wire" x1="224" y1="204" x2="270" y2="134" marker-end="url(#arw)"/>
+<line class="wire" x1="224" y1="204" x2="270" y2="204" marker-end="url(#arw)"/>
+<rect class="box" stroke="var(--ink)" x="24" y="110" width="200" height="46" rx="8"/>
+<text class="h" x="36" y="130">AST2050 BMC</text>
+<text class="m" x="36" y="146">I2C2/I2C3/I2C6</text>
+<rect class="box" stroke="var(--ink)" x="24" y="182" width="200" height="46" rx="8"/>
+<text class="h" x="36" y="200">SP5100 southbridge</text>
+<text class="m" x="36" y="218">SMBus1/SMBus2</text>
+<rect class="box" stroke="var(--green)" x="270" y="110" width="300" height="46" rx="8"/>
+<text class="h" x="282" y="130">W83795G hwmon · QU4 · 0x2F</text>
+<text class="m" x="282" y="146">11 voltages · 6 temps · 14 fans</text>
+<rect class="box" stroke="var(--gold)" x="270" y="182" width="300" height="46" rx="8"/>
+<text class="h" x="282" y="200">QU9 SN74CBTLV3125 switch</text>
+<text class="m" x="282" y="218">→ QU5 → DIMM SPD (see below)</text>
+<line class="wire" x1="24" y1="238" x2="570" y2="238"/>
+<rect class="sw" stroke="var(--ink)" x="24" y="243" width="16" height="13" rx="3"/>
+<text class="l" x="46" y="254">master (I2C controller)</text>
+<rect class="sw" stroke="var(--green)" x="229.6" y="243" width="16" height="13" rx="3"/>
+<text class="l" x="251.6" y="254">sensor</text>
+<rect class="sw" stroke="var(--gold)" x="312.8" y="243" width="16" height="13" rx="3"/>
+<text class="l" x="334.8" y="254">I2C mux / switch</text>
+</svg>
