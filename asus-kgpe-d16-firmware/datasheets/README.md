@@ -19,6 +19,13 @@ as this board — see [Provenance](#provenance--evidence).
 > included because this directory's JTAG/HDT scan-chain analysis references
 > them). See [Still missing](#still-missing--nda-restricted) for confirmed
 > parts with no public datasheet.
+>
+> **Sibling board / more docs.** [`15h.org/`](15h.org/) mirrors every PDF
+> linked from the 15h.org **ASUS KCMA-D8** wiki page (the KGPE-D16's
+> Socket-C32 sibling — same chipset, Super I/O, hwmon, and the same AST2050
+> BMC on an ASMB4/ASMB5 module): AMD fam10h/fam15h BKDGs, SR5670/SP5100
+> databooks + errata, the IOMMU spec, and the previously-missing
+> **W83667HG-A full Data Book**. Page content: [`../ASUS-KCMA-D8.md`](../ASUS-KCMA-D8.md).
 
 ---
 
@@ -148,7 +155,7 @@ run so the gaps stay visible.
 
 | Part | Status | Best available |
 |------|--------|----------------|
-| **Winbond W83667HG-A (host Super I/O)** | Registration/NDA-gated | Distributor mirrors 403; alldatasheet serves a truncated ~19 pp preview only. Open reference: coreboot `src/superio/winbond/w83667hg-a/`. |
+| **Winbond W83667HG-A (host Super I/O)** | ~~Registration/NDA-gated~~ **GAP CLOSED (2026-07-16)** | Full 319 pp Data Book v1.2 is committed at [`15h.org/W83667hg-a-datasheet-v1-2.pdf`](15h.org/W83667hg-a-datasheet-v1-2.pdf), mirrored from the CC BY-SA 15h.org KCMA-D8 page. (Distributor mirrors still 403; alldatasheet still serves a truncated ~19 pp preview. Open reference: coreboot `src/superio/winbond/w83667hg-a/`.) |
 | **BMC Ethernet PHY** (ASMB4/5, RMII) | **Unidentified** | `../RAPTOR-PORTING-GUIDE.md:958` flags it as an open question. RTL8201EL/RTL8211BN/RTL8201N in the analysis are the AST2050 driver's *supported* PHY list, **not** a board ID. Needs a board photo / ASMB schematic. Candidate if later confirmed as an RTL8201-class part: `http://realtek.info/pdf/rtl8201.pdf`. |
 | **BMC FRU EEPROM (exact part)** | Class ref committed | Present per `ast2050.h` / U-Boot but density/vendor unread; `AT24C256_Datasheet.pdf` stands in until the marking is read off the chip. |
 | **AST2050 on-module DDR2 SDRAM** (64 MB) | Part unidentified | Generic behaviour covered by JEDEC **JESD79-2**; specific SDRAM part unknown (needs a package marking). JEDEC standards are free but not redistributable here. |

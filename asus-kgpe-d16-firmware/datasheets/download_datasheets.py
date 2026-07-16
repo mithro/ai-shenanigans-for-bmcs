@@ -167,13 +167,10 @@ DATASHEETS = [
 # found. Listed so the gap is visible rather than silently omitted; see the
 # README "Still missing" section. `main()` prints these at the end.
 KNOWN_UNAVAILABLE = [
-    (
-        "Winbond W83667HG-A (host LPC Super I/O)",
-        "Full Winbond/Nuvoton Super I/O datasheet is registration/NDA-gated; "
-        "distributor mirrors 403 and alldatasheet serves a truncated ~19pp "
-        "preview only. coreboot 'superio/winbond/w83667hg-a' confirms the part.",
-        "Open reference: coreboot src/superio/winbond/w83667hg-a/",
-    ),
+    # NOTE (2026-07-16): the W83667HG-A gap is CLOSED — the full 319pp Data
+    # Book v1.2 is committed at 15h.org/W83667hg-a-datasheet-v1-2.pdf
+    # (mirrored from the 15h.org ASUS KCMA-D8 page by
+    # 15h.org/download_datasheets.py), so it no longer appears in this list.
     (
         "BMC Ethernet PHY (ASMB4/ASMB5 module, RMII)",
         "Raptor's device tree sets mac0 phy-mode='rmii' (external PHY needed) but "
