@@ -550,14 +550,14 @@ a dedicated document:
 
 | Connector | Type | BMC involvement |
 |---|---|---|
-| `VGA1` | VGA HD-15 | Integrated video (RGB DAC, DDC, sync) |
-| `AST_UART1` | 1×4 header | BMC serial console (UART2) |
-| `AST_JTAG1` | 2×10 header | BMC ARM926 JTAG debug |
-| `BMC_FW1` | 2×7 socket | SPI firmware flash + feature straps |
-| `PANEL1` | 2×10 header | Power/reset buttons, message LED, NMI |
-| `AUX_PANEL1` | 2×10 header | BMC locator LED/button, I²C8, LAN LEDs |
-| `PSUSMB1` | 1×5 header | PSU SMBus on BMC I²C1 |
-| `VGA_SW1` · `IPMI_SEL1` · `RECOVERY1` | 1×3 jumpers | Reset-source / IPMI / recovery straps |
+| [`VGA1`](BMC-CONNECTORS.md#vga1--vga-output-hd-15) | VGA HD-15 | Integrated video (RGB DAC, DDC, sync) |
+| [`AST_UART1`](BMC-CONNECTORS.md#ast_uart1--bmc-serial-console) | 1×4 header | BMC serial console (UART2) |
+| [`AST_JTAG1`](BMC-CONNECTORS.md#ast_jtag1--bmc-arm-jtag-debug) | 2×10 header | BMC ARM926 JTAG debug |
+| [`BMC_FW1`](BMC-CONNECTORS.md#bmc_fw1--bmc-spi-firmware-socket) | 2×7 socket | SPI firmware flash + feature straps |
+| [`PANEL1`](BMC-CONNECTORS.md#panel1--system-front-panel) | 2×10 header | Power/reset buttons, message LED, NMI |
+| [`AUX_PANEL1`](BMC-CONNECTORS.md#aux_panel1--auxiliary-panel-q-connector) | 2×10 header | BMC locator LED/button, I²C8, LAN LEDs |
+| [`PSUSMB1`](BMC-CONNECTORS.md#psusmb1--psu-smbus) | 1×5 header | PSU SMBus on BMC I²C1 |
+| [`VGA_SW1`](BMC-CONNECTORS.md#vga_sw1--vga-reset-source-jumper) · [`IPMI_SEL1`](BMC-CONNECTORS.md#ipmi_sel1--ipmi-enable-jumper) · [`RECOVERY1`](BMC-CONNECTORS.md#recovery1--bios-recovery-jumper) | 1×3 jumpers | Reset-source / IPMI / recovery straps |
 
 ---
 
