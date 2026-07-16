@@ -1,0 +1,56 @@
+# Stage-0 (BMC-side USB/IP export) — RUNTIME PASS on the faithful kgpe-d16-bmc QEMU (2026-07-16)
+# Boot: qemu-system-arm -M kgpe-d16-bmc -m 64 ... -append '... usbiphost'
+# Kernel built with CONFIG_USBIP_VUDC=y; initramfs ships static-ARM usbipd.
+#
+## relevant dmesg (vudc + vhub both register):
+[    1.010667] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    1.011363] dummy_hcd dummy_hcd.0: Dummy host controller
+[    1.011817] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    1.063329] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    1.063522] usb usb1: SerialNumber: dummy_hcd.0
+[    1.172057] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+--- UDCs present (expect usbip-vudc.0) ---
+1e6a0000.usb-vhub:p1
+1e6a0000.usb-vhub:p2
+1e6a0000.usb-vhub:p3
+1e6a0000.usb-vhub:p4
+1e6a0000.usb-vhub:p5
+1e6a0000.usb-vhub:p6
+1e6a0000.usb-vhub:p7
+usbip-vudc.0
+binding export gadget -> UDC 'usbip-vudc.0'
+USBIP-BIND-OK (gadget bound to usbip-vudc.0)
+  [PASS] usbip-vudc.0 UDC present
+
+## the usbiphost export block (init gate output):
+=== USBIP-EXPORT-BEGIN ===
+--- UDCs present (expect usbip-vudc.0) ---
+1e6a0000.usb-vhub:p1
+1e6a0000.usb-vhub:p2
+1e6a0000.usb-vhub:p3
+1e6a0000.usb-vhub:p4
+1e6a0000.usb-vhub:p5
+1e6a0000.usb-vhub:p6
+1e6a0000.usb-vhub:p7
+dummy_udc.0
+usbip-vudc.0
+256+0 records in
+256+0 records out
+1048576 bytes (1.0MB) copied, 0.043737 seconds, 22.9MB/s
+24+0 records in
+24+0 records out
+24 bytes (24B) copied, 0.003647 seconds, 6.4KB/s
+[    4.356775] Mass Storage Function, version: 2009/09/11
+[    4.357186] LUN: removable file: (no medium)
+binding export gadget -> UDC 'usbip-vudc.0'
+USBIP-BIND-OK (gadget bound to usbip-vudc.0)
+USBIP-DAEMON-LISTENING (:3240)
+USBIP-MAGIC=KGPE-D16-USBIP-VMEDIA-OK@512
+=== USBIP-EXPORT-END ===
+
+## harness verdict:
+  [PASS] usbip-vudc.0 UDC present
+  [PASS] gadget bound (USBIP-BIND-OK)
+  [PASS] usbipd listening :3240
+  [PASS] export block completed
+STAGE0 RESULT: PASS

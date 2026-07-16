@@ -67,7 +67,7 @@ USB; usbip is the CI-hermetic stand-in for "a real host is on the other end."
 | Static ARM usbip userspace (crux de-risk) | `qemu-firmware/initramfs/build-usbip.py` | ✅ built + verified (static ARM ELF) |
 | Initramfs ships usbipd/usbip | `qemu-firmware/initramfs/build.py` | ✅ verified in packed cpio |
 | BMC kernel `USBIP_VUDC` | `qemu-firmware/kernel/kgpe-d16-usbip.config` + `build-kernel.sh` | ✅ merge verified (`USBIP_VUDC=y`) |
-| BMC-side export gate | `qemu-firmware/initramfs/init` (`usbiphost`) | ✅ authored + `sh -n`/`ash -n` clean; ⏳ runtime boot |
+| BMC-side export gate | `qemu-firmware/initramfs/init` (`usbiphost`) | ✅ **runtime PASS** on kgpe-d16-bmc QEMU (Stage 0) |
 | Two-VM runner | `qemu-firmware/scripts/usbip-host-test.py` | ⏳ pending (needs x86 host image) |
 | x86 virtual-host image | `qemu-firmware/kernel/vhost-x86.config` + initramfs | ⏳ pending |
 | CI job | `.github/workflows/d16-kvm.yml` (or sibling) | ⏳ pending |
@@ -93,9 +93,13 @@ kernel as the host; Stage 2 uses a dedicated hermetic x86 guest — see below.)
 
 ## Staging
 
-- **Stage 0 (BMC-side, boot-verifiable without the x86 guest):** boot the BMC with
-  `usbiphost`; assert `USBIP-BIND-OK` (gadget bound to `usbip-vudc.0`) and
-  `USBIP-DAEMON-LISTENING (:3240)`. Proves the export half.
+- **Stage 0 (BMC-side, boot-verifiable without the x86 guest): ✅ DONE — runtime
+  PASS** on the faithful kgpe-d16-bmc QEMU (2026-07-16). Booting with `usbiphost`
+  yields `USBIP-BIND-OK` (gadget bound to `usbip-vudc.0`) and
+  `USBIP-DAEMON-LISTENING (:3240)`; the static-ARM usbipd runs and listens. Evidence
+  `evidence/f6-usb-host/01-stage0-bmc-export-PASS.txt`. (Open item for Stage 1: the
+  mass_storage LUN logged `(no medium)` at bind — confirm the host sees the backing
+  image, tweak the gate if the file isn't attaching.)
 - **Stage 1 (enumerate against the runner kernel):** `modprobe vhci-hcd
   usb-storage usbhid` on the runner, `usbip attach`, read `/dev/sdX` offset 512 ==
   magic, read the keypress on `/dev/input/eventX`. Fastest end-to-end; depends on
