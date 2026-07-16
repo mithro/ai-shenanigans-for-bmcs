@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 652 300" role="img" aria-label="PSUSMB1 — PSU SMBus" preserveAspectRatio="xMidYMid meet">
+  <title>PSUSMB1 — PSU SMBus</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#666;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:19px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .sig{font-size:12.5px;font-weight:600;}
+    .m{font-size:11px;fill:var(--muted);}
+    .pn{font-size:11px;font-weight:700;}
+    .leg{font-size:12px;}
+    .board{fill:var(--panel);stroke:var(--ink);stroke-width:2;}
+  </style>
+<text class="t" x="24" y="34">PSUSMB1 — PSU SMBus</text>
+<text class="st" x="24" y="55">BMC I²C1 · PSU telemetry (PMBus)</text>
+<rect class="board" x="48" y="122" width="556" height="56" rx="10"/>
+<rect x="77" y="137" width="26" height="26" rx="3" fill="var(--box)" stroke="var(--red)" stroke-width="2.8"/><text class="pn" x="90" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--red)">1</text>
+<text class="sig" x="90" y="195" text-anchor="middle" fill="var(--blue)">SCL</text><text class="m" x="90" y="210" text-anchor="middle">I2C1 · BMC B15</text>
+<circle cx="208" cy="150" r="13" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="208" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">2</text>
+<text class="sig" x="208" y="195" text-anchor="middle" fill="var(--blue)">SDA</text><text class="m" x="208" y="210" text-anchor="middle">I2C1 · BMC A15</text>
+<circle cx="326" cy="150" r="13" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="326" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">3</text>
+<text class="sig" x="326" y="195" text-anchor="middle" fill="var(--blue)">ALERT#</text><text class="m" x="326" y="210" text-anchor="middle">BMC B12</text>
+<circle cx="444" cy="150" r="13" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="444" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">4</text>
+<text class="sig" x="444" y="195" text-anchor="middle" fill="var(--muted)">GND</text>
+<circle cx="562" cy="150" r="13" fill="var(--box)" stroke="var(--green)" stroke-width="2.4"/><text class="pn" x="562" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--green)">5</text>
+<text class="sig" x="562" y="195" text-anchor="middle" fill="var(--green)">+3V3</text>
+<circle cx="28" cy="270" r="7" fill="var(--box)" stroke="var(--blue)" stroke-width="2.2"/><text class="leg" x="42" y="274">Signal / data</text><circle cx="147.5" cy="270" r="7" fill="var(--box)" stroke="var(--muted)" stroke-width="2.2"/><text class="leg" x="161.5" y="274">Ground</text><circle cx="214.5" cy="270" r="7" fill="var(--box)" stroke="var(--green)" stroke-width="2.2"/><text class="leg" x="228.5" y="274">Power</text>
+</svg>
