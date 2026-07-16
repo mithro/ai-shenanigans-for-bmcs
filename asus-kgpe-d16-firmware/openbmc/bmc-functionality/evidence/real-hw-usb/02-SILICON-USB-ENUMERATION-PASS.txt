@@ -1,0 +1,86 @@
+# 🎉 REAL SILICON: #2 virtual media + #3b keyboard VERIFIED on the AST2050 (2026-07-16)
+#
+# The real ASUS KGPE-D16 AST2050 BMC presents a virtual USB keyboard + mass-storage
+# device, and a REAL, separate physical Linux host (the RPi4 bridge) enumerates it,
+# reads the disk data, and receives the keystrokes. Same checks that passed in QEMU.
+#
+# CHAIN (all on real hardware):
+#   sandbox -> WireGuard -> welland IoT -> Pi rpi4-asus-aspeed2050-dev (10.1.90.222)
+#   Pi -> JTAG (RPi4 bit-bang, OpenOCD) -> AST2050 BMC
+#   Pi eth-bmc 192.168.66.1 <-> BMC 192.168.66.2 (TFTP + USB/IP)
+#
+## 1. JTAG: board alive
+#   JTAG tap: ast2050.cpu tap/device found: 0x07926f0f (ARM926EJ-S), ICE v6
+#
+## 2. JTAG bring-up (boot-silicon-uboot.sh: reset halt -> ddr2-init -> load U-Boot)
+#   [1/3] reset halt        -> Supervisor, SCTLR MMU=0
+#   [2/3] ddr2-init.tcl     -> straps SCU70=0x00819582, MCR04=0x00000585 (4-bank/64MB)
+#                              >>> DDR2 TRAINED: all read-backs match
+#   [3/3] boot-uboot.tcl    -> 0x40000000 read-back = 0xdeadbeef
+#                              AHB unlock 0xAEED1A03 -> 0x1E600000
+#                              remap 0x1E60008C: 0x00000000 -> 0x00000001 (DRAM->0x0)
+#                              reg pc 0 ; resume
+#   => U-Boot interactive:  boot#            (console 115200 on /dev/serial-bmc-console)
+#
+## 3. Netboot MY usbip kernel (linux-boot.py --skip-load, TFTP from the Pi)
+#   tftp 0x41000000 uImage-kgpe-d16-usbip        Bytes transferred = 3503232
+#   tftp 0x42000000 initramfs-usbip.cpio.gz      Bytes transferred = 3123600
+#   tftp 0x43000000 kgpe-hwpass-vgafix-video.dtb Bytes transferred = 23780
+#   bootargs: console=ttyS4,115200n8 earlyprintk usbiphost usbipkbd \
+#             bmcip=192.168.66.2/24 bmcgw=192.168.66.1 initrd=0x42000000,0x2fa990
+#   bootm 0x41000000 - 0x43000000
+#   [0.000000] Linux version 6.6.70-dirty (tim@desktop) ... #10 Thu Jul 16 15:55 ACST 2026
+#
+## 4. BMC-side export ON SILICON (the usbiphost gate):
+#   === USBIP-EXPORT-BEGIN ===
+#   --- UDCs present (expect usbip-vudc.0) ---
+#   usbip-vudc.0
+#   USBIP-BIND-OK (gadget bound to usbip-vudc.0)
+#   USBIP-LUN-MEDIUM-OK (lun.0 file=/tmp/vmedia.img)
+#   USBIP-DAEMON-LISTENING (:3240)
+#   USBIP-HIDKBD-LOOP started (periodic KEY_A on /dev/hidg0)
+#   === USBIP-EXPORT-END ===
+#   BMC-READY
+#   board reachable: ping 192.168.66.2 -> 3/3 received, rtt avg 0.877 ms
+#
+## 5. THE REAL BMC EXPORTS (queried from the Pi):
+#   $ sudo usbip list -r 192.168.66.2
+#   Exportable USB devices
+#    - 192.168.66.2
+#      usbip-vudc.0: Linux Foundation : Multifunction Composite Gadget (1d6b:0104)
+#                  : /sys/devices/platform/usbip-vudc.0
+#
+## 6. A REAL PHYSICAL HOST (the Pi) ENUMERATES IT:
+#   $ sudo usbip attach -r 192.168.66.2 -b usbip-vudc.0
+#   vhci_hcd vhci_hcd.0: Device attached
+#   usb 3-1: new high-speed USB device number 2 using vhci_hcd
+#   usb 3-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice=6.06
+#   usb 3-1: Product: AST2050 vKVM export (usbip)
+#   usb 3-1: Manufacturer: ASUS-KGPE-D16-BMC
+#   input: ASUS-KGPE-D16-BMC AST2050 vKVM export (usbip) as .../input/input4
+#   hid-generic 0003:1D6B:0104.0001: input,hidraw0: USB HID v1.01 Keyboard [...]
+#   usb-storage 3-1:1.1: USB Mass Storage device detected
+#   $ sudo usbip port
+#   Port 00: <Port in Use> at High Speed(480Mbps)
+#          Linux Foundation : Multifunction Composite Gadget (1d6b:0104)
+#          3-1 -> usbip://192.168.66.2:3240/usbip-vudc.0
+#
+## 7. ✅ FEATURE #2 — VIRTUAL MEDIA (data actually crosses to the host):
+#   sd 0:0:0:0: [sda] Attached SCSI removable disk
+#   $ sudo dd if=/dev/sda bs=1 skip=512 count=24
+#   /dev/sda offset512 = [KGPE-D16-USBIP-VMEDIA-OK]
+#   >>> SILICON-MASS-OK (/dev/sda)
+#
+## 8. ✅ FEATURE #3b — KEYBOARD EVENT DELIVERED TO A REAL HOST:
+#   kbd evdev: /dev/input/event4 (ASUS-KGPE-D16-BMC AST2050 vKVM export (usbip))
+#   captured 1536 bytes; input_event (64-bit) = 16B timeval + type(2) code(2) value(4)
+#   00000010  01 00 1e 00 02 00 00 00     <- EV_KEY(0x01) KEY_A(0x1e) value=2 (repeat)
+#   >>> SILICON-KEY-OK (EV_KEY KEY_A press delivered to a REAL host)
+#
+## 9. Cleaned up: usbip detach -p 00 -> "Port 0 is now detached!"; board left booted.
+#
+# HONEST SCOPE (same caveat as QEMU, F6-USB-HOST.md): the gadget is bound to the
+# usbip-vudc UDC, so this proves the GADGET/DESCRIPTOR/ENUMERATION + data + HID path
+# on real silicon against a real independent host. It does NOT exercise the AST2050
+# vhub's own register/EP-DMA datapath (a gadget binds ONE UDC at a time) -- that is
+# patch-0007's separate job (Test B, needs the board's USB port cabled to a host).

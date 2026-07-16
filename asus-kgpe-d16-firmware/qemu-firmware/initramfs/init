@@ -19,14 +19,26 @@ echo
 echo "ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  $(uname -r)"
 echo
 
-# Networking: loopback + eth0 via QEMU user-net DHCP (10.0.2.0/24).
+# Networking: loopback + eth0.
 ip link set lo up
 ip link set eth0 up
 # QEMU user-net is deterministic (guest 10.0.2.15, gateway 10.0.2.2). Configure
 # statically — busybox udhcpc obtains a lease but needs a script to actually
 # apply the address, which a minimal initramfs doesn't ship.
-ip addr add 10.0.2.15/24 dev eth0
-ip route add default via 10.0.2.2 2>&1 || true
+# On REAL HARDWARE the BMC net differs (board 192.168.66.2/24, Pi bridge
+# 192.168.66.1), so 'bmcip=<addr/len>' and 'bmcgw=<addr>' on the kernel cmdline
+# override the QEMU defaults. (The f8capture/vediag gates below hard-switch to the
+# rig net the same way; this makes it general for every gate, incl. usbiphost.)
+IPCIDR=10.0.2.15/24
+GW=10.0.2.2
+for _tok in $(cat /proc/cmdline); do
+	case "$_tok" in
+		bmcip=*) IPCIDR="${_tok#bmcip=}" ;;
+		bmcgw=*) GW="${_tok#bmcgw=}" ;;
+	esac
+done
+ip addr add "$IPCIDR" dev eth0
+ip route add default via "$GW" 2>&1 || true
 ip addr show eth0 2>&1 | sed -n 's/.*inet \([0-9.]*\).*/eth0: \1/p'
 
 # SSH: dropbear with key auth (the test pubkey is in /root/.ssh/authorized_keys).
