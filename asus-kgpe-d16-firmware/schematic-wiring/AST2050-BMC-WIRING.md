@@ -45,23 +45,23 @@ diagrams that explain it.
 
 | Function block | Balls |
 |---|---|
-| DDR2 memory (→ QU2) | 48 |
-| SPI / ROM flash (→ BMC_FW1) | 27 |
-| LPC host bus (→ SP5100 + Super-I/O) | 10 |
-| PCI 33 MHz (VGA / iKVM, → SP5100 + slots) | 45 |
-| USB (→ SP5100) | 6 |
-| Ethernet RMII / NC-SI (→ RTL8201N + 2× 82574L) | 18 |
-| VGA / video (→ VGA connector) | 14 |
-| I²C / SMBus (8 buses) | 16 |
-| Serial / SOL (UART) | 11 |
-| JTAG / test | 11 |
-| Power / reset / platform control | 17 |
-| LEDs / indicators | 6 |
-| Clock | 1 |
-| Strap / config | 2 |
+| [DDR2 memory (→ QU2)](#3-ddr2-memory-interface--qu2) | 48 |
+| [SPI / ROM flash (→ BMC_FW1)](#4-spi-firmware-flash--bmc_fw1) | 27 |
+| [LPC host bus (→ SP5100 + Super-I/O)](#5-lpc-host-bus--sp5100-su1--super-io-ou1) | 10 |
+| [PCI 33 MHz (VGA / iKVM, → SP5100 + slots)](#6-pci-33-mhz-bus-vga--ikvm--sp5100-su1--pci-slots) | 45 |
+| [USB (→ SP5100)](#9-usb-device-port--sp5100-su1) | 6 |
+| [Ethernet RMII / NC-SI (→ RTL8201N + 2× 82574L)](#7-ethernet--dual-channel-dedicated-phy--nc-si-sideband) | 18 |
+| [VGA / video (→ VGA connector)](#8-vga--video-output--vga1) | 14 |
+| [I²C / SMBus (8 buses)](#10-i²c--smbus-topology-traced-through-every-mux--expander) | 16 |
+| [Serial / SOL (UART)](#12-serial--serial-over-lan-sol) | 11 |
+| [JTAG / test](#13-jtag--test-leds-clock-straps) | 11 |
+| [Power / reset / platform control](#11-power--reset--platform-control-gpio) | 17 |
+| [LEDs / indicators](#13-jtag--test-leds-clock-straps) | 6 |
+| [Clock](#13-jtag--test-leds-clock-straps) | 1 |
+| [Strap / config](#13-jtag--test-leds-clock-straps) | 2 |
 | Other / GPIO / analog | 9 |
-| Power / decoupling | 48 |
-| Ground | 66 |
+| [Power / decoupling](#2-power-supply) | 48 |
+| [Ground](#2-power-supply) | 66 |
 | **Total** | **355** |
 
 ---
@@ -263,9 +263,23 @@ flowchart TB
     NIC2 --> LAN2["LAN2 RJ45"]
 ```
 
-Key balls: MDIO=A2, MDC=A3, MII TXD0/1=A4/B4, TXEN=C5, RXD0/1=C6/D6, RXER=C7,
-CRSDV=D7 (all → U5); RMII2 RXD0/1=A5/B5, CRSDV=B6, TXD0/1=C4/D4, TXEN=D5 (→ LU1
-+ LU2). Full detail:
+Key balls:
+
+| Signal | BMC ball | Channel | Endpoint |
+|---|---|---|---|
+| MDIO | A2 | MII management | `U5` |
+| MDC | A3 | MII management | `U5` |
+| MII TXD0 / TXD1 | A4 / B4 | MII (ch 1) | `U5` |
+| MII TXEN | C5 | MII (ch 1) | `U5` |
+| MII RXD0 / RXD1 | C6 / D6 | MII (ch 1) | `U5` |
+| MII RXER | C7 | MII (ch 1) | `U5` |
+| MII CRSDV | D7 | MII (ch 1) | `U5` |
+| RMII2 RXD0 / RXD1 | A5 / B5 | NC-SI (ch 2) | `LU1` + `LU2` |
+| RMII2 CRSDV | B6 | NC-SI (ch 2) | `LU1` + `LU2` |
+| RMII2 TXD0 / TXD1 | C4 / D4 | NC-SI (ch 2) | `LU1` + `LU2` |
+| RMII2 TXEN | D5 | NC-SI (ch 2) | `LU1` + `LU2` |
+
+Full detail:
 [pinmaps/QU1 → Ethernet RMII / NC-SI](pinmaps/QU1_pins.md#ethernet-rmii--nc-si-18).
 
 ---
@@ -361,24 +375,27 @@ device datasheets); where an address is set by strap pins, that is noted. The
 
 ### 10.3 How the muxes are controlled (the "steps" in detail)
 
-- **`QU9` — TI SN74CBTLV3125 quad FET bus switch.** Four independent FET
-  switches, each with its own active-low `OE#`. Here **all four `OE#` are tied to
-  `I2CMUX_ENABLE#`** (from inverter `U8`, pin 12). When `I2CMUX_ENABLE#` is low,
-  QU9 connects the BMC's `I2C2` to `I2C7` (switches 1&2, `1A↔1B`/`2A↔2B`) and
-  `I2C8↔I2C8_SW` (switches 3&4). Being a FET switch it is **transparent and
-  non-addressable** — no I²C transaction, it just makes/breaks the wire.
-- **`QU5` — 74HC4052 dual 4-channel analog mux/demux.** Its common pair
-  (`2Z`=`I2C7SDA` pin 3, `1Z`=`I2C7SCL` pin 13) is routed to one of four channel
-  pairs by two select inputs `S1` (pin 9) and `S0` (pin 10). Channel map on this
-  board: **`Y0`→I2C8, `Y1`→(unused), `Y2`→I2C10 (DIMM A–D), `Y3`→I2C11 (DIMM
-  E–H)**. 74HC4052 truth table: `S1:S0 = 00→Y0, 01→Y1, 10→Y2, 11→Y3`. So DIMM
-  A–D = `10`, DIMM E–H = `11`, aux panel = `00`.
-- **`U23` — 74LVC125 quad buffer (source-select).** The QU5 select lines
-  `S0`/`S1` (`I2CS0`/`I2CS1`) are driven through U23 from **either** the BMC
-  (`AST_I2CS0`=W4, `AST_I2CS1`=W3) **or** the SP5100 (`SB_I2CS0/1`), depending on
-  which buffer's `OE#` is enabled (`N51800495` for the BMC pair, `N51800497` for
-  the SP5100 pair). This arbitrates bus ownership: whichever host is enabled
-  chooses the DIMM channel.
+- **`QU9` — TI SN74CBTLV3125 quad FET bus switch.**
+  - Four independent FET switches, each with its own active-low `OE#`.
+  - Here **all four `OE#` are tied to `I2CMUX_ENABLE#`** (from inverter `U8`, pin 12).
+  - When `I2CMUX_ENABLE#` is low, QU9 connects the BMC's `I2C2` to `I2C7`
+    (switches 1&2, `1A↔1B`/`2A↔2B`) and `I2C8↔I2C8_SW` (switches 3&4).
+  - Being a FET switch it is **transparent and non-addressable** — no I²C
+    transaction, it just makes/breaks the wire.
+- **`QU5` — 74HC4052 dual 4-channel analog mux/demux.**
+  - Its common pair (`2Z`=`I2C7SDA` pin 3, `1Z`=`I2C7SCL` pin 13) is routed to
+    one of four channel pairs by two select inputs `S1` (pin 9) and `S0` (pin 10).
+  - Channel map on this board: **`Y0`→I2C8, `Y1`→(unused), `Y2`→I2C10 (DIMM
+    A–D), `Y3`→I2C11 (DIMM E–H)**.
+  - 74HC4052 truth table: `S1:S0 = 00→Y0, 01→Y1, 10→Y2, 11→Y3`.
+  - So DIMM A–D = `10`, DIMM E–H = `11`, aux panel = `00`.
+- **`U23` — 74LVC125 quad buffer (source-select).**
+  - The QU5 select lines `S0`/`S1` (`I2CS0`/`I2CS1`) are driven through U23 from
+    **either** the BMC (`AST_I2CS0`=W4, `AST_I2CS1`=W3) **or** the SP5100
+    (`SB_I2CS0/1`), depending on which buffer's `OE#` is enabled (`N51800495` for
+    the BMC pair, `N51800497` for the SP5100 pair).
+  - This arbitrates bus ownership: whichever host is enabled chooses the DIMM
+    channel.
 
 **Worked example — the BMC reads the SPD of DIMM slot C1 (DDR3):**
 
@@ -461,8 +478,16 @@ flowchart LR
     PRES["BMC_PRESENT#"] -. selects .-> MUX
 ```
 
-Key balls: `TXD1`=Y22, `RXD1`=AA22, `NRTS1`=V21, `NCTS1`=W22 (→ QU8). Full
-detail: [pinmaps/QU1 → Serial / SOL](pinmaps/QU1_pins.md#serial--sol-uart-11).
+Key balls:
+
+| Signal | BMC ball | Endpoint |
+|---|---|---|
+| `TXD1` | Y22 | `QU8` (mux) |
+| `RXD1` | AA22 | `QU8` |
+| `NRTS1` | V21 | `QU8` |
+| `NCTS1` | W22 | `QU8` |
+
+Full detail: [pinmaps/QU1 → Serial / SOL](pinmaps/QU1_pins.md#serial--sol-uart-11).
 
 ---
 

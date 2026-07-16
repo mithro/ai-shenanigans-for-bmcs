@@ -116,9 +116,18 @@ flowchart LR
     SB -->|"GPP_CLK0-3 (±)"| SLOTS["PCIe slot reference clocks"]
 ```
 
-Key balls: TX lane 3 = T22/T23 (`A_LINK_SB_RX_*3_C` → NU1 AD21/AC21); RX lanes 0–3
-= U21/U22, U19, R20/R21, R17/R18; link refclk = N24/N25 (from `CU1`). Full detail:
-[pinmaps/SU1 → PCI Express](pinmaps/SU1_pins.md#pci-express-34).
+Key balls:
+
+| Signal | SP5100 balls | Net | Endpoint |
+|---|---|---|---|
+| A-Link TX lane 3 | T22 / T23 | `A_LINK_SB_RX_*3_C` | `NU1` AD21 / AC21 |
+| A-Link RX lane 0 | U21 / U22 | `A_LINK_SB_TX_*0` | `NU1` |
+| A-Link RX lane 1 | U19 | `A_LINK_SB_TX_P1` | `NU1` |
+| A-Link RX lane 2 | R20 / R21 | `A_LINK_SB_TX_*2` | `NU1` |
+| A-Link RX lane 3 | R17 / R18 | `A_LINK_SB_TX_*3` | `NU1` |
+| Link ref clock | N24 / N25 | `C_CLKGEN_A_LINK_REFCLK_*` | `CU1` |
+
+Full detail: [pinmaps/SU1 → PCI Express](pinmaps/SU1_pins.md#pci-express-34).
 
 ---
 
