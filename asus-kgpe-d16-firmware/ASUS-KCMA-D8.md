@@ -1,7 +1,8 @@
 # ASUS KCMA-D8 — board reference (15h.org mirror)
 
-The **ASUS KCMA-D8** is the Socket-C32 sibling of the KGPE-D16: same AMD
-SR5670/SP5100 chipset generation, same Winbond W83667HG-A Super I/O, same
+The **ASUS KCMA-D8** is the Socket-C32 sibling of the
+[KGPE-D16](ASUS-KGPE-D16.md) (this directory's board): same AMD
+SR56x0/SP5100 chipset generation, same Winbond W83667HG-A Super I/O, same
 Nuvoton W83795G hardware monitor, and — most relevant to this repository —
 the **same Aspeed AST2050 BMC delivered on a removable ASMB4/ASMB5 module**.
 Raptor Engineering's AST2050 port (the source of truth for this directory,

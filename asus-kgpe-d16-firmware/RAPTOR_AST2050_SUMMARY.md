@@ -138,11 +138,12 @@ Enables GCC 6.x compilation.
 | AST1070 | - | - | - | ✓ |
 
 ### Target Boards
-- ASUS KGPE-D16 (server motherboard)
+- ASUS KGPE-D16 (server motherboard) — board reference: [ASUS-KGPE-D16.md](ASUS-KGPE-D16.md)
 - ASUS KCMA-D8 (server motherboard) — board reference: [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md)
-  (mirror of the 15h.org wiki page; its linked PDFs are committed in
-  [datasheets/](datasheets/), mapped in
-  [datasheets/15H-ORG-MIRROR.md](datasheets/15H-ORG-MIRROR.md))
+
+Both board references mirror the 15h.org wiki pages; every PDF those pages
+link is committed in [datasheets/](datasheets/), mapped in
+[datasheets/15H-ORG-MIRROR.md](datasheets/15H-ORG-MIRROR.md).
 
 ---
 

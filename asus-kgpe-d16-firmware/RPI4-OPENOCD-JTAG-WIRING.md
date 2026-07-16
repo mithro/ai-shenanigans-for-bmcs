@@ -354,11 +354,12 @@ Before applying power with everything wired:
   Olimex ARM-USB-TINY + OpenOCD, U-Boot bring-up, UART 115200):
   <https://www.raptorengineering.com/coreboot/kgpe-d16-bmc-port-status.php>
 - 15h.org — ASUS KGPE-D16 (AST2050 BMC, SR5690 NB, SP5100 SB, BMC_FW1 = ASMB
-  module slot): <https://15h.org/index.php/KGPE-D16>
-- 15h.org — ASUS KCMA-D8 (Socket-C32 sibling, same AST2050/ASMB module and
-  chipset family; page + all linked PDFs mirrored in-repo:
-  [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md),
+  module slot; page + all linked PDFs mirrored in-repo:
+  [ASUS-KGPE-D16.md](ASUS-KGPE-D16.md),
   [datasheets/15H-ORG-MIRROR.md](datasheets/15H-ORG-MIRROR.md)):
+  <https://15h.org/index.php/ASUS_KGPE-D16>
+- 15h.org — ASUS KCMA-D8 (Socket-C32 sibling, same AST2050/ASMB module and
+  chipset family; mirrored in-repo: [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md)):
   <https://15h.org/index.php/ASUS_KCMA-D8>
 - Raptor Engineering — `ast2050-flashrom` (AST2050 SPI flashing):
   <https://github.com/raptor-engineering/ast2050-flashrom>

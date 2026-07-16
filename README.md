@@ -39,12 +39,17 @@ Key files:
   Detailed analysis of Raptor's repositories (kernel, U-Boot, Yocto/OpenBMC).
 - [`RAPTOR_AST2050_SUMMARY.md`](asus-kgpe-d16-firmware/RAPTOR_AST2050_SUMMARY.md) --
   Quick reference summary.
+- [`ASUS-KGPE-D16.md`](asus-kgpe-d16-firmware/ASUS-KGPE-D16.md) --
+  Board reference for the KGPE-D16 itself, mirrored from the 15h.org wiki:
+  full specs, the actively developed coreboot-15h port (releases, VGA/fan
+  jumpers, flashing), board revisions, and per-component documentation.
+  Every PDF that page links (incl. the ASUS E8847 board manual) is committed
+  in [`datasheets/`](asus-kgpe-d16-firmware/datasheets/) (see
+  [`15H-ORG-MIRROR.md`](asus-kgpe-d16-firmware/datasheets/15H-ORG-MIRROR.md)).
 - [`ASUS-KCMA-D8.md`](asus-kgpe-d16-firmware/ASUS-KCMA-D8.md) --
   Board reference for the ASUS KCMA-D8, the KGPE-D16's Socket-C32 sibling
-  (same chipset and the same AST2050 BMC on an ASMB4/ASMB5 module), mirrored
-  from the 15h.org wiki; every PDF that page links is committed in
-  [`datasheets/`](asus-kgpe-d16-firmware/datasheets/) (see
-  [`15H-ORG-MIRROR.md`](asus-kgpe-d16-firmware/datasheets/15H-ORG-MIRROR.md)).
+  (same chipset and the same AST2050 BMC on an ASMB4/ASMB5 module), likewise
+  mirrored from the 15h.org wiki with its linked PDFs committed.
 - [`RAPTOR-UBOOT-ANALYSIS.md`](asus-kgpe-d16-firmware/RAPTOR-UBOOT-ANALYSIS.md) --
   Analysis of Raptor's U-Boot port and board bring-up.
 - [`DDR2-INIT-REVERSE-ENGINEERING.md`](asus-kgpe-d16-firmware/DDR2-INIT-REVERSE-ENGINEERING.md) --

@@ -339,12 +339,13 @@ support both single and multi-socket configurations natively.
   BKDG for Opteron 6300 series
 
 ### Community Resources
-- [15h.org KGPE-D16 Wiki](https://15h.org/index.php/KGPE-D16) --
-  Active coreboot development for the KGPE-D16
+- [15h.org KGPE-D16 Wiki](https://15h.org/index.php/ASUS_KGPE-D16) --
+  Active coreboot development for the KGPE-D16; mirrored in-repo at
+  [ASUS-KGPE-D16.md](ASUS-KGPE-D16.md) with all linked PDFs committed in
+  [datasheets/](datasheets/)
 - [15h.org KCMA-D8 Wiki](https://15h.org/index.php/ASUS_KCMA-D8) --
   The KGPE-D16's Socket-C32 sibling board (same chipset / BMC module);
-  mirrored in-repo at [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md) with all linked
-  PDFs committed in [datasheets/](datasheets/)
+  mirrored in-repo at [ASUS-KCMA-D8.md](ASUS-KCMA-D8.md)
 - [Vikings Wiki: KGPE-D16](https://wiki.vikings.net/hardware:kgpe-d16) --
   Hardware documentation including SR5690 firmware notes
 - [Dasharo KGPE-D16 Setup](https://docs.dasharo.com/variants/asus_kgpe_d16/setup/) --

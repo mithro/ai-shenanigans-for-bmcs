@@ -65,7 +65,7 @@ The choice between OpenBMC and u-bmc may differ per target:
 
 | Generation | CPU | Target Boards | Upstream Linux | Notes |
 |---|---|---|---|---|
-| **AST2050** | ARM (older core) | Dell C410x, ASUS KGPE-D16, ASUS KCMA-D8, ASUS P8B-M | **No** — needs porting | Most constrained; first OpenBMC port target. The KCMA-D8 is the KGPE-D16's Socket-C32 sibling (same ASMB4/ASMB5 BMC module) — see `asus-kgpe-d16-firmware/ASUS-KCMA-D8.md` |
+| **AST2050** | ARM (older core) | Dell C410x, ASUS KGPE-D16, ASUS KCMA-D8, ASUS P8B-M | **No** — needs porting | Most constrained; first OpenBMC port target. Board references mirrored from the 15h.org wiki: `asus-kgpe-d16-firmware/ASUS-KGPE-D16.md` and (Socket-C32 sibling, same ASMB4/ASMB5 BMC module) `asus-kgpe-d16-firmware/ASUS-KCMA-D8.md` |
 | **AST2400** | ARM | Supermicro X10, most X11 boards | **Yes** | Primary Supermicro target |
 | **AST2500** | 2× ARM Cortex A7 + Cortex M3 | Some X11 boards (e.g., X11SCH-F) | **Yes** | DDR4 1600Mbps, Quad GbE, 16-ch ADC |
 | **AST2600** | 2× ARM Cortex A7, 1.2 GHz | Supermicro X12 series | **Yes** | Future target |
