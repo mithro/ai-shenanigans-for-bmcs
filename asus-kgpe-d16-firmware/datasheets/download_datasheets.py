@@ -12,13 +12,14 @@ AST2050 SoC and the same SPI-NOR flash family), so they reuse the URLs proven in
 additions are the host-side AMD chipset (SR5690 / SP5100) and the board's
 hardware monitor.
 
-The final section mirrors every remaining PDF linked from the 15h.org
-"ASUS KCMA-D8" wiki page (the KGPE-D16's Socket-C32 sibling — same chipset,
-Super I/O, hwmon, and the same AST2050 BMC on an ASMB4/ASMB5 module); see
-15H-ORG-MIRROR.md for the full link->file provenance map. Four of that page's
-links are byte-identical to files fetched from vendor sites by earlier
-sections, so those 15h.org URLs appear as *fallback mirrors* on the existing
-entries instead of new files.
+The final sections mirror every remaining PDF linked from the 15h.org
+"ASUS KGPE-D16" wiki page (this directory's board) and its "ASUS KCMA-D8"
+sibling-board page (Socket-C32, same chipset, Super I/O, hwmon, and the same
+AST2050 BMC on an ASMB4/ASMB5 module); see 15H-ORG-MIRROR.md for the full
+link->file provenance maps. Four links shared by both pages are
+byte-identical to files fetched from vendor sites by earlier sections, so
+those 15h.org URLs appear as *fallback mirrors* on the existing entries
+instead of new files.
 
 Run with `uv` (no third-party deps, stdlib only):
 
@@ -186,16 +187,46 @@ DATASHEETS = [
     ),
 
     # ============================================================
-    # 15h.org "ASUS KCMA-D8" page mirror (retrieved 2026-07-16).
-    # Every PDF linked from https://15h.org/index.php/ASUS_KCMA-D8
-    # (oldid=2941) that is not already covered above. Full link->file
-    # provenance map: 15H-ORG-MIRROR.md. The KCMA-D8 is the KGPE-D16's
-    # Socket-C32 sibling (same SR5670/SP5100 chipset, W83667HG-A SIO,
-    # W83795G hwmon, and the same AST2050 BMC on an ASMB4/ASMB5
-    # module), so these docs apply to this board almost verbatim.
+    # 15h.org "ASUS KGPE-D16" page mirror (retrieved 2026-07-16).
+    # PDFs linked from https://15h.org/index.php/ASUS_KGPE-D16
+    # (oldid=2924) that are not already covered above. Full link->file
+    # provenance map: 15H-ORG-MIRROR.md.
     # ============================================================
 
-    # --- Host CPUs: AMD Opteron 4100 series (fam10h / K10) ---
+    # --- Board documentation ---
+    # Byte-identical (SHA-256) to the ASUS "E8847" KGPE-D16 user manual
+    # circulating from asus.com mirrors.
+    (
+        "KGPE-D16_Manual.pdf",
+        ["https://15h.org/images/4/48/KGPE-D16_Manual.pdf"],
+        "ASUS KGPE-D16 User Manual (ASUS pub E8847, 158pp)",
+    ),
+
+    # --- AMD SR5690 northbridge (the KGPE-D16's NB) ---
+    (
+        "AMD_SR5690_Databook.pdf",
+        ["https://15h.org/images/4/4c/AMD_SR5690_Databook.pdf"],
+        "AMD SR5690 Databook (pub 43869, rev 2.20)",
+    ),
+
+    # --- CPU microcode research papers (linked from the page's Opteron
+    #     'Reverse Engineering and Analysis' lists) ---
+    (
+        "Sec17_Koppe_Reverse_Engineering_x86_Processor_Microcode.pdf",
+        # Wiki basename: Sec17-koppe.pdf
+        ["https://15h.org/images/a/a3/Sec17-koppe.pdf"],
+        "Koppe et al., 'Reverse Engineering x86 Processor Microcode', "
+        "USENIX Security 2017 (fam10h/K8 microcode RE)",
+    ),
+    (
+        "2014_Chen_Ahn_Security_Analysis_of_x86_Processor_Microcode.pdf",
+        # Wiki basename: 2014_paper_microcode.pdf
+        ["https://15h.org/images/a/ab/2014_paper_microcode.pdf"],
+        "Chen & Ahn, 'Security Analysis of x86 Processor Microcode', 2014",
+    ),
+
+    # --- Host CPUs: fam10h / K10 (Opteron 6100 on this board;
+    #     4100 on the KCMA-D8) — linked from both board pages ---
     (
         "44065_Arch2008.pdf",
         ["https://15h.org/images/f/f7/44065_Arch2008.pdf"],
@@ -224,7 +255,8 @@ DATASHEETS = [
         "Data Sheet (pub 43374) - Opteron 4100 series",
     ),
 
-    # --- Host CPUs: AMD Opteron 4200/4300 series (fam15h) ---
+    # --- Host CPUs: fam15h (Opteron 6200/6300 on this board;
+    #     4200/4300 on the KCMA-D8) — linked from both board pages ---
     (
         "42301_15h_Mod_00h-0Fh_BKDG.pdf",
         ["https://15h.org/images/b/be/42301_15h_Mod_00h-0Fh_BKDG.pdf"],
@@ -243,7 +275,7 @@ DATASHEETS = [
     ),
 
     # --- AMD SR5690/5670/5650 northbridge family (KGPE-D16: SR5690;
-    #     KCMA-D8: SR5670) ---
+    #     KCMA-D8: SR5670) — family docs linked from both board pages ---
     (
         "AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf",
         ["https://15h.org/images/c/c3/AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf"],
@@ -260,11 +292,6 @@ DATASHEETS = [
         ["https://15h.org/images/b/b0/AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf"],
         "AMD SR5690/5670/5650 Register Programming Requirements "
         "(pub 43872, rev 3.05)",
-    ),
-    (
-        "AMD_SR5670_Databook.pdf",
-        ["https://15h.org/images/2/23/AMD_SR5670_Databook.pdf"],
-        "AMD SR5670 Databook (pub 44549, rev 2.20)",
     ),
     (
         "SR56x0_Product_Errata.pdf",
@@ -312,6 +339,19 @@ DATASHEETS = [
         "Nuvoton W83795G/ADG Datasheet V1.43 (15h.org copy) - same document "
         "as W83795G_W83795ADG_Datasheet.pdf but a different PDF build, kept "
         "to complete the 15h.org mirror",
+    ),
+
+    # ============================================================
+    # 15h.org "ASUS KCMA-D8" sibling-board page (oldid=2941): the one
+    # PDF linked ONLY from that page. Everything else the KCMA-D8 page
+    # links is covered above (shared with the KGPE-D16 page) or is a
+    # byte-identical fallback URL on a vendor-fetched entry.
+    # ============================================================
+    (
+        "AMD_SR5670_Databook.pdf",
+        ["https://15h.org/images/2/23/AMD_SR5670_Databook.pdf"],
+        "AMD SR5670 Databook (pub 44549, rev 2.20) - the KCMA-D8's "
+        "northbridge; same RD890 family as the KGPE-D16's SR5690",
     ),
 ]
 
