@@ -513,7 +513,30 @@ inference):
 
 ---
 
-## 15. Complete per-pin table
+## 15. Connectors & headers wired to the BMC
+
+Full physical pinout diagrams and signal tables for every connector, header,
+socket and jumper that touches the BMC — VGA output, the BMC serial-console and
+JTAG headers, the SPI firmware socket, the system and auxiliary front-panel
+headers, the PSU SMBus, and the VGA-reset / IPMI / BIOS-recovery jumpers — are in
+a dedicated document:
+
+**➡ [BMC-CONNECTORS.md](BMC-CONNECTORS.md)**
+
+| Connector | Type | BMC involvement |
+|---|---|---|
+| `VGA1` | VGA HD-15 | Integrated video (RGB DAC, DDC, sync) |
+| `AST_UART1` | 1×4 header | BMC serial console (UART2) |
+| `AST_JTAG1` | 2×10 header | BMC ARM926 JTAG debug |
+| `BMC_FW1` | 2×7 socket | SPI firmware flash + feature straps |
+| `PANEL1` | 2×10 header | Power/reset buttons, message LED, NMI |
+| `AUX_PANEL1` | 2×10 header | BMC locator LED/button, I²C8, LAN LEDs |
+| `PSUSMB1` | 1×5 header | PSU SMBus on BMC I²C1 |
+| `VGA_SW1` · `IPMI_SEL1` · `RECOVERY1` | 1×3 jumpers | Reset-source / IPMI / recovery straps |
+
+---
+
+## 16. Complete per-pin table
 
 The exhaustive table of **all 355 balls** — with a Connected-components summary
 per section — is in **[pinmaps/QU1_pins.md](pinmaps/QU1_pins.md)**. Regenerate
