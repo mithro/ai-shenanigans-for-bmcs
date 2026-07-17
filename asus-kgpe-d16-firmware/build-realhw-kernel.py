@@ -14,9 +14,12 @@ Output: tmp/uImage-kgpe-d16-realhw + the DTB, ready to TFTP-boot over P2A.
 import os, subprocess, sys, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                                   # culvert-g3-port worktree
-WT = os.path.dirname(ROOT)                                     # .worktrees/
-QF = os.path.join(WT, "d16-qemu", "asus-kgpe-d16-firmware", "qemu-firmware")
+ROOT = os.path.dirname(HERE)                                   # this worktree's root
+# Build from THIS worktree's kernel tree. (This script used to reach across
+# into the .worktrees/d16-qemu checkout — which silently builds WITHOUT any
+# kernel/DTS/config changes made in the current worktree. That produced a
+# stale-artifact trap on 2026-07-18; keep everything worktree-relative.)
+QF = os.path.join(HERE, "qemu-firmware")
 SRC = os.path.join(QF, "kernel", "linux")
 FRAG_QEMU = os.path.join(QF, "kernel", "kgpe-d16.config")
 FRAG_HW = os.path.join(HERE, "kernel", "kgpe-d16-realhw.config")
@@ -43,6 +46,10 @@ def main():
         if opt not in cfg:
             sys.exit(f"[!] {opt} did not survive olddefconfig -- check deps")
     print("[ok] NFS-root config present", flush=True)
+    # Refresh the board DTS in the kernel tree (same step as build-kernel.sh),
+    # so DTS edits in this worktree always reach the dtb we ship.
+    shutil.copy(os.path.join(QF, "dts", "aspeed-bmc-asus-kgpe-d16.dts"),
+                os.path.join(SRC, "arch/arm/boot/dts/aspeed/"))
     run(["make", f"-j{nproc}", "zImage", "dtbs"])
     run(["make", f"-j{nproc}", "LOADADDR=0x40008000", "uImage"])
     os.makedirs(OUT, exist_ok=True)
