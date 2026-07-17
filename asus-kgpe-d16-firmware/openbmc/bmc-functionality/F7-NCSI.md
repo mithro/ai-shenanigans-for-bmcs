@@ -5,7 +5,12 @@
 **NC-SI** (Network Controller Sideband Interface): the BMC shares the *host's* NIC
 over a sideband channel instead of having its own PHY.
 
-**Bottom line (faithfulness first):**
+> ⚠️ **2026-07-18: the bottom line below is SUPERSEDED IN PART.** It is correct
+> for **MAC channel 1** (the dedicated-PHY management port) but its board-wide
+> "NC-SI is not wired" claim is **wrong for MAC channel 2** — see the
+> **2026-07-18 correction** section immediately below it.
+
+**Bottom line (faithfulness first — MAC1-scoped, see correction):**
 
 > **The KGPE-D16 BMC does NOT use NC-SI.** It has its **own dedicated Ethernet PHY
 > (RTL8201CP) on an RMII link**, with its own MAC address and its own IP
@@ -24,7 +29,51 @@ demonstration of what the board *actually* does.
 
 ---
 
-## 1. Ground truth: dedicated RTL8201CP PHY, not NC-SI
+## ⚠️ 2026-07-18 CORRECTION — the "not wired" verdict was MAC1-scoped; MAC2's NC-SI sideband IS wired (REOPENED as D07)
+
+A netlist-level schematic trace
+(`../../schematic-wiring/AST2050-BMC-WIRING.md` §7) shows this document's
+board-wide conclusion **"NC-SI sideband is not wired on this board" is WRONG for
+MAC channel 2**. Every piece of §1's evidence (DTS `&mac0`, Raptor
+`CONFIG_MAC1_PHY_SETTING`, the Redfish `"Physical"` interface) is **MAC1/mac0**
+evidence; nothing in it examined the second channel's balls. The schematic does:
+
+* **RMII2 balls A5/B5 (RXD0/RXD1), B6 (CRSDV), C4/D4 (TXD0/TXD1), D5 (TXEN)
+  bus to BOTH Intel 82574L host NICs (`LU1` = LAN1, `LU2` = LAN2)** as a
+  **multi-drop sideband** — exactly the classic NC-SI topology this document
+  said the board did not have. (`RMII2RXER` is unconnected.)
+* The **50 MHz RMII reference clock is sourced externally by the board clock
+  generator `CU2`** (nothing for the BMC — or a QEMU model — to generate).
+* **LU1/LU2 are powered from `+3V3_AUX`** (netlist trace:
+  `../../schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md` §5), so the sideband is
+  electrically alive — and testable — **with the host powered off**.
+
+**Status: the "architecturally ABSENT / not wired on this board" verdict is
+REOPENED as task D07** (`../../device-driver-program/TASKLIST.md` § D07):
+QEMU MAC2 + NC-SI-responder 82574L model, Linux `net/ncsi` bring-up (DTS mac2
+node currently `status="disabled"`, no `use-ncsi`; `CONFIG_NET_NCSI` not built —
+recipe in §6 below), then silicon validation. **Implementation has not started.**
+`SILICON-STATUS.md` #9 is updated to match.
+
+What in this document **remains true** (the correction does not touch it):
+
+* **MAC1 is a dedicated-PHY management port** (RTL8201-family PHY at `U5`) —
+  all of §1 stands, *scoped to MAC1*. (Note the schematic identifies `U5` as an
+  **RTL8201N-GR on MII wiring**, vs this doc's RTL8201CP/RMII — a PHY-variant /
+  interface-mode discrepancy tracked under task D06, not resolved here.)
+* **The G3 MAC has no NC-SI hardware block** — NC-SI is a software protocol over
+  an ordinary RMII link (§2–§3). The schematic finding changes *which board
+  wiring exists* for that software to run over, not the SoC facts.
+* **SCU40[15:14] (and [13:12] for MAC2) are software scratch hints, not hardware
+  straps** (§2). Raptor sets `CONFIG_MAC2_PHY_SETTING 0` too — the vendor
+  firmware did not *use* the ch.2 sideband, but non-use is not non-wiring.
+
+The historical analysis below is kept intact, annotated
+`⚠️ [MAC1-scoped — see 2026-07-18 correction]` where superseded.
+
+---
+
+## 1. Ground truth: dedicated RTL8201CP PHY, not NC-SI ⚠️ [MAC1-scoped — see 2026-07-18 correction]
 
 Three independent primary sources agree. NC-SI is **not** wired on the KGPE-D16.
 
@@ -162,7 +211,7 @@ KGPE-D16 does not.
 
 ---
 
-## 4. Honest path taken
+## 4. Honest path taken ⚠️ [MAC1-scoped — the "board not wired" premise is corrected 2026-07-18; QEMU-responder/faithfulness points still valid for MAC1]
 
 Per the project rule (*QEMU must model the real AST2050/KGPE-D16 behaviour; the
 hardware is the oracle; never fake a feature the hardware doesn't have*), the correct
@@ -255,11 +304,19 @@ the datasheet notes, and the QEMU MAC-model source — no build required.)
 
 ## 6. If the KGPE-D16 *did* wire NC-SI — what it would take (for completeness)
 
-Recorded so the difference is unambiguous. **We do not do any of this** for the D16,
-because the board is not wired for it:
+> ⚠️ **2026-07-18: the D16 DOES wire NC-SI — on MAC channel 2** (schematic §7; see
+> the correction section). This "what it would take" list is therefore no longer
+> hypothetical: it is the working recipe for task D07, with item 1 already
+> satisfied by the board (RMII2 → LU1+LU2) and items 2–5 the open work (against
+> **mac2**, not mac0 — MAC1 keeps its dedicated PHY).
+
+Recorded so the difference is unambiguous. ~~**We do not do any of this** for the D16,
+because the board is not wired for it~~ ⚠️ *[premise corrected 2026-07-18 — MAC2 is wired]*:
 
 1. **Board:** route the MAC's RMII link to a host NIC's **NC-SI channel** (Intel/Broadcom)
-   instead of the RTL8201CP. (Physical wiring the KGPE-D16 does not have.)
+   instead of the RTL8201CP. ~~(Physical wiring the KGPE-D16 does not have.)~~
+   ⚠️ *[corrected 2026-07-18: the KGPE-D16 HAS this wiring on MAC2 — RMII2 balls
+   A5/B5/B6/C4/D4/D5 multi-drop to both Intel 82574Ls, schematic §7]*
 2. **U-Boot / straps:** set the MAC1 PHY-mode scratch `SCU40[15:14]` to `01`/`10`
    (NC-SI) instead of `00` (`CONFIG_MAC1_PHY_SETTING = 1|2`).
 3. **DTS:** replace `phy-mode="rmii"` + PHY handle with `use-ncsi;` on the `&mac0` node
@@ -268,8 +325,9 @@ because the board is not wired for it:
 5. **QEMU (to demo):** add an **NC-SI responder** peer to `hw/net/ftgmac100.c` (our
    submodule has none) so the guest's NC-SI stack can claim a channel and learn a MAC.
 
-Items 1–2 are the disqualifier: they describe a *different board*. NC-SI is **SoC-capable,
-not board-wired on KGPE-D16.**
+~~Items 1–2 are the disqualifier: they describe a *different board*. NC-SI is **SoC-capable,
+not board-wired on KGPE-D16.**~~ ⚠️ *[corrected 2026-07-18: item 1 is board-satisfied on
+MAC2; NC-SI on the KGPE-D16 is SoC-capable AND board-wired — implementation is task D07]*
 
 ---
 
@@ -282,17 +340,21 @@ not board-wired on KGPE-D16.**
   `RedfishVersion 1.17.0` — over the board's **dedicated RTL8201CP NIC** at
   `192.168.66.2`, on the same physical Ethernet as the host. This *is* the board's
   "share the host's network" story, and it is real.
-* **NC-SI on real HW:** **not applicable / not present** — the board has no NC-SI
-  sideband to characterise. This is a finding, not a gap. No state-mutating hardware
+* **NC-SI on real HW:** ~~**not applicable / not present** — the board has no NC-SI
+  sideband to characterise. This is a finding, not a gap.~~ ⚠️ *[corrected 2026-07-18:
+  the MAC2 RMII2 sideband to LU1/LU2 exists and is aux-powered — silicon
+  characterisation is an open D07 work item (needs 82574L NC-SI enable/EEPROM
+  config; the datasheet is not in-repo)]*. No state-mutating hardware
   action was taken; the consolidated real-HW boot is owned by F-HWPASS.
 
 ---
 
-## 8. Summary
+## 8. Summary ⚠️ [rows 1 and "wiring" answers are MAC1-scoped — see 2026-07-18 correction]
 
 | Question | Answer | Evidence |
 |---|---|---|
-| Does the KGPE-D16 BMC use NC-SI? | **No.** | DTS `phy-mode=rmii` (§1.1); Raptor `CONFIG_MAC1_PHY_SETTING=0` (§1.2) |
+| Does the KGPE-D16 BMC use NC-SI? | **No** (today's firmware, MAC1). ⚠️ *But the board WIRES it on MAC2 — reopened as D07 (2026-07-18)* | DTS `phy-mode=rmii` (§1.1); Raptor `CONFIG_MAC1_PHY_SETTING=0` (§1.2); schematic §7 (correction) |
+| Is the NC-SI sideband wired on this board? | **Yes — MAC2/RMII2 multi-drop to both 82574Ls** (2026-07-18 correction) | `schematic-wiring/AST2050-BMC-WIRING.md` §7 |
 | How does the BMC reach the network? | **Its own RTL8201CP PHY (RMII), own MAC/IP, same L2 as host.** | §1.4, §5, §7 |
 | Does the AST2050 MAC have NC-SI hardware? | **No NC-SI register block.** SCU70[8:6] is MII/RMII-only. | Datasheet §1.3, §2 |
 | Is NC-SI possible on the SoC at all? | **Yes — software over RMII**, if a board wires it (e.g. Dell C410X). | §3 |
@@ -300,5 +362,8 @@ not board-wired on KGPE-D16.**
 | What was demonstrated in QEMU? | **The real path:** dedicated-PHY eth0 up + DHCP, **zero NC-SI**. | §5 |
 
 **"Piggybacking on the host's network interface" on the KGPE-D16 = a dedicated BMC NIC
-sharing the host's physical Ethernet — which works. True NC-SI sideband is a SoC
-software capability that this board does not wire.**
+sharing the host's physical Ethernet — which works. ~~True NC-SI sideband is a SoC
+software capability that this board does not wire.~~** ⚠️ *[corrected 2026-07-18: the
+board DOES wire the NC-SI sideband, on MAC2/RMII2 to both 82574Ls (schematic §7). True
+NC-SI is a SoC software capability + board wiring that exist here but are not yet
+implemented — task D07.]*
