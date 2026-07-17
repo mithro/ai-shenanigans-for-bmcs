@@ -1,5 +1,43 @@
 # Modern Linux (6.6.70) on the real KGPE-D16 AST2050 — status
 
+> ## ✅ 2026-07-18 — the eth0/RMII blocker below is RESOLVED (this doc is historical)
+>
+> The "🔶 BLOCKER — eth0 (ftgmac100, RMII) doesn't pass traffic" section below,
+> and its candidate-fix analysis, are **superseded**. The blocker was walked all
+> the way down and fixed; the modern kernel's eth0 passes traffic on the real
+> AST2050 (NFS-root userspace + OpenBMC Redfish over that NIC). The actual root
+> causes — neither of which was the RMII TX path this doc suspected — and fixes:
+>
+> 1. **Dead timer clockevent / wrong VIC driver** (the real cause of the
+>    MAC-reset loop and the `ip_auto_config` hang): mainline `irq-aspeed-vic.c`
+>    drives the AST2400+ register map; the G3 needs a dedicated
+>    `aspeed,ast2050-vic` driver. Fixed by
+>    `kernel/patches/0003-irqchip-add-aspeed-ast2050-vic-g3.patch`
+>    (hardware-verified 2026-07-09: ~1 kHz clockevent, eth0 link on real
+>    interrupts, IP-config complete). Full narrative:
+>    `TIMER-CLOCKEVENT-ROOT-CAUSE.md`. The NIC-side MAC-reset "hangs" were a
+>    symptom; the timer fix let the stock ftgmac100 reset path work again.
+> 2. **RX=0 from FAST_MODE lost on the G3 MAC SW_RST** (the residual after the
+>    VIC fix): the G3 SW_RST clears MACCR (unlike AST2400+), leaving 10M timing
+>    on a 100M link → rx=0. Fixed by
+>    `qemu-firmware/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch`
+>    (re-derive FAST_MODE/GIGA_MODE from `cur_speed` in `ftgmac100_start_hw()`;
+>    HW-verified — see `kernel/patches/README.md`).
+> 3. This doc's "leading candidate" (MACCLK `clk_set_rate`) did also land as
+>    `kernel/patches/0002-ftgmac100-ast2050-macclk.patch`, and the VGA
+>    framebuffer `reserved-memory` DTS fix cured the separate RX-DMA
+>    memory-corruption crash (`TIMER-CLOCKEVENT-ROOT-CAUSE.md`).
+>
+> **Silicon end-state evidence:** OpenBMC boots NFS-root on the real AST2050 and
+> answers Redfish v1.17.0 over this eth0; sensors/IPMI/video all ride it — see
+> `openbmc/bmc-functionality/SILICON-STATUS.md` and
+> `openbmc/bmc-functionality/evidence/real-hw-consolidated/`. The current
+> patch-series source of truth is `kernel/patches/README.md`. (The
+> `clk_ignore_unused` workaround noted below was also later replaced by proper
+> G3 clock-gate fixes — see `openbmc/bmc-functionality/G3-CLK-PROGRESS.md`.)
+>
+> Sections below are kept **unedited as the historical investigation record**.
+
 Part of the full-OpenBMC bring-up (`docs/plans/2026-07-08-openbmc-ast2050-full-buildout.md`).
 Everything here is over **P2A + TFTP**, no spispy/JTAG.
 
@@ -33,7 +71,7 @@ is not in mainline; earliest is the AST2400/G4). Evidence (full dmesg captured):
   `build-realhw-kernel.py`): NFS root (`IP_PNP`+`ROOT_NFS`+`NFS_FS`+
   `NETWORK_FILESYSTEMS`), `netconsole` off.
 
-## 🔶 BLOCKER — eth0 (ftgmac100, RMII) doesn't pass traffic on the modern kernel
+## 🔶 BLOCKER — eth0 (ftgmac100, RMII) doesn't pass traffic on the modern kernel *(HISTORICAL — RESOLVED, see the 2026-07-18 banner at the top)*
 
 NFS root (and all networking: OpenBMC/Redfish) is blocked on this. **U-Boot's driver
 works** (it TFTP-loads the kernel over the same NIC), but the modern kernel's
@@ -116,7 +154,7 @@ Once eth0 passes traffic, the NFS root (server + export + busybox rootfs +
 `inittab`/`rcS` are all staged on the Pi) mounts and Phase A2 completes, unblocking
 A3 (driver audit) and Phase C (OpenBMC).
 
-## ⚠️ Boot reliability (found while debugging the NIC — affects everything)
+## ⚠️ Boot reliability (found while debugging the NIC — affects everything) *(HISTORICAL — from the same investigation period; P2A reset-boot flakiness remains a known rig caveat, see SILICON-STATUS.md)*
 
 The modern-kernel boot on real HW is **flaky**: the *same* `uImage-kgpe-d16-realhw`
 booted with a full dmesg on some attempts and **no console output at all** on others
@@ -143,7 +181,7 @@ the larger real-HW kernel, not memory. **Next:** (a) make `linux-boot.py` retry 
 confirmed-clean boot, resume the eth0 debug (a clean boot with `ftgmac100.dyndbg=+p`
 should finally show whether eth0 links + the reset reason, or an `AHB bus error`).
 
-## Boot recipe (today)
+## Boot recipe *(historical — the "blocked on eth0" note no longer applies; current builds use the full patch series per `kernel/patches/README.md`)*
 ```sh
 # modern kernel, NFS root (blocked on eth0):
 uv run asus-kgpe-d16-firmware/linux-boot.py \
