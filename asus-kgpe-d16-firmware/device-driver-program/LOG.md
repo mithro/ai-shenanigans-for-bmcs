@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-18 — silicon rerun with patch 0008: mux ALIVE; SPD not yet ACKing
+
+- Fixed kernel netbooted on silicon: **`i2c-mux-gpio i2cmux: 3 port mux`
+  registered, adapters i2c-14/15/16 present, pin-45 error GONE** — patch
+  0008 works on the real chip.
+- SPD probe loop: at24 on 15-0051 not binding yet. Live facts:
+  - `HOST_POWER_BEFORE=1` — GPIOH2 (line power) already high; plug ~49 W.
+    NOTE: H2 = STA_LINE_POWER; **SYS_PWRGD is a different net (ball D9)**
+    — QU9's gate follows SYS_PWRGD, so H2=1 does not prove the bridge is
+    closed. Register dump queued behind the script's wait loop.
+  - G3 SCU74 = 0x4204D000 decoded from datasheet §18: bit23 (VP[17:12]
+    pad enable) = **0** → W3/W4 pads are NOT in video mode (good);
+    bit25 PHYLINK set (the known A4 alt-func), bit18 DDC, bit15 VGA,
+    bit14 I2C#7, bit12 I2C#5 enabled.
+  - Hypotheses ranked: (1) SYS_PWRGD low → QU9 open (host half-on state);
+    (2) host mid-POST → SP5100 owns selects → misroute; (3) something
+    about GPIO drive on F4/F5 not reaching the pins. Discriminators queued:
+    GPIO A-D data bit14 (B6 = SYS_PWRGD net), E-H data/dir F4/F5 state.
+
 ## 2026-07-18 — SILICON SESSION: boot OK; pinctrl blocker root-caused QEMU-first
 
 - **Silicon boot chain worked end-to-end**: JTAG 3-step (reset-halt → DDR2
