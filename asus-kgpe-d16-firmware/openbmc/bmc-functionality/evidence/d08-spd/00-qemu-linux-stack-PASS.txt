@@ -1,0 +1,249 @@
+boot: asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -monitor none -serial stdio -nic user,model=ftgmac100,hostfwd=tcp::2224-:22 -kernel asus-kgpe-d16-firmware/qemu-firmware/kernel/out/zImage-kgpe-d16 -initrd asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/initramfs.cpio.gz -dtb asus-kgpe-d16-firmware/qemu-firmware/kernel/out/aspeed-bmc-asus-kgpe-d16.dtb -append console=ttyS4,115200n8 earlyprintk
+qemu-system-arm: warning: nic ftgmac100.1 has no peer
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #11 Sat Jul 18 02:27:54 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Reserved memory: created DMA memory pool at 0x43800000, size 8 MiB
+[    0.000000] OF: reserved mem: initialized node region@43800000, compatible id shared-dma-pool
+[    0.000000] OF: reserved mem: 0x43800000..0x43ffffff (8192 KiB) nomap non-reusable region@43800000
+[    0.000000] cma: Reserved 16 MiB at 0x47000000 on node -1
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000]   node   0: [mem 0x0000000043800000-0x0000000043ffffff]
+[    0.000000]   node   0: [mem 0x0000000044000000-0x0000000047ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk
+[    0.000000] Unknown kernel command line parameters "earlyprintk", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 32512
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 88604K/131072K available (8192K kernel code, 985K rwdata, 1996K rodata, 1024K init, 188K bss, 26084K reserved, 16384K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 31243 entries in 62 pages
+[    0.000000] ftrace: allocated 62 pages with 5 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] aspeed-g3-vic: SENSE=0x903897fe EVENT=0x983f97fe DUAL=0x7c00000 edge_sources=0x6fc76801
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 79635851949 ns
+[    0.000271] sched_clock: 32 bits at 24MHz, resolution 41ns, wraps every 89478484971ns
+[    0.002116] Switching to timer-based delay loop, resolution 41ns
+[    0.006057] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=240000)
+[    0.006281] CPU: Testing write buffer coherency: ok
+[    0.007571] pid_max: default: 32768 minimum: 301
+[    0.021432] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.021506] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.057548] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.058073] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.059108] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.062062] ASPEED Unknown rev A0 (00000202)
+[    0.069943] devtmpfs: initialized
+[    0.094135] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.094258] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.096352] pinctrl core: initialized pinctrl subsystem
+[    0.107344] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.115726] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.191958] usbcore: registered new interface driver usbfs
+[    0.192325] usbcore: registered new interface driver hub
+[    0.192565] usbcore: registered new device driver usb
+[    0.193105] mc: Linux media interface: v0.10
+[    0.193560] videodev: Linux video capture interface: v2.00
+[    0.193743] pps_core: LinuxPPS API ver. 1 registered
+[    0.193769] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.193877] PTP clock support registered
+[    0.193978] EDAC MC: Ver: 3.0.0
+[    0.251750] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.303141] NET: Registered PF_INET protocol family
+[    0.304499] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.308376] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.308474] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.308551] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.308665] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.308796] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.309949] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.310164] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.312000] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.333869] RPC: Registered named UNIX socket transport module.
+[    0.333921] RPC: Registered udp transport module.
+[    0.333939] RPC: Registered tcp transport module.
+[    0.333953] RPC: Registered tcp-with-tls transport module.
+[    0.333968] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.359447] Unpacking initramfs...
+[    0.366321] workingset: timestamp_bits=30 max_order=15 bucket_order=0
+[    0.367983] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.372970] NFS: Registering the id_resolver key type
+[    0.373999] Key type id_resolver registered
+[    0.374042] Key type id_legacy registered
+[    0.374357] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.406013] NET: Registered PF_ALG protocol family
+[    0.407007] io scheduler bfq registered
+[    0.481309] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.545906] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1500000) is a ASPEED VUART
+[    0.569125] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.570430] printk: console [ttyS4] enabled
+[    0.663976] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.733630] loop: module loaded
+[    0.787680] random: crng init done
+[    0.964600] zram: Added device: zram0
+[    0.977000] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    0.993928] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    0.994918] RTL8201CP Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    0.997766] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at 9611bdb4
+[    1.002102] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    1.002779] dummy_hcd dummy_hcd.0: Dummy host controller
+[    1.003184] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    1.065755] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    1.066081] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.066304] usb usb1: Product: Dummy host controller
+[    1.066467] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    1.066652] usb usb1: SerialNumber: dummy_hcd.0
+[    1.071248] hub 1-0:1.0: USB hub found
+[    1.082401] hub 1-0:1.0: 1 port detected
+[    1.167516] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+[    1.184419] i2c_dev: i2c /dev entries driver
+[    1.213897] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 23
+[    1.225004] i2c i2c-1: Added multiplexed i2c bus 14
+[    1.244837] Freeing initrd memory: 3052K
+[    1.284067] i2c i2c-1: Added multiplexed i2c bus 15
+[    1.285391] i2c i2c-1: Added multiplexed i2c bus 16
+[    1.285588] i2c-mux-gpio i2cmux: 3 port mux on 1e78a080.i2c-bus adapter
+[    1.293620] aspeed-video 1e700000.video: irq 24
+[    1.294717] aspeed-video 1e700000.video: alloc mem size(24576) at 0x47048000 for jpeg header
+[    1.303761] Driver for 1-wire Dallas network protocol.
+[    1.332083] usbcore: registered new interface driver usbhid
+[    1.332302] usbhid: USB HID core driver
+[    1.338929] NET: Registered PF_INET6 protocol family
+[    1.372465] Segment Routing with IPv6
+[    1.372915] In-situ OAM (IOAM) with IPv6
+[    1.374210] NET: Registered PF_PACKET protocol family
+[    1.375108] 8021q: 802.1Q VLAN Support v1.8
+[    1.375762] Key type dns_resolver registered
+[    1.484016] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    1.484591] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+[    1.503717] printk: console [netcon0] enabled
+[    1.503994] netconsole: network logging started
+[    1.508664] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    1.523887] clk: Disabling unused clocks
+[    1.562102] Freeing unused kernel image (initmem) memory: 1024K
+[    1.563700] Checked W+X mappings: passed, no W+X pages found
+[    1.564071] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+[    1.771588] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+eth0: 10.0.2.15
+Fingerprint: SHA256:RNVpYjtSylsv9kpkEe0PsNHQRTLM5s3YhEtTBGDbiY8
+[70] Jan 01 00:00:02 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86400sec preferred_lft 14400sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (ssh in vi--- ssh attempt 1 ---
+SPD_MUX_CH2=i2c-15
+SPD_GATED_OFF_OK
+SPD_HOST_ON
+SPD_HDR=[92 11 0b]
+TSOD_MC=35000
+SPD_GATED_OFF_AGAIN_OK
+SPD_ALL_OK
+
+Warning: Permanently added '[127.0.0.1]:2224' (ED25519) to the list of known hosts.
++ BASE=
++ grep -q 1e780000.gpio /sys/class/gpio/gpiochip512/label
++ cat /sys/class/gpio/gpiochip512/base
++ BASE=512
++ '[' -n 512 ]
++ A4=516
++ B1=521
++ B6=526
++ F0=552
++ CH2=
++ grep -q 'chan_id 2' /sys/bus/i2c/devices/i2c-1/name
++ grep -q 'chan_id 2' /sys/bus/i2c/devices/i2c-14/name
++ grep -q 'chan_id 2' /sys/bus/i2c/devices/i2c-15/name
++ CH2=15
++ grep -q 'chan_id 2' /sys/bus/i2c/devices/i2c-16/name
++ '[' -n 15 ]
++ echo 'SPD_MUX_CH2=i2c-15'
++ '[' -e /sys/bus/i2c/devices/15-0051/eeprom ]
++ echo SPD_GATED_OFF_OK
++ exp 516
++ '[' -d /sys/class/gpio/gpio516 ]
++ echo 516
++ out 516
++ echo out
++ val 516 1
++ echo 1
++ exp 521
++ '[' -d /sys/class/gpio/gpio521 ]
++ echo 521
++ exp 526
++ '[' -d /sys/class/gpio/gpio526 ]
++ echo 526
++ exp 552
++ '[' -d /sys/class/gpio/gpio552 ]
++ echo 552
++ out 521
++ echo out
++ out 526
++ echo out
++ out 552
++ echo out
++ val 521 1
++ echo 1
++ val 526 1
++ echo 1
++ val 552 1
++ echo 1
++ val 526 0
++ echo 0
++ val 521 0
++ echo 0
++ sleep 1
++ val 526 1
++ echo 1
++ val 521 1
++ echo 1
++ echo SPD_HOST_ON
++ echo 15-0051
++ echo 15-0019
++ sleep 1
++ '[' -e /sys/bus/i2c/devices/15-0051/eeprom ]
++ hexdump -v -e '3/1 "%02x "' -n 3 /sys/bus/i2c/devices/15-0051/eeprom
++ HDR='92 11 0b'
++ echo 'SPD_HDR=[92 11 0b]'
++ '[' '92 11 0b' '=' '92 11 0b' ]
++ cat /sys/bus/i2c/devices/15-0019/hwmon/hwmon1/temp1_input
++ T=35000
++ echo 'TSOD_MC=35000'
++ '[' 35000 -gt 30000 ]
++ '[' 35000 -lt 40000 ]
++ val 552 0
++ echo 0
++ sleep 1
++ val 552 1
++ echo 1
++ dd 'if=/sys/bus/i2c/devices/15-0051/eeprom' 'of=/dev/null' 'bs=16' 'count=1' 'iflag=direct'
++ echo 15-0051
++ echo 15-0051
++ '[' -e /sys/bus/i2c/devices/15-0051/eeprom ]
++ echo SPD_GATED_OFF_AGAIN_OK
++ echo SPD_ALL_OK
+
+
+SPD RESULT: PASS

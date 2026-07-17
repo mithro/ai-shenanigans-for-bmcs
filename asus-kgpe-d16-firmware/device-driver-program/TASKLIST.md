@@ -116,8 +116,8 @@ U-Boot access + Zephyr, with the mux *fabric* modeled once):
 |---|---|---|
 | AST2050 I2C controller (8 buses) QEMU+Linux | ✅ | g3 AC-timing fix proven on silicon (i2cdetect, W83795 reads) |
 | W83795G hwmon (QU4, I2C2 @0x2F) full model + Linux hwmon ×3 validations | 🔶 | silicon reads work; QEMU model completeness audit vs datasheet (VSEN1-11, TR1-6, FANIN1-12, FANCTL1-8) |
-| **QU9+QU5+U23 mux fabric QEMU model** (GPIO-driven, transparent FET + 4052) | 🔶 | control/arbitration FULLY netlist-traced 2026-07-18 → `schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md` (QU9 = !SYS_PWRGD auto-enable; QU5 always-enabled, idle select=11; U23 = hardware mutex on BMC_PRESENT#+SB_BIOS_POST_COMPLT#; only BMC controls are GPIOF4/F5). QEMU device next |
-| **DIMM SPD ×16 + TSOD** via fabric (I2C10/I2C11) 🔁 | ⬜ | QEMU: SPD EEPROM + TSOD models per bank; Linux: i2c-mux-gpio (2 GPIOs, no enable line exists) + at24/jc42; silicon: host-on + POST-complete required (fabric doc §6) |
+| **QU9+QU5+U23 mux fabric QEMU model** (GPIO-driven, transparent FET + 4052) | ✅ | netlist-traced (`I2C-MUX-FABRIC-ARBITRATION.md`) → `kgpe-d16-i2c-fabric` QEMU device (submodule `be673b2`); fwtest `i2cmux` 11/11 PASS; full suite 114/114 |
+| **DIMM SPD ×16 + TSOD** via fabric (I2C10/I2C11) 🔁 | 🔶 | QEMU: SPD (provisional CRC-valid DDR3 image) + new `jc42` TSOD on Y2 @0x51/0x19 = rig slot A2 ✅ fwtest-proven; Linux: DTS `/i2cmux` + config landed, kernel building → QEMU boot validation next; silicon: host-on + POST-complete procedure (fabric doc §6) ⬜ |
 | FRU EEPROM HT24LC08 (U25, I2C5) | ⬜ | audit: NO DTS node/model wired anywhere (claim was overstated). NEW: netlist shows U25 pin E2 strapped to VCC → address likely **0x54-0x57**, not 0x50-0x53 (fabric doc §5); settle on silicon |
 | W83601G DIMM-LED expanders (U27/U28, I2C5) | ⬜ | QEMU model (new chip); Linux gpio/led driver; light DIMMxERRLED on silicon |
 | SB-TSI CPU thermal (I2C4 → QU4 pins 29/30, 0x4C/0x4D) | ⬜ | QEMU SB-TSI responder model; Linux sbtsi_temp; silicon read CPU temps |

@@ -4,6 +4,29 @@ Newest entries at the top. Every work session appends here and commits.
 Format: `## YYYY-MM-DD HH:MM` + what was done / found / failed (with honest
 confidence about whether a failure was our own mistake).
 
+## 2026-07-18 — D08 Linux stack VALIDATED in QEMU: `SPD RESULT: PASS`
+
+- `scripts/spd-test.py` boots the machine and drives the REAL driver chain:
+  i2c-mux-gpio child adapters appear (chan 2 = i2c-15); with host OFF the
+  DT-declared at24/jc42 probes fail (faithful QU9 gating — asserted, not
+  worked around); host powered on in-guest via the modeled sequencer;
+  re-probe binds at24 → `/sys/.../eeprom` header `92 11 0b` and jc42 →
+  hwmon `temp1_input=35000`; host powered OFF → device unbinds and cannot
+  re-probe (gating is live). Evidence:
+  `openbmc/bmc-functionality/evidence/d08-spd/00-qemu-linux-stack-PASS.txt`.
+- **My bug count this session: 1** — the first run failed on a
+  trailing-space string comparison in MY test (command substitution strips
+  it); the model/drivers were right. ("It is always your code.")
+- Learned/documented: deferred probe does NOT retry on power events — the
+  silicon procedure needs the same explicit `drivers_probe` re-bind after
+  host power-on (recorded in peripherals/i2cmux/DOC.md).
+- CI: new `boot-spd-mux` job in d16-qemu-stack.yml.
+- realhw kernel inherits the new config via the merge order (verified
+  build-realhw-kernel.py merges kgpe-d16.config).
+- Next: silicon half — JTAG boot the realhw kernel with the new DTS, power
+  host on, wait POST, read SPD/TSOD; then bake the REAL A2 SPD dump into
+  the QEMU model replacing the provisional image.
+
 ## 2026-07-18 — D08 fabric IMPLEMENTED in QEMU; fwtest 11/11 PASS first run
 
 - **QEMU submodule (`be673b2`):** new `kgpe-d16-i2c-fabric` device
