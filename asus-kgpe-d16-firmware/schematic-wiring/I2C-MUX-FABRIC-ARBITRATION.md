@@ -104,6 +104,24 @@ With the host **off**, all of it is unreachable.
 - The QU5 select-line pull-ups mean the idle/unclaimed select state is
   `S1:S0 = 11` → **channel Y3 (DIMM E–H)** whenever no buffer drives the lines.
 
+## 5b. Per-slot SPD/TSOD addresses (SA-strap traced)
+
+The SA0–2 straps on every DIMM socket were read from the netlist; both banks
+use the same clean sequential map:
+
+| Slot (bank Y2 = I2C10) | SPD | TSOD | Slot (bank Y3 = I2C11) | SPD | TSOD |
+|---|---|---|---|---|---|
+| DIMM_A1 | 0x50 | 0x18 | DIMM_E1 | 0x50 | 0x18 |
+| DIMM_A2 | 0x51 | 0x19 | DIMM_E2 | 0x51 | 0x19 |
+| DIMM_B1 | 0x52 | 0x1A | DIMM_F1 | 0x52 | 0x1A |
+| DIMM_B2 | 0x53 | 0x1B | DIMM_F2 | 0x53 | 0x1B |
+| DIMM_C1 | 0x54 | 0x1C | DIMM_G1 | 0x54 | 0x1C |
+| DIMM_C2 | 0x55 | 0x1D | DIMM_G2 | 0x55 | 0x1D |
+| DIMM_D1 | 0x56 | 0x1E | DIMM_H1 | 0x56 | 0x1E |
+| DIMM_D2 | 0x57 | 0x1F | DIMM_H2 | 0x57 | 0x1F |
+
+The test rig's known-populated slot is **A2 → SPD 0x51 / TSOD 0x19 on bank Y2**.
+
 ## 6. Driver / model requirements distilled
 
 1. **QEMU:** the fabric is a board-glue device: QU9 closed iff modeled
