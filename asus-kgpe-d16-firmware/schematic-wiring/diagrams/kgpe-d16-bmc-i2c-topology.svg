@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 802" role="img" aria-labelledby="t-title t-desc" preserveAspectRatio="xMidYMid meet">
+  <title id="t-title">ASUS KGPE-D16 AST2050 BMC I2C bus topology</title>
+  <desc id="t-desc">Tree from the AST2050 BMC I2C engine across its eight controllers (I2C1-I2C8) to the leaf devices: PSU SMBus, W83795G hardware monitor (0x2F), CPU SB-TSI (0x4C/0x4D), HT24LC08 FRU EEPROM (0x50), two W83601G DIMM-error-LED GPIO expanders (U27/U28), and - through the SN74CBTLV3125 FET switch QU9 and the 74HC4052 mux QU5 - the 16 DIMM SPD (0x50-0x57) and TSOD (0x18-0x1F) sensors, plus the SP5100 southbridge shared segments.</desc>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#555;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:19px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .h{font-size:13px;font-weight:700;}
+    .l{font-size:12px;}
+    .m{font-size:12px;fill:var(--muted);}
+    .cr{fill:var(--red);}
+    .box{fill:var(--box);stroke-width:1.8;}
+    .blue{stroke:var(--blue);}.green{stroke:var(--green);}.gold{stroke:var(--gold);}
+    .purple{stroke:var(--purple);}.neu{stroke:var(--ink);}
+    .wire{fill:none;stroke:var(--ink);stroke-width:1.4;}
+    .fillink{fill:var(--ink);}
+    .sw{stroke-width:1.8;fill:var(--box);}
+  </style>
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+    </marker>
+  </defs>
+
+  <text class="t" x="24" y="34">ASUS KGPE-D16 &#8212; AST2050 BMC I2C bus topology</text>
+  <text class="st" x="24" y="54">W83795G&#215;1 &#183; W83601G&#215;2 &#183; HT24LC08&#215;1 &#183; SN74CBTLV3125 switch &#183; 74HC4052 mux &#183; 16&#215; DIMM SPD+TSOD &#183; SB-TSI &#183; PSU PMBus</text>
+
+  <g transform="translate(0,46)">
+  <!-- BMC root -->
+  <rect class="box neu" x="24" y="300" width="150" height="150" rx="10"/>
+  <text class="h" x="99" y="365" text-anchor="middle">AST2050 BMC</text>
+  <text class="l" x="99" y="386" text-anchor="middle">I2C engine</text>
+  <text class="m" x="99" y="412" text-anchor="middle">I2C1 &#8211; I2C8</text>
+
+  <!-- Fan from BMC to bus nodes -->
+  <line class="wire" x1="174" y1="375" x2="214" y2="60"  marker-end="url(#arw)"/>
+  <line class="wire" x1="174" y1="375" x2="214" y2="180" marker-end="url(#arw)"/>
+  <line class="wire" x1="174" y1="375" x2="214" y2="400" marker-end="url(#arw)"/>
+  <line class="wire" x1="174" y1="375" x2="214" y2="510" marker-end="url(#arw)"/>
+  <line class="wire" x1="174" y1="375" x2="214" y2="570" marker-end="url(#arw)"/>
+  <line class="wire" x1="174" y1="375" x2="214" y2="630" marker-end="url(#arw)"/>
+
+  <!-- Bus nodes -->
+  <rect class="box neu" x="214" y="40"  width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="58"  text-anchor="middle">I2C1</text>
+  <text class="m" x="289" y="74"  text-anchor="middle">A15/B15 &#183; PSU</text>
+
+  <rect class="box neu" x="214" y="160" width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="178" text-anchor="middle">I2C2</text>
+  <text class="m" x="289" y="194" text-anchor="middle">C14/D14 &#183; sensors</text>
+
+  <rect class="box neu" x="214" y="380" width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="398" text-anchor="middle">I2C5</text>
+  <text class="m" x="289" y="414" text-anchor="middle">A13/B13 &#183; inventory</text>
+
+  <rect class="box neu" x="214" y="490" width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="508" text-anchor="middle">I2C3</text>
+  <text class="m" x="289" y="524" text-anchor="middle">A14/B14</text>
+
+  <rect class="box neu" x="214" y="550" width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="568" text-anchor="middle">I2C4</text>
+  <text class="m" x="289" y="584" text-anchor="middle">C13/D13</text>
+
+  <rect class="box neu" x="214" y="610" width="150" height="40" rx="7"/>
+  <text class="h" x="289" y="628" text-anchor="middle">I2C6</text>
+  <text class="m" x="289" y="644" text-anchor="middle">C12/D12</text>
+
+  <!-- I2C1 -> PSU -->
+  <line class="wire" x1="364" y1="60" x2="410" y2="60" marker-end="url(#arw)"/>
+  <rect class="box neu" x="410" y="40" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="58">PSU SMBus &#183; PSUSMB1</text>
+  <text class="m" x="422" y="74">PMBus telemetry &#183; alert&#8594;SALT1</text>
+
+  <!-- I2C2 -> hwmon + switch chain -->
+  <line class="wire" x1="364" y1="180" x2="410" y2="120" marker-end="url(#arw)"/>
+  <rect class="box green" x="410" y="100" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="118">W83795G hwmon &#183; 0x2F</text>
+  <text class="m" x="422" y="134">volts / temps / fans (QU4)</text>
+
+  <line class="wire" x1="364" y1="180" x2="410" y2="184" marker-end="url(#arw)"/>
+  <rect class="box gold" x="410" y="164" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="182">QU9 SN74CBTLV3125</text>
+  <text class="m" x="422" y="198">FET switch &#183; <tspan class="cr">I2CMUX_EN#</tspan> gates I2C2&#8596;I2C7</text>
+
+  <line class="wire" x1="670" y1="184" x2="710" y2="184" marker-end="url(#arw)"/>
+  <rect class="box gold" x="710" y="164" width="180" height="40" rx="7"/>
+  <text class="h" x="722" y="182">QU5 74HC4052</text>
+  <text class="m" x="722" y="198">1-of-4 &#183; S1:S0</text>
+
+  <line class="wire" x1="890" y1="184" x2="930" y2="150" marker-end="url(#arw)"/>
+  <rect class="box green" x="930" y="130" width="226" height="44" rx="7"/>
+  <text class="h" x="942" y="148">DIMM A&#8211;D &#183; I2C10 (S1:S0=10)</text>
+  <text class="m" x="942" y="164">SPD 0x50&#8211;57 &#183; TSOD 0x18&#8211;1F</text>
+
+  <line class="wire" x1="890" y1="184" x2="930" y2="204" marker-end="url(#arw)"/>
+  <rect class="box green" x="930" y="184" width="226" height="44" rx="7"/>
+  <text class="h" x="942" y="202">DIMM E&#8211;H &#183; I2C11 (S1:S0=11)</text>
+  <text class="m" x="942" y="218">SPD 0x50&#8211;57 &#183; TSOD 0x18&#8211;1F</text>
+
+  <line class="wire" x1="890" y1="184" x2="930" y2="258" marker-end="url(#arw)"/>
+  <rect class="box neu" x="930" y="238" width="226" height="40" rx="7"/>
+  <text class="h" x="942" y="256">AUX_PANEL1 &#183; I2C8</text>
+  <text class="m" x="942" y="272">front-panel I2C (S1:S0=00)</text>
+
+  <!-- I2C5 -> EEPROM + 2x expander -->
+  <line class="wire" x1="364" y1="400" x2="410" y2="330" marker-end="url(#arw)"/>
+  <rect class="box neu" x="410" y="310" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="328">HT24LC08 EEPROM &#183; 0x50</text>
+  <text class="m" x="422" y="344">board FRU (U25)</text>
+
+  <line class="wire" x1="364" y1="400" x2="410" y2="390" marker-end="url(#arw)"/>
+  <rect class="box purple" x="410" y="370" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="388">W83601G &#183; U27</text>
+  <text class="m" x="422" y="404">DIMM A&#8211;F error LEDs (strap addr)</text>
+
+  <line class="wire" x1="364" y1="400" x2="410" y2="450" marker-end="url(#arw)"/>
+  <rect class="box purple" x="410" y="430" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="448">W83601G &#183; U28</text>
+  <text class="m" x="422" y="464">DIMM G/H error LEDs (strap addr)</text>
+
+  <!-- I2C3 -> SP5100 -->
+  <line class="wire" x1="364" y1="510" x2="410" y2="510" marker-end="url(#arw)"/>
+  <rect class="box neu" x="410" y="490" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="508">SP5100 southbridge &#183; SU1</text>
+  <text class="m" x="422" y="524">shared mgmt bus (host)</text>
+
+  <!-- I2C4 -> SB-TSI -->
+  <line class="wire" x1="364" y1="570" x2="410" y2="570" marker-end="url(#arw)"/>
+  <rect class="box green" x="410" y="550" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="568">CPU0/1 SB-TSI &#183; 0x4C/0x4D</text>
+  <text class="m" x="422" y="584">processor temp (via level-shift FETs)</text>
+
+  <!-- I2C6 -> SP5100/hwmon -->
+  <line class="wire" x1="364" y1="630" x2="410" y2="630" marker-end="url(#arw)"/>
+  <rect class="box neu" x="410" y="610" width="260" height="40" rx="7"/>
+  <text class="h" x="422" y="628">SP5100 &#183; SU1 + hwmon</text>
+  <text class="m" x="422" y="644">second shared segment</text>
+
+  <!-- source-select note -->
+  <rect class="box neu" x="710" y="490" width="300" height="60" rx="7"/>
+  <text class="h" x="722" y="510">U23 74LVC125 source-select</text>
+  <text class="m" x="722" y="527">drives QU5 S0/S1 from BMC (AST_I2CS)</text>
+  <text class="m" x="722" y="543">or SP5100 (SB_I2CS) &#8212; bus ownership</text>
+
+  <!-- Legend -->
+  <line class="wire" x1="24" y1="694" x2="1156" y2="694"/>
+  <rect class="sw green"  x="24"  y="710" width="18" height="14" rx="3"/><text class="l" x="48"  y="722">sensor</text>
+  <rect class="sw gold"   x="130" y="710" width="18" height="14" rx="3"/><text class="l" x="154" y="722">I2C mux / switch</text>
+  <rect class="sw purple" x="300" y="710" width="18" height="14" rx="3"/><text class="l" x="324" y="722">GPIO expander</text>
+  <rect class="sw neu"    x="460" y="710" width="18" height="14" rx="3"/><text class="l" x="484" y="722">EEPROM / host / PSU</text>
+  <text class="l cr" x="700" y="722">I2CMUX_EN# / S1:S0 = mux control</text>
+  <text class="m" x="1156" y="740" text-anchor="end">addresses are 7-bit (datasheet defaults)</text>
+  </g>
+</svg>

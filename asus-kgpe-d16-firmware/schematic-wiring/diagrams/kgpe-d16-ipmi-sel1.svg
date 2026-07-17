@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300" role="img" aria-label="IPMI_SEL1 — IPMI enable jumper" preserveAspectRatio="xMidYMid meet">
+  <title>IPMI_SEL1 — IPMI enable jumper</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#666;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:19px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .sig{font-size:12.5px;font-weight:600;}
+    .m{font-size:11px;fill:var(--muted);}
+    .pn{font-size:11px;font-weight:700;}
+    .leg{font-size:12px;}
+    .board{fill:var(--panel);stroke:var(--ink);stroke-width:2;}
+  </style>
+<text class="t" x="24" y="34">IPMI_SEL1 — IPMI enable jumper</text>
+<text class="st" x="24" y="55">IPMI_SEL strap · 1×3</text>
+<rect class="board" x="48" y="122" width="320" height="56" rx="10"/>
+<rect x="77" y="137" width="26" height="26" rx="3" fill="var(--box)" stroke="var(--red)" stroke-width="2.8"/><text class="pn" x="90" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--red)">1</text>
+<text class="sig" x="90" y="195" text-anchor="middle" fill="var(--muted)">NC</text><text class="m" x="90" y="210" text-anchor="middle">pull opt</text>
+<circle cx="208" cy="150" r="13" fill="var(--box)" stroke="var(--gold)" stroke-width="2.4"/><text class="pn" x="208" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--gold)">2</text>
+<text class="sig" x="208" y="195" text-anchor="middle" fill="var(--gold)">IPMI_SEL</text><text class="m" x="208" y="210" text-anchor="middle">BMC A8</text>
+<circle cx="326" cy="150" r="13" fill="var(--box)" stroke="var(--gold)" stroke-width="2.4"/><text class="pn" x="326" y="150" text-anchor="middle" dominant-baseline="central" fill="var(--gold)">3</text>
+<text class="sig" x="326" y="195" text-anchor="middle" fill="var(--gold)">opt</text>
+<circle cx="28" cy="270" r="7" fill="var(--box)" stroke="var(--muted)" stroke-width="2.2"/><text class="leg" x="42" y="274">No-connect</text><circle cx="125.0" cy="270" r="7" fill="var(--box)" stroke="var(--gold)" stroke-width="2.2"/><text class="leg" x="139.0" y="274">Strap / config</text>
+</svg>

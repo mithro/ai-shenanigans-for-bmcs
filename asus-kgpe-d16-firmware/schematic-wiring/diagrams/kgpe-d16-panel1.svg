@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 766 548" role="img" aria-label="PANEL1 — system front panel" preserveAspectRatio="xMidYMid meet">
+  <title>PANEL1 — system front panel</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#666;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:19px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .sig{font-size:12.5px;font-weight:600;}
+    .m{font-size:11px;fill:var(--muted);}
+    .pn{font-size:11px;font-weight:700;}
+    .leg{font-size:12px;}
+    .board{fill:var(--panel);stroke:var(--ink);stroke-width:2;}
+  </style>
+<text class="t" x="24" y="34">PANEL1 — system front panel</text>
+<text class="st" x="24" y="55">power/reset/LEDs · 2×10 (pin 5 keyed)</text>
+<rect class="board" x="66" y="224" width="600" height="100" rx="10"/>
+<rect x="83" y="237" width="26" height="26" rx="3" fill="var(--box)" stroke="var(--red)" stroke-width="2.8"/><text class="pn" x="96" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--red)">1</text>
+<text class="sig" transform="rotate(-90 96 208)" x="96" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">HDLED+</text>
+<circle cx="96" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="96" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">2</text>
+<text class="sig" transform="rotate(-90 96 340)" x="96" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">HDLED-</text>
+<circle cx="156" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="156" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">3</text>
+<text class="sig" transform="rotate(-90 156 208)" x="156" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="156" cy="298" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="156" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">4</text>
+<text class="sig" transform="rotate(-90 156 340)" x="156" y="340" text-anchor="end" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="216" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="216" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">6</text>
+<text class="sig" transform="rotate(-90 216 340)" x="216" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">PLED-</text>
+<circle cx="276" cy="250" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="276" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">7</text>
+<text class="sig" transform="rotate(-90 276 208)" x="276" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">NMIBNT#</text>
+<circle cx="276" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="276" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">8</text>
+<text class="sig" transform="rotate(-90 276 340)" x="276" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">PLED+</text>
+<circle cx="336" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="336" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">9</text>
+<text class="sig" transform="rotate(-90 336 208)" x="336" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="336" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="336" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">10</text>
+<text class="sig" transform="rotate(-90 336 340)" x="336" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">MLED</text>
+<circle cx="396" cy="250" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="396" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">11</text>
+<text class="sig" transform="rotate(-90 396 208)" x="396" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">PWRBTN#</text>
+<circle cx="396" cy="298" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="396" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">12</text>
+<text class="sig" transform="rotate(-90 396 340)" x="396" y="340" text-anchor="end" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="456" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="456" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">13</text>
+<text class="sig" transform="rotate(-90 456 208)" x="456" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="456" cy="298" r="12" fill="var(--box)" stroke="var(--green)" stroke-width="2.4"/><text class="pn" x="456" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--green)">14</text>
+<text class="sig" transform="rotate(-90 456 340)" x="456" y="340" text-anchor="end" dominant-baseline="central" fill="var(--green)">+5V</text>
+<circle cx="516" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="516" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">15</text>
+<text class="sig" transform="rotate(-90 516 208)" x="516" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="516" cy="298" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="516" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">16</text>
+<text class="sig" transform="rotate(-90 516 340)" x="516" y="340" text-anchor="end" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="576" cy="250" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="576" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">17</text>
+<text class="sig" transform="rotate(-90 576 208)" x="576" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">RESET#</text>
+<circle cx="576" cy="298" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="576" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">18</text>
+<text class="sig" transform="rotate(-90 576 340)" x="576" y="340" text-anchor="end" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="636" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="636" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">19</text>
+<text class="sig" transform="rotate(-90 636 208)" x="636" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="636" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="636" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">20</text>
+<text class="sig" transform="rotate(-90 636 340)" x="636" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">SPKOUT</text>
+<circle cx="28" cy="506" r="7" fill="var(--box)" stroke="var(--blue)" stroke-width="2.2"/><text class="leg" x="42" y="510">Signal / data</text><circle cx="147.5" cy="506" r="7" fill="var(--box)" stroke="var(--muted)" stroke-width="2.2"/><text class="leg" x="161.5" y="510">Ground</text><circle cx="214.5" cy="506" r="7" fill="var(--box)" stroke="var(--muted)" stroke-width="2.2"/><text class="leg" x="228.5" y="510">No-connect</text><circle cx="311.5" cy="506" r="7" fill="var(--box)" stroke="var(--green)" stroke-width="2.2"/><text class="leg" x="325.5" y="510">Power</text>
+<text class="m" x="742" y="528" text-anchor="end">odd pins top row · even bottom · pin 1 = square pad</text>
+</svg>
