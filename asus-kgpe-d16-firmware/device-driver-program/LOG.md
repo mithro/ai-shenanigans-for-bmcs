@@ -1,5 +1,46 @@
 # Device-driver program — running log
 
+## 2026-07-18 — SILICON SESSION: boot OK; pinctrl blocker root-caused QEMU-first
+
+- **Silicon boot chain worked end-to-end**: JTAG 3-step (reset-halt → DDR2
+  train MCR04=0x585 → U-Boot @0x40000000) → `boot#` → TFTP kernel 3463384 B
+  + initramfs + dtb → Linux 6.6.70 up, eth0 192.168.66.2, dropbear,
+  BMC-READY on serial.
+  - My-bug #2 this session: drove the serial at 1200 baud; the evidence
+    file for THIS U-Boot build (186096 B) says its console is 115200 — the
+    1200-baud build was a different binary. 7 bytes of framing garbage =
+    the banner. Fixed; `bmc-serial.sh` helper deployed on the Pi.
+- **D08 silicon blocker found**: `aspeed-g4-pinctrl: pin-45
+  (1e780000.gpio:557) status -1` → `i2c-mux-gpio: probe failed` → no mux
+  adapters. Root cause chain, fully evidenced:
+  - G4 pinctrl table: ball A19 (its pin 45) has SIOSCI/ACPI function gated
+    on `HW_STRAP1[19]==0` (`ACPI_DESC`, pinctrl-aspeed-g4.c:385).
+  - Real G3 SCU70 = **0x00819582** (JTAG + devmem agree), bit19=0 → driver
+    thinks an un-deconfigurable strap function owns the pad → -EPERM.
+  - G3 datasheet §18: SCU70 bit19 = **"Bypass all PLL (test mode only)"** —
+    the G4 interpretation is a phantom; and setting bit19 on silicon would
+    be catastrophic, so no devmem workaround (ruled out BEFORE trying).
+  - **Bonus silicon facts from the strap decode**: SCU70[8:6]=0b110 =
+    "RMII(MAC#1) and RMII(MAC#2)" — MAC1 is RMII (settles the N-vs-CP/
+    MII-vs-RMII tension: balls are MII-capable, strap selects RMII) and
+    the MAC2/NC-SI channel is STRAP-ENABLED on this board (D07 evidence);
+    [1:0]=10 = SPI boot (G3 has no DRAM-size strap in SCU70); [3:2]=00 =
+    8 MB VGA; [23]=1 LPC reset on B10; SCU74=0x4204D000, SCU40=0x000020C0.
+- **QEMU-first loop executed**:
+  1. Machine strap constant replaced with the measured 0x00819582
+     (was palmetto-derived guesswork) → submodule `4ff6a74`.
+  2. Integration suite still 114/114.
+  3. `spd-test.py` now FAILS in QEMU with the byte-identical
+     `pin-45 status -1` — faithful repro (the old constructed strap had
+     been masking this real kernel bug).
+  4. Kernel fix: `g3_strap_phantoms` quirk — strap-only G4-table
+     expressions are skippable on the DISABLE path only (enable-path strap
+     evaluation untouched — eth0's RMII1 mux depends on it), gated by new
+     compatible `aspeed,ast2050-pinctrl`; both DTS switched. Will become
+     patch 0008 once validated.
+- C4/C-UBOOT oracle re-validation with the new strap: not yet run locally
+  (CI covers on push) — flagged, not forgotten.
+
 ## 2026-07-18 — silicon session prep; NC-SI facts pinned; docs reconciled
 
 - **Stale-artifact trap found & fixed:** `build-realhw-kernel.py` built from
