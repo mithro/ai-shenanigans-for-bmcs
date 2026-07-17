@@ -287,7 +287,18 @@
 
 				pinctrl@80 {
 					reg = <0x80 0x18 0xa0 0x10>;
-					compatible = "aspeed,ast2400-pinctrl";
+					/*
+					 * ast2050-pinctrl = the G4 driver with
+					 * the G3 strap-phantom quirk (kernel
+					 * patch 0008): G4-table functions
+					 * gated purely on HW_STRAP1/2 bits
+					 * must not block GPIO requests — the
+					 * G3 SCU70 layout differs (silicon
+					 * SCU70=0x00819582 has bit19=0, which
+					 * the G4 table misreads as the ACPI
+					 * function owning ball A19/GPIOF5).
+					 */
+					compatible = "aspeed,ast2050-pinctrl";
 					phandle = <0x05>;
 
 					acpi_default {

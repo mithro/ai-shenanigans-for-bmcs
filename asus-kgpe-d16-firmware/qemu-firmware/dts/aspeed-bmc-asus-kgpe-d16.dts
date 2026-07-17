@@ -309,6 +309,20 @@
 	};
 };
 
+/*
+ * ast2050-pinctrl = the G4 pinctrl driver with the G3 strap-phantom quirk
+ * (kernel patch 0008). The G3's SCU70 layout differs from the AST2400's
+ * (datasheet §18: G3 bit19 = "bypass all PLL", not an ACPI mux select), so
+ * G4-table functions gated purely on HW_STRAP1/2 must not block GPIO
+ * requests — with the real strap value (SCU70=0x00819582, bit19=0) the
+ * stock driver rejects GPIOF5 (the QU5 I2C mux select S1) with -EPERM,
+ * killing the /i2cmux probe. Reproduced byte-identically in QEMU once the
+ * machine carried the measured strap value.
+ */
+&pinctrl {
+	compatible = "aspeed,ast2050-pinctrl";
+};
+
 &wdt1 {
 	status = "okay";
 };

@@ -104,6 +104,20 @@ if ! grep -q "USB command bus dead-lock" drivers/usb/gadget/udc/aspeed-vhub/core
     git apply "$ROOT/kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch"
 fi
 
+# AST2050 (G3) pinctrl strap-phantom quirk: the G3's SCU70 strap layout differs
+# entirely from the AST2400's (G3 bit19 = "bypass all PLL", not the ACPI mux
+# select), so G4-table signal expressions gated purely on HW_STRAP1/2 can read
+# "active" from unrelated G3 strap bits and can never be deconfigured -> GPIO
+# requests fail -EPERM. Hit on real silicon (SCU70=0x00819582, bit19=0 -> the
+# driver refused GPIOF5 = the QU5 I2C-mux select, killing the /i2cmux probe)
+# and reproduced byte-identically in QEMU once the machine carried the measured
+# strap. New compatible aspeed,ast2050-pinctrl skips strap-only expressions on
+# the DISABLE path only (enable-path strap evaluation unchanged -- the MAC's
+# RMII pinmux depends on it). Idempotent guard on the flag the patch adds.
+if ! grep -q "g3_strap_phantoms" drivers/pinctrl/aspeed/pinmux-aspeed.h; then
+    git apply "$ROOT/kernel/patches/0008-pinctrl-aspeed-g3-strap-phantom-quirk.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

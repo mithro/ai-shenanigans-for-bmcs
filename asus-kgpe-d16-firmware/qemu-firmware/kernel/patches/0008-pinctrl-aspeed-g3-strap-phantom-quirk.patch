@@ -1,0 +1,99 @@
+diff --git a/drivers/pinctrl/aspeed/pinctrl-aspeed-g4.c b/drivers/pinctrl/aspeed/pinctrl-aspeed-g4.c
+index bfed0e274..cc4e9d2eb 100644
+--- a/drivers/pinctrl/aspeed/pinctrl-aspeed-g4.c
++++ b/drivers/pinctrl/aspeed/pinctrl-aspeed-g4.c
+@@ -2541,6 +2541,29 @@ static const struct aspeed_pin_config aspeed_g4_configs[] = {
+ 	ASPEED_SB_PINCONF(PIN_CONFIG_INPUT_DEBOUNCE, C14, B14, SCUA8, 27),
+ };
+ 
++/*
++ * True iff every descriptor of the expression lives in the strap registers.
++ * Such expressions can never be reconfigured (straps are read-only policy
++ * below), and on the AST2050/AST1100 (G3) their evaluation is meaningless:
++ * the G3 SCU70 bit layout differs entirely from the AST2400's (datasheet
++ * §18 p217-218 — e.g. G3 bit19 = "bypass all PLL (test mode only)", which
++ * this G4 table reads as the ACPI mux select for ball A19/GPIOF5).
++ */
++static bool aspeed_g4_expr_only_straps(const struct aspeed_sig_expr *expr)
++{
++	int i;
++
++	for (i = 0; i < expr->ndescs; i++) {
++		const struct aspeed_sig_desc *desc = &expr->descs[i];
++
++		if (!(desc->ip == ASPEED_IP_SCU &&
++		      (desc->reg == HW_STRAP1 || desc->reg == HW_STRAP2)))
++			return false;
++	}
++
++	return expr->ndescs > 0;
++}
++
+ static int aspeed_g4_sig_expr_set(struct aspeed_pinmux_data *ctx,
+ 				  const struct aspeed_sig_expr *expr,
+ 				  bool enable)
+@@ -2548,6 +2571,18 @@ static int aspeed_g4_sig_expr_set(struct aspeed_pinmux_data *ctx,
+ 	int ret;
+ 	int i;
+ 
++	/*
++	 * G3 (AST2050/AST1100): strap-only expressions are phantoms of the
++	 * G4 strap interpretation — report success on disable instead of
++	 * -EPERM so GPIO requests (e.g. GPIOF5 = the board's QU5 I2C mux
++	 * select) aren't blocked by unrelated G3 strap bits. The real G3
++	 * pad function for these balls is set by the G3's own SCU74/78
++	 * multi-function registers, not by these strap bits.
++	 */
++	if (!enable && ctx->g3_strap_phantoms &&
++	    aspeed_g4_expr_only_straps(expr))
++		return 0;
++
+ 	for (i = 0; i < expr->ndescs; i++) {
+ 		const struct aspeed_sig_desc *desc = &expr->descs[i];
+ 		u32 pattern = enable ? desc->enable : desc->disable;
+@@ -2664,12 +2699,22 @@ static int aspeed_g4_pinctrl_probe(struct platform_device *pdev)
+ 	for (i = 0; i < ARRAY_SIZE(aspeed_g4_pins); i++)
+ 		aspeed_g4_pins[i].number = i;
+ 
++	/* AST2050/AST1100 (G3): see g3_strap_phantoms in pinmux-aspeed.h. */
++	aspeed_g4_pinctrl_data.pinmux.g3_strap_phantoms =
++		of_device_is_compatible(pdev->dev.of_node,
++					"aspeed,ast2050-pinctrl");
++
+ 	return aspeed_pinctrl_probe(pdev, &aspeed_g4_pinctrl_desc,
+ 			&aspeed_g4_pinctrl_data);
+ }
+ 
+ static const struct of_device_id aspeed_g4_pinctrl_of_match[] = {
+ 	{ .compatible = "aspeed,ast2400-pinctrl", },
++	/*
++	 * AST2050/AST1100 (G3): reuses the G4 tables (register-compatible
++	 * multi-function control) but flags the G3 strap-layout quirk.
++	 */
++	{ .compatible = "aspeed,ast2050-pinctrl", },
+ 	/*
+ 	 * The aspeed,g4-pinctrl compatible has been removed the from the
+ 	 * bindings, but keep the match in case of old devicetrees.
+diff --git a/drivers/pinctrl/aspeed/pinmux-aspeed.h b/drivers/pinctrl/aspeed/pinmux-aspeed.h
+index aaa78a613..d4aa13df0 100644
+--- a/drivers/pinctrl/aspeed/pinmux-aspeed.h
++++ b/drivers/pinctrl/aspeed/pinmux-aspeed.h
+@@ -796,6 +796,18 @@ struct aspeed_pinmux_data {
+ 	struct device *dev;
+ 	struct regmap *maps[ASPEED_NR_PINMUX_IPS];
+ 
++	/*
++	 * AST2050/AST1100 (G3) quirk: the G3's SCU70 strap layout differs
++	 * entirely from the AST2400's (e.g. G3 bit19 is "bypass all PLL",
++	 * not the ACPI mux select), so G4-table signal expressions that are
++	 * gated purely on HW_STRAP1/HW_STRAP2 bits are phantoms on the G3 —
++	 * they may evaluate "active" from unrelated G3 strap bits and can
++	 * never be deconfigured (straps are treated read-only). When set,
++	 * such expressions are skipped when *disabling* signals (GPIO
++	 * requests), while enable-path strap evaluation is unchanged.
++	 */
++	bool g3_strap_phantoms;
++
+ 	const struct aspeed_pinmux_ops *ops;
+ 
+ 	const struct aspeed_pin_group *groups;
