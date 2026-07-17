@@ -47,6 +47,56 @@
 	};
 
 	/*
+	 * QU9/QU5/U23 I2C mux fabric behind I2C2 (Linux i2c-1): DIMM SPD/TSOD
+	 * buses + aux-panel segment, channel-selected by GPIOF4/F5 (AST_I2CS0/1,
+	 * balls W4/W3; Linux GPIO lines 44/45). No enable GPIO exists: QU9
+	 * bridges only while host SYS_PWRGD is high, and U23 hands the selects
+	 * to the BMC only after the host BIOS asserts SB_BIOS_POST_COMPLT#
+	 * (hardware mutex) — host off => no ACK; mid-POST => SP5100 owns
+	 * routing. See schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md.
+	 */
+	i2cmux {
+		compatible = "i2c-mux-gpio";
+		#address-cells = <0x01>;
+		#size-cells = <0x00>;
+		i2c-parent = <&i2c1bus>;
+		/* order: bit0 = S0 (GPIOF4 = line 44), bit1 = S1 (GPIOF5 = 45) */
+		mux-gpios = <&bmcgpio 0x2c 0x00>, <&bmcgpio 0x2d 0x00>;
+
+		i2c@0 {
+			/* QU5 Y0: aux panel + (via QU9) TPM hdr + PCIe SMBus */
+			reg = <0x00>;
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+		};
+
+		i2c@2 {
+			/* QU5 Y2 = I2C10: DIMM A-D bank (SPD 0x50-0x57) */
+			reg = <0x02>;
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+
+			/* Rig population: slot A2 (SA-strap map §5b) */
+			spd@51 {
+				compatible = "atmel,24c02";
+				reg = <0x51>;
+				read-only;
+			};
+			temp@19 {
+				compatible = "jedec,jc-42.4-temp";
+				reg = <0x19>;
+			};
+		};
+
+		i2c@3 {
+			/* QU5 Y3 = I2C11: DIMM E-H bank (empty on the rig) */
+			reg = <0x03>;
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+		};
+	};
+
+	/*
 	 * VGA/graphics aperture (F8 / VGA-corruption fix, hardware-verified
 	 * 2026-07-13). On the AST2050 the BMC and the host's onboard VGA are the
 	 * SAME silicon sharing this one DRAM: the host's video adapter frame-buffers
@@ -1071,7 +1121,7 @@
 				};
 			};
 
-			gpio@1e780000 {
+			bmcgpio: gpio@1e780000 {
 				#gpio-cells = <0x02>;
 				gpio-controller;
 				compatible = "aspeed,ast2400-gpio";
@@ -1273,7 +1323,7 @@
 					status = "disabled";
 				};
 
-				i2c-bus@80 {
+				i2c1bus: i2c-bus@80 {
 					#address-cells = <0x01>;
 					#size-cells = <0x00>;
 					reg = <0x80 0x40>;

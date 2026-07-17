@@ -254,6 +254,61 @@
 	};
 };
 
+/*
+ * QU9/QU5/U23 I2C mux fabric behind I2C2 (Linux i2c-1): the DIMM SPD/TSOD
+ * buses and the aux-panel/TPM/PCIe-SMBus segment, selected by GPIOF4/F5
+ * (AST_I2CS0/1, balls W4/W3). There is NO enable GPIO: QU9's bridge closes
+ * automatically while host SYS_PWRGD is high, and U23 hands the select lines
+ * to the BMC only once the host BIOS asserts SB_BIOS_POST_COMPLT# (hardware
+ * mutex) — with the host off or mid-POST, transactions simply get no ACK or
+ * may be routed by the SP5100's choice. Decoded pin-by-pin in
+ * schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md; modeled in QEMU by
+ * hw/i2c/kgpe_d16_i2c_fabric.c on the kgpe-d16-bmc machine.
+ */
+/ {
+	i2cmux {
+		compatible = "i2c-mux-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		i2c-parent = <&i2c1>;
+		/* order: bit0 = S0 (GPIOF4), bit1 = S1 (GPIOF5) */
+		mux-gpios = <&gpio ASPEED_GPIO(F, 4) GPIO_ACTIVE_HIGH>,
+			    <&gpio ASPEED_GPIO(F, 5) GPIO_ACTIVE_HIGH>;
+
+		i2c@0 {
+			/* QU5 Y0: aux panel + (via QU9) TPM hdr + PCIe SMBus */
+			reg = <0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c@2 {
+			/* QU5 Y2 = I2C10: DIMM A-D bank (SPD 0x50-0x57) */
+			reg = <2>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* Rig population: slot A2 (SA-strap map §5b) */
+			spd@51 {
+				compatible = "atmel,24c02";
+				reg = <0x51>;
+				read-only;
+			};
+			temp@19 {
+				compatible = "jedec,jc-42.4-temp";
+				reg = <0x19>;
+			};
+		};
+
+		i2c@3 {
+			/* QU5 Y3 = I2C11: DIMM E-H bank (empty on the rig) */
+			reg = <3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+	};
+};
+
 &wdt1 {
 	status = "okay";
 };
