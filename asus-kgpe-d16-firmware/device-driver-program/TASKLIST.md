@@ -101,6 +101,18 @@ so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.
 | QEMU: model RTL8201**N** specifics (currently RTL8201CP model) | 🔶 | verify register deltas vs the N part on silicon |
 
 ### D07 — Ethernet ch.2: MAC2 RMII2 / NC-SI → LU1+LU2 (Intel 82574L) 🔁
+
+**Facts pinned 2026-07-18 (82574 datasheet rev2.7 research, full cite in LOG):**
+true DMTF NC-SI 1.0.0a over RMII 1.2 (PHY-side), mutually exclusive with the
+SMBus sideband, selected by NVM word 0x0F `MNGM`=01b; package ID = NVM word
+0x2E[14:12]; needs ≥32 Kb NVM with Intel MNG firmware code; outputs float until
+Select Package (multi-drop legal, NO hw arbitration — MC time-slices with
+Select/Deselect); one channel per package; Intel OEM cmds (mfr 0x157) 0x06 GMA /
+0x20 keep-PHY already in mainline `net/ncsi`. QEMU's NC-SI responder lives in
+libslirp (minimal, Intel OEM handler NULL). NIC pins 2/3/5/6/7/8/9 map exactly
+to the board's RMII2 nets. **Open board question: do the ASUS-programmed NIC
+NVMs enable MNGM? Dump via host `ethtool -e` or observe NC-SI responses on
+silicon.**
 | Layer | Status | Evidence / next step |
 |---|---|---|
 | QEMU model (2nd MAC in RMII/NC-SI mode + NC-SI-responder 82574L model) | ⬜ | MAC2 device exists (SoC `macs_num=2`, 0x1E680000) but board `macs_mask=ASPEED_MAC0_ON` leaves it unwired; ftgmac100.c has no NC-SI responder. RMII2 is multi-drop to LU1+LU2, 50 MHz REF from clockgen `CU2` (external — nothing to model), `RMII2RXER` unconnected |

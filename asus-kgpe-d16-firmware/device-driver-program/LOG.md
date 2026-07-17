@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-18 — silicon session prep; NC-SI facts pinned; docs reconciled
+
+- **Stale-artifact trap found & fixed:** `build-realhw-kernel.py` built from
+  the `.worktrees/d16-qemu` tree (not this worktree) — the artifact would
+  have silently lacked ALL my changes. Fixed to worktree-relative + DTS
+  refresh; committed. Realhw kernel rebuilding correctly now.
+- **DTS lineage identified:** the proven silicon dtb
+  (`kgpe-hwpass-vgafix-video.dtb`) is the *QEMU-DTS lineage* (built by
+  build-kernel.sh from `qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts`),
+  NOT `dts/aspeed-bmc-asus-kgpe-d16-realhw.dts`. Diff of my new kernel dtb
+  vs proven = my i2cmux node + kcs `clocks` (patch-0004 pair, desired) +
+  **vhub `okay` vs proven `disabled`**. For the SPD silicon run I forced
+  vhub back to disabled in a boot-only copy (`kgpe-i2cmux-novhub.dtb`,
+  via fdtput) — the vhub silicon retest is D05 Test B, a separate
+  controlled experiment; one variable at a time.
+- **Rig state:** plug 49 W, old kernel still up at 192.168.66.2 (its
+  dropbear rejects our key — irrelevant, JTAG reboot planned). claude on
+  the Pi has passwordless sudo; JTAG workspace copied to
+  `/home/claude/openocd-bmc-new` (paths patched); TFTP dir writable,
+  dnsmasq active, eth-bmc 192.168.66.1 up, serial console free.
+- **Docs-reconciliation agent landed 3 commits** (F7-NCSI corrected with
+  MAC2 facts; SILICON-STATUS #9 → REOPENED(D07); MODERN-KERNEL-STATUS
+  resolved-banner). Its flags: SILICON-STATUS intro still carries the old
+  #9 verdict (queued); **MAC1 MII-vs-RMII strap question** — read SCU70 on
+  silicon this session (added to checklist).
+- **82574L NC-SI research complete** (datasheet rev 2.7): true DMTF NC-SI
+  1.0.0a over RMII, NVM-gated (word 0x0F MNGM), package-ID word 0x2E,
+  multi-drop-by-float + Select Package, no hw arbitration, Intel OEM cmds
+  in mainline net/ncsi, QEMU responder = libslirp. Open: ASUS NVM MNGM
+  state — dump on silicon. TASKLIST D07 updated.
+
 Newest entries at the top. Every work session appends here and commits.
 Format: `## YYYY-MM-DD HH:MM` + what was done / found / failed (with honest
 confidence about whether a failure was our own mistake).
