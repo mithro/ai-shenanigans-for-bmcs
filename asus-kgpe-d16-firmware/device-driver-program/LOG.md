@@ -4,6 +4,26 @@ Newest entries at the top. Every work session appends here and commits.
 Format: `## YYYY-MM-DD HH:MM` + what was done / found / failed (with honest
 confidence about whether a failure was our own mistake).
 
+## 2026-07-18 — D03 BIOS-flash path SETTLED; D08 fabric facts gathered
+
+- **D03/#8 settled by sub-agent research with schematic citations:** host BIOS
+  flash `FU1` (W25Q16) is on the **SP5100 SPI controller** (`SB_SPI_*`, SU1
+  D1/D2/G6/F3/F4/D6→FU1); BMC `AST_SPI*` nets reach only `BMC_FW1`; no shared
+  node; AST2050 has no host-facing SPI master; BIOS fetch is FCH-SPI (not LPC
+  cycles). Prior "no path" claim was RIGHT — now Ⓝ *with evidence* instead of
+  assumption. TASKLIST updated.
+- **D08 mux-fabric facts established (schematic):**
+  - `AST_I2CS0` = GPIOF4 (ball W4), `AST_I2CS1` = GPIOF5 (ball W3) → U23[5]/[2].
+  - `I2CMUX_ENABLE#` = inverted `SYS_PWRGD` (U8 74LVC14A: pin13 in = SYS_PWRGD
+    per QU1_pins.md:315, pin12 out = I2CMUX_ENABLE#). So QU9 bridges I2C2↔I2C7
+    **only while host power is good** — SPD unreachable with host off; QEMU
+    model must enforce this.
+  - U23 OE# nets (`N51800495`/`N51800497`) driver still untraced (BMC pinmap
+    only shows U23[2]/[5]) — must come from the FZ netlist dumps; open item
+    before silicon SPD access (multi-master hazard vs SP5100).
+- Launched 4 read-only audit/research agents (statuses D01-D06, D07-D15 +
+  U-Boot/Zephyr inventory, BIOS path [done ↑], NC-SI facts). 3 still running.
+
 ## 2026-07-18 — program start
 
 - Merged `origin/main` (schematic-wiring PR #29) into `claude/bmc-functionality`

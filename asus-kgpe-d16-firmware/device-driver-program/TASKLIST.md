@@ -35,7 +35,7 @@ must survive independent review).
 | "True NC-SI impossible / not wired" | SILICON-STATUS.md #9 | `AST_RMII2*` balls A5/B5/B6/C4/D4/D5 bus to BOTH Intel 82574L NICs (LU1/LU2) — §7 | D07-NCSI |
 | "DIMM inventory (SPD) impossible — no path" | SILICON-STATUS.md #5 | I2C2 →QU9 FET switch→ I2C7 →QU5 4052 mux→ I2C10/I2C11 reach all 16 DIMM SPD+TSOD; select via AST_I2CS0/1 (W4/W3) + I2CMUX_ENABLE#; U23 arbitrates vs SP5100 — §10.3 | D08-I2C (SPD sub-task) |
 | "SOL host-serial impossible" | SILICON-STATUS.md #6 | UART1 (Y22/AA22/V21/W22) → QU8 PI5C3257 2:1 mux → Super-I/O serial; select = BMC_PRESENT# — §12 | D10-SOL |
-| "Host-BIOS flash access — no path" | SILICON-STATUS.md #8 | BMC is an LPC peripheral on the SP5100 LPC bus (§5). Whether the host BIOS flash is LPC-attached or SP5100-SPI-attached must be settled from SP5100-SOUTHBRIDGE-WIRING.md — NOT assumed | D03-LPC (BIOS-path sub-task) |
+| "Host-BIOS flash access — no path" | SILICON-STATUS.md #8 | **SETTLED 2026-07-18 (schematic-cited): claim stands.** Host BIOS = socketed W25Q16 `FU1` on the SP5100's SPI controller (`SB_SPI_*` nets, SU1 D1/D2/G6/F3/F4 → FU1, WP# on SU1 D6; `pinmaps/SU1_pins.md:12-16`, `SP5100-SOUTHBRIDGE-WIRING.md §8`). BMC `AST_SPI*` nets terminate only at `BMC_FW1` (`pinmaps/QU1_pins.md:73-118`); the two net families share no node, and the AST2050 has no host-facing SPI master (single legacy SMC @0x16000000 — `fw-update/UPDATE-PATHS.md:120-134`). BIOS is fetched over FCH-SPI, not LPC firmware cycles, so no LPC route reaches it either. Scope = Ⓝ (host-mediated orchestration only) | D03 Ⓝ with citations |
 
 (The schematic *confirms* USB is device-only — §9 "USB device port" to SP5100 —
 so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.)
@@ -71,7 +71,7 @@ so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.
 | U-Boot driver (n/a? — justify or implement) | ⬜ | check modern U-Boot aspeed LPC support |
 | Linux KCS/IPMI validated QEMU+silicon+userspace | ✅ | `sdr` over host-KCS on silicon (g3-clk memory) |
 | Linux mailbox/snoop/vUART drivers + validation ×3 | ⬜ | |
-| **BIOS-flash-path determination** (LPC vs SP5100-SPI; what the BMC can reach) | 🔁 | settle from SP5100-SOUTHBRIDGE-WIRING.md + SP5100 datasheet; then scope |
+| **BIOS-flash-path determination** (LPC vs SP5100-SPI; what the BMC can reach) | Ⓝ | SETTLED — see the REOPENED table above: FU1 is SP5100-SPI-attached with no BMC node on any `SB_SPI_*` net; BMC self-update of `BMC_FW1` stays in scope (D02), host-BIOS update is host-mediated only |
 | Zephyr KCS driver + validation | ⬜ | |
 
 ### D04 — PCI 33 MHz (VGA/iKVM device on SP5100 bus) + video-capture engine
