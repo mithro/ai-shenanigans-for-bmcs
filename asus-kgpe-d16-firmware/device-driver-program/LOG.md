@@ -4,6 +4,36 @@ Newest entries at the top. Every work session appends here and commits.
 Format: `## YYYY-MM-DD HH:MM` + what was done / found / failed (with honest
 confidence about whether a failure was our own mistake).
 
+## 2026-07-18 — D08 fabric IMPLEMENTED in QEMU; fwtest 11/11 PASS first run
+
+- **QEMU submodule (`be673b2`):** new `kgpe-d16-i2c-fabric` device
+  (transparent GPIO-selected mux, pca954x `match_and_add` pattern, gated on
+  the modeled host power), new `jc42` TSOD device (MCP98244 IDs — corrected
+  from my first MCP9805 guess after checking Linux jc42.c's ID table:
+  MCP9805's real devid is the 0x0000-family, 98244=0x2200 is cleanly in the
+  table), board glue instantiates SPD @0x51 (CRC-valid provisional
+  DDR3-1333 ECC RDIMM image) + TSOD @0x19 on bank Y2 = rig slot A2.
+  `aspeed_gpio` grew `kgpe-host-on` + `kgpe-i2cs[2]` named outputs (per-pin
+  sysbus-IRQ indexes shift with skipped pins, so named outputs are the
+  robust wiring; pull-up semantics "undriven ⇒ high" preserved).
+- **Parent repo (`61ae28e`):** `/i2cmux` i2c-mux-gpio DTS nodes in BOTH the
+  QEMU DTS and the realhw DTS (GPIOF4/F5 = Linux lines 44/45; no enable
+  GPIO — none exists in hardware), kernel config +I2C_MUX_GPIO +AT24 +JC42.
+  Both DTS verified compiling with dtc (phandles resolve).
+- **fwtest `peripherals/i2cmux` + `integration/test_i2cmux.py`: 11/11 checks
+  PASS on the first run** — host-off NAK / host-on Y3-idle NAK / Y2 SPD+TSOD
+  ACK / SPD bytes 0x92,0x0B read / live re-routing / mid-session power-off
+  disconnect, with the pre-fabric W83795G unaffected throughout.
+- Full integration suite regression run in progress.
+- Compatibles verified against the vendored kernel source (at24
+  "atmel,24c02" ✓, jc42 "jedec,jc-42.4-temp" ✓, cap high-byte==0 detect
+  requirement ✓).
+- NOTE (D09 reconciliation item): schematic §11 names vs the silicon-verified
+  pwrseq GPIO map disagree on some lines (e.g. GPIOB6 = SYS_PWRGD in the
+  schematic vs CTL_REQ_RESET_N in asus_power.sh RE). Power control is
+  plug-verified working, so both facts are real — the naming must be
+  reconciled with net-level evidence in D09, not papered over.
+
 ## 2026-07-18 — fabric FULLY decoded from netlist; audits folded in
 
 - **D08 fabric control/arbitration completely traced** from the extracted
