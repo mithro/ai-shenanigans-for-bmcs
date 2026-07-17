@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 346" role="img" aria-label="DIMM SPD / TSOD buses (via QU5 mux)" preserveAspectRatio="xMidYMid meet">
+  <title>DIMM SPD / TSOD buses (via QU5 mux)</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#555;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--purple:#7d3cc0;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--purple:#b98cf0;--red:#e74c3c;}
+    }
+    .t{font-size:18px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .h{font-size:13px;font-weight:700;}
+    .m{font-size:11.5px;fill:var(--muted);}
+    .l{font-size:12px;}
+    .box{fill:var(--box);stroke-width:1.8;}
+    .wire{fill:none;stroke:var(--ink);stroke-width:1.4;}
+    .fillink{fill:var(--ink);}
+    .sw{stroke-width:1.8;fill:var(--box);}
+  </style>
+  <defs>
+    <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+    </marker>
+  </defs>
+<text class="t" x="24" y="34">DIMM SPD / TSOD buses (via QU5 mux)</text>
+<text class="st" x="24" y="56">BMC I2C2 → QU9 switch → QU5 74HC4052 → the two DIMM banks</text>
+<line class="wire" x1="194" y1="202" x2="240" y2="202" marker-end="url(#arw)"/>
+<line class="wire" x1="450" y1="202" x2="496" y2="202" marker-end="url(#arw)"/>
+<line class="wire" x1="686" y1="202" x2="732" y2="133" marker-end="url(#arw)"/>
+<line class="wire" x1="686" y1="202" x2="732" y2="202" marker-end="url(#arw)"/>
+<line class="wire" x1="686" y1="202" x2="732" y2="271" marker-end="url(#arw)"/>
+<rect class="box" stroke="var(--ink)" x="24" y="179" width="170" height="46" rx="8"/>
+<text class="h" x="36" y="198">AST2050 BMC</text>
+<text class="m" x="36" y="215">I2C2 (or SP5100)</text>
+<rect class="box" stroke="var(--gold)" x="240" y="179" width="210" height="46" rx="8"/>
+<text class="h" x="252" y="198">QU9 SN74CBTLV3125</text>
+<text class="m" x="252" y="215">FET switch · I2CMUX_EN#</text>
+<rect class="box" stroke="var(--gold)" x="496" y="179" width="190" height="46" rx="8"/>
+<text class="h" x="508" y="198">QU5 74HC4052</text>
+<text class="m" x="508" y="215">1-of-4 · S1:S0</text>
+<rect class="box" stroke="var(--green)" x="732" y="110" width="300" height="46" rx="8"/>
+<text class="h" x="744" y="129">DIMM A–D · I2C10 (S1:S0=10)</text>
+<text class="m" x="744" y="146">SPD 0x50–57 · TSOD 0x18–1F</text>
+<rect class="box" stroke="var(--green)" x="732" y="179" width="300" height="46" rx="8"/>
+<text class="h" x="744" y="198">DIMM E–H · I2C11 (S1:S0=11)</text>
+<text class="m" x="744" y="215">SPD 0x50–57 · TSOD 0x18–1F</text>
+<rect class="box" stroke="var(--ink)" x="732" y="248" width="300" height="46" rx="8"/>
+<text class="h" x="744" y="267">AUX_PANEL1 · I2C8 (S1:S0=00)</text>
+<text class="m" x="744" y="284">front-panel I2C</text>
+<line class="wire" x1="24" y1="304" x2="1032" y2="304"/>
+<rect class="sw" stroke="var(--ink)" x="24" y="309" width="16" height="13" rx="3"/>
+<text class="l" x="46" y="320">master (I2C controller)</text>
+<rect class="sw" stroke="var(--green)" x="229.6" y="309" width="16" height="13" rx="3"/>
+<text class="l" x="251.6" y="320">sensor</text>
+<rect class="sw" stroke="var(--gold)" x="312.8" y="309" width="16" height="13" rx="3"/>
+<text class="l" x="334.8" y="320">I2C mux / switch</text>
+<rect class="sw" stroke="var(--ink)" x="468.0" y="309" width="16" height="13" rx="3"/>
+<text class="l" x="490.0" y="320">EEPROM / host / PSU</text>
+</svg>

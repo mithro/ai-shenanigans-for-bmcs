@@ -162,6 +162,14 @@ real VGA output. The Orange Pi presents a **BIOS-compatible boot keyboard**
 (`hid.usb0`: protocol=1, subclass=1, 8-byte reports) on `/dev/hidg0`, auto-created
 at boot by `usb-gadget.service` → `/usr/local/sbin/usb-gadget-setup.sh` (ansible).
 
+Two board facts relevant to this VGA path (from the 15h.org board page,
+mirrored in [`ASUS-KGPE-D16.md`](ASUS-KGPE-D16.md)): the **VGA_SW1 jumper**
+selects whether the AST2050's onboard VGA or a PCIe GPU drives the bootup
+display (must be "Enable" for the Magewell to see firmware output on the
+rear VGA port), and there is an **undocumented 9-pin VGA header next to the
+rear-IO VGA port** whose pins are shared with that port — a possible capture
+tap point without occupying the rear connector.
+
 ### Type on the host (works in Linux *and* the BIOS)
 ```sh
 ssh -F … opi "sudo python3 ~/rig-tools/keysend.py type 'ls -la'"

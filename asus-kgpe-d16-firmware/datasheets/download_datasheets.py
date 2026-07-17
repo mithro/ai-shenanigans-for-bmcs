@@ -12,6 +12,15 @@ AST2050 SoC and the same SPI-NOR flash family), so they reuse the URLs proven in
 additions are the host-side AMD chipset (SR5690 / SP5100) and the board's
 hardware monitor.
 
+The final sections mirror every remaining PDF linked from the 15h.org
+"ASUS KGPE-D16" wiki page (this directory's board) and its "ASUS KCMA-D8"
+sibling-board page (Socket-C32, same chipset, Super I/O, hwmon, and the same
+AST2050 BMC on an ASMB4/ASMB5 module); see 15H-ORG-MIRROR.md for the full
+link->file provenance maps. Four links shared by both pages are
+byte-identical to files fetched from vendor sites by earlier sections, so
+those 15h.org URLs appear as *fallback mirrors* on the existing entries
+instead of new files.
+
 Run with `uv` (no third-party deps, stdlib only):
 
     uv run download_datasheets.py
@@ -45,7 +54,12 @@ DATASHEETS = [
     ),
     (
         "AST2050_AST1100_A3_Datasheet_V1.05.pdf",
-        ["https://raw.githubusercontent.com/erik-smit/oohhh-what-does-this-ipmi-doooo-no-deedee-nooooo/master/1-discovering/beetje-poepe-daan/ASPEED/AST2050%20iRMC%20A3%20Datasheet%20(1.05).pdf"],
+        [
+            "https://raw.githubusercontent.com/erik-smit/oohhh-what-does-this-ipmi-doooo-no-deedee-nooooo/master/1-discovering/beetje-poepe-daan/ASPEED/AST2050%20iRMC%20A3%20Datasheet%20(1.05).pdf",
+            # Byte-identical copy hosted by the 15h.org KCMA-D8 page
+            # (verified by SHA-256, 2026-07-16 - see 15H-ORG-MIRROR.md).
+            "https://15h.org/images/1/18/AST2050_Data_Sheet.pdf",
+        ],
         "Aspeed AST2050/AST1100 A3 Datasheet V1.05 (May 2010) - newer revision of the same datasheet",
     ),
 
@@ -73,7 +87,12 @@ DATASHEETS = [
     ),
     (
         "S25FL128P_Datasheet.pdf",
-        ["https://www.infineon.com/dgdl/Infineon-S25FL128P_128_MBIT_3.0_V_FLASH_MEMORY-DataSheet-v14_00-EN.pdf?fileId=8ac78c8c7d0d8da4017d0ed4d9135357"],
+        [
+            "https://www.infineon.com/dgdl/Infineon-S25FL128P_128_MBIT_3.0_V_FLASH_MEMORY-DataSheet-v14_00-EN.pdf?fileId=8ac78c8c7d0d8da4017d0ed4d9135357",
+            # Byte-identical copy hosted by the 15h.org KCMA-D8 page
+            # (verified by SHA-256, 2026-07-16 - see 15H-ORG-MIRROR.md).
+            "https://15h.org/images/6/64/Infineon-s25fl128p-128-mbit-3.0-v-flash-memory-datasheet-en.pdf",
+        ],
         "S25FL128P - 128Mbit 3.0V SPI Flash (Spansion/Cypress/Infineon)",
     ),
     (
@@ -146,6 +165,9 @@ DATASHEETS = [
         [
             "https://www.amd.com/content/dam/amd/en/documents/archived-tech-docs/programmer-references/43871.pdf",
             "https://theretroweb.com/chip/documentation/43869-64c7c40660d33123068113.pdf",
+            # Byte-identical copy hosted by the 15h.org KCMA-D8 page
+            # (verified by SHA-256, 2026-07-16 - see 15H-ORG-MIRROR.md).
+            "https://15h.org/images/9/9a/AMD_SR5690_5670_5650_Register_Reference_Guide.pdf",
         ],
         "AMD SR5690/5670/5650 Register Reference Guide (RD890 NB/IOMMU) - HDT scan-chain node",
     ),
@@ -157,8 +179,179 @@ DATASHEETS = [
         [
             "https://www.amd.com/content/dam/amd/en/documents/archived-tech-docs/programmer-references/44413.pdf",
             "https://theretroweb.com/chip/documentation/44413-64c7c6c5a7fab785584815.pdf",
+            # Byte-identical copy hosted by the 15h.org KCMA-D8 page
+            # (verified by SHA-256, 2026-07-16 - see 15H-ORG-MIRROR.md).
+            "https://15h.org/images/7/78/AMD_SP5100_Register_Reference_Guide.pdf",
         ],
         "AMD SP5100 Register Reference Guide (SB700 southbridge, 8051 SMBus core) - HDT scan-chain node",
+    ),
+
+    # ============================================================
+    # 15h.org "ASUS KGPE-D16" page mirror (retrieved 2026-07-16).
+    # PDFs linked from https://15h.org/index.php/ASUS_KGPE-D16
+    # (oldid=2924) that are not already covered above. Full link->file
+    # provenance map: 15H-ORG-MIRROR.md.
+    # ============================================================
+
+    # --- Board documentation ---
+    # Byte-identical (SHA-256) to the ASUS "E8847" KGPE-D16 user manual
+    # circulating from asus.com mirrors.
+    (
+        "KGPE-D16_Manual.pdf",
+        ["https://15h.org/images/4/48/KGPE-D16_Manual.pdf"],
+        "ASUS KGPE-D16 User Manual (ASUS pub E8847, 158pp)",
+    ),
+
+    # --- AMD SR5690 northbridge (the KGPE-D16's NB) ---
+    (
+        "AMD_SR5690_Databook.pdf",
+        ["https://15h.org/images/4/4c/AMD_SR5690_Databook.pdf"],
+        "AMD SR5690 Databook (pub 43869, rev 2.20)",
+    ),
+
+    # --- CPU microcode research papers (linked from the page's Opteron
+    #     'Reverse Engineering and Analysis' lists) ---
+    (
+        "Sec17_Koppe_Reverse_Engineering_x86_Processor_Microcode.pdf",
+        # Wiki basename: Sec17-koppe.pdf
+        ["https://15h.org/images/a/a3/Sec17-koppe.pdf"],
+        "Koppe et al., 'Reverse Engineering x86 Processor Microcode', "
+        "USENIX Security 2017 (fam10h/K8 microcode RE)",
+    ),
+    (
+        "2014_Chen_Ahn_Security_Analysis_of_x86_Processor_Microcode.pdf",
+        # Wiki basename: 2014_paper_microcode.pdf
+        ["https://15h.org/images/a/ab/2014_paper_microcode.pdf"],
+        "Chen & Ahn, 'Security Analysis of x86 Processor Microcode', 2014",
+    ),
+
+    # --- Host CPUs: fam10h / K10 (Opteron 6100 on this board;
+    #     4100 on the KCMA-D8) — linked from both board pages ---
+    (
+        "44065_Arch2008.pdf",
+        ["https://15h.org/images/f/f7/44065_Arch2008.pdf"],
+        "AMD AGESA Interface Specification for Arch2008 (pub 44065) - "
+        "Opteron 4100 and 4200/4300 series",
+    ),
+    (
+        "AMD_Family_10h_BKDG_31116.pdf",
+        ["https://15h.org/images/6/63/31116.pdf"],
+        "AMD Family 10h BIOS and Kernel Developer's Guide (pub 31116) - "
+        "Opteron 4100 series",
+    ),
+    (
+        "AMD_Family_10h_Opteron_PDS_40036.pdf",
+        ["https://15h.org/images/1/15/40036.pdf"],
+        "AMD Family 10h Opteron Processor Product Data Sheet (pub 40036)",
+    ),
+    # NOTE: the KCMA-D8 page links https://15h.org/images/2/2b/43374.pdf,
+    # but that direct link is STALE (redirects to the wiki Home page). The
+    # file was renamed on the wiki; File:43374.pdf redirects to the long
+    # name below, whose current upload path is used here.
+    (
+        "AMD_Family_10h_Power_Thermal_Data_Sheet_43374.pdf",
+        ["https://15h.org/images/9/94/43374_-_AMD_Family_10h_Server_and_Workstation_Processor_Power_and_Thermal_Data_Sheet_%2843374%29.pdf"],
+        "AMD Family 10h Server and Workstation Processor Power and Thermal "
+        "Data Sheet (pub 43374) - Opteron 4100 series",
+    ),
+
+    # --- Host CPUs: fam15h (Opteron 6200/6300 on this board;
+    #     4200/4300 on the KCMA-D8) — linked from both board pages ---
+    (
+        "42301_15h_Mod_00h-0Fh_BKDG.pdf",
+        ["https://15h.org/images/b/be/42301_15h_Mod_00h-0Fh_BKDG.pdf"],
+        "AMD Family 15h Models 00h-0Fh BIOS and Kernel Developer's Guide "
+        "(pub 42301) - Opteron 4200/4300 series",
+    ),
+    (
+        "49687_15h_Mod_00h-0Fh_Opteron_PDS.pdf",
+        ["https://15h.org/images/e/ee/49687_15h_Mod_00h-0Fh_Opteron_PDS.pdf"],
+        "AMD Family 15h Models 00h-0Fh Opteron Product Data Sheet (pub 49687)",
+    ),
+    (
+        "47414_15h_sw_opt_guide.pdf",
+        ["https://15h.org/images/a/af/47414_15h_sw_opt_guide.pdf"],
+        "AMD Family 15h Software Optimization Guide (pub 47414)",
+    ),
+
+    # --- AMD SR5690/5670/5650 northbridge family (KGPE-D16: SR5690;
+    #     KCMA-D8: SR5670) — family docs linked from both board pages ---
+    (
+        "AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf",
+        ["https://15h.org/images/c/c3/AMD_SR5690_5670_5650_BIOS_Developers_Guide.pdf"],
+        "AMD SR5690/5670/5650 BIOS Developer's Guide (pub 43870, rev 3.00)",
+    ),
+    (
+        "AMD_IOMMU_Spec_48882_v2.62.pdf",
+        ["https://15h.org/images/2/24/48882-2.62.pdf"],
+        "AMD I/O Virtualization Technology (IOMMU) Specification rev 2.62 "
+        "(pub 48882)",
+    ),
+    (
+        "AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf",
+        ["https://15h.org/images/b/b0/AMD_SR5690_5670_5650_Register_Programming_Requirements.pdf"],
+        "AMD SR5690/5670/5650 Register Programming Requirements "
+        "(pub 43872, rev 3.05)",
+    ),
+    (
+        "SR56x0_Product_Errata.pdf",
+        ["https://15h.org/images/5/5d/SR56x0_Product_Errata.pdf"],
+        "AMD SR56x0 Product Errata - silicon errata for SR5690/5670/5650 "
+        "(pub 46303, rev 3.10)",
+    ),
+
+    # --- AMD SP5100 southbridge ---
+    (
+        "AMD_SP5100_BIOS_Developers_Guide.pdf",
+        # Wiki filename has an apostrophe (Developer's); cleaned locally.
+        ["https://15h.org/images/a/ad/AMD_SP5100_BIOS_Developer%27s_Guide.pdf"],
+        "AMD SP5100 BIOS Developer's Guide (pub 44415, rev 3.01)",
+    ),
+    (
+        "AMD_SP5100_Register_Programming_Requirements.pdf",
+        ["https://15h.org/images/7/7b/AMD_SP5100_Register_Programming_Requirements.pdf"],
+        "AMD SP5100 Register Programming Requirements (pub 44414, rev 3.02)",
+    ),
+    (
+        "AMD_SP5100_Databook.pdf",
+        ["https://15h.org/images/d/df/AMD_SP5100_Databook.pdf"],
+        "AMD SP5100 Databook (pub 44409, rev 1.70; AES-encrypted with an "
+        "empty user password - viewers open it transparently)",
+    ),
+    (
+        "SP5100_Product_Errata.pdf",
+        ["https://15h.org/images/e/ec/SP5100_Product_Errata.pdf"],
+        "AMD SP5100 Product Errata - silicon errata for SP5100 "
+        "(pub 46836, rev 3.00)",
+    ),
+
+    # --- Winbond / Nuvoton ---
+    (
+        "W83667hg-a-datasheet-v1-2.pdf",
+        # Wiki filename carries an upload-hash suffix; cleaned locally.
+        ["https://15h.org/images/3/34/W83667hg-a-datasheet-v1-2-67dd6c3d7aef5611225428.pdf"],
+        "Winbond W83667HG-A LPC Super I/O Data Book v1.2 (319pp) - closes "
+        "the 'NDA-gated, no public copy' gap previously recorded here",
+    ),
+    (
+        "Nuvoton_W83795G_W83795ADG_Datasheet_V1.43.pdf",
+        ["https://15h.org/images/3/31/Nuvoton_W83795G_W83795ADG_Datasheet_V1.43.pdf"],
+        "Nuvoton W83795G/ADG Datasheet V1.43 (15h.org copy) - same document "
+        "as W83795G_W83795ADG_Datasheet.pdf but a different PDF build, kept "
+        "to complete the 15h.org mirror",
+    ),
+
+    # ============================================================
+    # 15h.org "ASUS KCMA-D8" sibling-board page (oldid=2941): the one
+    # PDF linked ONLY from that page. Everything else the KCMA-D8 page
+    # links is covered above (shared with the KGPE-D16 page) or is a
+    # byte-identical fallback URL on a vendor-fetched entry.
+    # ============================================================
+    (
+        "AMD_SR5670_Databook.pdf",
+        ["https://15h.org/images/2/23/AMD_SR5670_Databook.pdf"],
+        "AMD SR5670 Databook (pub 44549, rev 2.20) - the KCMA-D8's "
+        "northbridge; same RD890 family as the KGPE-D16's SR5690",
     ),
 ]
 
@@ -167,13 +360,10 @@ DATASHEETS = [
 # found. Listed so the gap is visible rather than silently omitted; see the
 # README "Still missing" section. `main()` prints these at the end.
 KNOWN_UNAVAILABLE = [
-    (
-        "Winbond W83667HG-A (host LPC Super I/O)",
-        "Full Winbond/Nuvoton Super I/O datasheet is registration/NDA-gated; "
-        "distributor mirrors 403 and alldatasheet serves a truncated ~19pp "
-        "preview only. coreboot 'superio/winbond/w83667hg-a' confirms the part.",
-        "Open reference: coreboot src/superio/winbond/w83667hg-a/",
-    ),
+    # NOTE (2026-07-16): the W83667HG-A gap is CLOSED — the full 319pp Data
+    # Book v1.2 is committed as W83667hg-a-datasheet-v1-2.pdf (mirrored from
+    # the 15h.org ASUS KCMA-D8 page; see 15H-ORG-MIRROR.md), so it no longer
+    # appears in this list.
     (
         "BMC Ethernet PHY (ASMB4/ASMB5 module, RMII)",
         "Raptor's device tree sets mac0 phy-mode='rmii' (external PHY needed) but "
