@@ -4,6 +4,39 @@ Newest entries at the top. Every work session appends here and commits.
 Format: `## YYYY-MM-DD HH:MM` + what was done / found / failed (with honest
 confidence about whether a failure was our own mistake).
 
+## 2026-07-18 — fabric FULLY decoded from netlist; audits folded in
+
+- **D08 fabric control/arbitration completely traced** from the extracted
+  netlist (`.worktrees/kcma-d8-bmc-wiring/tmp/kgpe/kgpe.json`) → new doc
+  `schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md`. Headlines:
+  - QU9 enable = !SYS_PWRGD (automatic, no BMC GPIO); QU5 E# grounded
+    (always on); U23 ownership = hardware mutex via D27/QQ9/QQ10
+    (BMC owns iff BMC_PRESENT# low AND SB_BIOS_POST_COMPLT# low);
+    only BMC-driven controls anywhere = GPIOF4/F5 selects; idle select = 11.
+  - **Doc gap found & recorded:** the QU9-switched 4th segment reaches the
+    TPM1 header (pins 13/14) and PCIe slots 1–5 SMBus (`I2C13*` nets) —
+    §10 only mentioned the aux panel.
+  - **LU1/LU2 (82574L) confirmed on +3V3_AUX** → D07 silicon testable host-off.
+  - **U25 FRU EEPROM E2 pin strapped high** → address likely 0x54-0x57 (doc
+    said 0x50-0x53); silicon i2cdetect to settle.
+- **Audit agents (4) returned; corrections folded into TASKLIST:**
+  - UNDERSTATED: modern U-Boot v2019.04 (`evb-ast2400_defconfig`) already
+    boots→Linux→SSH in QEMU (CI `boot-uboot-ssh`); still zero board port.
+  - OVERSTATED: FRU EEPROM "QEMU eeprom exists" — no DTS node/model wired
+    anywhere → reset to ⬜.
+  - D06 naming conflict: schematic says RTL8201**N** (U5); model/tests say
+    RTL8201**CP** (PHYID 0x8201). Reconcile via silicon PHYID + datasheets.
+  - F7-NCSI.md "not wired" verdict was MAC1-scoped — must be reconciled with
+    schematic §7 (MAC2/RMII2 to LU1+LU2). QEMU MAC2 exists but unwired
+    (`macs_mask=ASPEED_MAC0_ON`); DTS mac2 disabled; NET_NCSI not built.
+  - Stale doc: `MODERN-KERNEL-STATUS.md` still lists the RMII-TX blocker
+    superseded by the VIC + cur_speed fixes — needs updating.
+  - "108 tests" = 67 test functions parametrized to 108 cases (accurate but
+    now stated precisely).
+  - Zephyr: confirmed zero code exists anywhere (D14 all-⬜ accurate).
+- Push hiccups to GitHub (2 timeouts, then success) — network, not repo state;
+  branch now synced at `2e10f8a`.
+
 ## 2026-07-18 — D03 BIOS-flash path SETTLED; D08 fabric facts gathered
 
 - **D03/#8 settled by sub-agent research with schematic citations:** host BIOS

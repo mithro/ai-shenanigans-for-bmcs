@@ -49,7 +49,7 @@ so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.
 |---|---|---|
 | QEMU model (SDMC regs, 64 MB, training behaviour) | ✅ | faithful-QEMU program (108 tests); 64 MB fix per openbmc-64mb-constraint |
 | U-Boot driver (DDR2 lowlevel init, SCU40[6] skip path) | 🔶 | Raptor legacy U-Boot init works (QEMU+silicon); **modern U-Boot port needs its own ram driver** |
-| U-Boot validated QEMU / silicon | 🔶 | legacy: both ✅; modern: ⬜ / ⬜ |
+| U-Boot validated QEMU / silicon | 🔶 | legacy: both ✅. Modern: audit found CI `boot-uboot-ssh` already boots OpenBMC U-Boot v2019.04 (`evb-ast2400_defconfig`) → Linux → SSH **in QEMU** (understated ⬜→🔶) — but that leans on register compatibility with no kgpe-d16 board port or own DDR2 driver; silicon ⬜ |
 | Linux (memory only — no driver beyond memblock) | ✅ | boots to shell QEMU+silicon (g3-clk kernel) |
 | Zephyr (memory init / linker) | ⬜ | part of Zephyr ARM926/AST2050 port (D14) |
 
@@ -103,9 +103,10 @@ so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.
 ### D07 — Ethernet ch.2: MAC2 RMII2 / NC-SI → LU1+LU2 (Intel 82574L) 🔁
 | Layer | Status | Evidence / next step |
 |---|---|---|
-| QEMU model (2nd MAC in RMII/NC-SI mode + NC-SI-responder 82574L model) | ⬜ | new work: NC-SI frames over the modeled RMII2 link |
-| Linux ncsi stack (ftgmac100 mac2 + net/ncsi) QEMU validation | ⬜ | |
-| Silicon validation | ⬜ | needs host NIC powered (82574L on standby? check schematic power domain first) |
+| QEMU model (2nd MAC in RMII/NC-SI mode + NC-SI-responder 82574L model) | ⬜ | MAC2 device exists (SoC `macs_num=2`, 0x1E680000) but board `macs_mask=ASPEED_MAC0_ON` leaves it unwired; ftgmac100.c has no NC-SI responder. RMII2 is multi-drop to LU1+LU2, 50 MHz REF from clockgen `CU2` (external — nothing to model), `RMII2RXER` unconnected |
+| Reconcile F7-NCSI.md (its "not wired" verdict was MAC1-scoped) | ⬜ | update F7 + SILICON-STATUS #9 with the schematic §7 channel-2 facts |
+| Linux ncsi stack (ftgmac100 mac2 + net/ncsi) QEMU validation | ⬜ | DTS mac2 node exists but `status="disabled"`, no `use-ncsi`; `CONFIG_NET_NCSI` not built; recipe in F7-NCSI.md:256-269 |
+| Silicon validation | ⬜ | **power-domain ANSWERED: LU1/LU2 are on +3V3_AUX (netlist)** — NC-SI testable with host off. Need 82574L datasheet (not in repo) for NC-SI enable/EEPROM config |
 | U-Boot / Zephyr NC-SI | ⬜ | scope after Linux path proven |
 
 ### D08 — I²C ×8 + board mux fabric + all far-end devices
@@ -115,9 +116,9 @@ U-Boot access + Zephyr, with the mux *fabric* modeled once):
 |---|---|---|
 | AST2050 I2C controller (8 buses) QEMU+Linux | ✅ | g3 AC-timing fix proven on silicon (i2cdetect, W83795 reads) |
 | W83795G hwmon (QU4, I2C2 @0x2F) full model + Linux hwmon ×3 validations | 🔶 | silicon reads work; QEMU model completeness audit vs datasheet (VSEN1-11, TR1-6, FANIN1-12, FANCTL1-8) |
-| **QU9+QU5+U23 mux fabric QEMU model** (GPIO-driven, transparent FET + 4052) | ⬜ | model as QEMU I2C mux devices tied to GPIO lines W3/W4 + I2CMUX_ENABLE# |
-| **DIMM SPD ×16 + TSOD** via fabric (I2C10/I2C11) 🔁 | ⬜ | QEMU: SPD EEPROM + TSOD models per bank; Linux: i2c-mux-gpio + at24/jc42; silicon: worked example §10.3 |
-| FRU EEPROM HT24LC08 (U25, I2C5 @0x50-53) | 🔶 | QEMU eeprom exists; wire at correct bus/addr; Linux at24 + FRU decode ×3 |
+| **QU9+QU5+U23 mux fabric QEMU model** (GPIO-driven, transparent FET + 4052) | 🔶 | control/arbitration FULLY netlist-traced 2026-07-18 → `schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md` (QU9 = !SYS_PWRGD auto-enable; QU5 always-enabled, idle select=11; U23 = hardware mutex on BMC_PRESENT#+SB_BIOS_POST_COMPLT#; only BMC controls are GPIOF4/F5). QEMU device next |
+| **DIMM SPD ×16 + TSOD** via fabric (I2C10/I2C11) 🔁 | ⬜ | QEMU: SPD EEPROM + TSOD models per bank; Linux: i2c-mux-gpio (2 GPIOs, no enable line exists) + at24/jc42; silicon: host-on + POST-complete required (fabric doc §6) |
+| FRU EEPROM HT24LC08 (U25, I2C5) | ⬜ | audit: NO DTS node/model wired anywhere (claim was overstated). NEW: netlist shows U25 pin E2 strapped to VCC → address likely **0x54-0x57**, not 0x50-0x53 (fabric doc §5); settle on silicon |
 | W83601G DIMM-LED expanders (U27/U28, I2C5) | ⬜ | QEMU model (new chip); Linux gpio/led driver; light DIMMxERRLED on silicon |
 | SB-TSI CPU thermal (I2C4 → QU4 pins 29/30, 0x4C/0x4D) | ⬜ | QEMU SB-TSI responder model; Linux sbtsi_temp; silicon read CPU temps |
 | PSU PMBus (I2C1 → PSUSMB1 header) | ⬜ | QEMU PMBus device; Linux pmbus; silicon: depends on PSU with SMBus — check rig PSU, else Ⓝ-partial with evidence |
@@ -181,8 +182,9 @@ DDR_THERM monitors) — fans are driven by W83795G FANCTL, not the AST2050 PWM.
 ### D15 — Modern U-Boot AST2050 port (cross-cutting foundation)
 | Item | Status | Next step |
 |---|---|---|
-| Board/SoC support in current U-Boot (base: existing uboot-patches/, build-bmc-uboot.yml) | 🔶 | audit what exists; bring to bootable in QEMU |
-| Drivers: serial, timer, ram(D01), spi(D02), i2c(D08), gpio(D09), eth(D06), wdt | ⬜ | per-device ×2 validations |
+| Board/SoC support in current U-Boot (base: existing uboot-patches/, build-bmc-uboot.yml) | 🔶 | AUDITED 2026-07-18: modern base = OpenBMC U-Boot v2019.04 with stock `evb-ast2400_defconfig` (boots→Linux→SSH in QEMU via CI `boot-uboot-ssh`); **zero kgpe-d16/AST2050 board port exists** (no defconfig, no DTS, no drivers ported); legacy Raptor source NOT vendored (only diffs in `uboot-patches/`) |
+| Real board port: kgpe-d16-bmc defconfig + DTS + AST2050 quirks | ⬜ | |
+| Drivers: serial, timer, ram(D01), spi(D02), i2c(D08), gpio(D09), eth(D06), wdt | ⬜ | per-device ×2 validations (QEMU + silicon via JTAG/netboot) |
 
 ---
 
