@@ -36,10 +36,16 @@ rig-blocked, or architecturally impossible on this SoC/board (see per-row notes)
 **four features can never be fully delivered here** — #8 host-BIOS flash (**not
 wired on the KGPE-D16**: the board's BIOS SPI hangs off the AMD SB, not on any
 BMC-mastered bus — see the #8 row for the datasheet correction; the AST2050 is
-*not* categorically without a host-flash path), #9 true NC-SI (**not wired on this
-board** — dedicated RTL8201CP PHY; the SoC MAC can do NC-SI but the board straps
-MII/RMII only), #2's USB-*host* side (device-only controller — no EHCI/OHCI on the
-SoC), and #5's DIMM/memory inventory (SPDs on the host SMBus, not a BMC I2C bus).
+*not* categorically without a host-flash path; schematic-confirmed 2026-07-18:
+FU1 is on the SP5100 SPI controller with no shared node with any `AST_SPI*`
+net), ~~#9 true NC-SI~~ (**REOPENED 2026-07-18 as D07** — the earlier "not
+wired" verdict was MAC1-scoped; schematic §7 shows MAC2's RMII2 is a multi-drop
+NC-SI sideband to BOTH 82574L NICs, aux-powered; see the #9 row and F7-NCSI.md's
+correction), #2's USB-*host* side (device-only controller — no EHCI/OHCI on the
+SoC), and ~~#5's DIMM/memory inventory~~ (**REOPENED and now IMPLEMENTED as
+D08** — the SPDs are reachable from BMC I2C2 through the QU9/QU5/U23 fabric
+while host power is on; QEMU full-stack PASS 2026-07-18, silicon run pending;
+see `schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md`).
 So "all nine on both QEMU and silicon" is not achievable on this hardware; this
 doc is the honest map of what is, what's pending, and what cannot be delivered on
 this board (with the reason stated per row — a board-wiring limit vs a SoC limit).
@@ -100,8 +106,15 @@ this board (with the reason stated per row — a board-wiring limit vs a SoC lim
   not on a BMC-mastered bus). NB: the AST2050 SoC *does* have host-flash-master paths
   (LPC Master/FWH update §2.20; write-capable SMC with a spare CE) — this is a
   board-wiring limit, not a SoC absence (corrected per the 2026-07-16 audit).
-- **True NC-SI host-NIC sharing** — board wires a dedicated PHY and straps MII/RMII
-  only; the SoC MAC can do NC-SI but this board does not route it.
+- ~~**True NC-SI host-NIC sharing** — board wires a dedicated PHY and straps MII/RMII
+  only; the SoC MAC can do NC-SI but this board does not route it.~~
+  **⚠️ WITHDRAWN 2026-07-18 — no longer architecturally bounded.** That verdict
+  only examined MAC1 (the RTL8201 dedicated PHY). The schematic
+  (`schematic-wiring/AST2050-BMC-WIRING.md` §7) shows MAC2's RMII2 balls are a
+  multi-drop NC-SI sideband to BOTH Intel 82574L NICs (LU1/LU2, on +3V3_AUX,
+  50 MHz REF from clockgen CU2), and the 82574L datasheet confirms DMTF NC-SI
+  1.0.0a over RMII (NVM-selected). Now task **D07** in
+  `device-driver-program/TASKLIST.md`.
 - **USB host** — the AST2050 has only a USB *device/gadget* controller (no EHCI/OHCI;
   datasheet feature table lists "USB 1.1 Controller = No").
 
