@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-18 — CLOSED a gap: removed the phantom ADC from the G3 (first #144 increment)
+
+- Acting on the audit rather than only cataloguing it. **Removed the phantom ADC** the
+  gate-(a)/(d) audit confirmed (#146): the AST2050 (G3) has NO ADC (datasheet §1.4/§9;
+  AST2050-MEMORY-MAP.md), but the shared AST2400 SoC realize created+mapped an `aspeed.adc`
+  at 0x1E6E9000 unconditionally. Gated the instance-init + realize on
+  `sc->silicon_rev != AST2050_A1_SILICON_REV` (the exact G3-branch pattern the init already
+  uses for the faithful 2050 VIC). Submodule `9eedd27540`.
+- **Validated:** build OK; `tmp/check-adc.py` drives each machine's qtree over QMP → shows
+  `aspeed.adc` **ABSENT on kgpe-d16-bmc** and still **PRESENT on ast2500-evb** (no
+  regression to other SoCs). No DTS references an `adc` node (grepped), so nothing
+  downstream breaks; a G3 access to 0x1E6E9000 now reads unassigned like the silicon.
+  Parent submodule-pointer bump + CI oracle re-validation (C2/C4/C-UBOOT must still boot)
+  to follow once the submodule push lands. **#146 CLOSED**; this is the first of the #144
+  phantom set (ADC done; UART3-5/WDT2/SRAM/SPI1 + serial loop remain, each with its own
+  oracle re-validation). Matrix row 41 → all-Ⓝ, phantom-removed.
+- Faithfulness lesson reinforced: "model every device" is bounded by "…that the real
+  silicon has." An earlier gate-(d) pass had ADDED the ADC as a to-do; the deeper check
+  against the authoritative datasheet showed the honest answer was its ABSENCE.
+
 ## 2026-07-18 — Gate-(a)/(d) completeness+honesty audit: re-read the FULL schematic, dispatched 3 auditors
 
 - Re-grounded in the goal's PRIMARY deliverable (a Stop-hook flagged that recent work

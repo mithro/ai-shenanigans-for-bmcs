@@ -183,7 +183,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 41 | ADC — **ABSENT on G3** (G4 phantom in model, remove) | adc | 🔷 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
 - **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
@@ -196,11 +196,13 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
   creates + maps an `aspeed.adc` at 0x1E6E9000 (IRQ 31 in the model, not even the IRQ 22
   the earlier note claimed — which the datasheet gives to the RTC-second). So the prior
   "QE=🔶, model+wire an ADC" was itself a faithfulness violation (a G4 device on the G3).
-  Honest disposition: **all stacks Ⓝ (the device does not exist on this SoC)**; QE=🔷
-  **blocked-pending-removal** — the phantom `aspeed.adc` wiring must be removed from the G3
-  SoC, exactly like the #144 phantom UART3-5/WDT2/SRAM/SPI1 set (same class, same delicate
-  machine-refactor + oracle re-validation). Tracked in **#146** (folded into the #144
-  refactor). This supersedes the earlier gate-(d) "add an ADC row" call.
+  Honest disposition: **all stacks Ⓝ (the device does not exist on this SoC)**. **DONE
+  (2026-07-18, submodule 9eedd27540):** the phantom `aspeed.adc` create/realize/map is now
+  gated on `sc->silicon_rev != AST2050_A1_SILICON_REV`, so the G3 machine presents NO ADC
+  (verified: `tmp/check-adc.py` qtree shows aspeed.adc ABSENT on kgpe-d16-bmc, still PRESENT
+  on ast2500-evb — no regression; a G3 access to 0x1E6E9000 now reads unassigned like the
+  silicon). First increment of the #144 phantom-removal set landed. This supersedes the
+  earlier gate-(d) "add an ADC row" call (which was itself the faithfulness error).
 
 ## Roll-up (honest)
 
