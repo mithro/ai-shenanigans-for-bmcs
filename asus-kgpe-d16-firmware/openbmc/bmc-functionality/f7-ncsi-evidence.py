@@ -2,26 +2,38 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""F7 — verify the KGPE-D16 BMC networking ground truth: dedicated PHY, NOT NC-SI.
+"""F7 — verify the KGPE-D16 BMC networking ground truth: DUAL channel.
 
-This is the faithful, buildless guard for the F7 finding (see F7-NCSI.md). It
-asserts a set of invariants against the *actual* repo artifacts so that a future
-change which silently flips the KGPE-D16 to NC-SI (e.g. adding `use-ncsi;` to the
-DTS, or claiming an NC-SI demo) fails loudly:
+Schematic §7 (authoritative) is titled "Ethernet — dual channel: dedicated PHY +
+NC-SI sideband". The board has BOTH:
+  * Channel 1 — RMII1/MII -> Realtek RTL8201N dedicated management PHY = the BMC's
+    own eth0 (MAC0). This is NOT NC-SI.
+  * Channel 2 — RMII2 -> an NC-SI SIDEBAND to the two Intel 82574L host NICs
+    (MAC1). NC-SI genuinely exists here (an earlier "no NC-SI anywhere" guard was
+    WRONG -- corrected 2026-07-18 against the schematic + the working D07 NC-SI).
 
-  1. DTS `&mac0` uses `phy-mode = "rmii"` and has NO `use-ncsi` / NC-SI channel node.
-  2. Raptor's real KGPE-D16 U-Boot sets the MAC1 PHY-mode scratch = 0 (Dedicated PHY).
-  3. The AST2050 datasheet notes record: G3 MAC has no NC-SI hardware mode/register.
-  4. The D16 kernel tree does not build CONFIG_NET_NCSI.
-  5. (If checked out) our QEMU ftgmac100 model has no NC-SI handling / responder.
-  6. (If --boot-log given) the QEMU boot brings eth0 up via a dedicated PHY + DHCP,
-     with ZERO NC-SI anywhere in the log.
+This is the faithful, buildless guard: it holds eth0/MAC0 to the dedicated PHY
+while allowing (and scoping) the Channel-2 NC-SI sideband, so a change that
+silently flips eth0 to NC-SI, or drops/mis-scopes the sideband, fails loudly:
+
+  1. DTS `&mac0` uses `phy-mode = "rmii"` and has NO `use-ncsi` (eth0 = dedicated PHY).
+  2. Raptor's real KGPE-D16 U-Boot sets the MAC1 PHY-mode scratch = 0 (its own
+     networking is Dedicated PHY; U-Boot does not use the host-NIC sideband).
+  3. The AST2050 datasheet notes record: G3 MAC has no NC-SI *hardware* mode, so
+     NC-SI is the software protocol (kernel net/ncsi) over the RMII2 MAC.
+  4. NC-SI is scoped to the RMII2/MAC1 sideband: kernel builds CONFIG_NET_NCSI and
+     the DTS puts `use-ncsi` on `&mac1` (never `&mac0`).
+  5. The `&mac1` NC-SI sideband is `status="disabled"` by default, so the C2/C4/NFS
+     single-NIC oracle boots are unaffected (the D07 test enables it at runtime).
+  6. (If --boot-log given) the eth0-only boot brings eth0 up via a dedicated PHY +
+     DHCP, with ZERO NC-SI in that log (mac1 disabled -> no sideband in this boot).
 
 Run:
   uv run asus-kgpe-d16-firmware/openbmc/bmc-functionality/f7-ncsi-evidence.py
   uv run .../f7-ncsi-evidence.py --boot-log .../evidence/qemu-ncsi/eth0-dedicated-phy-boot.log
 
-Exit 0 = all invariants hold (dedicated PHY, not NC-SI). Nonzero = a check failed.
+Exit 0 = all invariants hold (eth0 dedicated PHY; NC-SI scoped to the MAC1
+sideband). Nonzero = a check failed.
 """
 import argparse
 import os
@@ -104,10 +116,18 @@ def check_datasheet():
     return ok
 
 
-# 4. Kernel does not build CONFIG_NET_NCSI ----------------------------------
-def check_kernel():
+# 4. NC-SI is scoped to the RMII2/MAC1 host-NIC sideband, NOT eth0/MAC0 ------
+def check_ncsi_scoped_to_mac1():
+    """Schematic §7 is a DUAL-channel topology: dedicated PHY on MAC0 (eth0) AND
+    an NC-SI sideband on RMII2/MAC1 to the two 82574L host NICs. So NC-SI DOES
+    exist on this board (the earlier 'no NC-SI anywhere' guard was wrong); the
+    real invariant is that NC-SI stays on the MAC1 sideband and never on eth0.
+    The AST2050 G3 MAC has no NC-SI *hardware* mode (check 3) -- NC-SI is the
+    software protocol (kernel CONFIG_NET_NCSI over RMII2), so that config being
+    enabled is EXPECTED here, not a red flag."""
+    # The sideband needs the software NC-SI stack built.
     kdir = KGPE / "qemu-firmware/kernel"
-    hits = []
+    kncsi = False
     if kdir.exists():
         for p in kdir.rglob("*"):
             if p.is_file() and p.suffix in (".config", ".cfg", "") and p.name != "out":
@@ -116,26 +136,36 @@ def check_kernel():
                 except (IsADirectoryError, PermissionError):
                     continue
                 if re.search(r"CONFIG_NET_NCSI\s*=\s*y", t):
-                    hits.append(str(p.relative_to(REPO)))
-    ok = not hits
-    check("D16 kernel does NOT enable CONFIG_NET_NCSI", ok,
-          f"found CONFIG_NET_NCSI=y in: {hits}" if hits else "")
-    return ok
+                    kncsi = True
+                    break
+    check("kernel builds CONFIG_NET_NCSI for the RMII2/MAC1 host-NIC sideband", kncsi,
+          "the Channel-2 NC-SI sideband (schematic §7) needs the software NC-SI stack")
+    # The DTS must scope use-ncsi to &mac1 (never &mac0 -- check 1 guards mac0).
+    dts = KGPE / "qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts"
+    text = read(dts) or ""
+    m1 = re.search(r"&mac1\s*\{(.*?)\n\};", text, re.S)
+    mac1 = re.sub(r"/\*.*?\*/", "", m1.group(1), flags=re.S) if m1 else ""
+    ok_mac1 = bool(m1) and "use-ncsi" in mac1
+    check("DTS scopes NC-SI to &mac1 (RMII2 sideband), not eth0/&mac0", ok_mac1,
+          "expected use-ncsi in the &mac1 node (Channel-2 host-NIC sideband)")
+    return kncsi and ok_mac1
 
 
-# 5. QEMU ftgmac100 model has no NC-SI (if submodule checked out) -----------
-def check_qemu():
-    f = KGPE / "qemu-firmware/qemu/qemu/hw/net/ftgmac100.c"
-    text = read(f)
-    if text is None:
-        print("[SKIP] QEMU ftgmac100.c not checked out (submodule) — skipping model check")
-        return True
-    # Any real NC-SI handling would reference ncsi/NC-SI in the model.
-    hits = [ln for ln in text.splitlines() if re.search(r"nc[_-]?si", ln, re.I)]
-    ok = not hits
-    check("QEMU ftgmac100 model exposes no NC-SI handling/responder", ok,
-          f"{len(hits)} NC-SI reference(s) in ftgmac100.c" if hits else "")
-    return ok
+# 5. The NC-SI sideband is OFF by default so the C2/C4 single-NIC oracle boots -
+def check_sideband_off_by_default():
+    """MAC1/NC-SI must be status=\"disabled\" in the committed DTS: it has no QEMU
+    backend on the plain machine, so a silently-enabled &mac1 would break the
+    C2/C4/NFS single-NIC oracle boots. The D07 NC-SI test flips it okay at runtime
+    (fdtput) with a second slirp NIC that answers NC-SI."""
+    dts = KGPE / "qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts"
+    text = read(dts) or ""
+    m1 = re.search(r"&mac1\s*\{(.*?)\n\};", text, re.S)
+    mac1 = re.sub(r"/\*.*?\*/", "", m1.group(1), flags=re.S) if m1 else ""
+    ok = bool(m1) and re.search(r'status\s*=\s*"disabled"', mac1)
+    check("DTS &mac1 NC-SI sideband is status=disabled by default (oracle-safe)",
+          bool(ok),
+          "expected status=\"disabled\" in &mac1 so C2/C4/NFS single-NIC boots are unaffected")
+    return bool(ok)
 
 
 # 6. Boot log: dedicated-PHY eth0 up + DHCP, zero NC-SI ----------------------
@@ -250,14 +280,15 @@ def main():
             return 2
         boot_and_capture(args, args.boot_log)
 
-    print("=== F7: KGPE-D16 BMC networking = DEDICATED PHY, not NC-SI ===")
+    print("=== F7: KGPE-D16 networking = DEDICATED PHY (eth0/MAC0) + NC-SI "
+          "sideband (RMII2/MAC1) ===")
     print(f"repo: {REPO}\n")
     print("-- Static invariants (no build required) --")
     check_dts()
     check_raptor()
     check_datasheet()
-    check_kernel()
-    check_qemu()
+    check_ncsi_scoped_to_mac1()
+    check_sideband_off_by_default()
     if args.boot_log:
         print("\n-- QEMU boot-log invariants --")
         check_boot_log(args.boot_log)
@@ -266,8 +297,9 @@ def main():
     if _fails:
         print("FAILED:", ", ".join(_fails))
         return 1
-    print("All F7 ground-truth invariants hold: the KGPE-D16 BMC uses a dedicated "
-          "RTL8201CP PHY (RMII), not NC-SI.")
+    print("All F7 ground-truth invariants hold: the KGPE-D16 BMC eth0 uses a "
+          "dedicated RTL8201CP PHY (RMII1), and NC-SI is scoped to the RMII2/MAC1 "
+          "host-NIC sideband (schematic §7 dual channel), off by default.")
     return 0
 
 

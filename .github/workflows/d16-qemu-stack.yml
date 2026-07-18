@@ -551,16 +551,17 @@ jobs:
             --boot-timeout 300
 
   f7-ncsi-dedicated-phy:
-    name: F7 — BMC networking is dedicated PHY, not NC-SI (ground-truth guard)
+    name: F7 — eth0 dedicated PHY (MAC0) + NC-SI sideband scoped to RMII2/MAC1 (guard)
     runs-on: ubuntu-latest
     needs: [build-kernel, build-initramfs]
     # Faithfulness guard for the F7 finding (asus-kgpe-d16-firmware/openbmc/
-    # bmc-functionality/F7-NCSI.md): the KGPE-D16 BMC uses its own dedicated
-    # RTL8201CP PHY (RMII), NOT NC-SI. Step 1 statically asserts that invariant
-    # against the DTS / Raptor U-Boot config / datasheet notes / kernel / QEMU
-    # model. Step 2 boots the faithful machine with a dedicated ftgmac100 NIC over
-    # slirp and proves eth0 comes up + gets a DHCP lease with ZERO NC-SI in dmesg
-    # — the real "share the host's network via the board's own NIC" path.
+    # bmc-functionality/F7-NCSI.md): schematic §7 is DUAL channel — the BMC's own
+    # eth0 (MAC0) is a dedicated RTL8201CP PHY (RMII1, NOT NC-SI), while NC-SI is a
+    # separate sideband on RMII2/MAC1 to the host NICs (off by default). Step 1
+    # statically asserts eth0=dedicated-PHY AND NC-SI is scoped to the disabled-by-
+    # default &mac1. Step 2 boots the faithful machine with the dedicated ftgmac100
+    # NIC over slirp and proves eth0 comes up + gets a DHCP lease with ZERO NC-SI in
+    # that eth0-only dmesg (mac1 disabled) — the board's own management NIC path.
     steps:
       - uses: actions/checkout@v4
         with:

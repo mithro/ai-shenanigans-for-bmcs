@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-18 — F7 guard FIXED: it was an "incorrect claim that functionality doesn't exist"
+
+- Directly addresses the goal's flagged failure mode ("incorrect claims have been
+  made about functionality not-existing"). The F7 guard (`f7-ncsi-evidence.py`)
+  asserted "NO NC-SI anywhere" (checks 4/5: kernel must NOT build CONFIG_NET_NCSI;
+  ftgmac100 must have zero NC-SI refs) and failed CI. But the AUTHORITATIVE schematic
+  `AST2050-BMC-WIRING.md` §7 is titled "Ethernet — dual channel: dedicated PHY +
+  NC-SI sideband": MAC0/eth0 = dedicated RTL8201 PHY (RMII1), AND MAC1/RMII2 = an
+  NC-SI SIDEBAND to the two 82574L host NICs. NC-SI genuinely exists — and the D07
+  work implements it (kernel CONFIG_NET_NCSI, DTS `&mac1 { use-ncsi }`, and the
+  `D07 — NC-SI channel discovery on MAC2` CI job PASSES). So the guard was stale +
+  contradicted working, schematic-faithful functionality.
+- **Re-scoped the guard to the dual-channel ground truth** (kept it MEANINGFUL, not
+  weakened): (1) `&mac0` = rmii dedicated PHY, no use-ncsi [unchanged core guard];
+  (2) Raptor MAC1 scratch = 0 [its U-Boot uses dedicated PHY, doesn't use the
+  sideband]; (3) datasheet: G3 MAC has no NC-SI *hardware* mode → NC-SI is the
+  software protocol over RMII2; (4) NEW — NC-SI is SCOPED to `&mac1` (kernel builds
+  CONFIG_NET_NCSI + DTS puts use-ncsi on &mac1, never &mac0); (5) NEW — `&mac1` is
+  `status="disabled"` by default so the C2/C4/NFS single-NIC oracle boots are
+  unaffected (the D07 test flips it okay at runtime). Guard now catches the real
+  regressions: eth0 flipped to NC-SI (check 1), NC-SI dropped/mis-scoped (check 4),
+  sideband silently enabled → breaks C2/C4 (check 5). **`f7-ncsi-evidence.py` →
+  8 passed, 0 failed.** Updated the CI job name/comment to the dual-channel truth.
+- Corrects the recalled-wrong belief in [[bmc-functionality-program]] ("true NC-SI
+  architecturally IMPOSSIBLE") — see [[ncsi-sideband-exists-schematic]]. Follow-up:
+  `F7-NCSI.md` prose may still carry the old "not NC-SI" framing (doc, non-gating).
+
 ## 2026-07-18 — C4 FIXED: vhub deadlock made opt-in (default-off); both C4 + C2 verified
 
 - **Traced the vendor firmware's exact udc sequence** (temporary UDCTRACE logging,
