@@ -10,8 +10,10 @@
   **3 on ast2500-evb** (no regression). The MAIN WDT (WDT0 @0x1E785000, used by U-Boot
   reset.c + Linux /dev/watchdog) is untouched — only the phantom WDT1 is gone. Low-risk:
   C2 already boots tolerating the absent wdt3 node, so an absent wdt2 is benign. Parent
-  bump + CI oracle re-validation to follow. Phantom set: ADC ✅ + WDT2 ✅ done; SPI1/SRAM/
-  UART (risky) + serial loop remain (#144).
+  bump `073d2b4`. **CI CONFIRMED CLEAN (run 29647058070): all oracles boot with wdts_num=1
+  — C2/C2-full/C4/C-UBOOT/C5 + D07/D08×2/D09/B1 + F2-F9 green; KVM 6/6; only C3-musl red
+  (#143).** Phantom set: ADC ✅ + WDT2 ✅ done+CI-validated; SPI1/SRAM/UART (risky, boot-dep
+  untangling) + serial loop remain (#144). Two faithfulness gaps closed+validated this cycle.
 
 ## 2026-07-18 — CLOSED a gap: removed the phantom ADC from the G3 (first #144 increment)
 
