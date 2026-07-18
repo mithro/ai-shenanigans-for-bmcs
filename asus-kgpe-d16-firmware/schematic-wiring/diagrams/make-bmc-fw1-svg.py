@@ -1,33 +1,34 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Generate kgpe-d16-bmc-fw1-pinout.svg.
+"""Generate kgpe-d16-bmc-fw1.svg.
 
 BMC_FW1 pinout drawn to match the ASUS KGPE-D16 manual (§2.7.2, "BMC header"):
-a 2x7 socket with **pin 1 at the bottom-left** and the **top-left position keyed
-(filled/blocked)**. Pins are numbered DIP/row-wise (the only scheme consistent
-with pin-1-bottom-left + a keyed top-left corner):
+a 2x7 socket with **pin 1 at the bottom-left** and **pin 14 keyed (filled) at the
+top-right**. Standard column-pair numbering — odd pins on the bottom row, even on
+the top:
 
-    top row  (L->R):  KEY  13   12   11   10    9    8
-    bot row  (L->R):   1    2    3    4    5    6    7
+    top row  (L->R):   2    4    6    8   10   12   14(key)
+    bot row  (L->R):   1    3    5    7    9   11   13
 
-Signals are the schematic nets (schematic-wiring/BMC-CONNECTORS.md). Colour
-coding + theme-aware styling preserved. The horizontal schematic-wiring SVG
-(schematic-wiring/diagrams/kgpe-d16-bmc-fw1.svg) predates this correction and
-still shows pin 1 top-left; this file is the manual-accurate version.
+Signals are the schematic nets (../BMC-CONNECTORS.md). Colour coding +
+theme-aware styling preserved. This is the canonical BMC_FW1 pinout used by both
+BMC-CONNECTORS.md and the ULX3S/spispy wiring doc; it replaces the earlier
+version that had pin 1 top-left (vertically flipped from the manual).
 
-Run:  uv run make-bmc-fw1-pinout-svg.py
+Run:  uv run make-bmc-fw1-svg.py
 """
 
-# position (row, col) -> (pin-or-None, signal, colour). row 0 = top, 1 = bottom.
-# col 0 = left ... col 6 = right.
+# Standard 2x7 column-pair numbering with pin 1 at the bottom-left (per the ASUS
+# manual): odd pins on the BOTTOM row, even pins on the TOP row, pin 14 (top-right)
+# is the keyed position. col 0 = left ... col 6 = right.
 KEY = "KEY"
-TOP = [(KEY, "", "muted"), (13, "GND", "muted"), (12, "SPICS#0", "blue"),
-       (11, "NC", "muted"), (10, "SOLEN#", "gold"), (9, "NC", "muted"),
-       (8, "SPICLK", "blue")]
-BOT = [(1, "SPIDO", "blue"), (2, "+3V3", "green"), (3, "IKVMEN#", "gold"),
-       (4, "SPICS#2", "blue"), (5, "NC", "muted"), (6, "SPIDI", "blue"),
-       (7, "PRESENT#", "gold")]
+TOP = [(2, "+3V3", "green"), (4, "SPICS#2", "blue"), (6, "SPIDI", "blue"),
+       (8, "SPICLK", "blue"), (10, "SOLEN#", "gold"), (12, "SPICS#0", "blue"),
+       (KEY, "", "muted")]
+BOT = [(1, "SPIDO", "blue"), (3, "IKVMEN#", "gold"), (5, "NC", "muted"),
+       (7, "PRESENT#", "gold"), (9, "NC", "muted"), (11, "NC", "muted"),
+       (13, "GND", "muted")]
 
 X0, DX = 96, 60          # first column x, column pitch
 Y_TOP, Y_BOT = 250, 298  # pin row y
@@ -59,19 +60,19 @@ parts = [
     '  </style>',
     '<text class="t" x="24" y="34">BMC_FW1 — BMC SPI firmware / ASMB4 slot</text>',
     '<text class="st" x="24" y="55">socketed SPI flash + straps · 2×7 · '
-    'pin 1 = square pad (bottom-left) · top-left keyed</text>',
+    'pin 1 = square pad (bottom-left) · pin 14 keyed (top-right)</text>',
     f'<rect class="board" x="{X0-30}" y="224" width="{6*DX+60}" height="100" rx="10"/>',
 ]
 
 def pin(cx, cy, pinno, sig, col, label_y, anchor):
     c = f"var(--{col})"
     out = []
-    if pinno == KEY:  # filled/keyed position
+    if pinno == KEY:  # filled/keyed position (pin 14)
         out.append(
             f'<rect x="{cx-13}" y="{cy-13}" width="26" height="26" rx="3"'
             f' fill="var(--ink)" stroke="var(--ink)" stroke-width="2"/>'
             f'<text class="pn" x="{cx}" y="{cy}" text-anchor="middle"'
-            f' dominant-baseline="central" fill="var(--box)">✕</text>'
+            f' dominant-baseline="central" fill="var(--box)">14</text>'
             f'<text class="m" transform="rotate(-90 {cx} {label_y})" x="{cx}"'
             f' y="{label_y}" text-anchor="{anchor}" dominant-baseline="central">key</text>')
         return "".join(out)
@@ -111,10 +112,10 @@ parts.append(
     '<text class="leg" x="460" y="516">Keyed (no pin)</text>')
 parts.append(
     '<text class="m" x="596" y="540" text-anchor="end">'
-    'numbering: bottom 1→7 L→R · top 8→13 R→L · top-left keyed</text>')
+    'odd pins = bottom row (1→13) · even = top row (2→14) · pin 14 (top-right) keyed</text>')
 parts.append('</svg>')
 
 svg = "\n".join(parts) + "\n"
-with open("kgpe-d16-bmc-fw1-pinout.svg", "w") as f:
+with open("kgpe-d16-bmc-fw1.svg", "w") as f:
     f.write(svg)
-print("wrote kgpe-d16-bmc-fw1-pinout.svg")
+print("wrote kgpe-d16-bmc-fw1.svg")

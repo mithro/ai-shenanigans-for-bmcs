@@ -6,8 +6,8 @@
 
 Uses the high-resolution KGPE-D16 top photo from theretroweb.com. Board is kept
 in its natural (standard) orientation to match the ASUS manual and the pinout
-SVG: BMC_FW1 is a 2x7 socket with **pin 1 at the bottom-left** and the
-**top-left position keyed** (filled). Signals are in kgpe-d16-bmc-fw1-pinout.svg.
+SVG: BMC_FW1 is a 2x7 socket with **pin 1 at the bottom-left** and **pin 14
+keyed (top-right)**. Signals are in kgpe-d16-bmc-fw1-pinout.svg.
 
 BMC_FW1 pixel coords (in the source photo) were read off zoomed crops.
 
@@ -64,14 +64,14 @@ hx0, hy0 = src2px(345, 3170)
 hx1, hy1 = src2px(492, 3221)
 d.rectangle((hx0, hy0, hx1, hy1), outline=RED, width=4)
 
-# 7 columns, 2 rows: pin 1 bottom-left, key top-left
+# 7 columns, 2 rows: pin 1 bottom-left, key (pin 14) top-right
 col_x = [src2px(347 + (c + 0.5) * (490 - 347) / 7, 0)[0] for c in range(7)]
 y_top = src2px(0, 3184)[1]
 y_bot = src2px(0, 3208)[1]
 
-# pin 1 marker (bottom-left) + key marker (top-left)
+# pin 1 marker (bottom-left) + key marker (top-right = pin 14)
 p1x, p1y = col_x[0], y_bot
-kx, ky = col_x[0], y_top
+kx, ky = col_x[6], y_top
 d.ellipse((p1x - 11, p1y - 11, p1x + 11, p1y + 11), outline=RED, width=4)
 d.rectangle((kx - 11, ky - 11, kx + 11, ky + 11), fill=BLACK, outline=WHITE, width=2)
 
@@ -84,7 +84,8 @@ def tag(x, y, txt, col, f=F_B, anchor="lt"):
 
 
 tag(hx0 - 12, p1y - 14, "pin 1", RED, anchor="rt")
-tag(hx0 - 12, ky - 14, "key (no pin)", BLACK, F_S, anchor="rt")
+d.line((kx, hy0 - 6, kx, ky - 12), fill=BLACK, width=2)          # tag -> key marker
+tag(kx - 68, hy0 - 38, "key = pin 14", BLACK, F_S, anchor="lt")
 
 # ---- signal legend (right side), rows matching the SVG numbering ----
 # bottom row L->R = pins 1..7 ; top row L->R = key,13,12,11,10,9,8
@@ -94,7 +95,7 @@ sig = {1: ("MOSI", RED), 2: ("+3V3", GREY), 3: ("IKVMEN#", ORANGE),
        12: ("CS0", RED), 13: ("GND", GREEN)}
 lines = [("BMC_FW1 — pin signals", RED, F_H)]
 lines += [(f"{n:>2} {sig[n][0]}", sig[n][1], F_B) for n in range(1, 14)]
-lines.append(("pin 1 = square pad · top-left keyed", BLACK, F_S))
+lines.append(("pin 1 = square pad · pin 14 top-right keyed", BLACK, F_S))
 lines.append(("full pinout: kgpe-d16-bmc-fw1-pinout.svg", GREY, F_S))
 lw = max(tw(t, f) for t, _, f in lines)
 lx, ly = base.width - lw - 34, 54

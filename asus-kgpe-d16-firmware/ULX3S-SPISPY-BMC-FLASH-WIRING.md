@@ -66,15 +66,15 @@ prints a "+ −" legend by pin `11`). The right-edge header `J2` is debug-only (
 **On the motherboard:** find `BMC_FW1` — the **2×7 socket** with the `BMC_FW1`
 silkscreen, just below the AST2050 (near `SB_PWR1` / `LOCLED1`, by the PCI slots).
 Per the ASUS manual (§2.7.2), **pin 1 is the square pad at the bottom-left** and
-the **top-left position is keyed (no pin)** — use those two to orient the socket;
-each pin's signal is then fixed. The photo locates the socket on the board (both
-in the board's natural orientation, rear I/O to the left); the SVG is the full
-pinout. Numbering is row-wise: bottom row `1`→`7` left-to-right, top row `8`→`13`
-right-to-left, with the keyed corner where pin 14 would be.
+**pin 14 is keyed (no pin) at the top-right** — use those two to orient the
+socket; each pin's signal is then fixed. The photo locates the socket on the
+board (both in the board's natural orientation, rear I/O to the left); the SVG is
+the full pinout. Standard column-pair numbering: **odd pins on the bottom row**
+(`1`,`3`,…`13` left-to-right), **even pins on the top row** (`2`,`4`,…`14`).
 
 ![Annotated KGPE-D16 photo — BMC_FW1 socket location, pin 1, and keyed corner](diagrams/kgpe-d16-bmc-fw1-board.png)
 
-![BMC_FW1 socket pinout — pin 1 bottom-left, top-left keyed](diagrams/kgpe-d16-bmc-fw1-pinout.svg)
+![BMC_FW1 socket pinout — pin 1 bottom-left, pin 14 keyed top-right](schematic-wiring/diagrams/kgpe-d16-bmc-fw1.svg)
 
 ### Three rules that prevent damage (full list: §5)
 
