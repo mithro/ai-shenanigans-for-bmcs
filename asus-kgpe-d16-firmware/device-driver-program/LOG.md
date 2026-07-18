@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Zephyr ns16550 real-console: still no output via z_phys_map (honest negative; static workaround stays)
+
+- With the #141 fix validated + the working env staged, tried to replace the static
+  `soc/aspeed/ast2050/console.c` bring-up hack with the STANDARD ns16550 console
+  (`-DCONFIG_UART_CONSOLE=y`; the board DTS already has `zephyr,console = &uart2`,
+  `&uart2 status=okay`). Result: build OK, boots clean (no crash, qemu rc=124) but
+  **ZERO console output** — the ns16550 `DEVICE_MMIO_MAP`/`z_phys_map` path maps a
+  device VA that does not reach UART5 @ 0x1e784000, so writes go nowhere.
+- Investigated (localized, not solved). Hypothesis: `CONFIG_KERNEL_VM_SIZE=0x800000`
+  (8 MB) + `KERNEL_VM_BASE=0x40000000` means the device-VA allocator hands VAs inside
+  the DRAM window that `soc.c` statically flat-maps NORMAL (0x40000000..0x44000000),
+  so the device mapping collides with DRAM. **Tested the fix** (`-DCONFIG_KERNEL_VM_SIZE=0x08000000`,
+  128 MB) → STILL no output, so the VM-window overlap is NOT the (whole) cause; the
+  dynamic arm_mmu device mapping needs deeper instrumentation (where the ns16550 VA
+  lands + whether `arch_mem_map` installs the L2 entry over the static DRAM section).
+- **Honest status:** the UART OUTPUT works today via the static MMU-region path
+  (M0/M1 console = console.c, proven — "Hello World!" prints), so the UART is usable;
+  only the *standard driver path* is open. This is a SEPARATE issue from #141 (which
+  is validated). Per the faithfulness rule it is almost certainly our VM/MMU config,
+  not upstream — the next Zephyr-UART step is to trace the z_phys_map VA + the
+  L1-section→L2 remap for the device page. Did NOT overstate: the real ns16550 driver
+  is NOT yet working; the static console is.
+
 ## 2026-07-18 — 🎉 Zephyr #141 FIX VALIDATED: sustained tickful scheduling RUNS (it was our config)
 
 - **The #141 fix is PROVEN by build + boot.** Got a ZEPHYR_BASE with PR #103557
