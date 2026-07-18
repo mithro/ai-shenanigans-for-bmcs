@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D08 FRU EEPROM done both sides; W83601G located on silicon
+
+- Enabled I2C5 (i2c-4) in the DTS + added the FRU node (at24 24c08 @0x54).
+  Rebuilt the realhw kernel, JTAG-booted on silicon, and **read the real board
+  FRU**: U25 is present + at24-bindable across 0x54-0x57 (1 KB 24c08) but
+  **BLANK (0xff)** — ASUS shipped it unprogrammed. The BMC's I2C5 FRU path
+  works; E2 strap high confirms the 0x54 base (§10.2's 0x50-0x53 was wrong).
+  `evidence/d08-fru/`.
+- **Bonus**: `i2cdetect -y -r 4` also shows 0x18/0x19 responding = the two
+  W83601G DIMM-LED expanders (U27/U28) on I2C5 — the next D08 sub-device,
+  now reachable (bus enabled).
+- Modeled the FRU faithfully in QEMU (blank 24c08 at 0x54-0x57 on i2c bus 4);
+  qtree confirms, integration suite 114/114. DEVICE-MATRIX FRU row → ✅ both
+  sides. A tractable break from the Zephyr banner that closed a real audit
+  gap (#4) with a silicon read.
+
 ## 2026-07-18 — D14 Zephyr M0 BUILD SUCCEEDS (run/banner debug pending)
 
 - Iterated the Zephyr AST2050 port to a **successful build+link** of
