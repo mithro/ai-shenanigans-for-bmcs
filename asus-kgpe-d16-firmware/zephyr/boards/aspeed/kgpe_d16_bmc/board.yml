@@ -1,0 +1,6 @@
+board:
+  name: kgpe_d16_bmc
+  full_name: ASUS KGPE-D16 BMC (ASPEED AST2050)
+  vendor: aspeed
+  socs:
+    - name: ast2050

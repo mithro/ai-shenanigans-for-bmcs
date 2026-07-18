@@ -1,0 +1,10 @@
+# Out-of-tree Zephyr module: the ASPEED AST2050 SoC + KGPE-D16 BMC board.
+# Point a west workspace's EXTRA modules / ZEPHYR_EXTRA_MODULES at
+# asus-kgpe-d16-firmware/zephyr so these soc_root/board_root/dts_root are used.
+# The ARM926EJ-S arch core itself comes from upstream Zephyr (PR #103557,
+# arch/arm/core/cortex_a_r) — this module only adds the AST2050 SoC + board.
+build:
+  settings:
+    soc_root: .
+    board_root: .
+    dts_root: .

@@ -1,0 +1,7 @@
+# ASPEED AST2050 (G3) — ARM926EJ-S BMC SoC.
+family:
+- name: aspeed
+  series:
+  - name: ast2050
+    socs:
+    - name: ast2050

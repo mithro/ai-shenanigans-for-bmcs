@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_FAMILY_ASPEED
+
+configdefault SOC_EARLY_INIT_HOOK
+	default y
+
+endif # SOC_FAMILY_ASPEED
+
+rsource "*/Kconfig.defconfig"

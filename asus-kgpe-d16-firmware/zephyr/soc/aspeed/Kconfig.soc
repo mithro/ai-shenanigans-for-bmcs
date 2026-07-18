@@ -1,0 +1,12 @@
+# ASPEED AST2050 SoC family.
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FAMILY_ASPEED
+	bool
+	help
+	  ASPEED BMC SoCs (ARM926EJ-S G3 generation: AST2050 / AST1100).
+
+config SOC_FAMILY
+	default "aspeed" if SOC_FAMILY_ASPEED
+
+rsource "*/Kconfig.soc"

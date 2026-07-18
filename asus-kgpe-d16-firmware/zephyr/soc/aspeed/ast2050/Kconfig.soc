@@ -1,0 +1,19 @@
+# ASPEED AST2050 (G3) series.
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_AST2050
+	bool
+	select SOC_FAMILY_ASPEED
+	select CPU_ARM926EJ_S
+	help
+	  ASPEED AST2050 / AST1100 (ARM926EJ-S, ARMv5TEJ) server BMC SoC.
+
+config SOC_SERIES
+	default "ast2050" if SOC_SERIES_AST2050
+
+config SOC_AST2050
+	bool
+	select SOC_SERIES_AST2050
+
+config SOC
+	default "ast2050" if SOC_AST2050

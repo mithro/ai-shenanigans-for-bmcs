@@ -1,0 +1,23 @@
+/*
+ * ASUS KGPE-D16 BMC (ASPEED AST2050) — Zephyr board.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <aspeed/ast2050.dtsi>
+
+/ {
+	model = "ASUS KGPE-D16 BMC (AST2050)";
+	compatible = "aspeed,kgpe-d16-bmc", "aspeed,ast2050";
+
+	chosen {
+		zephyr,sram = &ddram;
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+	};
+};
+
+&uart2 {
+	current-speed = <115200>;
+	status = "okay";
+};

@@ -1,0 +1,10 @@
+identifier: kgpe_d16_bmc
+name: ASUS KGPE-D16 BMC (ASPEED AST2050)
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+ram: 65536
+supported:
+  - uart
+vendor: aspeed

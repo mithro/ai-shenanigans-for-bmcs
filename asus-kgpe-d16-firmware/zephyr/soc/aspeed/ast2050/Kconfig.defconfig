@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_SERIES_AST2050
+
+# Compact G3 VIC at 0x1e6c0000 has 32 sources (datasheet §16). Milestone 1
+# adds the intc driver; until then interrupts are not used.
+configdefault NUM_IRQS
+	default 32
+
+endif # SOC_SERIES_AST2050
