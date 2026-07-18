@@ -183,12 +183,24 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 38 | Watchdog (WDT) | wdt | ✅ | ⬜ | ⬜ | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 41 | ADC (voltage monitor, 0x1E6E9000, IRQ22) | adc | 🔶 | Ⓝ | Ⓝ | ⬜ | Ⓝ | ⬜ | ⬜ | Ⓝ |
+| 41 | ADC — **ABSENT on G3** (G4 phantom in model, remove) | adc | 🔷 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
 - **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
-- **41** ADC (added by gate-(d) audit): SoC voltage-monitor ADC at 0x1E6E9000, IRQ22, needs an `aspeed,ast2050-adc` binding. QE=🔶 (aspeed_adc in the SoC model, G3 semantics to verify); LS=Ⓝ (board disposition: the ADC's VP0-17 analog inputs are repurposed as GPIOE/F THERMTRIP/PROCHOT/DDR_THERM lines and rail monitoring is the W83795's job — the SoC ADC isn't wired to analog rails here); LQ/LU=⬜ (`aspeed_adc` IIO driver in QEMU). See FULL-TASK-LIST A9.
+- **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
+  NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/
+  AST2050-MEMORY-MAP.md:96` states: "ADC (10-bit analog-to-digital) — **Absent** — No ADC
+  chapter and no ADC entry in the §9 map (p97). ADC (0x1E6E9000 on G4) was introduced with
+  the AST2400." Yet the SoC model (`hw/arm/aspeed_ast2400.c:230,574-580`) UNCONDITIONALLY
+  creates + maps an `aspeed.adc` at 0x1E6E9000 (IRQ 31 in the model, not even the IRQ 22
+  the earlier note claimed — which the datasheet gives to the RTC-second). So the prior
+  "QE=🔶, model+wire an ADC" was itself a faithfulness violation (a G4 device on the G3).
+  Honest disposition: **all stacks Ⓝ (the device does not exist on this SoC)**; QE=🔷
+  **blocked-pending-removal** — the phantom `aspeed.adc` wiring must be removed from the G3
+  SoC, exactly like the #144 phantom UART3-5/WDT2/SRAM/SPI1 set (same class, same delicate
+  machine-refactor + oracle re-validation). Tracked in **#146** (folded into the #144
+  refactor). This supersedes the earlier gate-(d) "add an ADC row" call.
 
 ## Roll-up (honest)
 
