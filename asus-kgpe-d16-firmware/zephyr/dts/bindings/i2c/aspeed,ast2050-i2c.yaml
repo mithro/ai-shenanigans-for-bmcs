@@ -1,0 +1,43 @@
+# ASPEED AST2050 (G3) I2C controller (one engine / one bus) binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  ASPEED AST2050 (G3) I2C controller engine.
+
+  The AST2050 / AST2400 (G3/G4) I2C block lives at controller base 0x1E78A000
+  and is built from a 0x40-byte global register block followed by up to 7
+  per-engine (per-bus) register blocks, each 0x40 bytes, at
+  0x1E78A000 + 0x40 * (engine + 1) for engine 0..6:
+
+    engine 0   0x1E78A040
+    engine 1   0x1E78A080
+    engine 2   0x1E78A0C0
+    engine 3   0x1E78A100
+    engine 4   0x1E78A140
+    engine 5   0x1E78A180
+    engine 6   0x1E78A1C0
+
+  Each engine is an independent I2C master/slave; a Zephyr I2C controller node
+  models one engine, and its "reg" points at that engine's per-bus register
+  block (NOT the global block). Register offsets within the block (legacy "old
+  mode", the AST2050 reset default): FUN_CTRL 0x00, AC_TIMING1 0x04,
+  AC_TIMING2 0x08, INTR_CTRL 0x0C, INTR_STS 0x10, CMD 0x14, DEV_ADDR 0x18,
+  POOL_CTRL 0x1C, BYTE_BUF 0x20 (from QEMU include/hw/i2c/aspeed_i2c.h and the
+  vendor U-Boot arch-aspeed/aspeed_i2c.h).
+
+  The whole 7-engine block is held in reset at power-on by SCU04[2]; the driver
+  de-asserts it (see drivers/i2c/i2c_aspeed_g3.c).
+
+compatible: "aspeed,ast2050-i2c"
+
+include: [i2c-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clock-frequency:
+    description: |
+      Target SCL frequency in Hz. This minimal driver programs the fixed vendor
+      AC-timing value for ~100 kHz regardless (see the driver); the property is
+      accepted for forward compatibility with a per-speed divider computation.

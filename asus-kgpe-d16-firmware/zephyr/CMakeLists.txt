@@ -4,3 +4,4 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_subdirectory_ifdef(CONFIG_GPIO_ASPEED_G3 drivers/gpio)
+add_subdirectory_ifdef(CONFIG_I2C_ASPEED_G3 drivers/i2c)

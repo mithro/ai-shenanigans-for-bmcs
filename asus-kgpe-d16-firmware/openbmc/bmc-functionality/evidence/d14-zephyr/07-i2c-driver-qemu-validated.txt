@@ -1,0 +1,9 @@
+=== Zephyr AST2050 I2C driver — QEMU validation (2026-07-19) ===
+Build: west build -b kgpe_d16_bmc samples/i2c_smoke (CONFIG_I2C_ASPEED_G3=y)
+Engine 1 (i2c1 @0x1e78a080) → W83795G @0x2F; read CHIP_ID reg 0xFE (const 0x79 in model)
+Driver: polled master; SCU-unlock+reset-release (SCU04[2]), AC-timing 0x77743335,
+  INTR_CTRL status-enable, START/addr/write-reg/repeated-START/read/STOP.
+---8<--- boot log ---8<---
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+I2C read dev=0x2f reg=0xfe val=0x79 (expect 0x79) PASS
+---8<--- end ---8<---

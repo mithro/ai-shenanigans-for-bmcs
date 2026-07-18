@@ -1,0 +1,21 @@
+# ASPEED AST2050 (G3) I2C driver.
+# SPDX-License-Identifier: Apache-2.0
+
+# Only offered once the I2C subsystem itself is enabled (mirrors the in-tree
+# drivers/i2c "if I2C" menu). Auto-enables when a matching devicetree node is
+# present and left okay.
+if I2C
+
+config I2C_ASPEED_G3
+	bool "ASPEED AST2050 (G3) I2C driver"
+	default y
+	depends on DT_HAS_ASPEED_AST2050_I2C_ENABLED
+	help
+	  Enable the polled (interrupt-free) I2C master driver for the ASPEED
+	  AST2050 (G3, ARM926EJ-S) BMC SoC. Each devicetree node models one of
+	  the SoC's 7 I2C engines; the node's reg points at that engine's per-bus
+	  register block (base 0x1E78A000 + 0x40 * (engine + 1)). The driver
+	  de-asserts the SCU04[2] I2C reset, programs the vendor G3 AC timing and
+	  drives START/TX/RX/STOP by polling the command/status register.
+
+endif # I2C

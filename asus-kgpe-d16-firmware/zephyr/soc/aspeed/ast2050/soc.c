@@ -52,6 +52,21 @@ static const struct arm_mmu_region mmu_regions[] = {
 	 * (the highest, set YZAAAB, ends at 0x1e7801e7). */
 	MMU_REGION_FLAT_ENTRY("gpio", 0x1e780000, 0x1000,
 			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* G3/AST2400-compatible I2C controller (0x1e78a000, drivers/i2c/
+	 * i2c_aspeed_g3.c) — device memory, statically mapped like the others so
+	 * the driver reaches the global block + all 7 per-engine register blocks
+	 * (engine 6 ends at 0x1e78a1ff) at their physical address with the MMU
+	 * on. One 0x1000 page covers the whole controller. */
+	MMU_REGION_FLAT_ENTRY("i2c", 0x1e78a000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* SCU / System Control Unit (0x1e6e2000) — device memory. The I2C driver
+	 * writes SCU04[2] to de-assert the reset hold that keeps all 7 I2C
+	 * engines inert at power-on (and SCU00 to unlock the SCU first); on
+	 * bare-metal Zephyr no U-Boot runs to do this. One 0x1000 page. */
+	MMU_REGION_FLAT_ENTRY("scu", 0x1e6e2000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {
