@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Zephyr #141: dedicated ZEPHYR_BASE build launched (background) to validate the fix
+
+- To validate the #141 `HW_STACK_PROTECTION=n` fix (root-caused below) without the
+  shared-workspace drift, launched a self-contained background build in MY worktree
+  (`tmp/zephyr-env-setup.sh` → `tmp/zephyr-env.log`, cgroup-limited): clone
+  zephyrproject/zephyr, fetch+checkout PR #103557 (ARM926 arch), `west update`
+  (blobless/narrow), then `west build -b kgpe_d16_bmc hello_world
+  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n`, then boot in the
+  faithful QEMU and check for "Hello World!" + NO data-abort at 0x40008ffc (=the
+  sustained-tick fix validated). Does NOT touch the shared tenstorrent workspace.
+  Long-running (~20-40 min: clone + west update + build); result checked next cycle.
+  If PASS → #141 fixed + the Zephyr column unblocks; if FAIL → the log pinpoints the
+  next gap (PR-merge conflict, a west module, or the fix itself).
+
 ## 2026-07-18 — Zephyr #141 ROOT CAUSE identified (our config, not upstream); build env-blocked
 
 - Tackled the Zephyr keystone (#141): the ENTIRE Zephyr column is `[ ]` gated on the
