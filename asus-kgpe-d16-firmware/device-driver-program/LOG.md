@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C2-full CI-confirmed (PASS); C4 confirmed a REAL regression (bisect range bracketed)
+
+- **C2-full: independent CI confirmation.** The run for the mkflash fix (47e073d)
+  shows the `Boot U-Boot -> Linux + SSH login (C2 full chain)` job = **success**.
+  So C2-full is resolved local AND CI (gate-b met for this item).
+- **C4: NOT flaky — a real regression, now bracketed by CI history.** Checked the C4
+  job across ~20 runs: it PASSES on parent commits that pin QEMU submodule
+  `e61dd3461d` (231ddf7d, bb09a854) and FAILS on those pinning `512d56d217`
+  (current). `e61dd3461d` is a clean ANCESTOR of `512d56d217`, so this is a genuine
+  pass→fail regression, not a timing flake. Per [[ast2050-faithful-qemu]] C4 was a
+  passing oracle at submodule `ae204f8` (inside this range), so the regression is in
+  the **~10 device-driver-program submodule commits after ae204f8**: be673b284e
+  (I2C mux fabric), 4ff6a74504 (measured strap), d931f92770 (W83795 silicon seed),
+  f00a39540e (DIMM_A2 SPD), c67c1b6bda (MAC2/NC-SI wiring), 9561717b8d (GPIO latch
+  migrate), 58dfe21497 (FRU EEPROM), d0556622ed/a43b8b221e (W83601G), 512d56d217
+  (SB-TSI). DRAM-size angle likely EXONERATED: the strap's 56 MB is the faithful
+  real-hardware value (64 MB − 8 MB VGA) and the real C410X AST2050 also has 64 MB,
+  so its firmware must cope with 56 MB. **Next (bounded bisect, fresh context):**
+  build QEMU at the midpoint of ae204f8..512d56d217, boot C4 (build-c4-flash.py +
+  `-M kgpe-d16-bmc -m 128 -no-reboot`, watch for the ~18 s reset), narrow to the
+  culprit commit, then fix the model (or, if it's the faithful strap vs C410X-fw
+  mismatch, override the strap in the C4 probe only). ~4 build+boot steps.
+
 ## 2026-07-18 — C2-full fix CONFIRMED locally (SSH PASS); C4 diagnosed (late-boot WDT reset)
 
 - **C2-full fix verified end-to-end locally** (not just pushed). Built the OpenBMC
