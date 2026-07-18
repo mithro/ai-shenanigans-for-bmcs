@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-18 — explicit origin/main merge command run (Already up to date)
+
+- Ran, THIS SESSION, the actual merge command (not just a status check):
+  ```
+  git fetch origin
+  git merge --no-ff origin/main -m "Merge origin/main into claude/bmc-functionality (2026-07-18)"
+  ```
+  Result: **"Already up to date."** origin/main tip = `85bd82a` (PR #29
+  schematic-wiring); `git rev-list --left-right --count origin/main...HEAD` = `0
+  388` (branch is 0 behind / 388 ahead). origin/main is an ANCESTOR of HEAD, so
+  there is nothing to integrate — the merge is a genuine no-op, not a skipped
+  step. (This branch only reaches main via PR merges per the repo convention, so
+  it accumulates a large ahead-count; that is expected, not drift.)
+
 ## 2026-07-18 — completeness gate (a) CLOSED: 3rd audit CONFIRMED CLEAN
 
 - Third (confirmation) completeness audit returned **"CONFIRMED CLEAN — all
