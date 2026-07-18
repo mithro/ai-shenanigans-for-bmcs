@@ -12,3 +12,8 @@ config SOC_FAMILY_ASPEED
 	select ARM_CUSTOM_INTERRUPT_CONTROLLER
 	select MMU
 	select ATOMIC_OPERATIONS_C
+	# MMU is required by the ARM9 arch (CONFIG_MMU stays y even if not
+	# selected here). The M0 banner is blocked by the ns16550 z_phys_map not
+	# being translated by the brand-new upstream ARM9 arm_mmu (evidence
+	# d14-zephyr/01) — the fix is an upstream arm_mmu correction or a
+	# static-mapped / physical-address console, tracked as a D14 follow-up.
