@@ -267,10 +267,10 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [~] QEMU · [ ] silicon (**needs DTS `gpio-line-names` exposing these balls as GPIO inputs + a reboot; on 2026-07-18 a `/sys/kernel/debug/gpio` dump on silicon showed only `bmc-ctl-lockout-n` named — the §11 monitor pins are not yet line-named/exported, several are in TACH alt-mode**) · [ ] userspace (gpio sysfs / gpio-keys)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### E3. LEDs — BMCRDY/CPUERR/MLED/ID (§13)
-- [~] QEMU: LED GPIOs present; DTS led nodes
-- U-Boot: [N]
-- Linux: [~] QEMU · [ ] silicon (LED observation — task #136) · [ ] userspace (`/sys/class/leds`)
+### E3. LEDs — BMCRDY/CPUERR/MLED/ID (§13)  ✅ silicon+userspace this session
+- [~] QEMU: LED GPIOs present; DTS `gpio-leds` nodes (a QEMU toggle-observe test would confirm ✅)
+- U-Boot: [N] (front-panel LEDs are an OS/runtime function)
+- Linux: [~] QEMU · [x] **silicon (`echo 1 > /sys/class/leds/identify/brightness` flips the real GPIO led-id-n out hi→lo, `echo 0` back; the leds-gpio driver drives the real AST2050 GPIO — evidence e-gpio-leds/00)** · [x] userspace (`/sys/class/leds/*/brightness`)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### E4. Straps — IPMI_SEL/IKVMEN#/SOLEN# + SCU70 measured (§13)

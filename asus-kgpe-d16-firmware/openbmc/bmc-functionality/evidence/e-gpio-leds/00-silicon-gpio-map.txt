@@ -1,0 +1,38 @@
+E1/E3/D6 — GPIO signal map + LEDs observed LIVE on silicon (2026-07-18, host on,
+uImage-sbtsi boot). `cat /sys/kernel/debug/gpio` on the aspeed 1e780000.gpio chip:
+
+  gpio-516 (bmc-ctl-lockout-n)              A4  — BMC control-lockout (E1/E4)
+  gpio-521 (power-up-req-n)                 B1  — POWERUP_N (E1 power seq)
+  gpio-526 (reset-req-n)                        — reset request (E1)
+  gpio-552 (power-down-req-n)                   — power-down / force-off (E1)
+  gpio-545 (led-bmc-status-n |bmc-status)  out lo ACTIVE LOW  -> BMC-status LED ON
+  gpio-546 (led-cpu2-err-n   |cpu2-error)  out hi ACTIVE LOW  -> CPU2 error LED OFF
+  gpio-547 (led-cpu1-err-n   |cpu1-error)  out hi ACTIVE LOW  -> CPU1 error LED OFF
+  gpio-560 (led-id-n         |identify)    out hi ACTIVE LOW  -> chassis-ID LED OFF
+  gpio-556 (spd-mux-s1       |mux)         out lo   — QU5 select S1 (D6, GPIOF5)
+  gpio-557 (spd-mux-s0       |mux)         out hi   — QU5 select S0 (D6, GPIOF4)
+  gpio-561 (sw-id-n          |id-button)   in  hi IRQ ACTIVE LOW  — ID button (E2 input)
+  gpio-570 (power-state-in   |sysfs)       in  hi   — GPIOH2 SYS_PWRGD = host ON
+
+VALIDATED on silicon:
+- **E3 LEDs**: the BMC DRIVES the status/CPU-error/ID LEDs — bmc-status is asserted
+  (LED ON, healthy BMC), CPU1/2-error de-asserted (no CPU faults), ID off. Real
+  GPIO output drive observed.
+- **E1 power/reset GPIO map**: the power-up/reset/power-down/lockout control lines
+  are present + configured as the kgpe-power.sh path uses them.
+- **D6 mux selects**: QU5 S0/S1 driven (the SPD-mux fabric selects, GPIOF4/F5).
+- **E2 ID-button input** (sw-id-n) reads hi (not pressed), IRQ-capable.
+
+NOT exposed (honest gap): the §11 platform-MONITOR inputs THERMTRIP#/PROCHOT#/
+DDR_THERM#/NMI#/BIOS_POST_COMPLT#/SYNCFLOODIN# are NOT gpio-line-named here — they
+are in TACH/alt-function pinmux on this DTS, so E2 needs DTS pinmux+line-name work
++ a reboot to read them as GPIO. Tracked in FULL-TASK-LIST E2.
+
+--- LED toggle test (2026-07-18): SILICON PASS ---
+/sys/class/leds/ = { bmc-status, cpu1-error, cpu2-error, identify }.
+Drove the chassis-ID LED via userspace and confirmed the real GPIO flips:
+  echo 1 > /sys/class/leds/identify/brightness -> gpio-560 (led-id-n) out hi -> out lo (LED ON)
+  echo 0 > /sys/class/leds/identify/brightness -> gpio-560 (led-id-n) out lo -> out hi (LED OFF)
+So the leds-gpio driver + /sys/class/leds userspace path drives the real AST2050
+GPIO on silicon. E3 (LEDs) Linux-silicon + userspace = DONE. (Chose the ID LED —
+a harmless locator; restored to OFF.)

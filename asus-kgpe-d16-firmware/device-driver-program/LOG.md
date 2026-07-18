@@ -1,5 +1,20 @@
 # Device-driver program — running log
 
+## 2026-07-18 — E3 LEDs validated on SILICON + userspace; E1/D6 GPIO map confirmed
+
+- Leveraged the live silicon board (host on, uImage-sbtsi) to validate the GPIO
+  signal map without a new netboot. `/sys/kernel/debug/gpio` shows the BMC driving
+  the named lines: `led-bmc-status-n` (ON), `led-cpu1/2-err-n` (no faults),
+  `led-id-n` (off), the power/reset controls (lockout/power-up/reset/power-down),
+  and the QU5 `spd-mux-s0/s1` selects; `power-state-in` (H2) = hi (host on).
+- **E3 LEDs DONE silicon+userspace:** `echo 1 > /sys/class/leds/identify/brightness`
+  flips the real GPIO `led-id-n out hi→out lo` (LED ON), `echo 0` flips it back —
+  the leds-gpio driver + `/sys/class/leds` path drives the real AST2050 GPIO.
+  Evidence `evidence/e-gpio-leds/00`. Matrix row 32 LS/LU → ✅; FULL-TASK-LIST E3.
+- Honest gap confirmed: the §11 platform-MONITOR inputs (THERMTRIP/PROCHOT/
+  DDR_THERM/NMI/POST_COMPLT/SYNCFLOOD) are NOT gpio-line-named — they're in
+  TACH/alt pinmux, so E2 needs DTS pinmux+line-name work + a reboot.
+
 ## 2026-07-18 — gate (d) task-discovery audit found MISSING tasks → folded them in
 
 - A sub-agent task-discovery audit (gate d: "can anyone find tasks that SHOULD be

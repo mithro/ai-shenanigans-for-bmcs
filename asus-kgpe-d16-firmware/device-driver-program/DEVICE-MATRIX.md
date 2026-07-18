@@ -135,12 +135,12 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ⬜ | 🔶 | ⬜ | ⬜ |
+| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | ⬜ | ⬜ |
 | 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | 34 | 24 MHz clock input (QOSC1) | SCU/clk | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | — | AST_JTAG1 (§13/§15) | ARM debug | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
-- **32** `gpio-leds` DTS nodes exist; **no silicon observation** (audit #9). D09.
+- **32** LS/LU=✅: **silicon LED-drive DONE (2026-07-18, host on)** — `echo 1 > /sys/class/leds/identify/brightness` flips the real GPIO `led-id-n out hi→out lo` (LED ON) and `echo 0` flips it back; the `/sys/class/leds` userspace → aspeed-GPIO path drives the real hardware. Evidence `evidence/e-gpio-leds/00`. The same debug-gpio dump also confirmed the BMC driving `led-bmc-status-n` (ON) + `led-cpu1/2-err-n` (no faults), the E1 power/reset GPIO map, and the D6 QU5 mux selects on silicon. QE stays 🔶 (LED nodes present in the QEMU DTS; a QEMU toggle-observe test would make it ✅).
 - **34** the 24 MHz ref is consumed by SCU/clk (validated via every boot). Ⓝ userspace.
 - **AST_JTAG1** is the silicon TEST HARNESS (how all silicon boots happen), not a driver target → Ⓝ (explicitly out of scope, not omitted).
 
