@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D08 W83601G: BOTH-SIDES done (silicon LED-drive + datasheet fix)
+
+- Silicon reset-default reads (U27 @0x18) match the datasheet AND the model
+  exactly: CR20=0x60, CR02=0xf0, CR03=0xff, CR09=0x00, CR0A=0x70, CR0B=0x7f.
+- **Silicon resolved a datasheet inconsistency**: CR21 (chip-ID low) reads
+  **0x13** on silicon, not the §7.1-table 0x12 (the §7.2 text's 0x13 is right).
+  Per "QEMU models real hardware", set the model's `W83601G_ID_LOW` = 0x13 and
+  the test expectation to 0x13; QEMU re-run still PASS.
+- **Silicon LED-drive path proven on BOTH expanders** (the exact BMC DIMM-error-
+  LED sequence, live over i2c-4, fully reversible):
+    U27 @0x18: CR03=0xfe, CR01=0x01 -> readback DRV03=0xfe DRV01=0x01 -> restore.
+    U28 @0x19: same -> DRV03=0xfe DRV01=0x01 -> restore.
+  The write takes effect on real hardware (readback-confirmed) and restores to
+  reset defaults. Evidence `evidence/d08-w83601g/03-silicon-both-sides.txt`.
+- Matrix rows 21/22: LS ✅ (silicon LED-drive), QE ✅, LU ✅. D08 W83601G is
+  fully both-sides (QEMU + silicon) for both expanders. QEMU submodule updated.
+
 ## 2026-07-18 — D08 W83601G: faithful QEMU model + validation (QEMU PASS)
 
 - Obtained the official Nuvoton W83601G datasheet V1.31 (register map in

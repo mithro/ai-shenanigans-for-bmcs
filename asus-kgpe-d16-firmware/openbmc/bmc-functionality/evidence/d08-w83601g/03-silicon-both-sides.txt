@@ -1,0 +1,37 @@
+D08 W83601G — SILICON validation (2026-07-18), the both-sides other half.
+
+Board booted (JTAG->U-Boot->TFTP netboot), i2c-4 = the BMC's direct I2C5 engine.
+
+(1) Reset defaults read on silicon (U27 @0x18) — match datasheet AND the QEMU
+    model exactly:
+      CR20 (ID high)      = 0x60
+      CR21 (ID low)       = 0x13   <-- SILICON-RESOLVED datasheet ambiguity
+      CR02 (P1 polarity)  = 0xf0
+      CR03 (P1 iocfg)     = 0xff   (all inputs)
+      CR09 (P2 out data)  = 0x00
+      CR0A (P2 polarity)  = 0x70
+      CR0B (P2 iocfg)     = 0x7f   (all inputs)
+
+    The Nuvoton V1.31 datasheet is self-inconsistent on CR21 (§7.1 table 0x12
+    vs §7.2 text 0x13). Silicon reads 0x13, so the model is set to 0x13 per the
+    "QEMU models real hardware" rule (the datasheet table is simply wrong here).
+
+(2) LED-DRIVE PATH on silicon — the exact BMC DIMM-error-LED sequence, driven
+    live over i2c-4, then restored:
+      i2cset 0x18 CR03=0xfe   (clear bit0 -> GP10 output)
+      i2cset 0x18 CR01=0x01   (drive GP10 high -> DIMM error LED on)
+      readback:  DRV03=0xfe  DRV01=0x01   (writes took effect on silicon)
+      restore:   CR01=0x00, CR03=0xff
+      readback:  RST03=0xff  RST01=0x00   (clean restore to reset defaults)
+
+RESULT: the BMC drives the W83601G DIMM-LED expander output registers on real
+hardware; the write takes effect (readback-confirmed) and is fully reversible.
+This is the silicon half of the both-sides D08 W83601G validation; the QEMU half
+is scripts/w83601g-test.py (02-qemu-pass.txt). U28 @0x19 present + ID-readable
+identically (00-silicon-present.txt).
+
+(3) U28 @0x19 LED-drive on silicon (DIMM G/H error LEDs), same sequence:
+      i2cset 0x19 CR03=0xfe; i2cset 0x19 CR01=0x01
+      readback: DRV03=0xfe DRV01=0x01   (write took effect)
+      restore:  CR01=0x00, CR03=0xff -> RST01=0x00
+    Both W83601G expanders are thus driven both-sides (QEMU + silicon).

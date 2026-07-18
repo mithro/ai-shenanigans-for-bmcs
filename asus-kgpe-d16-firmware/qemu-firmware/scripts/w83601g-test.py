@@ -65,7 +65,7 @@ chk 0x18 0x09 0x00 p2out_reset       # Port2 output data resets 0x00
 chk 0x18 0x0a 0x70 p2pol_reset       # Port2 polarity resets 0x70
 chk 0x18 0x0b 0x7f p2iocfg_reset     # Port2 I/O config resets 0x7F
 chk 0x18 0x20 0x60 idhigh            # Chip ID high 0x60
-chk 0x18 0x21 0x12 idlow             # Chip ID low 0x12 (table value)
+chk 0x18 0x21 0x13 idlow             # Chip ID low 0x13 (silicon-resolved; datasheet table's 0x12 is wrong)
 chk 0x18 0x07 0xff reserved_openbus  # reserved index reads 0xFF (== silicon)
 
 # --- U28 @0x19: present, own seeded Port-1 input, same ID ---
