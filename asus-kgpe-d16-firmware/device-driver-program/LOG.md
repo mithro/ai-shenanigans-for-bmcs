@@ -1,5 +1,40 @@
 # Device-driver program — running log
 
+## 2026-07-18 — CI ROOT-CAUSE FIXES: unpushed QEMU submodule + initramfs missing usbip source
+
+- **Honest correction to a completion-gate claim.** Checked CI on the branch and
+  found the `D16 QEMU firmware stack` workflow **failing on every recent push**.
+  Two INDEPENDENT root causes, both now fixed; my QEMU/initramfs "bind" results
+  were validated **locally**, NOT in CI — the gate-(b) "CI green" bar was not
+  actually met. Recorded plainly, not papered over.
+- **Cause 1 (git, not code): unpushed QEMU submodule SHA.** The parent repo pins
+  the QEMU submodule at `512d56d217` (SB-TSI), but that commit — and
+  `a43b8b221e`/`d0556622ed` (W83601G) before it — were committed in the submodule
+  but **never pushed** to `github.com/mithro/qemu`. `git branch -r --contains
+  512d56d217` was empty. `actions/checkout@v4` (`submodules: recursive`) then can't
+  fetch the pinned SHA → submodule init fails → "Build custom QEMU" fails →
+  everything downstream (C2/C4/C-UBOOT/F2/F3/F5/F5b/F4/F9…) cascades to failure and
+  my new B1/D08/D09 jobs are *skipped*. C code compiles fine locally (binary built
+  14:15). **Fix:** pushed submodule branch `claude/bmc-functionality`
+  (`a43b8b221e..512d56d217`) to `git@github.com:mithro/qemu`. **Confirmed:** the
+  fresh `workflow_dispatch` run 29635041209 shows **"Build custom QEMU" = success**
+  (was failing). Lesson: after any QEMU submodule commit, push the submodule remote
+  BEFORE relying on CI — the parent gitlink alone is not enough.
+- **Cause 2 (CI env): build-initramfs job lacked the usbip source.** With the QEMU
+  build green, the boot jobs were still skipped because `Build initramfs` *also*
+  fails — actual error: `FileNotFoundError: …/kernel/linux/tools/usb/usbip`.
+  `build-usbip.py` reads usbip from the kernel tree, but `kernel/linux` is NOT a
+  submodule — `build-kernel.sh` clones it (`git clone --depth 1 --branch v6.6.70`
+  stable Linux) — and the initramfs job never runs that, so the tree is absent in
+  CI. Built locally only because my worktree already has the kernel. Regression from
+  adding the usbip initramfs (2026-07-16). **Fix:** made `build-usbip.py`
+  self-contained — new `ensure_usbip_src()` prefers the checked-out kernel tree,
+  else sparse-clones just `tools/usb/usbip` at the pinned `KERNEL_VERSION`
+  (fail-loud). Added `git autoconf automake libtool pkg-config` to the initramfs
+  job deps (usbip autogen + libudev-zero/usbip clones). Fallback path tested locally
+  (`USBIP FALLBACK CLONE OK`). Lesson: any job that consumes the kernel *source*
+  tree must obtain it itself — only build-kernel clones it.
+
 ## 2026-07-18 — B1c snoop: silicon kernel BUILT + STAGED; POST-capture scoped (not yet run)
 
 - Built the real-HW kernel/DTB from the snoop-armed source and **verified the

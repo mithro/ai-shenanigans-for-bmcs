@@ -51,9 +51,16 @@ STRIP = CROSS + "strip"
 LIBUDEV_ZERO_URL = "https://github.com/illiliti/libudev-zero"
 LIBUDEV_ZERO_COMMIT = "2bebebc9e0444ec53afd7f1f37aa80ff6b95f5f7"
 
-# The vendored usbip userspace (version-locked to the BMC kernel submodule).
+# The vendored usbip userspace (version-locked to the BMC kernel tree).
 HERE = Path(__file__).resolve().parent
 USBIP_SRC = (HERE / ".." / "kernel" / "linux" / "tools" / "usb" / "usbip").resolve()
+
+# Where to sparse-clone tools/usb/usbip from when the kernel tree is NOT checked
+# out (e.g. the CI build-initramfs job, which does not run build-kernel.sh). Pin
+# the SAME version build-kernel.sh defaults to so the userspace matches the built
+# kernel; overridable via KERNEL_VERSION to keep the two in lockstep.
+KERNEL_VERSION = os.environ.get("KERNEL_VERSION", "v6.6.70")
+KERNEL_URL = "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
 
 
 def run(cmd, cwd=None, env=None, stdin=None):
@@ -143,18 +150,43 @@ def build_libudev_zero(build: Path) -> Path:
     return stage
 
 
+def ensure_usbip_src(build: Path) -> Path:
+    """Return the usbip userspace source tree to build from.
+
+    Prefer the checked-out BMC kernel tree (version-locked to exactly what we
+    build). If it is absent -- the CI build-initramfs job does NOT run
+    build-kernel.sh, so kernel/linux/tools/usb/usbip does not exist there -- fall
+    back to a sparse, blobless clone of just tools/usb/usbip from stable Linux at
+    the pinned KERNEL_VERSION. Fail loud if the source still is not present."""
+    if USBIP_SRC.exists():
+        return USBIP_SRC
+    kdir = build / "kernel-usbip"
+    sub = kdir / "tools" / "usb" / "usbip"
+    if not sub.exists():
+        if kdir.exists():
+            shutil.rmtree(kdir)
+        run(["git", "clone", "--depth", "1", "--branch", KERNEL_VERSION,
+             "--filter=blob:none", "--sparse", KERNEL_URL, str(kdir)])
+        run(["git", "-C", str(kdir), "sparse-checkout", "set", "tools/usb/usbip"])
+    if not sub.exists():
+        raise SystemExit(
+            f"usbip source missing after sparse clone of {KERNEL_VERSION}: {sub}")
+    return sub
+
+
 def build_usbip(build: Path):
     """Cross-build fully-static ARM usbipd + usbip. Returns (usbipd, usbip) as
     stripped Path binaries under <build>."""
     build.mkdir(parents=True, exist_ok=True)
     stage = build_libudev_zero(build)
 
-    # Copy the vendored usbip source out of the submodule (autogen writes into the
-    # tree; never dirty the submodule).
+    # Copy the usbip source out of the (read-only) kernel tree; autogen writes
+    # into the tree, so never build in place. See ensure_usbip_src for where the
+    # source comes from when the kernel tree is not checked out (CI).
     src = build / "usbip-src"
     if src.exists():
         shutil.rmtree(src)
-    shutil.copytree(USBIP_SRC, src)
+    shutil.copytree(ensure_usbip_src(build), src)
 
     run(["./autogen.sh"], cwd=src)
     run(["./configure",

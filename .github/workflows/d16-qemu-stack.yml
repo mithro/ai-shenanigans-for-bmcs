@@ -121,7 +121,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-arm-linux-gnueabi libc6-dev-armel-cross bzip2 cpio \
-            u-boot-tools openssh-client make
+            u-boot-tools openssh-client make \
+            git autoconf automake libtool pkg-config
+          # git + autotools are needed by build-usbip.py: it sparse-clones
+          # tools/usb/usbip (this job does not run build-kernel.sh, so the kernel
+          # tree is absent) and clones + autoreconfs libudev-zero / usbip.
       - uses: astral-sh/setup-uv@v5
       - name: Build initramfs
         run: uv run asus-kgpe-d16-firmware/qemu-firmware/initramfs/build.py
