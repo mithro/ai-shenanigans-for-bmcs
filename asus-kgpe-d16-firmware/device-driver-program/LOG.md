@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-18 — fresh complete read of AST2050-BMC-WIRING.md + task-list verification
+
+- Re-merged origin/main (up to date). Read the **complete** authoritative
+  schematic doc end-to-end (all 597 lines, §§1–16) and did a deliberate
+  section-by-section cross-check of every function block, the §14
+  neighbour-chip table, and the §15 connector list against DEVICE-MATRIX.md.
+- Appended a "Completeness verification" table to DEVICE-MATRIX.md mapping
+  every doc section → matrix rows, and explicitly justifying the only
+  spec elements without their own driver row: passive power/glue (LDOs,
+  series-R nets, FET switches/buffers — modeled where behaviour-relevant, e.g.
+  the QU9/QU5/U23 fabric device), the JTAG header (silicon test harness, Ⓝ),
+  and the host chips SU1/OU1/NU1 (reached via the LPC/PCI/I²C rows, not
+  BMC-internal). **Verdict: the 40-row matrix is comprehensive against the
+  authoritative schematic — nothing skipped.** This is the fresh-read +
+  task-list-creation deliverable.
+
 ## 2026-07-18 — D08 FRU EEPROM done both sides; W83601G located on silicon
 
 - Enabled I2C5 (i2c-4) in the DTS + added the FRU node (at24 24c08 @0x54).

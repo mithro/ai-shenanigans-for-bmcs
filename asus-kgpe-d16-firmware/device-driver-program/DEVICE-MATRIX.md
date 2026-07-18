@@ -162,3 +162,36 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
   several §11 signals + LED silicon observation.
 - **Zephyr**: entire column ⬜ pending the D14 port (feasibility settled;
   tractable).
+
+---
+
+## Completeness verification — fresh full read of AST2050-BMC-WIRING.md (2026-07-18)
+
+The complete authoritative document (all 597 lines, §§1–16) was read end-to-end
+and cross-checked section-by-section. Every function block, neighbour chip, and
+connector maps to a row above — nothing in the spec is unrepresented:
+
+| Doc section | Content | Matrix rows |
+|---|---|---|
+| §2 Power supply (48+66 balls) | LDOs PU22/PU28, rails, PLL analog | passive power (no driver target); consumed by SCU/PLL = row 35. AST_VREFSSTL/PLLs = part of SDMC/SCU init |
+| §3 DDR2 → QU2 (48) | SDMC + Hynix HY5PS121621 | 1 |
+| §4 SPI flash → BMC_FW1 (27) | SMC + socketed flash; legacy ROMA0-23 = spare GPIO | 2 (ROMA spare GPIO folds into GPIO rows) |
+| §5 LPC → SP5100/OU1/TPM1 (10) | KCS, mailbox, vUART, TPM header | 3, 4, 5, 6, 7 |
+| §6 PCI-33 → SP5100/slots (45) | iKVM video-capture PCI device | 8 |
+| §7 Ethernet (18) | MAC1 MII→RTL8201N; MAC2 RMII2/NC-SI→2×82574L | 10, 11 |
+| §8 VGA → VGA1 (14) | DAC output, QU6 sync buffer, DDC/EDID | 12, 13, 14 |
+| §9 USB device → SP5100 (6) | vhub | 9 |
+| §10 I²C/SMBus (16, 8 buses) | W83795G, SB-TSI, FRU U25, W83601G U27/U28, DIMM SPD/TSOD, aux panel, PSU PMBus, SALT, QU9/QU5/U23 fabric | 15–26 |
+| §11 GPIO power/reset/platform (17) | ATXPSON#/SYS_PWRGD/PWRBTN#/SYSRESET#/PCI_RST#/BIOSREVRY#/CLRTC#/CPU1-2DISABLE#/THERMTRIP#/PROCHOT#/DDR_THERM#/NMI# | 27, 28, 29 |
+| §12 Serial/SOL (11) | UART console; UART1→QU8 mux→Super-I/O | 30, 31 |
+| §13 JTAG/LEDs/clock/straps (11+6+1+2) | JTAG harness; BMCRDY/MLED/CPUERR/chassis-ID LEDs; 24 MHz clock; IKVMEN#/SOLEN#/IPMI_SEL straps | AST_JTAG1 (harness Ⓝ), 32, 33, 34 |
+| §14 Neighbour chips | QU2/BMC_FW1/U5/LU1-2/QU4/U27-28/U25/QU9/QU5/QU8/QU6/U23/AZ75232/glue U6-8/LDOs/SU1/OU1/NU1 | all active chips have rows; passive glue (U6/U7/U8/U23) modeled in the fabric+power-seq; LDOs = passive power; **SU1/OU1 = host chips reached via LPC/PCI/I2C (rows 3/8/15); NU1 SR5690 = host northbridge, reached only via the shared I2C3/I2C6 multi-master bus (row 15 note), not a distinct BMC-driven device** |
+| §15 Connectors | VGA1/AST_UART1/AST_JTAG1/BMC_FW1/PANEL1/AUX_PANEL1/PSUSMB1/TPM1/VGA_SW1/IPMI_SEL1/RECOVERY1 | VGA1→12, UART1→30, JTAG1→harness, FW1→2, PANEL1→27/32, AUX_PANEL1→26/32, PSUSMB1→24, TPM1→7, jumpers→29/33 |
+
+**Verdict:** the 40-row matrix is comprehensive against the authoritative
+schematic. The only spec elements without their own driver row are (a) passive
+power/glue (LDOs, series-R nets, FET switches, buffers — modeled where they
+affect behaviour, e.g. the QU9/QU5/U23 fabric device, not driven), (b) the JTAG
+header (the silicon test harness, explicitly Ⓝ), and (c) the host-side chips
+SU1/OU1/NU1 (reached through the LPC/PCI/I²C rows, not BMC-internal). Each is
+justified above, not skipped.
