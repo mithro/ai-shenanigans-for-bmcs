@@ -4,6 +4,11 @@
 authoritative). Where an earlier document in this repo contradicts the schematic
 wiring, **the schematic wins** and the earlier claim is REOPENED here.
 
+**➡ The explicit per-device checklist** (every schematic device × QEMU /
+U-Boot(Q,Si) / Linux(Q,Si,US) / Zephyr(Q,Si) cells) is
+**[DEVICE-MATRIX.md](DEVICE-MATRIX.md)** — the authoritative grid. This file is
+the per-block detail + next-steps behind it.
+
 **Program goal:** for *every* function block wired to the AST2050 on the
 KGPE-D16:
 

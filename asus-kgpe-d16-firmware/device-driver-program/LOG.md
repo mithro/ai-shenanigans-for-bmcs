@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-18 — explicit per-device task matrix created (DEVICE-MATRIX.md)
+
+- Re-merged origin/main (already up to date). Re-read the authoritative
+  wiring doc §§2–15 fresh and enumerated **every device** (40 rows incl. the
+  §14 neighbour chips + SoC-internal peripherals) into a new
+  **DEVICE-MATRIX.md** — an explicit grid with the exact deliverable columns
+  the goal demands: QEMU / U-Boot(QEMU,silicon) / Linux(QEMU,silicon,
+  userspace) / Zephyr(QEMU,silicon). Each cell carries the honest current
+  status (reflecting the completeness audit — USB-Si scoped, NC-SI-Si 🔷
+  blocked, WDT-Si uncited, 6 I2C far-ends absent, SOL/DDC/mailbox ⬜, whole
+  Zephyr column ⬜). TASKLIST now points to it as the authoritative checklist.
+- This makes the per-device coverage inspectable at a glance and is the
+  master checklist for the remaining work.
+
 ## 2026-07-18 — D07 silicon NC-SI attempt 2 FAIL; deep G3-pinmux diagnosis; BREAK
 
 - Added the RMII2 pinctrl to mac1 + rebuilt + re-tested on silicon → STILL
