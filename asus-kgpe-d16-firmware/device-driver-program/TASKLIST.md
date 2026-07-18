@@ -147,7 +147,7 @@ silicon.**
 | Linux ncsi stack (ftgmac100 mac1 + net/ncsi) QEMU validation | ✅ | **`NCSI RESULT: PASS`** — net/ncsi discovers + configures a channel via the slirp responder, eth1 carrier up (`evidence/d07-ncsi/`, CI `boot-ncsi`); `CONFIG_NET_NCSI`+OEM built; DTS mac1 `use-ncsi` (disabled by default) |
 | Reconcile F7-NCSI.md (its "not wired" verdict was MAC1-scoped) | ✅ | F7 corrected + SILICON-STATUS #9 REOPENED (done 2026-07-18) |
 | QEMU: faithful 82574L NC-SI responder (2 packages + Intel OEM 0x06/0x20) | ⬜ | Phase 2: slirp responder is generic (MFR-ID 0x0); a real 82574L responder (mfr 0x157) belongs in the MAC model (libslirp is external). Facts pinned (82574 datasheet, D07 header) |
-| Silicon validation | ⬜ | MAC2 strap-enabled (SCU70=0x00819582); LU1/LU2 on +3V3_AUX (host-off testable). Open: do the ASUS NIC NVMs enable MNGM? Check `ethtool -e` / observe NC-SI on silicon |
+| Silicon validation | 🔶 blocked (G3 RMII2 pinmux) | NICs confirmed NC-SI-enabled (NVM MNGM=01, pkg 0/1). BMC-side discovery ATTEMPTED on silicon 2× + empirical SCU74[27] test → `No channel found` because **the AST2050 (G3) RMII2 pinmux differs from the G4**: g4 pinctrl's `RMII2_DESC=SCU70[7]==0` mis-selects on the G3 (strap 110 → bit7=1) and targets the wrong pins (GPIOT/V, not the G3's GPIOE balls A5/B5/B6/C4/D4/D5). Needs the AST2050 datasheet RMII2/GPIOE routing + a G3 pinctrl group. Evidence `evidence/d07-ncsi/02,03-...`. **Confidence HIGH it is my pinmux/RE, not the hardware.** Focused follow-up |
 | U-Boot / Zephyr NC-SI | ⬜ | scope after Linux path proven |
 
 ### D08 — I²C ×8 + board mux fabric + all far-end devices

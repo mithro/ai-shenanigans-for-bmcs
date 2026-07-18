@@ -1,0 +1,40 @@
+D07 silicon NC-SI discovery — ATTEMPT 2 (2026-07-18): still FAILS; deeper
+root cause found = the AST2050 (G3) RMII2 pinmux differs FUNDAMENTALLY from
+the AST2400 (G4), and mainline's aspeed-g4 pinctrl cannot route it.
+
+Added pinctrl-0=<&pinctrl_rmii2_default> to mac1, rebuilt, re-booted on
+silicon. Result unchanged:
+  ftgmac100 1e680000.ethernet eth1: NCSI: No channel found to configure!
+  ftgmac100 1e680000.ethernet eth1: Wrong NCSI state 0x100 in workqueue
+
+Why the g4 RMII2 pinctrl group is WRONG for the AST2050 (source read of
+drivers/pinctrl/aspeed/pinctrl-aspeed-g4.c):
+  1. `#define RMII2_DESC SIG_DESC_BIT(HW_STRAP1, 7, 0)` — the g4 pinctrl gates
+     RMII2 on SCU70[7]==0 (G4 semantics: bit7 alone selects RMII2). But on the
+     G3, SCU70[8:6] is a 3-bit MAC-mode field; strap 110 (RMII1+RMII2) has
+     bit7=1 (measured SCU70=0x00819582). So the g4 pinctrl reads "RMII2 NOT
+     selected" and won't enable it — same class of G3-vs-G4 strap-layout bug
+     as the GPIOF5 issue fixed by patch 0008, but here it mis-selects the
+     whole function.
+  2. The g4 RMII2 pins are D9/A10/B10/C9/A9/E8/D8 (GPIOT/GPIOV group) — the
+     AST2400's RMII2 balls. The AST2050's RMII2 balls (schematic §7:
+     A5/B5/B6/C4/D4/D5) are the **GPIOE group** (pin names MIIRXD2/RMII2RXD0/
+     GPIOE2 …). Different hardware pins entirely.
+  3. The GPIOE-as-MAC routing is gated by SCU74[27] ("Enable GPIOE group pins
+     shared with MAC pins", datasheet §18) — but the datasheet notes it is
+     "valid for SCU70[8:6]=2,4,7", NOT 6, so even setting it may not be the
+     mechanism for strap=110.
+
+Empirical test on the live board: set SCU74[27]=1 (SCU74 0x4204D000 ->
+0x4A04D000) and re-triggered eth1 up -> STILL "No channel found". So SCU74[27]
+alone is not the enable. Restored SCU74=0x4204D000.
+
+HONEST STATUS (confidence HIGH this is a config/RE problem, not hardware —
+the NICs' NVMs are NC-SI-enabled, evidence 01-...): silicon NC-SI discovery
+is BLOCKED on a G3-specific RMII2 pinmux that mainline does not implement. It
+needs: (a) the exact AST2050 datasheet RMII2/GPIOE routing for strap=110
+(which SCU pin-function bits actually mux A5/B5/B6/C4/D4/D5 as RMII2), then
+(b) a G3 pinctrl group (like patch 0008's approach) or a devmem/DTS mux that
+sets those bits. Deferred to a focused follow-up (per "take a break when
+stuck"). NC-SI is validated in QEMU (evidence 00-...); this is the remaining
+silicon step.

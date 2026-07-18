@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D07 silicon NC-SI attempt 2 FAIL; deep G3-pinmux diagnosis; BREAK
+
+- Added the RMII2 pinctrl to mac1 + rebuilt + re-tested on silicon → STILL
+  "No channel found to configure!". Read the g4 pinctrl source and found the
+  REAL blocker: **the AST2050 (G3) RMII2 pinmux is fundamentally different
+  from the AST2400 (G4)** and mainline's aspeed-g4 pinctrl can't route it:
+  - `RMII2_DESC = SIG_DESC_BIT(HW_STRAP1, 7, 0)` gates RMII2 on SCU70[7]==0
+    (G4 semantics); on the G3, strap 110 has bit7=1 → g4 pinctrl thinks RMII2
+    is off (same class as the patch-0008 GPIOF5 bug, deeper).
+  - the g4 RMII2 pins (D9/A10/B10/C9/A9/E8/D8, GPIOT/V group) are the G4's;
+    the G3's RMII2 balls are A5/B5/B6/C4/D4/D5 = the **GPIOE group**.
+  - empirically set SCU74[27]=1 on the live board → still no channel, so that
+    single bit isn't the enable. Restored SCU74.
+  - Confidence HIGH this is config/RE, not hardware (NVMs are NC-SI-enabled).
+  Evidence `evidence/d07-ncsi/03-...`.
+- **Taking a break from NC-SI silicon** (per the "get stuck → work elsewhere"
+  guidance). It needs the AST2050 datasheet's exact RMII2/GPIOE routing for
+  strap=110 + a G3 pinctrl group — a focused follow-up. NC-SI is validated in
+  QEMU; the NICs are confirmed enabled; the silicon step is well-characterized
+  and open. Bug #4 (RMII2 pinmux) was mine; the deeper G3-pinmux gap is a real
+  mainline limitation, honestly documented.
+
 ## 2026-07-18 — D07 silicon NC-SI attempt 1 FAILED (my missing RMII2 pinmux)
 
 - Ran BMC-side NC-SI discovery on real silicon (addresses audit #3). Booted
