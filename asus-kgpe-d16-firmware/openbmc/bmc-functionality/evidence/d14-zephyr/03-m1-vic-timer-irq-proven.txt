@@ -78,3 +78,20 @@ ns16550 device mapping; it is intrinsic to sustained ticking, consistent at
 faulting L1 entry (qemu -s -S) to catch WHAT writes it. Deferred as a focused
 follow-up; the timer/VIC drivers are correct (IRQs dispatch, app runs) and
 SYS_CLOCK stays OFF by default (clean cooperative Hello World).
+
+--- gdb hardware-watchpoint root-localization (2026-07-18) ---
+A gdb hw watchpoint on the L1 entry for the DRAM section (l1_page_table
+0x40008000 + 0x400*4 = 0x40009000) shows every write to it comes from
+`arm_mmu_l2_map_page` <- `z_arm_mmu_init` <- `z_prep_c` <- `z_arm_reset`, i.e.
+BOOT-time static-region mapping in the UPSTREAM arch core (arch/arm/core/mmu/
+arm_mmu.c). Re-arming the watchpoint AFTER `main()` catches NOTHING — so L1[0x400]
+is not written during ticking; it is set at boot and the fault is a deferred TLB
+miss (which is why M0/no-timer runs clean: nothing evicts the TLB entry, while
+the M1 timer's activity eventually evicts it and the walk hits the bad entry).
+Ruled OUT further: CONFIG_ARM_MMU_NUM_L2_TABLES bumped 64->256 does NOT fix it,
+so it is not L2-pool exhaustion/wrap. The corrupting write is inside
+z_arm_mmu_init's mapping of the SoC's static mmu_regions; pinning the exact
+upstream defect needs single-stepping z_arm_mmu_init while watching the L2-table
+pool + L1[0x400] value transitions. This is upstream arm_mmu territory (my four
+SoC files are code-review-clean and cannot write the L1 region — independently
+confirmed). Deferred; SYS_CLOCK stays OFF (clean cooperative Hello World).

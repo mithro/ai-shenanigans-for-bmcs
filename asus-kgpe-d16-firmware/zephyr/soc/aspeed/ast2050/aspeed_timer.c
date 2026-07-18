@@ -96,9 +96,10 @@ static int sys_clock_driver_init(void)
 	tmr_wr(TIMER_CTRL, ctrl);
 
 	tmr_wr(T1_RELOAD, CYC_PER_TICK);
-	tmr_wr(T1_STATUS, CYC_PER_TICK);	/* prime the counter */
 	tmr_wr(T1_MATCH1, 0);
 	tmr_wr(T1_MATCH2, 0);
+	/* The counter loads from RELOAD on the enable transition below; STATUS
+	 * (0x00) is the read-only live count, so there is nothing to pre-load. */
 
 	IRQ_CONNECT(TIMER_IRQ, TIMER_IRQ_PRIO, aspeed_timer_isr, NULL, 0);
 	irq_enable(TIMER_IRQ);
