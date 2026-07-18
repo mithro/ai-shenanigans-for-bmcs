@@ -121,6 +121,16 @@ optional debug tap.
 Layout: the **odd-pin row carries `GN`**, the **even-pin row carries `GP`**
 (female-angled). Power/GND sit at both ends and the two mid-breaks.
 
+![Annotated ULX3S top view — the spispy SPI pins GP7–GP10 on header J1](diagrams/ulx3s-spispy-j1-annotated.png)
+
+*The four wired SPI pins (`GP7`=CS#, `GP8`=SCK, `GP9`=MOSI, `GP10`=MISO) are the
+`7`–`10` block on the lower-left header `J1`, with a GND pair (schematic 21/22)
+just above `GP7`. `J2` (right edge) carries only the optional debug taps. Wire the
+`GP` ("+") column — see the table above and the board's own "+ −" legend by pin
+`11`. Base photo: ULX3S v3.0.3 top from the open-source-hardware `emard/ulx3s`
+repo (`pic/ULX3S_v303_top.png`); regenerate with
+[`diagrams/make-ulx3s-spispy-annotated.py`](diagrams/make-ulx3s-spispy-annotated.py).*
+
 **Header J1 — `GP`/`GN` 0–13 (carries all four wired spispy signals):**
 
 | Odd pin | `GN` row | | Even pin | `GP` row |
