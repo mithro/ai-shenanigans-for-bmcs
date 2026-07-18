@@ -27,6 +27,19 @@
   and expect sustained ticks with no data-abort. This converts #141 from "deferred
   as upstream" to "specific config fix identified + mechanism proven from the source,
   pending an env rebuild to run it."
+- **Build attempt — scoped the env dependency + made the DTS self-contained.** Ran
+  `west build -b kgpe_d16_bmc hello_world` against the shared base; it failed in
+  stages, each pinpointing a piece of PR #103557 the base lost: (1) `fatal error:
+  arm/armv5.dtsi: No such file` → **VENDORED `dts/arm/armv5.dtsi` into my module**
+  (mirrors `dts/arm/armv7-a.dtsi`), so the DTS no longer depends on the base and
+  preprocesses. (2) Kconfig `MMU y-selected but CPU_HAS_MMU=n` — my
+  `SOC_FAMILY_ASPEED select CPU_ARM926EJ_S` is UNDEFINED in the base (confirmed: 0
+  `CPU_ARM926EJ_S` defs + 0 armv5/arm926 files in `arch/arm/core/cortex_a_r`). PR
+  #103557 (the ~770-LOC ARM926 cortex_a_r arch core, fetched in a prior session per
+  LOG below, now absent) is entirely gone from the shared workspace. Reconstructing
+  it in-module = re-doing the arch port, not the #141 fix. **Precise blocker: the
+  ZEPHYR_BASE must carry PR #103557** (upstream-merge it, or a dedicated base) — then
+  the #141 config fix is a one-line validation. Shared workspace left untouched.
 
 ## 2026-07-18 — Completion-gate reviews dispatched (independent sub-agents)
 

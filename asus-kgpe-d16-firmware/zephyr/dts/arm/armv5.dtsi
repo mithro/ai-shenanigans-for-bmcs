@@ -1,0 +1,22 @@
+/*
+ * ARMv5 (ARM9 / ARM926EJ-S) base devicetree skeleton.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Vendored into this out-of-tree module so the AST2050 (ARM926EJ-S) board is
+ * self-contained and does not depend on the ZEPHYR_BASE carrying the cortex_a_r
+ * ARMv5 PR (#103557): the shared workspace has drifted off that branch, dropping
+ * dts/arm/armv5.dtsi (2026-07-18). Mirrors dts/arm/armv7-a.dtsi (a minimal
+ * skeleton + an empty simple-bus `soc` node that the SoC .dtsi extends); the
+ * per-SoC cpus/memory/interrupt-controller nodes live in aspeed/ast2050.dtsi.
+ */
+
+#include "skeleton.dtsi"
+
+/ {
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges;
+	};
+};
