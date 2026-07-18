@@ -33,13 +33,11 @@ M1 VIC + system timer — written, IRQs delivered, tickful operation still WIP:
 - soc/aspeed/ast2050/aspeed_timer.c: tickful Timer1 @ 1 MHz, VIC source 16.
 - With CONFIG_SYS_CLOCK_EXISTS=y the timer DELIVERS interrupts through the
   cortex_a_r isr_wrapper and the app still boots + prints "Hello World!" — but
-  sustained ticking then trips a data abort at the arm_mmu L1 page table
-  (0x40008ffc): the SAME brand-new-ARM9 arm_mmu dynamic-mapping breakage that
-  forced the static M0 console, now reached via timer-driven thread-switch page-
-  table updates. So SYS_CLOCK_EXISTS is left OFF by default (clean cooperative
-  Hello World, no crash); the timer/VIC code is committed and re-armed by
-  flipping it to y once the upstream arm_mmu dynamic mapping is fixed (or the
-  per-thread MMU stack-guard update is disabled).
+  after sustained ticking the arm_mmu L1 page table gets CORRUPTED and a later
+  DRAM access data-aborts (DFAR ~0x40008xxx, DFSR 0x5). See the refined diagnosis
+  below for what this is and isn't. So SYS_CLOCK_EXISTS is left OFF by default
+  (clean cooperative Hello World, no crash); the timer/VIC code is committed and
+  re-armed once the corruption is root-caused.
 
 Matrix: row 30 ZQ upgraded to reflect a RUNNING APP (not just a banner). Per-
 device Zephyr drivers (ZQ/ZS) build on this once preemptive scheduling is clean.
@@ -68,3 +66,15 @@ device Zephyr drivers (ZQ/ZS) build on this once preemptive scheduling is clean.
   follow-up. The timer/VIC drivers themselves are correct (IRQs dispatch, app
   runs); this is a memory-corruption bug reached only under sustained ticking on
   the brand-new ARMv5 core. SYS_CLOCK stays OFF by default until it's found.
+
+--- ns16550-map hypothesis RULED OUT (2026-07-18) ---
+Tested SYS_CLOCK=y with CONFIG_SERIAL=n (no ns16550 -> no dynamic device map at
+all): the app still prints "Hello World!" cleanly, but the SAME crash recurs — a
+data abort at the arm_mmu L1 table (DFAR 0x40008bf0) after ~2282 timer IRQs, and
+the trace produces NO further output (a 15 s run yields byte-identical output to
+an 8 s run: the machine is dead after the abort). So the L1 corruption is NOT the
+ns16550 device mapping; it is intrinsic to sustained ticking, consistent at
+~2264-2282 ticks across runs. Next tool: a gdb hardware watchpoint on the
+faulting L1 entry (qemu -s -S) to catch WHAT writes it. Deferred as a focused
+follow-up; the timer/VIC drivers are correct (IRQs dispatch, app runs) and
+SYS_CLOCK stays OFF by default (clean cooperative Hello World).
