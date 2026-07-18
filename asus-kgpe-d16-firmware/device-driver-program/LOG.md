@@ -12,10 +12,15 @@
   `aspeed.adc` **ABSENT on kgpe-d16-bmc** and still **PRESENT on ast2500-evb** (no
   regression to other SoCs). No DTS references an `adc` node (grepped), so nothing
   downstream breaks; a G3 access to 0x1E6E9000 now reads unassigned like the silicon.
-  Parent submodule-pointer bump + CI oracle re-validation (C2/C4/C-UBOOT must still boot)
-  to follow once the submodule push lands. **#146 CLOSED**; this is the first of the #144
-  phantom set (ADC done; UART3-5/WDT2/SRAM/SPI1 + serial loop remain, each with its own
-  oracle re-validation). Matrix row 41 → all-Ⓝ, phantom-removed.
+  Parent bump `56d3317` (submodule `9eedd27540`). **CI CONFIRMED CLEAN (run 29646297882):
+  all oracles boot with the ADC gone — C2, C2-full, C4, C-UBOOT, C5/NFS + D07/D08×2/D09/B1
+  + F2-F9 all green; KVM 6/6; only the known C3-musl environmental build red (#143).** So
+  the phantom removal is oracle-safe — faithfulness gate PASSED. **#146 CLOSED**; first of
+  the #144 phantom set (ADC done+validated; UART3-5/WDT2/SRAM/SPI1 + serial loop remain).
+  Matrix row 41 → all-Ⓝ, phantom-removed. Method proven end-to-end (audit→identify→gate→
+  qtree-verify→CI oracle re-validation); the remaining phantoms follow it, but with a
+  per-item risk note (SPI1=FMC-vs-SMC boot dep, SRAM=U-Boot early-stack, UART=console-enum;
+  WDT2 likely next-safest) — see #144.
 - Faithfulness lesson reinforced: "model every device" is bounded by "…that the real
   silicon has." An earlier gate-(d) pass had ADDED the ADC as a to-do; the deeper check
   against the authoritative datasheet showed the honest answer was its ABSENCE.
