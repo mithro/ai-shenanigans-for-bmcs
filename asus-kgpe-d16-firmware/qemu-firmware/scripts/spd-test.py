@@ -73,7 +73,7 @@ sleep 1
 HDR=$(hexdump -v -e '4/1 "%02x "' -n 4 /sys/bus/i2c/devices/$CH2-0051/eeprom)
 echo "SPD_HDR=[$HDR]"
 [ "$HDR" = "92 11 0b 02" ] || { echo SPD_FAIL_bad_header; exit 1; }
-PN=$(dd if=/sys/bus/i2c/devices/$CH2-0051/eeprom bs=1 skip=128 count=18 2>&1 | tr -dc 'A-Za-z0-9')
+PN=$(hexdump -v -e '/1 "%c"' -s 128 -n 18 /sys/bus/i2c/devices/$CH2-0051/eeprom)
 echo "SPD_PN=[$PN]"
 [ "$PN" = "RMR5030EF68F9W1600" ] || { echo SPD_FAIL_bad_partnumber; exit 1; }
 # This UDIMM has no thermal sensor (SPD byte32=0) -> 0x19 must NOT bind.
