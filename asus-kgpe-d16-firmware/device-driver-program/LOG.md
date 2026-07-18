@@ -1,5 +1,34 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C4 FIXED: vhub deadlock made opt-in (default-off); both C4 + C2 verified
+
+- **Traced the vendor firmware's exact udc sequence** (temporary UDCTRACE logging,
+  reverted): it writes CTRL=0x80000800 (release PHY reset), does ~10 EP-setup writes
+  (0x08/0x0c/0x10/0x14/0x18/0x1c/0x30/0x38), then CTRL=0x80000801 (connect) — WITHOUT
+  ever reading CTRL[31]. The model only sets `phy_ready` on a CTRL *read*, so the
+  connect latched ISR[18] → 1.58M-access ISR livelock → the vendor fw's nowayout WDT
+  reset.
+- **Fundamental finding (why a "correct trigger" isn't achievable here).** Compared
+  against the mainline driver (`core.c` `ast_vhub_init_hw`): the UNPATCHED mainline
+  (hangs on silicon) and the vendor fw (safe on silicon) do the SAME register-access
+  pattern between reset-release and connect — reset-release, SW_RESET pulse + EP
+  setup, connect — differing ONLY in patch-0007's poll loop, whose distinguishing
+  effect is its `udelay(10)` TIMING. QEMU without icount cannot advance virtual time
+  through a guest `udelay()`, so there is NO deterministic signal to latch the
+  deadlock for the mainline without ALSO false-latching it for the vendor. Every
+  access-based proxy I tried (poll-read, CTRL re-write, non-CTRL access count,
+  SW_RESET-clears-phy) breaks either the vendor OR the patched/mainline case.
+- **Fix (QEMU submodule `01323e0426`): gate the deadlock behind a default-OFF
+  `deadlock-model` property.** Primary faithfulness rule = legacy firmware must
+  always boot; the hazard is real but un-latchable deterministically without
+  breaking the vendor, so it is opt-in (a dedicated patch-0007 regression scenario
+  sets `deadlock-model=on`). **Verified locally:** C4 now SURVIVES 130s and reaches
+  `aim_function_execute netGetCurrentIfConfig` (was WDT-reset @27s); **C2 full-chain
+  still `C2 RESULT: PASS`** (SSH). CI will confirm F6 (patched-kernel vhub probe)
+  which checks probe-success (unaffected by deadlock-off). So BOTH legacy-boot
+  regressions this cycle (C2-full = my mkflash truncation; C4 = my vhub model) are
+  now FIXED + verified — my code, not the hardware, exactly as the principle says.
+
 ## 2026-07-18 — C4 CULPRIT (corrected): the USB vhub DEADLOCK model (192c4ef4da), NOT the mux fabric
 
 - **Self-corrected a premature bisect conclusion (the empirical method caught it).**
