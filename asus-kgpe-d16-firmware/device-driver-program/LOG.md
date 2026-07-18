@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Completion-gate reviews dispatched (independent sub-agents)
+
+- Per the goal's completion gates (a) reviews find nothing missed, (b) full code
+  review no issues, (d) sub-agents can't find new tasks — dispatched 2 INDEPENDENT
+  sub-agents (≤5 concurrent):
+  1. **Code review** (feature-dev:code-reviewer) of this session's 3 code changes:
+     QEMU vhub `deadlock-model` property (submodule `01323e0426`), `mkflash.py`
+     copy-size computation (`47e073d`), F7 guard re-scope (`39a2fac`). Looking for
+     correctness/logic/faithfulness bugs.
+  2. **Schematic-enumeration completeness** (general-purpose): read the AUTHORITATIVE
+     `schematic-wiring/AST2050-BMC-WIRING.md` fully + cross-check every device against
+     `DEVICE-MATRIX.md`/`FULL-TASK-LIST.md` — enumerate every schematic device, flag
+     any missing from the enumeration, and identify concrete NEW tasks (gate d).
+- Findings will be folded back: code issues fixed, enumeration gaps + new tasks added.
+  Results pending (agents running).
+
 ## 2026-07-18 — CI GREEN confirmed for C4+F7+C2-full; C3 fix = force IPv4 (musl.cc)
 
 - **CI confirmation (run 29639741089):** `Boot proprietary firmware -> BMC web
