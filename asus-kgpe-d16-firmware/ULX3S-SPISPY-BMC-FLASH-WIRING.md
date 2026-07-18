@@ -63,17 +63,18 @@ prints a "+ −" legend by pin `11`). The right-edge header `J2` is debug-only (
 
 ![Annotated ULX3S top view — the spispy SPI pins GP7–GP10 on header J1](diagrams/ulx3s-spispy-j1-annotated.png)
 
-**On the motherboard:** find `BMC_FW1` — a **2×7 socket** ("BMC_FW" silkscreen,
-beside the AST2050 and the PCI/PCIe slots). **Pin 1 is the red square pad**; that
-is your orientation anchor, and each pin's signal is fixed however the board is
-turned. The photo below locates the socket and labels every pin; the SVG is the
-clean pinout. Both are drawn in the **same orientation** — the board rotated so
-the PCIe slots stand vertical (rear/bracket edge along the bottom), with **pin 1
-at bottom-left, odd pins in the left column, even pins in the right**.
+**On the motherboard:** find `BMC_FW1` — the **2×7 socket** with the `BMC_FW1`
+silkscreen, just below the AST2050 (near `SB_PWR1` / `LOCLED1`, by the PCI slots).
+Per the ASUS manual (§2.7.2), **pin 1 is the square pad at the bottom-left** and
+the **top-left position is keyed (no pin)** — use those two to orient the socket;
+each pin's signal is then fixed. The photo locates the socket on the board (both
+in the board's natural orientation, rear I/O to the left); the SVG is the full
+pinout. Numbering is row-wise: bottom row `1`→`7` left-to-right, top row `8`→`13`
+right-to-left, with the keyed corner where pin 14 would be.
 
-![Annotated KGPE-D16 photo — BMC_FW1 socket location and per-pin signals](diagrams/kgpe-d16-bmc-fw1-board.png)
+![Annotated KGPE-D16 photo — BMC_FW1 socket location, pin 1, and keyed corner](diagrams/kgpe-d16-bmc-fw1-board.png)
 
-![BMC_FW1 socket pinout — vertical, matching the photo](diagrams/kgpe-d16-bmc-fw1-vertical.svg)
+![BMC_FW1 socket pinout — pin 1 bottom-left, top-left keyed](diagrams/kgpe-d16-bmc-fw1-pinout.svg)
 
 ### Three rules that prevent damage (full list: §5)
 

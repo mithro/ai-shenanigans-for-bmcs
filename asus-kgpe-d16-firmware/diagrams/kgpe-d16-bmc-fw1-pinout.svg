@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 560" role="img" aria-label="BMC_FW1 — BMC SPI firmware socket (manual-accurate: pin 1 bottom-left)" preserveAspectRatio="xMidYMid meet">
+  <title>BMC_FW1 — BMC SPI firmware socket (pin 1 bottom-left, top-left keyed)</title>
+  <style>
+    text{font-family:ui-monospace,'DejaVu Sans Mono',monospace;fill:var(--ink);}
+    svg{--ink:#1a1a1a;--muted:#666;--box:#f4f4f4;--panel:#ececec;
+        --blue:#2d6cdf;--green:#1a8a5a;--gold:#b8860b;--red:#c0392b;}
+    @media (prefers-color-scheme: dark){
+      svg{--ink:#e6e6e6;--muted:#a8a8a8;--box:#2a2a2a;--panel:#232323;
+          --blue:#5b9bff;--green:#3cc98a;--gold:#e0b050;--red:#e74c3c;}
+    }
+    .t{font-size:19px;font-weight:700;}
+    .st{font-size:12px;fill:var(--muted);}
+    .sig{font-size:12.5px;font-weight:600;}
+    .pn{font-size:11px;font-weight:700;}
+    .m{font-size:11px;fill:var(--muted);}
+    .leg{font-size:12px;}
+    .board{fill:var(--panel);stroke:var(--ink);stroke-width:2;}
+  </style>
+<text class="t" x="24" y="34">BMC_FW1 — BMC SPI firmware / ASMB4 slot</text>
+<text class="st" x="24" y="55">socketed SPI flash + straps · 2×7 · pin 1 = square pad (bottom-left) · top-left keyed</text>
+<rect class="board" x="66" y="224" width="420" height="100" rx="10"/>
+<rect x="83" y="237" width="26" height="26" rx="3" fill="var(--ink)" stroke="var(--ink)" stroke-width="2"/><text class="pn" x="96" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--box)">✕</text><text class="m" transform="rotate(-90 96 208)" x="96" y="208" text-anchor="start" dominant-baseline="central">key</text>
+<circle cx="156" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="156" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">13</text><text class="sig" transform="rotate(-90 156 208)" x="156" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">GND</text>
+<circle cx="216" cy="250" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="216" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">12</text><text class="sig" transform="rotate(-90 216 208)" x="216" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">SPICS#0</text>
+<circle cx="276" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="276" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">11</text><text class="sig" transform="rotate(-90 276 208)" x="276" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="336" cy="250" r="12" fill="var(--box)" stroke="var(--gold)" stroke-width="2.4"/><text class="pn" x="336" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--gold)">10</text><text class="sig" transform="rotate(-90 336 208)" x="336" y="208" text-anchor="start" dominant-baseline="central" fill="var(--gold)">SOLEN#</text>
+<circle cx="396" cy="250" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="396" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">9</text><text class="sig" transform="rotate(-90 396 208)" x="396" y="208" text-anchor="start" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="456" cy="250" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="456" y="250" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">8</text><text class="sig" transform="rotate(-90 456 208)" x="456" y="208" text-anchor="start" dominant-baseline="central" fill="var(--blue)">SPICLK</text>
+<rect x="83" y="285" width="26" height="26" rx="3" fill="var(--box)" stroke="var(--red)" stroke-width="2.8"/><text class="pn" x="96" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--red)">1</text><text class="sig" transform="rotate(-90 96 340)" x="96" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">SPIDO</text>
+<circle cx="156" cy="298" r="12" fill="var(--box)" stroke="var(--green)" stroke-width="2.4"/><text class="pn" x="156" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--green)">2</text><text class="sig" transform="rotate(-90 156 340)" x="156" y="340" text-anchor="end" dominant-baseline="central" fill="var(--green)">+3V3</text>
+<circle cx="216" cy="298" r="12" fill="var(--box)" stroke="var(--gold)" stroke-width="2.4"/><text class="pn" x="216" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--gold)">3</text><text class="sig" transform="rotate(-90 216 340)" x="216" y="340" text-anchor="end" dominant-baseline="central" fill="var(--gold)">IKVMEN#</text>
+<circle cx="276" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="276" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">4</text><text class="sig" transform="rotate(-90 276 340)" x="276" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">SPICS#2</text>
+<circle cx="336" cy="298" r="12" fill="var(--box)" stroke="var(--muted)" stroke-width="2.4"/><text class="pn" x="336" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--muted)">5</text><text class="sig" transform="rotate(-90 336 340)" x="336" y="340" text-anchor="end" dominant-baseline="central" fill="var(--muted)">NC</text>
+<circle cx="396" cy="298" r="12" fill="var(--box)" stroke="var(--blue)" stroke-width="2.4"/><text class="pn" x="396" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--blue)">6</text><text class="sig" transform="rotate(-90 396 340)" x="396" y="340" text-anchor="end" dominant-baseline="central" fill="var(--blue)">SPIDI</text>
+<circle cx="456" cy="298" r="12" fill="var(--box)" stroke="var(--gold)" stroke-width="2.4"/><text class="pn" x="456" y="298" text-anchor="middle" dominant-baseline="central" fill="var(--gold)">7</text><text class="sig" transform="rotate(-90 456 340)" x="456" y="340" text-anchor="end" dominant-baseline="central" fill="var(--gold)">PRESENT#</text>
+<circle cx="28" cy="512" r="7" fill="var(--box)" stroke="var(--blue)" stroke-width="2.2"/><text class="leg" x="42" y="516">Signal / data</text><circle cx="152" cy="512" r="7" fill="var(--box)" stroke="var(--green)" stroke-width="2.2"/><text class="leg" x="166" y="516">Power</text><circle cx="228" cy="512" r="7" fill="var(--box)" stroke="var(--gold)" stroke-width="2.2"/><text class="leg" x="242" y="516">Strap / config</text><circle cx="344" cy="512" r="7" fill="var(--box)" stroke="var(--muted)" stroke-width="2.2"/><text class="leg" x="358" y="516">NC / GND</text><rect x="440" y="505" width="14" height="14" fill="var(--ink)"/><text class="leg" x="460" y="516">Keyed (no pin)</text>
+<text class="m" x="596" y="540" text-anchor="end">numbering: bottom 1→7 L→R · top 8→13 R→L · top-left keyed</text>
+</svg>

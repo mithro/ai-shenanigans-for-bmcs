@@ -2,16 +2,14 @@
 # requires-python = ">=3.11"
 # dependencies = ["pillow"]
 # ///
-"""Generate kgpe-d16-bmc-fw1-board.png — an annotated board photo of BMC_FW1.
+"""Generate kgpe-d16-bmc-fw1-board.png — annotated board photo locating BMC_FW1.
 
-Takes the ASUS KGPE-D16 top photo from the Vikings wiki, extracts the left/bottom
-section, rotates it 90 deg CCW (so the PCIe/PCI slots stand vertical with the
-board's rear/bracket edge along the bottom), and annotates the BMC_FW1 2x7 socket
-with its per-pin signals. In this orientation pin 1 is bottom-left, odd pins are
-the left column and even pins the right column (both bottom -> top) — matching
-diagrams/kgpe-d16-bmc-fw1-vertical.svg.
+Uses the high-resolution KGPE-D16 top photo from theretroweb.com. Board is kept
+in its natural (standard) orientation to match the ASUS manual and the pinout
+SVG: BMC_FW1 is a 2x7 socket with **pin 1 at the bottom-left** and the
+**top-left position keyed** (filled). Signals are in kgpe-d16-bmc-fw1-pinout.svg.
 
-BMC_FW1 pixel coords were read off zoomed crops of the source photo.
+BMC_FW1 pixel coords (in the source photo) were read off zoomed crops.
 
 Run:  uv run make-kgpe-bmc-fw1-board.py
 """
@@ -19,19 +17,21 @@ Run:  uv run make-kgpe-bmc-fw1-board.py
 import io
 import urllib.request
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-SRC = "https://wiki.vikings.net/_media/hardware:asus_kgpe-d16.jpg"
+SRC = "https://theretroweb.com/motherboard/image/dsc-7778-615-687f6933e78c9140165335.jpg"
 OUT = "kgpe-d16-bmc-fw1-board.png"
 
-raw = urllib.request.urlopen(SRC).read()  # noqa: S310 (public wiki asset)
+req = urllib.request.Request(SRC, headers={"User-Agent": "Mozilla/5.0"})
+raw = urllib.request.urlopen(req).read()  # noqa: S310 (public asset)
 img = Image.open(io.BytesIO(raw)).convert("RGB")
 
-# left/bottom crop -> 90 deg CCW -> 2.5x
-crop = img.crop((0, 1500, 780, 2016))
-base = crop.transpose(Image.ROTATE_90)
-SCALE = 2.5
-base = base.resize((int(base.width * SCALE), int(base.height * SCALE)), Image.LANCZOS)
+# crop the BMC_FW1 neighbourhood (source px), brighten a touch, upscale
+CX0, CY0 = 250, 3070
+crop = img.crop((CX0, CY0, 720, 3360))
+crop = ImageEnhance.Brightness(crop).enhance(1.35)
+S = 2.5
+base = crop.resize((int(crop.width * S), int(crop.height * S)), Image.LANCZOS)
 d = ImageDraw.Draw(base)
 
 
@@ -45,9 +45,9 @@ def font(sz, bold=True):
 
 RED, BLUE, GREEN, ORANGE, BLACK, GREY, WHITE = (
     (205, 25, 25), (0, 70, 190), (0, 130, 50), (210, 120, 0),
-    (10, 10, 10), (110, 110, 110), (255, 255, 255),
+    (10, 10, 10), (120, 120, 120), (255, 255, 255),
 )
-F_H, F_B, F_S = font(26), font(23), font(20)
+F_H, F_B, F_S = font(27), font(23), font(20)
 
 
 def tw(t, f):
@@ -55,58 +55,59 @@ def tw(t, f):
     return b[2] - b[0]
 
 
-# ---- BMC_FW1 header geometry (rotated+scaled frame) ----
-HX0, HY0, HX1, HY1 = 663, 1345, 734, 1556
-d.rectangle((HX0, HY0, HX1, HY1), outline=RED, width=4)
-row_y = [1538 - i * 29.3 for i in range(7)]      # bottom (1/2) -> top (13/14)
-odd_x = 682
-
-sig = {
-    1: ("MOSI", RED), 2: ("+3V3", GREY), 3: ("IKVMEN#", ORANGE), 4: ("CS2", BLACK),
-    5: ("NC", GREY), 6: ("MISO", RED), 7: ("PRESENT#", ORANGE), 8: ("SCK", RED),
-    9: ("NC", GREY), 10: ("SOLEN#", ORANGE), 11: ("NC", GREY), 12: ("CS0", RED),
-    13: ("GND", GREEN), 14: ("NC", GREY),
-}
+def src2px(sx, sy):
+    return int((sx - CX0) * S), int((sy - CY0) * S)
 
 
-def tag(x, y, txt, col, f=F_B):
+# ---- BMC_FW1 header box (source coords ~347..490 x, 3173..3218 y) ----
+hx0, hy0 = src2px(345, 3170)
+hx1, hy1 = src2px(492, 3221)
+d.rectangle((hx0, hy0, hx1, hy1), outline=RED, width=4)
+
+# 7 columns, 2 rows: pin 1 bottom-left, key top-left
+col_x = [src2px(347 + (c + 0.5) * (490 - 347) / 7, 0)[0] for c in range(7)]
+y_top = src2px(0, 3184)[1]
+y_bot = src2px(0, 3208)[1]
+
+# pin 1 marker (bottom-left) + key marker (top-left)
+p1x, p1y = col_x[0], y_bot
+kx, ky = col_x[0], y_top
+d.ellipse((p1x - 11, p1y - 11, p1x + 11, p1y + 11), outline=RED, width=4)
+d.rectangle((kx - 11, ky - 11, kx + 11, ky + 11), fill=BLACK, outline=WHITE, width=2)
+
+
+def tag(x, y, txt, col, f=F_B, anchor="lt"):
     w = tw(txt, f)
-    d.rectangle((x - 3, y - 3, x + w + 5, y + f.size + 3), fill=WHITE, outline=col, width=2)
-    d.text((x + 1, y), txt, fill=col, font=f)
+    tx = x - w - 6 if anchor == "rt" else x
+    d.rectangle((tx - 4, y - 3, tx + w + 4, y + f.size + 4), fill=WHITE, outline=col, width=2)
+    d.text((tx, y), txt, fill=col, font=f)
 
 
-d.ellipse((odd_x - 9, row_y[0] - 9, odd_x + 9, row_y[0] + 9), outline=RED, width=4)
-tag(HX0 - 44, int(row_y[0]) - 12, "1", RED)
-tag(HX0 - 52, int(row_y[6]) - 12, "13", BLACK, F_S)
+tag(hx0 - 12, p1y - 14, "pin 1", RED, anchor="rt")
+tag(hx0 - 12, ky - 14, "key (no pin)", BLACK, F_S, anchor="rt")
 
-# ---- signal legend, rows aligned to the physical header rows ----
-title = "BMC_FW1 — 2×7 socket"
-foots = ["odd = left col · even = right", "pin 1 ● at bottom-left"]
-rows = [(f"{2*i+1:>2} {sig[2*i+1][0]}", sig[2*i+1][1],
-         f"{2*i+2:>2} {sig[2*i+2][0]}", sig[2*i+2][1]) for i in range(7)]
-lx, pad, col2_dx = 812, 14, 172
-content_w = max(tw(title, F_H),
-                col2_dx + max(tw(r[2], F_B) for r in rows),
-                max(tw(f, F_S) for f in foots))
-title_y = int(row_y[6]) - 44
-foot_y0 = int(row_y[0]) + 30
-d.rectangle((lx - pad, title_y - 8, lx + content_w + pad, foot_y0 + 2 * (F_S.size + 6) + 6),
+# ---- signal legend (right side), rows matching the SVG numbering ----
+# bottom row L->R = pins 1..7 ; top row L->R = key,13,12,11,10,9,8
+sig = {1: ("MOSI", RED), 2: ("+3V3", GREY), 3: ("IKVMEN#", ORANGE),
+       4: ("CS2", BLACK), 5: ("NC", GREY), 6: ("MISO", RED), 7: ("PRESENT#", ORANGE),
+       8: ("SCK", RED), 9: ("NC", GREY), 10: ("SOLEN#", ORANGE), 11: ("NC", GREY),
+       12: ("CS0", RED), 13: ("GND", GREEN)}
+lines = [("BMC_FW1 — pin signals", RED, F_H)]
+lines += [(f"{n:>2} {sig[n][0]}", sig[n][1], F_B) for n in range(1, 14)]
+lines.append(("pin 1 = square pad · top-left keyed", BLACK, F_S))
+lines.append(("full pinout: kgpe-d16-bmc-fw1-pinout.svg", GREY, F_S))
+lw = max(tw(t, f) for t, _, f in lines)
+lx, ly = base.width - lw - 34, 54
+d.rectangle((lx - 14, ly - 8, lx + lw + 14, ly + sum(f.size + 8 for _, _, f in lines) + 8),
             fill=WHITE, outline=RED, width=3)
-d.text((lx, title_y), title, fill=RED, font=F_H)
-for (t1, c1, t2, c2), y in zip(rows, row_y):
-    d.line((HX1 + 2, y, lx - pad, y), fill=GREY, width=2)
-    d.text((lx, y - 14), t1, fill=c1, font=F_B)
-    d.text((lx + col2_dx, y - 14), t2, fill=c2, font=F_B)
-for k, f in enumerate(foots):
-    d.text((lx, foot_y0 + k * (F_S.size + 6)), f, fill=BLACK, font=F_S)
+cy = ly
+for t, c, f in lines:
+    d.text((lx, cy), t, fill=c, font=f)
+    cy += f.size + 8
 
-# ---- orientation note + title strip ----
-onote = "PCIe/PCI slots vertical · rear (bracket) edge along the bottom"
-d.rectangle((30, base.height - 46, 40 + tw(onote, F_S) + 20, base.height - 8),
-            fill=WHITE, outline=BLUE, width=2)
-d.text((44, base.height - 42), onote, fill=BLUE, font=F_S)
-d.rectangle((0, 0, base.width, 46), fill=WHITE)
-d.text((12, 8), "ASUS KGPE-D16 — BMC_FW1 BMC SPI boot-flash socket (signals)",
+# ---- title strip ----
+d.rectangle((0, 0, base.width, 44), fill=WHITE)
+d.text((12, 8), "ASUS KGPE-D16 — BMC_FW1 BMC SPI boot-flash socket",
        fill=BLACK, font=F_H)
 
 base.save(OUT)
