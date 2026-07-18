@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-18 — 🎉 FIRST per-device Zephyr driver: AST2050 GPIO — QEMU-VALIDATED (Z1, #147)
+
+- Built the first per-device Zephyr driver on the validated #141 tick foundation. The G3
+  GPIO controller @0x1E780000 groups pins into 32-pin sets (ABCD..YZAAAB); since a Zephyr
+  GPIO port is one 32-bit word, each set = one DT node (reg → that set's data-value reg;
+  data +0x00 / direction +0x04). Driver `drivers/gpio/gpio_aspeed_g3.c`: pin_configure +
+  port get/set/clear/toggle, software output shadow-latch (the data reg reads the input-
+  sampled level, not the write latch — Linux dcache pattern), direction-before-value.
+  MMIO via a static identity MMU region added to soc.c. Parent commit `aa61b0968`.
+- **VALIDATED IN QEMU (evidence d14-zephyr/06):** `west build -b kgpe_d16_bmc
+  samples/gpio_smoke` (CONFIG_GPIO_ASPEED_G3=y) → boots `*** Booting Zephyr OS ***` →
+  configures GPIOI0 (safe pin, set IJKL, no board wiring) output-high → **reads 1** →
+  clears → **reads 0**, ZERO data-aborts. So GPIO configure/set/clear/read all work.
+- **Method:** wrote the driver via a sub-agent (full G3 register specs + Zephyr API),
+  then I reviewed + built + boot-validated. Caught + fixed the sub-agent's ONE build error
+  honestly: missing `#include <zephyr/drivers/gpio/gpio_utils.h>` → `GPIO_PORT_PIN_MASK_
+  FROM_DT_INST` stayed an unexpanded identifier → "initializer element is not constant";
+  every in-tree gpio driver includes it. Register offsets cited from QEMU aspeed_gpio.c,
+  cross-checked vs Linux gpio-aspeed.c.
+- **Advances #147** (ZQ done). Remaining: ZS (silicon via JTAG-load), interrupts (per-bank
+  INT regs → G3 VIC), and driving the SPECIFIC board pins (power A4 / LEDs / straps) in
+  Zephyr. The GPIO-based matrix rows (27/28/29/32/33) ZQ move ⬜→🔶 (enabling driver works
+  in QEMU; per-function Zephyr validation still pending). Next Zephyr: Z2 I2C (#148).
+
 ## 2026-07-18 — CLOSED another gap: dropped the phantom 2nd WDT (second #144 increment)
 
 - Continuing to close #144 phantoms with the proven method. **Dropped the phantom 2nd

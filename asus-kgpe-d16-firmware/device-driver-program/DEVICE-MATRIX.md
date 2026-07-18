@@ -123,9 +123,9 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 28 | Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
-| 29 | Platform control (CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCIRST#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
+| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
+| 28 | Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ |
+| 29 | Platform control (CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCIRST#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ |
 
 - **27** power control both sides. **HONESTY CORRECTION (2026-07-18 audit):** power
   ON/OFF are silicon-proven (`evidence/real-hw-f2sta/power-on-A4-fix.txt`: BMC drove the
@@ -164,8 +164,14 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | ⬜ | ⬜ |
-| 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
+| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | 🔶 | ⬜ |
+| 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
+
+- **27-29/32-33 ZQ = 🔶 (2026-07-18):** the enabling **Zephyr GPIO driver
+  (`gpio_aspeed_g3.c`, #147) is QEMU-VALIDATED** — configure/set/clear/read a pin works
+  (evidence `d14-zephyr/06`). 🔶 not ✅ because that proves the GENERIC GPIO port, not each
+  row's SPECIFIC pins (power A4, the THERMTRIP/PROCHOT inputs, the LED/strap lines) driven
+  from a Zephyr app; those per-function Zephyr validations + ZS silicon (JTAG-load) remain.
 | 34 | 24 MHz clock input (QOSC1) | SCU/clk | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | — | AST_JTAG1 (§13/§15) | ARM debug | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
@@ -219,12 +225,15 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
   open items are NC-SI-silicon (🔷 G3 pinmux), USB-vhub-silicon (🔶),
   SOL (⬜), the 6 I2C far-ends (⬜), DDC/EDID (⬜), MTD-write (⬜), and
   several §11 signals + LED silicon observation.
-- **Zephyr**: the D14 port now **BUILDS, LINKS, and RUNS its M0 banner in
-  QEMU** (`*** Booting Zephyr OS ***`, evidence `d14-zephyr/02`) — the ARM926
-  arch core (upstream PR #103557) + the authored AST2050 SoC/board + a
-  static-mapped polling console all work. Row 30 ZQ is 🔶. Remaining: M1
-  (aspeed system timer → app thread → per-device Zephyr drivers → ZS silicon);
-  the standard ns16550 console awaits the upstream ARM9 `arm_mmu` z_phys_map fix.
+- **Zephyr**: the D14 port RUNS in QEMU (banner, evidence `d14-zephyr/02`) on the ARM926
+  arch core (upstream PR #103557) + authored AST2050 SoC/board + static-mapped console.
+  **M1 tickful scheduling VALIDATED (#141, evidence `05`)** — the fix was OUR
+  `HW_STACK_PROTECTION`, not upstream. **First per-device driver DONE: AST2050 GPIO
+  (#147, `gpio_aspeed_g3.c`) QEMU-VALIDATED** — configure/set/clear/read a pin works
+  (evidence `06`); rows 27-29/32-33 ZQ → 🔶. Remaining: Z2 I2C (#148, unlocks ~8 device
+  rows), Z3 WDT (#149); per-driver ZS silicon (JTAG-load zephyr.bin→DRAM); GPIO interrupts
+  (per-bank INT regs → VIC); the standard ns16550 console still awaits the separate ARM9
+  `arm_mmu` z_phys_map fix (real, open — the M1 tick fix was unrelated).
 
 ---
 
