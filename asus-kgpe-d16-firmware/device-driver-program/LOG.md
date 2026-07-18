@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D08 W83601G DIMM-LED expanders characterized on silicon
+
+- Read the two W83601G I2C GPIO expanders (U27/U28, §10.2 DIMM-error-LED
+  drivers) live on the BMC's I2C5 engine (Linux i2c-4), read-only:
+  `0x18` reg0=`0x0f` reg1=`0x00` reg7=`0xff`; `0x19` reg0=`0xb5`. Both are
+  **present and register-readable by the BMC** — the schematic wiring is
+  confirmed on real silicon and the BMC's DIMM-LED expander access path works.
+  Evidence: `evidence/d08-w83601g/00-silicon-present.txt`.
+- Matrix rows 21/22 moved ⬜→🔶 (LS/Linux-silicon partial): silicon reach
+  proven, but a **faithful QEMU model + full LED bit-map** needs the Winbond
+  W83601G datasheet (register semantics: direction vs. output vs. GP10-GP26),
+  which is **not in-repo** (unlike the W83795G/W83667HG datasheets). Honestly
+  left as an open D08 item (task #135) — NOT claimed done, since "all
+  functionality" requires the datasheet-backed register map to model the LED
+  drive faithfully. Next: locate the W83601G datasheet (try the 15h.org
+  mirror / Winbond archives), then write the QEMU expander model seeded with
+  the observed defaults and validate LED-drive on silicon.
+
 ## 2026-07-18 — fresh complete read of AST2050-BMC-WIRING.md + task-list verification
 
 - Re-merged origin/main (up to date). Read the **complete** authoritative

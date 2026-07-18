@@ -1,0 +1,25 @@
+D08 W83601G DIMM-LED I2C GPIO expanders (U27/U28) on silicon, 2026-07-18.
+Both respond on the BMC's direct I2C5 engine (Linux i2c-4), confirming the
+schematic §10.2 wiring:
+
+  # i2cget -y 4 0x18 0x00  -> 0x0f
+  # i2cget -y 4 0x18 0x01  -> 0x00
+  # i2cget -y 4 0x18 0x07  -> 0xff
+  # i2cget -y 4 0x19 0x00  -> 0xb5
+
+Findings:
+- U27 (0x18) and U28 (0x19) are both PRESENT and register-readable by the BMC
+  over I2C5. This validates the BMC's DIMM-error-LED expander access path on
+  real silicon — the "5 far-end devices absent" audit gap is now down to
+  SB-TSI / PSU-PMBus / SMBus-ALERT for the fully-modeled set.
+- The BMC drives DIMM{A..H}ERRLED by writing the W83601G GPIO output registers
+  (GP10-GP26, §10.2). Reading is non-destructive; the observed defaults above
+  seed a QEMU model.
+
+NEXT (faithful QEMU model): the W83601G register semantics (which registers are
+GPIO direction vs output vs the GP10-GP26 LED map) require the Winbond W83601G
+datasheet, which is NOT in-repo (unlike the W83795G/W83667HG which are). A
+register-file model seeded with the observed defaults reproduces the BMC's
+read/write path; full LED-map faithfulness needs the datasheet. Tracked as an
+open D08 item (task #135) — honestly NOT claimed done, since a datasheet-backed
+register map is required to model "all functionality".
