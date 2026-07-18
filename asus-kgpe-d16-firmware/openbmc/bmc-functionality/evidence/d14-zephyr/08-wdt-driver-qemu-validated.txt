@@ -1,0 +1,20 @@
+=== Zephyr AST2050 watchdog driver — QEMU validation (2026-07-19) ===
+Build: west build -b kgpe_d16_bmc samples/wdt_smoke (CONFIG_WDT_ASPEED_G3=y)
+WDT @0x1e785000; 1MHz clock (CTRL[4]=1) so 500ms==500ms on QEMU+silicon;
+  restart magic 0x4755, CTRL run 0x33 (ENABLE|RESET_SYSTEM|1MHZ|full-chip).
+Test: arm 500ms, feed 3x, stop -> WDT fires -> SoC reset -> reboot loop.
+PROOF the reset FIRED: 'WDT smoke: boot' / banner repeats (reboot loop).
+---8<--- boot log (first 3 reset cycles) ---8<---
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+WDT smoke: boot
+WDT armed for 500 ms, feeding 3x
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+WDT smoke: boot
+WDT armed for 500 ms, feeding 3x
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+WDT smoke: boot
+WDT armed for 500 ms, feeding 3x
+...
+boot-count in 7s window: 14 (>=2 = reset fired)
+---8<--- end ---8<---
+RESULT: PASS — WDT setup/feed/timeout + real SoC reset validated in QEMU

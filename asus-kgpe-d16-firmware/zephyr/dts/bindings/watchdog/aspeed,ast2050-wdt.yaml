@@ -1,0 +1,28 @@
+# ASPEED AST2050 (G3) watchdog timer binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  ASPEED AST2050 (G3) watchdog timer.
+
+  The AST2050 / AST1100 integrates ONE 32-bit programmable watchdog timer at
+  0x1E785000 (the AST2400/G4 grew a second at 0x1E785020; the G3 has only one).
+  It is a down-counter clocked from either PCLK or a fixed 1 MHz reference that,
+  on timeout, resets the SoC (or raises an interrupt). Register block is 0x20
+  bytes; offsets within it (from the vendor hwreg.h / QEMU
+  hw/watchdog/wdt_aspeed.c):
+
+    0x00  counter / status   (R: current down-count)
+    0x04  reload             (RW: value reloaded into the counter)
+    0x08  restart (magic)    (W: write 0x4755 to reload the counter = "kick")
+    0x0C  control            ([0] enable, [1] reset-system, [2] interrupt,
+                              [4] clock 0=PCLK/1=1 MHz, [6:5] reset mode)
+
+  See drivers/watchdog/wdt_aspeed_g3.c for the driver.
+
+compatible: "aspeed,ast2050-wdt"
+
+include: [base.yaml]
+
+properties:
+  reg:
+    required: true

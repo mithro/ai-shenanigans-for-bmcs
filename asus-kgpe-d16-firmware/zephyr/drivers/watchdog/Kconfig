@@ -1,0 +1,19 @@
+# ASPEED AST2050 (G3) watchdog driver.
+# SPDX-License-Identifier: Apache-2.0
+
+# Only offered once the watchdog subsystem itself is enabled (mirrors the in-tree
+# drivers/watchdog "if WATCHDOG" menu). Auto-enables when a matching devicetree
+# node is present and left okay.
+if WATCHDOG
+
+config WDT_ASPEED_G3
+	bool "ASPEED AST2050 (G3) watchdog driver"
+	default y
+	depends on DT_HAS_ASPEED_AST2050_WDT_ENABLED
+	help
+	  Enable the watchdog driver for the ASPEED AST2050 (G3, ARM926EJ-S) BMC
+	  SoC. The single 32-bit WDT at 0x1E785000 is driven off its 1 MHz clock
+	  reference so the timeout is PCLK-independent (reload = timeout_ms * 1000);
+	  feed writes the 0x4755 restart magic and setup enables reset-on-timeout.
+
+endif # WATCHDOG

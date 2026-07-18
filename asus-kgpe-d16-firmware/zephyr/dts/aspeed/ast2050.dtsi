@@ -133,5 +133,19 @@
 			clock-frequency = <100000>;
 			status = "okay";
 		};
+
+		/*
+		 * G3/AST2400-compatible watchdog timer at 0x1E785000. The AST2050
+		 * integrates ONE WDT (the AST2400 grew a second at 0x1E785020; the
+		 * kgpe-d16-bmc QEMU SoC models wdts_num = 1). The 0x20-byte block holds
+		 * the counter/reload/restart/control registers. Driver:
+		 * drivers/watchdog/wdt_aspeed_g3.c. Offsets from QEMU
+		 * hw/watchdog/wdt_aspeed.c and the vendor hwreg.h.
+		 */
+		wdt0: watchdog@1e785000 {
+			compatible = "aspeed,ast2050-wdt";
+			reg = <0x1e785000 0x20>;
+			status = "okay";
+		};
 	};
 };

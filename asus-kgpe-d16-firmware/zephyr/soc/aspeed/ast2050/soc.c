@@ -67,6 +67,14 @@ static const struct arm_mmu_region mmu_regions[] = {
 	 * bare-metal Zephyr no U-Boot runs to do this. One 0x1000 page. */
 	MMU_REGION_FLAT_ENTRY("scu", 0x1e6e2000, 0x1000,
 			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* G3/AST2400-compatible watchdog timer (0x1e785000, drivers/watchdog/
+	 * wdt_aspeed_g3.c) — device memory, statically mapped like the others. The
+	 * other 0x1e78xxxx regions are separate 4 KB pages (uart5 0x1e784000, gpio
+	 * 0x1e780000), so 0x1e785000 is NOT already covered — its own page is
+	 * needed. One 0x1000 page covers the 0x20-byte WDT block. */
+	MMU_REGION_FLAT_ENTRY("wdt", 0x1e785000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {
