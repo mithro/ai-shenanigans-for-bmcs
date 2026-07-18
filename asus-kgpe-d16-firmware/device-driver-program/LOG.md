@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-18 — completeness gate (a) CLOSED: 3rd audit CONFIRMED CLEAN
+
+- Third (confirmation) completeness audit returned **"CONFIRMED CLEAN — all
+  second-audit fixes present, no substantive issues found."** Verified: NC-SI row
+  11 LS=⬜ (weasel gone), zero `❓` symbols, VGA-DAC row 12 QE=🔶, USB row 9
+  LS=🔷/LU=🔶, the FULL-TASK-LIST-authoritative header note, and the D9 SB-TSI
+  in-kernel claim substantiated (sbtsi.c + CONFIG_SENSORS_SBTSI + hwmon test + CI).
+  Independent sweep: coverage complete (every §14 chip / §10.2 device / §11 signal
+  / §15 connector maps to a row), NO fabricated citations (sampled the strongest
+  ✅ files — all exist), NO remaining weasel (the surviving [N]/[B] are legitimate;
+  the reframed items are honestly [ ] "hard undone work"). Cross-doc consistency
+  good. So **gate (a) is satisfied** — three sub-agent completeness reviews, the
+  last finding nothing missed/skipped/overstated.
+- Fixed the one cosmetic slip it flagged: DEVICE-MATRIX row-9 prose note still read
+  "LS = 🔶" while the cell was 🔷 — reconciled the note to 🔷 (blocked) + 🔶 LU.
+- Gate (b) code reviews: W83601G, SB-TSI, Zephyr M1 all returned clean this
+  program. Gates (a)+(b) hold for the code developed so far; new code (PMBus/PSU,
+  NC-SI pinmux, etc.) gets the same review treatment as it lands.
+
 ## 2026-07-18 — D09 in-kernel sbtsi_temp bind + SB-TSI code-review-clean + audit-2 matrix re-sync
 
 - **D09 in-kernel driver DONE (QEMU):** added `CONFIG_SENSORS_SBTSI=y` to

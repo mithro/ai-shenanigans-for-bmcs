@@ -61,7 +61,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 - **4/5/6** mailbox, POST-snoop, vUART: unmodeled/undriven (audit gap #5). vUART is register-present but no session. D03.
 - **7** TPM1 shares the LPC bus + a QU9-switched I2C segment; the BMC is not the TPM driver (host owns TPM) → Ⓝ for driver stacks, but QEMU should model the LPC/I2C reachability (⬜). D03.
 - **8** capture proven (`#3a`, `evidence/real-hw-video/`); the 45-ball PCI bus itself is only P2A/video-modeled, not a full PCI target. UB/ZP Ⓝ (no runtime need). D04.
-- **9** LS = 🔶: silicon enumeration used `usbip-vudc` (gadget path), **not** the real vhub EP-DMA datapath (Test B rig-blocked; audit). D05.
+- **9** LS = 🔷 (blocked): the real vhub EP-DMA datapath on silicon is rig-blocked (patch 0007 is QEMU-verified + compile-clean, but the P2A siphon degrades after ~15 boot cycles; Test B not run to avoid a host-CMOS-halt strand). Earlier `usbip-vudc` gadget-path enumeration is a different, non-vhub route. LU = 🔶 (BMC-side gadget configured; host-side HID enumeration not validated). D05 / FULL-TASK-LIST B5.
 
 ## Network
 
