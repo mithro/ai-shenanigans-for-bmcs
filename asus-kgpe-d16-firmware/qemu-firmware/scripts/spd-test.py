@@ -68,12 +68,18 @@ echo $CH2-0051 > /sys/bus/i2c/drivers_probe
 echo $CH2-0019 > /sys/bus/i2c/drivers_probe
 sleep 1
 [ -e /sys/bus/i2c/devices/$CH2-0051/eeprom ] || { echo SPD_FAIL_no_eeprom_after_on; exit 1; }
-HDR=$(hexdump -v -e '3/1 "%02x "' -n 3 /sys/bus/i2c/devices/$CH2-0051/eeprom)
+# The REAL rig SPD (read from silicon): DDR3 header 92 11 0b, module type 02
+# (UDIMM), part number "RMR5030EF68F9W1600" at offset 128.
+HDR=$(hexdump -v -e '4/1 "%02x "' -n 4 /sys/bus/i2c/devices/$CH2-0051/eeprom)
 echo "SPD_HDR=[$HDR]"
-[ "$HDR" = "92 11 0b" ] || { echo SPD_FAIL_bad_header; exit 1; }
-T=$(cat /sys/bus/i2c/devices/$CH2-0019/hwmon/hwmon*/temp1_input)
-echo "TSOD_MC=$T"
-[ "$T" -gt 30000 ] && [ "$T" -lt 40000 ] || { echo SPD_FAIL_tsod_range; exit 1; }
+[ "$HDR" = "92 11 0b 02" ] || { echo SPD_FAIL_bad_header; exit 1; }
+PN=$(dd if=/sys/bus/i2c/devices/$CH2-0051/eeprom bs=1 skip=128 count=18 2>&1 | tr -dc 'A-Za-z0-9')
+echo "SPD_PN=[$PN]"
+[ "$PN" = "RMR5030EF68F9W1600" ] || { echo SPD_FAIL_bad_partnumber; exit 1; }
+# This UDIMM has no thermal sensor (SPD byte32=0) -> 0x19 must NOT bind.
+echo $CH2-0019 > /sys/bus/i2c/drivers_probe 2>&1 || true
+[ -e /sys/bus/i2c/devices/$CH2-0019/hwmon ] && { echo SPD_FAIL_unexpected_tsod; exit 1; }
+echo TSOD_ABSENT_OK
 
 # --- power off: a FRESH read must fail (live gating) ---
 val $F0 0; sleep 1; val $F0 1

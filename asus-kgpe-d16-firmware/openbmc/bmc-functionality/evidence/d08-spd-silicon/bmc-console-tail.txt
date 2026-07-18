@@ -1,0 +1,103 @@
+- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- 69 -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
++ echo '-- GPIO F4/F5 while that adapter is selected --'
+-- GPIO F4/F5 while that adapter is selected --
++ i2cget -y 16 0x51 0x00
+i2cget: read failed: No such device or address
++ true
++ devmem 0x1e780020
++ devmem 0x1e780024
++ echo '  E-H data=0xFC03FFFF dir=0x0301300E'
+  E-H data=0xFC03FFFF dir=0x0301300E
++ echo BMC_DIAG_DONE
+BMC_DIAG_DONE
+/tmp # cd /tmp && tftp -g -r bmc-read.sh 192.168.66.1 && sh bmc-read.sh
+bmc-read.sh          100% |********************************|   990  0:00:00 ETAbmc-read.sh          100% |********************************|   990  0:00:00 ETA
++ echo '=== i2cdetect i2c-1 (expect 0x2f hwmon + 0x51 SPD + 0x19 TSOD now) ==='
+=== i2cdetect i2c-1 (expect 0x2f hwmon + 0x51 SPD + 0x19 TSOD now) ===
++ i2cdetect -y -r 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- UU 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- 51 -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- 69 -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
++ echo '=== SPD header bytes via I2C2 direct ==='
+=== SPD header bytes via I2C2 direct ===
++ printf 'SPD[%s]=' 0x00
+SPD[0x00]=+ i2cget -y 1 0x51 0x00
+0x92
++ printf 'SPD[%s]=' 0x02
+SPD[0x02]=+ i2cget -y 1 0x51 0x02
+0x0b
++ printf 'SPD[%s]=' 0x03
+SPD[0x03]=+ i2cget -y 1 0x51 0x03
+0x02
++ printf 'SPD[%s]=' 0x04
+SPD[0x04]=+ i2cget -y 1 0x51 0x04
+0x04
++ printf 'SPD[%s]=' 0x05
+SPD[0x05]=+ i2cget -y 1 0x51 0x05
+0x21
++ printf 'SPD[%s]=' 0x07
+SPD[0x07]=+ i2cget -y 1 0x51 0x07
+0x01
++ echo '=== full 256-byte SPD dump (for the faithful QEMU image) ==='
+=== full 256-byte SPD dump (for the faithful QEMU image) ===
++ i2cdump -y 1 0x51 b
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f    0123456789abcdef
+00: 92 11 0b 02 04 21 02 01 03 11 01 08 0a 00 fe 00    ?????!???????.?.
+10: 69 78 69 30 69 11 18 81 20 08 3c 3c 00 f0 83 81    ixi0i??? ?<<.???
+20: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+30: 00 00 00 00 00 00 00 00 00 00 00 00 0f 01 20 00    ............?? .
+40: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+50: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+60: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+70: 00 00 00 00 00 04 43 01 14 23 42 0b 46 9c b4 f0    .....?C??#B?F???
+80: 52 4d 52 35 30 33 30 45 46 36 38 46 39 57 31 36    RMR5030EF68F9W16
+90: 30 30 41 00 02 fe 00 00 00 00 00 00 00 00 00 00    00A.??..........
+a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
+f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00    ................
++ echo '=== TSOD 0x19 manufacturer/device id (regs 0x06/0x07, word) ==='
+=== TSOD 0x19 manufacturer/device id (regs 0x06/0x07, word) ===
++ i2cget -y 1 0x19 0x06 w
+i2cget: read failed: No such device or address
++ i2cget -y 1 0x19 0x07 w
+i2cget: read failed: No such device or address
++ echo '=== also bind the DT at24 on the mux child (should succe[11500.873076] at24 15-0051: 256 byte 24c02 EEPROM, read-only
+ed now) ==='
+=== also bind the DT at24 on the mux child (should succeed now) ===
++ echo 15-0051
++ sleep 1
++ '[' -e /sys/bus/i2c/devices/15-0051/eeprom ]
++ echo AT24_BOUND:
+AT24_BOUND:
++ hexdump -C -n 32 /sys/bus/i2c/devices/15-0051/eeprom
+00000000  92 11 0b 02 04 21 02 01  03 11 01 08 0a 00 fe 00  |.....!..........|
+00000010  69 78 69 30 69 11 18 81  20 08 3c 3c 00 f0 83 81  |ixi0i... .<<....|
+00000020
++ echo BMC_READ_DONE
+BMC_READ_DONE
+/tmp # hexdump -C /sys/bus/i2c/devices/15-0051/eeprom
+00000000  92 11 0b 02 04 21 02 01  03 11 01 08 0a 00 fe 00  |.....!..........|
+00000010  69 78 69 30 69 11 18 81  20 08 3c 3c 00 f0 83 81  |ixi0i... .<<....|
+00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00  00 00 00 00 0f 01 20 00  |.............. .|
+00000040  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00000070  00 00 00 00 00 04 43 01  14 23 42 0b 46 9c b4 f0  |......C..#B.F...|
+00000080  52 4d 52 35 30 33 30 45  46 36 38 46 39 57 31 36  |RMR5030EF68F9W16|
+00000090  30 30 41 00 02 fe 00 00  00 00 00 00 00 00 00 00  |00A.............|
+000000a0  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00000100
+/tmp # 

@@ -7,10 +7,11 @@ netlist-decoded board fabric (schematic-wiring/I2C-MUX-FABRIC-ARBITRATION.md):
   the host off, DIMM SPD probes NAK while the W83795G — directly on I2C2,
   before the fabric — still ACKs.
 - The QU5 selects idle at S1:S0=11 (pull-ups) = the empty E-H bank; driving
-  GPIOF4 low routes to bank Y2 where the rig's DIMM A2 answers: SPD 0x51 and
-  TSOD 0x19 ACK, the unpopulated 0x50 NAKs.
-- The SPD data path works end-to-end: byte0=0x92 (DDR3 SPD header),
-  byte2=0x0B (memory type DDR3).
+  GPIOF4 low routes to bank Y2 where the rig's DIMM A2 answers: SPD 0x51 ACKs,
+  the unpopulated 0x50 NAKs, and 0x19 (TSOD) NAKs — the real A2 UDIMM has no
+  thermal sensor (SPD byte32=0), matching silicon.
+- The SPD data path works end-to-end against the REAL silicon-read SPD:
+  byte0=0x92 (DDR3 header), byte2=0x0B (DDR3), byte3=0x02 (UDIMM).
 - Routing is live, not cached: re-selecting Y3 makes 0x51 vanish; forcing
   host power off makes the whole fabric vanish mid-session.
 
@@ -49,5 +50,6 @@ def test_host_power_gates_fabric(mux):
 
 
 def test_spd_content(mux):
-    assert mux.kvs.get("spd.b0") == 0x92
-    assert mux.kvs.get("spd.b2") == 0x0B
+    assert mux.kvs.get("spd.b0") == 0x92    # DDR3 SPD header
+    assert mux.kvs.get("spd.b2") == 0x0B    # memory type = DDR3
+    assert mux.kvs.get("spd.b3") == 0x02    # module type = UDIMM (real rig DIMM)

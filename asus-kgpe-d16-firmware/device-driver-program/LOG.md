@@ -1,5 +1,37 @@
 # Device-driver program — running log
 
+## 2026-07-18 — 🎉 D08: BMC read the REAL DIMM SPD on silicon
+
+- **The BMC's at24 read the real 256-byte SPD** over I2C2 → QU9 → QU5-Y2 →
+  DIMM 0x51: `at24 15-0051: 256 byte 24c02 EEPROM`, part `RMR5030EF68F9W1600`,
+  serial 420B469C (== host `dmidecode -t 17`), CRC-16 0xf0b4 verified. The
+  formerly-"impossible" #5 DIMM inventory is REAL. Evidence:
+  `evidence/d08-spd-silicon/`.
+- **Full diagnosis chain** (every step is my code/driving, never the hardware):
+  1. patch 0008 makes the mux driver load on silicon (3 adapters).
+  2. GPIO dump proved the BMC drives the correct Y2 selects; QU9 closed.
+  3. But 0x51 didn't ACK → the physical QU5 selects weren't at Y2.
+  4. Root cause A: the mux **floats/parks at a non-DIMM bank at idle** —
+     measured SP5100 reg 0x54=0x0707 = selects at Y1 (unconnected). Even the
+     HOST's decode-dimms found nothing at idle → NOT a dead chip, it's the mux.
+  5. Root cause B: **U23 arbitration gives the SP5100 select-ownership** on
+     this rig because the BMC flash socket is EMPTY → BMC_PRESENT# high. So the
+     BMC's correct Y2 drive is blocked at U23 (netlist-traced: D27/QQ9/QQ10).
+  6. Obtained the read by pointing the mux at Y2 from the SP5100 side
+     (`setpci 00:14.0 0x54.w=0x000B`, GPIO59/60 = SB_I2CS0/1, register found in
+     the in-repo SP5100 RRG `GPIO_60_to_57_Cntrl`), fully recoverable
+     (restored 0x0707). BMC then read through the shared closed QU9.
+  - Honest scope: the SPD **data path** is proven on the BMC; the select-drive
+    was provided by the SP5100 (rig has empty flash socket → BMC can't own
+    selects). A production board (BMC_PRESENT# low) has the BMC drive them.
+- **Faithful model updated**: real 256-byte SPD baked into `hw/arm/aspeed.c`
+  (replacing the provisional image); TSOD REMOVED (real UDIMM has byte32=0 =
+  no thermal sensor → QEMU 0x19 NAKs like silicon); temp@19 dropped from both
+  DTS; fwtest/spd-test/test assert real SPD (0x92/0x0b/0x02 UDIMM) + TSOD NAK.
+  fwtest 12/12, integration 114/114. jc42.c kept (available for TS DIMMs).
+- **My bugs this session so far: still just the earlier 3** — the hardware
+  read the real SPD perfectly once I drove the mux correctly.
+
 ## 2026-07-18 — silicon rerun with patch 0008: mux ALIVE; SPD not yet ACKing
 
 - Fixed kernel netbooted on silicon: **`i2c-mux-gpio i2cmux: 3 port mux`

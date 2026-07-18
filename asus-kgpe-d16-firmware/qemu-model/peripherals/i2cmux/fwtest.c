@@ -184,15 +184,19 @@ void fwtest_run(void)
     reg_setbit(GPIO_DIR_EH, F4_BIT, 1);
     reg_setbit(GPIO_DATA_EH, F4_BIT, 0);
     fwt_check("y2.spd_acks", i2c_addr_acks(I2C2, 0x51), 1);
-    fwt_check("y2.tsod_acks", i2c_addr_acks(I2C2, 0x19), 1);
+    /* The rig's A2 UDIMM has SPD byte32=0 (no thermal sensor), so 0x19 NAKs —
+     * matches silicon (i2cget 0x19 -> "No such device"). */
+    fwt_check("y2.tsod_naks", i2c_addr_acks(I2C2, 0x19), 0);
     fwt_check("y2.empty_slot_naks", i2c_addr_acks(I2C2, 0x50), 0);
 
-    /* --- Data path: SPD byte 0 is the DDR3 header 0x92 (bytes-used/CRC
-     *     coverage), byte 2 is the memory type 0x0B = DDR3. --- */
+    /* --- Data path: the REAL rig SPD (read from silicon 2026-07-18) — byte 0
+     *     = 0x92 (DDR3 header), byte 2 = 0x0B (DDR3), byte 3 = 0x02 (UDIMM). */
     fwt_kv("spd.b0", i2c_read_byte(I2C2, 0x51, 0));
     fwt_kv("spd.b2", i2c_read_byte(I2C2, 0x51, 2));
+    fwt_kv("spd.b3", i2c_read_byte(I2C2, 0x51, 3));
     fwt_check("spd.header", i2c_read_byte(I2C2, 0x51, 0), 0x92);
     fwt_check("spd.ddr3", i2c_read_byte(I2C2, 0x51, 2), 0x0B);
+    fwt_check("spd.udimm", i2c_read_byte(I2C2, 0x51, 3), 0x02);
 
     /* --- Back to Y3: the same addresses vanish (routing, not caching). --- */
     reg_setbit(GPIO_DATA_EH, F4_BIT, 1);

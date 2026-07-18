@@ -76,15 +76,16 @@
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
 
-			/* Rig population: slot A2 (SA-strap map §5b) */
+			/*
+			 * Rig population: slot A2 (SA-strap map §5b). The real
+			 * A2 module (RMR5030EF68F9W1600, SPD read on silicon) is
+			 * a UDIMM with byte32=0 = no thermal sensor, so no jc42
+			 * TSOD node (0x19 NAKs). A TS-equipped DIMM adds temp@19.
+			 */
 			spd@51 {
 				compatible = "atmel,24c02";
 				reg = <0x51>;
 				read-only;
-			};
-			temp@19 {
-				compatible = "jedec,jc-42.4-temp";
-				reg = <0x19>;
 			};
 		};
 
