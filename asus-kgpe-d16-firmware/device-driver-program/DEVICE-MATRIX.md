@@ -193,7 +193,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
-| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
+| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | 🔶 | ⬜ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |

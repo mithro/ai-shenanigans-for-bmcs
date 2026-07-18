@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉 THIRD Zephyr driver: AST2050 watchdog — QEMU-VALIDATED, reset FIRES (Z3, #149)
+
+- Third per-device Zephyr driver (`drivers/watchdog/wdt_aspeed_g3.c`): WDT @0x1E785000,
+  setup/disable/install_timeout/feed. Registers/magics cited from QEMU wdt_aspeed.c
+  (STATUS 0x00, RELOAD 0x04, RESTART 0x08 magic 0x4755, CTRL 0x0C: [0]ENABLE [1]RESET_SYSTEM
+  [4]1MHz). Driven off the **1 MHz reference (CTRL[4]=1)** so 500 ms means 500 ms on BOTH
+  QEMU and silicon — sidesteps the modeled-PCLK rate error (task #55), faithful per the
+  datasheet. Parent commit `3b35686a4`.
+- **VALIDATED IN QEMU (evidence d14-zephyr/08) — proves the RESET ACTION, not just a reg
+  write:** arm 500 ms + feed 3× then stop → the WDT fires → real SoC reset → reboot; the
+  banner + `WDT smoke: boot` repeat **14× in a 7 s window** (booted WITHOUT -no-reboot so
+  the reset reboots). This also supplies the dedicated WDT-reset transcript the audit found
+  the Linux row-38 LS cell was missing (it only had a side-effect observation before).
+- **Advances #149** (ZQ done, reset-fire proven). Row 38 ZQ → 🔶. ZS silicon (JTAG-load) pending.
+- **🎉 CYCLE MILESTONE: the Zephyr stack went 0 → 3 QEMU-validated per-device drivers
+  (GPIO #147, I2C #148, WDT #149) in one cycle, on the validated #141 tick** — via the
+  sub-agent-writes / I-validate pattern, all boot-tested against the real QEMU model. Plus
+  2 faithfulness phantoms removed+CI-validated (ADC, WDT2). Remaining Zephyr: per-driver ZS
+  silicon (batch JTAG-load), GPIO/I2C/WDT interrupts, per-device sensor drivers.
+
 ## 2026-07-19 — 🎉 SECOND Zephyr driver: AST2050 I2C master — QEMU-VALIDATED (Z2, #148)
 
 - Same write(sub-agent)→validate(me) pattern as the GPIO driver. Polled I2C master
