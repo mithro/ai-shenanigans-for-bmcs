@@ -25,12 +25,14 @@ mkdir -p "$TOOLS" "$OUT"
 musl_bin="$TOOLS/arm-linux-musleabi-cross/bin"
 if [ ! -x "$musl_bin/arm-linux-musleabi-gcc" ]; then
     echo "fetching musl toolchain: $MUSL_URL"
-    # musl.cc is frequently flaky (intermittent connection resets / 5xx), which
-    # was intermittently failing C3 with wget exit 4 (network failure). Retry
-    # hard and show each attempt (drop -q so the diagnostics stay visible per the
-    # repo's fail-loud convention); wget still errors out loudly if it ultimately
-    # can't fetch, rather than silently continuing with no toolchain.
-    wget -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
+    # Force IPv4 (-4): GitHub-hosted runners carry an IPv6 address but no working
+    # IPv6 *route*, so resolving musl.cc's AAAA record and connecting over IPv6
+    # fails hard with "Network is unreachable" (wget exit 4) -- the C3 failure
+    # signature (2026-07-18), distinct from a plain 5xx. musl.cc has an A record
+    # and serves fine over IPv4 (verified: the 102 MB tarball downloads cleanly
+    # over IPv4). Retry hard and show each attempt (no -q, per fail-loud); wget
+    # still errors out loudly if it ultimately can't fetch.
+    wget -4 -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
         -O "$TOOLS/musl.tgz" "$MUSL_URL"
     tar xzf "$TOOLS/musl.tgz" -C "$TOOLS"
     rm -f "$TOOLS/musl.tgz"

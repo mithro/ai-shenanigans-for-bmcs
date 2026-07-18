@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-18 — CI GREEN confirmed for C4+F7+C2-full; C3 fix = force IPv4 (musl.cc)
+
+- **CI confirmation (run 29639741089):** `Boot proprietary firmware -> BMC web
+  service (C4)` = SUCCESS, `F7 — eth0 dedicated PHY + NC-SI sideband scoped` =
+  SUCCESS, `Boot U-Boot -> Linux + SSH (C2 full chain)` = SUCCESS, plus D07 NC-SI,
+  Build QEMU, Build initramfs. So this cycle's THREE fixes (C4 vhub, F7 guard,
+  C2-full mkflash) are all gate-(b) green. Only C3 remained red.
+- **C3 root cause = IPv6, not a musl.cc outage.** The `Build Raptor userspace`
+  job failed fetching the musl toolchain with `failed: Network is unreachable`
+  (wget exit 4) — the classic signature of a host with an IPv6 address but no
+  working IPv6 *route* resolving an AAAA record. GitHub-hosted runners have exactly
+  that. musl.cc serves fine over IPv4 (verified here: the 102 MB
+  `arm-linux-musleabi-cross.tgz` downloads cleanly over IPv4, sha256 d70c6071…).
+- **Fix: `wget -4` (force IPv4)** in `raptor/scripts/build-raptor-userspace.sh` —
+  a trivial, non-outward-facing change that avoids the broken IPv6 path. (The
+  alternative — mirror the toolchain as a GitHub *release* asset — is an
+  outward-facing publish the auto-mode classifier blocked; the `-4` fix is better
+  anyway and needs no publish.) **Honest confidence:** high but not proven — I
+  can't reproduce the runner's network locally; the CI run for this commit is the
+  real test. If `-4` doesn't clear it, the fallback is a release-asset mirror
+  (needs the user to authorize the publish).
+
 ## 2026-07-18 — F7 guard FIXED: it was an "incorrect claim that functionality doesn't exist"
 
 - Directly addresses the goal's flagged failure mode ("incorrect claims have been
