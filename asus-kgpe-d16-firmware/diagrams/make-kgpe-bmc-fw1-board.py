@@ -7,7 +7,8 @@
 Uses the high-resolution KGPE-D16 top photo from theretroweb.com. Board is kept
 in its natural (standard) orientation to match the ASUS manual and the pinout
 SVG: BMC_FW1 is a 2x7 socket with **pin 1 at the bottom-left** and **pin 14
-keyed (top-right)**. Signals are in kgpe-d16-bmc-fw1-pinout.svg.
+keyed (top-right)**. Every pin is labelled directly on the connector; the full
+schematic pinout is in schematic-wiring/diagrams/kgpe-d16-bmc-fw1.svg.
 
 BMC_FW1 pixel coords (in the source photo) were read off zoomed crops.
 
@@ -64,53 +65,56 @@ hx0, hy0 = src2px(345, 3170)
 hx1, hy1 = src2px(492, 3221)
 d.rectangle((hx0, hy0, hx1, hy1), outline=RED, width=4)
 
-# 7 columns, 2 rows: pin 1 bottom-left, key (pin 14) top-right
+# 7 columns, 2 rows: odd pins bottom row, even pins top row; pin 14 = key top-right
 col_x = [src2px(347 + (c + 0.5) * (490 - 347) / 7, 0)[0] for c in range(7)]
 y_top = src2px(0, 3184)[1]
 y_bot = src2px(0, 3208)[1]
 
-# pin 1 marker (bottom-left) + key marker (top-right = pin 14)
-p1x, p1y = col_x[0], y_bot
-kx, ky = col_x[6], y_top
-d.ellipse((p1x - 11, p1y - 11, p1x + 11, p1y + 11), outline=RED, width=4)
-d.rectangle((kx - 11, ky - 11, kx + 11, ky + 11), fill=BLACK, outline=WHITE, width=2)
+# pin -> (signal, colour): SPI blue, power green, strap orange, NC/GND grey, key black
+sig = {1: ("MOSI", BLUE), 2: ("+3V3", GREEN), 3: ("IKVMEN#", ORANGE),
+       4: ("CS2", BLUE), 5: ("NC", GREY), 6: ("MISO", BLUE), 7: ("PRESENT#", ORANGE),
+       8: ("SCK", BLUE), 9: ("NC", GREY), 10: ("SOLEN#", ORANGE), 11: ("NC", GREY),
+       12: ("CS0", BLUE), 13: ("GND", GREY), 14: ("key", BLACK)}
+F_L = font(21)
 
 
-def tag(x, y, txt, col, f=F_B, anchor="lt"):
-    w = tw(txt, f)
-    tx = x - w - 6 if anchor == "rt" else x
-    d.rectangle((tx - 4, y - 3, tx + w + 4, y + f.size + 4), fill=WHITE, outline=col, width=2)
-    d.text((tx, y), txt, fill=col, font=f)
+def vlabel(cx, edge_y, text, color, above):
+    """A rotated, white-backed label centred on column `cx`, pin number toward
+    the connector; placed above (`above=True`) or below the header edge."""
+    pad = 6
+    w = tw(text, F_L)
+    timg = Image.new("RGBA", (w + 2 * pad, F_L.size + 2 * pad), (255, 255, 255, 235))
+    ImageDraw.Draw(timg).text((pad, pad - 2), text, fill=color, font=F_L)
+    rot = timg.rotate(90 if above else -90, expand=True)
+    x = int(cx - rot.width / 2)
+    y = int(edge_y - rot.height) if above else int(edge_y)
+    base.paste(rot, (x, y), rot)
 
 
-tag(hx0 - 12, p1y - 14, "pin 1", RED, anchor="rt")
-# the key (top-right) is shown by the black square marker; the legend labels it
-# (no floating tag here — it would collide with the signal panel)
+# label every pin directly on the connector
+for c in range(7):
+    odd, even = 2 * c + 1, 2 * c + 2                 # bottom row / top row
+    d.line((col_x[c], y_bot, col_x[c], hy1 + 5), fill=GREY, width=2)
+    vlabel(col_x[c], hy1 + 8, f"{odd} {sig[odd][0]}", sig[odd][1], above=False)
+    d.line((col_x[c], y_top, col_x[c], hy0 - 5), fill=GREY, width=2)
+    vlabel(col_x[c], hy0 - 8, f"{even} {sig[even][0]}", sig[even][1], above=True)
 
-# ---- signal legend (right side), rows matching the SVG numbering ----
-# bottom row L->R = pins 1..7 ; top row L->R = key,13,12,11,10,9,8
-sig = {1: ("MOSI", RED), 2: ("+3V3", GREY), 3: ("IKVMEN#", ORANGE),
-       4: ("CS2", BLACK), 5: ("NC", GREY), 6: ("MISO", RED), 7: ("PRESENT#", ORANGE),
-       8: ("SCK", RED), 9: ("NC", GREY), 10: ("SOLEN#", ORANGE), 11: ("NC", GREY),
-       12: ("CS0", RED), 13: ("GND", GREEN)}
-lines = [("BMC_FW1 — pin signals", RED, F_H)]
-lines += [(f"{n:>2} {sig[n][0]}", sig[n][1], F_B) for n in range(1, 14)]
-lines.append(("key (filled hole) = pin 14, top-right", BLACK, F_S))
-lines.append(("pin 1 = bottom-left (opposite the key)", BLACK, F_S))
-lines.append(("full pinout: kgpe-d16-bmc-fw1.svg", GREY, F_S))
-lw = max(tw(t, f) for t, _, f in lines)
-lx, ly = base.width - lw - 34, 54
-d.rectangle((lx - 14, ly - 8, lx + lw + 14, ly + sum(f.size + 8 for _, _, f in lines) + 8),
-            fill=WHITE, outline=RED, width=3)
-cy = ly
-for t, c, f in lines:
-    d.text((lx, cy), t, fill=c, font=f)
-    cy += f.size + 8
+# pin 1 (red ring, bottom-left) + key / pin 14 (black square, top-right)
+d.ellipse((col_x[0] - 11, y_bot - 11, col_x[0] + 11, y_bot + 11), outline=RED, width=4)
+d.rectangle((col_x[6] - 11, y_top - 11, col_x[6] + 11, y_top + 11),
+            fill=BLACK, outline=WHITE, width=2)
 
-# ---- title strip ----
+# ---- title strip + one-line key ----
 d.rectangle((0, 0, base.width, 44), fill=WHITE)
 d.text((12, 8), "ASUS KGPE-D16 — BMC_FW1 BMC SPI boot-flash socket",
        fill=BLACK, font=F_H)
+notes = ["SPI = blue · power = green · strap = orange · NC / GND = grey",
+         "pin 1 = bottom-left (red ring) · pin 14 = key, top-right (black square)"]
+nw = max(tw(n, F_S) for n in notes)
+d.rectangle((6, base.height - 68, 22 + nw, base.height - 6),
+            fill=WHITE, outline=BLACK, width=2)
+for i, n in enumerate(notes):
+    d.text((14, base.height - 62 + i * (F_S.size + 6)), n, fill=BLACK, font=F_S)
 
 base.save(OUT)
 print("wrote", OUT, base.size)
