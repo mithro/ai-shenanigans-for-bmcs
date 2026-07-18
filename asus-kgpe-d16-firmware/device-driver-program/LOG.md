@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-18 — completeness audit (sub-agent, gate a) + honesty fixes applied
+
+- Ran a sub-agent completeness audit of FULL-TASK-LIST.md vs the authoritative
+  schematic + the real code/evidence state. It verified **every `[x]` cites a
+  real file** (no fabricated claims — all QEMU models, scripts, CI jobs, evidence
+  dirs exist on disk) and coverage is essentially complete, and flagged honesty
+  issues which I FIXED (this is the gate: review finds → fix → re-review):
+  1. **A3 SMC silicon was `[N]` — the clearest weaseling.** The SPI/SMC IS the
+     board's boot device by design; the flash just isn't populated on this rig.
+     Re-classed to `[B]` (rig limitation, fixable by populating BMC_FW1), matching
+     DEVICE-MATRIX row 2.
+  2. **§11 control OUTPUTS had no explicit row.** Added E5 (CLRTC#/BIOSREVRY#/
+     CPU1-2DISABLE#/PCI_RST#/ATXPSON#/SYSRESET#) with its own status boxes.
+  3. **B3 video rolled a partial DAC-output into a done `[x]`.** Split into B3
+     (CAPTURE path — genuinely both-sides PASS) and B3b (DAC output/mode-set/
+     PCI-target — `[~]`, self-questioned).
+  4. **D9 SB-TSI silicon `[B]` was a weak block** (the rig CAN power the host).
+     Re-classed to `[ ]` (achievable, not-done-yet). Same for C2 NC-SI and F2 SOL:
+     re-classed the "hard authoring work" parts from `[B]` to `[ ]` (my code to
+     write — RMII2 pinmux RE / QU8 mux / registerSOLService — not external blocks).
+  5. **D8 TSOD `[x]`** clarified: the jc42 model is complete but deliberately
+     not-placed (faithful to this rig's TSOD-less DIMM).
+  6. **Coverage assertion** now names the host chips SU1/OU1/NU1 (reached through
+     the controller rows, not BMC-internal).
+  7. **DEVICE-MATRIX drift fixed:** W83601G rows 21/22 had `LQ=⬜` while `LS/LU=✅`
+     (contradiction) and a stale "LED-drive-on-silicon pending" note though it was
+     done — reconciled (LQ/LS/LU all ✅ via userspace; note now says both-sides
+     done). Row 23 SB-TSI updated to QE=✅/LU=✅/LQ=🔶.
+- Next: re-run the completeness audit to confirm the fixes leave nothing flagged
+  (the gate wants MULTIPLE clean reviews).
+
 ## 2026-07-18 — D09 SB-TSI CPU thermal: faithful QEMU model + validation (QEMU PASS)
 
 - `hw/sensor/sbtsi.c` — AMD SB-TSI processor thermal sensor, register file

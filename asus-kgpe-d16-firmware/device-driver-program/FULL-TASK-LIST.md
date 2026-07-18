@@ -45,9 +45,9 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 
 ### A3. SMC — SPI / ROM flash controller → BMC_FW1 (§4)
 - [x] QEMU: SMC model (SPI CS0/CS2, m25p80)
-- U-Boot: [x] QEMU (Raptor SMC) · [N] silicon (**SPI flash not wired to the BMC on this rig** — boot is JTAG+TFTP; read-path untestable here)
-- Linux: [x] QEMU (spi-nor/MTD) · [N] silicon (no BMC-attached flash on this rig) · [ ] userspace MTD write path (`/dev/mtd*`) — QEMU-side TODO
-- Zephyr: [ ] QEMU (spi-nor) · [N] silicon (no flash)
+- U-Boot: [x] QEMU (Raptor SMC) · [B] silicon (**rig limitation, NOT N/A: the SMC/SPI *is* the board's boot device by design, but the socketed flash is not populated/wired on this rig, so boot is JTAG+TFTP and the SMC read path is untestable here. Confidence: driver is correct in QEMU; blocker is the rig's missing flash, fixable by populating BMC_FW1**)
+- Linux: [x] QEMU (spi-nor/MTD) · [B] silicon (same rig limitation — no BMC-attached flash to bind spi-nor to) · [ ] userspace MTD write path (`/dev/mtd*`) — QEMU-side TODO
+- Zephyr: [ ] QEMU (spi-nor) · [B] silicon (same rig limitation)
 
 ### A4. VIC — interrupt controller 0x1e6c0000 (§ implied; datasheet §16)
 - [x] QEMU: faithful G3 VIC (TYPE_ASPEED_2050_VIC, single-bank, sense/dual/event)
@@ -95,10 +95,16 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [~] QEMU (video path uses it) · [~] silicon · [ ] userspace (covered via video below)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### B3. Video / iKVM capture + VGA DAC output → VGA1 (§6 capture, §8 output)
+### B3. Video / iKVM CAPTURE → VGA1 (§6 capture) — the JPEG capture path
 - [x] QEMU: `aspeed.video-ast2050` faithful G3 model (headerless entropy + 8 ROM quant tables)
 - U-Boot: [N] (video capture is an OS/runtime function)
-- Linux: [x] QEMU (v4l2 `/dev/video0`, JFIF pixel-verified) · [x] silicon (patch 0006, `bytesused=28418`, real host frame) · [x] userspace (V4L2 DQBUF → decodable JPEG)
+- Linux: [x] QEMU (v4l2 `/dev/video0`, JFIF pixel-verified) · [x] silicon (patch 0006, `bytesused=28418`, real host frame — both-sides PASS) · [x] userspace (V4L2 DQBUF → decodable JPEG)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B3b. VGA DAC analog output + mode-set + PCI-target config → VGA1 (§8 output, §6 PCI)
+- [~] QEMU: DAC/mode-set present but the analog-output + PCI-target config-space paths are partial (DEVICE-MATRIX rows 8/12 self-question mode-set/fb)
+- U-Boot: [N] (analog VGA output is an OS/runtime function)
+- Linux: [~] QEMU (mode-set/fb self-questioned) · [~] silicon (host VGA visible via capture, but the BMC's *own* DAC output as a framebuffer is not independently validated) · [ ] userspace (`/dev/fb0` / DRM)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### B4. VGA DDC / EDID I²C → VGA1 (§8)
@@ -126,7 +132,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### C2. NC-SI sideband — RMII2 channel 2 → 2× 82574L (§7)
 - [x] QEMU: RMII2/NC-SI model + faithful responder (MAC2 channel discovery)
 - U-Boot: [N] (NC-SI sideband is an OS-level function)
-- Linux: [x] QEMU (ncsi channel discovery) · [B] silicon (**"No channel found": the deeper G3 RMII2 pinmux group divergence — strap 110 RMII2 routing differs from G4's SCU70[7]. Needs the AST2050 RMII2/GPIOE routing RE + a G3 pinctrl group. Confidence: my kernel patch 0008 fixed the strap-phantom class; this is a distinct, deeper pinmux gap, precisely diagnosed, not a hardware fault**) · [ ] userspace
+- Linux: [x] QEMU (ncsi channel discovery) · [ ] silicon (**not blocked externally — this is HARD, undone authoring work: "No channel found" is the deeper G3 RMII2 pinmux group divergence (strap 110 RMII2 routing differs from G4's SCU70[7]). Needs the AST2050 RMII2/GPIOE routing RE + a G3 pinctrl group written. My kernel patch 0008 fixed the strap-phantom class; this distinct, deeper pinmux gap is precisely diagnosed and is my code to write, not a hardware fault**) · [ ] userspace
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ---
@@ -176,7 +182,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D8. DIMM A–D / E–H TSOD thermal — I2C10/I2C11 0x18–0x1F (§10.2)
-- [x] QEMU: `hw/sensor/jc42.c` JC-42.4 TSOD model (available; not placed for this rig's UDIMM)
+- [x] QEMU: `hw/sensor/jc42.c` JC-42.4 TSOD model is COMPLETE + correct (MCP98244 IDs, word-swapped regs); deliberately NOT instantiated on this machine — the rig's DIMM_A2 SPD byte32=0 = no TSOD, so placing one would be un-faithful. The model is wired-in on demand for a TS-equipped DIMM config.
 - U-Boot: [N]
 - Linux: [x] QEMU (jc42 model exists) · [N] silicon (**this rig's DIMM_A2 SPD byte32=0 = NO thermal sensor; 0x19 NAKs — faithfully absent, not a gap**) · [N] userspace (no TSOD present)
 - Zephyr: [ ] QEMU · [N] silicon (no TSOD on this rig's DIMM)
@@ -184,7 +190,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)  ✅ QEMU this session
 - [x] QEMU: `hw/sensor/sbtsi.c` datasheet/driver-faithful (P0@0x4c, P1@0x4d on i2c3); `scripts/sbtsi-test.py` 8/8 PASS (evidence d09-sbtsi/00)
 - U-Boot: [N] (CPU thermal is an OS function)
-- Linux: [~] QEMU (raw SMBus reads the exact `sbtsi_temp` register model; in-kernel bind needs CONFIG_SENSORS_SBTSI = a kernel rebuild — TODO) · [B] silicon (**AMD SB-TSI answers only while the host CPU is powered; reachable once host is on + i2c3 enabled on the silicon DTB — host-presence-dependent, not a driver gap**) · [x] userspace (raw i2cget/i2cset validated)
+- Linux: [~] QEMU (raw SMBus reads the exact `sbtsi_temp` register model; in-kernel bind needs CONFIG_SENSORS_SBTSI = a kernel rebuild — TODO) · [ ] silicon (**not done yet, ACHIEVABLE not blocked: the rig can power the host via the au-plug (plug 3W→103W proven), so bring the host up, enable i2c3 on the silicon DTB, and read 0x4c/0x4d. Just requires a host-on boot cycle**) · [x] userspace (raw i2cget/i2cset validated)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)
@@ -237,6 +243,20 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU · [x] silicon (pinctrl binds, mux selects work) · [N] userspace (straps not a userspace ABI)
 - Zephyr: [ ] QEMU · [ ] silicon
 
+### E5. Platform-control OUTPUT lines — CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCI_RST#/ATXPSON#/SYSRESET# (§11)
+(the discrete BMC-driven control signals beyond the E1 power-latch: `AST_CLRTC#`
+B9, `AST_BIOSREVRY#` C9, `AST_CPU1DISABLE#` D8, `AST_CPU2DISABLE#` C8,
+`SB_PCI_RST#` B10, `AST_ATXPSON#` A9, `AST_SYSRESET#` D10 — DEVICE-MATRIX row 29)
+- [~] QEMU: driven as aspeed GPIOs by the model (the power-latch ones are in the
+  kgpe_d16_pwrseq path; CLRTC#/BIOSREVRY#/CPUxDISABLE# are plain GPIO outputs,
+  togglable but not yet each behaviour-verified)
+- U-Boot: [N] (discrete platform control is an OS/runtime function)
+- Linux: [~] QEMU (sysfs GPIO toggles) · [ ] silicon (**not done: each line needs an
+  observed effect — CLRTC# clears CMOS, CPUxDISABLE# gates a socket, PCI_RST#
+  resets the SB PCI. Achievable via sysfs GPIO on silicon + a host to observe;
+  undone, not blocked**) · [ ] userspace (`/sys/class/gpio` per-line)
+- Zephyr: [ ] QEMU · [ ] silicon
+
 ---
 
 ## F. Serial / SOL (§12)
@@ -250,7 +270,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### F2. UART1 → SOL via QU8 mux → Super-I/O (§12)
 - [~] QEMU: VUART byte-flow model; QU8 2:1 mux (BMC_PRESENT# select) not modeled (D10)
 - U-Boot: [N] (SOL is an OS/IPMI function)
-- Linux: [~] QEMU (obmc-console byte-flow PASS) · [B] silicon (**host console not VUART-wired on this rig; QU8 mux select needs modeling; RMCP+ SOL activate has a netipmid registerSOLService gap — precisely diagnosed, QEMU-only**) · [ ] userspace (ipmitool sol)
+- Linux: [~] QEMU (obmc-console byte-flow PASS) · [ ] silicon (**mostly HARD/undone authoring work, not an external block: (a) the QU8 2:1 mux select (BMC_PRESENT#) is unmodelled — my code to write; (b) `sol activate` fails at netipmid `registerSOLService` — a phosphor-net-ipmid binding gap, my code to fix; the only genuine rig aspect is that the host serial console is not VUART-wired on this bench. Byte-flow (obmc-console-client) already works**) · [ ] userspace (ipmitool sol)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ---
@@ -266,14 +286,19 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ## Coverage assertion (verified against the complete schematic read)
 
 Every §2–§15 function block and every §14 neighbour chip maps to a row above:
-§2→A1; §3→A2; §4→A3; §5→B1; §6→B2/B3; §7→C1/C2; §8→B3/B4; §9→B5;
-§10→D1–D13; §11→E1/E2; §12→F1/F2; §13→A1/A4/A5/E3/E4/G1; §14 chips→the bus rows
+§2→A1; §3→A2; §4→A3; §5→B1; §6→B2/B3/B3b; §7→C1/C2; §8→B3b/B4; §9→B5;
+§10→D1–D13; §11→E1/E2/E5; §12→F1/F2; §13→A1/A4/A5/E3/E4/G1; §14 chips→the bus rows
 that reach them (W83795→D2, W83601G→D3/D4, HT24LC08→D5, RTL8201N→C1, 82574L→C2,
-QU9/QU5→D6, QU8→F2, muxes/glue→passive); §15 connectors→the functional rows
-(VGA1→B3/B4, AST_UART1→F1, JTAG1→G1, BMC_FW1→A3, PANEL1/AUX_PANEL1→E1/E3/D12,
-PSUSMB1→D10, TPM1→B1, jumpers→E4). Passive parts (LDOs UP7706U8, series-R nets
-QRN*, sync buffer QU6, RS-232 AZ75232, glue 74LVCxx) carry no driver by nature
-and are modeled only where behaviour-relevant (the QU9/QU5/U23 fabric = D6).
+SB-TSI→D9, QU9/QU5→D6, QU8→F2, muxes/glue→passive). The three **host chips**
+`SU1` (SP5100 southbridge), `OU1` (W83667HG Super-I/O), `NU1` (SR5690 northbridge)
+are not BMC-internal devices — the BMC reaches them **through** the LPC (B1), PCI
+(B2), USB (B5) and I²C (D1) controller rows; their own register maps are host-
+side (documented in the SP5100/Super-I/O docs), not a BMC driver. §15 connectors→
+the functional rows (VGA1→B3/B3b/B4, AST_UART1→F1, JTAG1→G1, BMC_FW1→A3,
+PANEL1/AUX_PANEL1→E1/E3/E5/D12, PSUSMB1→D10, TPM1→B1, jumpers→E4). Passive parts
+(LDOs UP7706U8, series-R nets QRN*, sync buffer QU6, RS-232 AZ75232, glue 74LVCxx)
+carry no driver by nature and are modeled only where behaviour-relevant (the
+QU9/QU5/U23 fabric = D6).
 
 **Nothing in the schematic is skipped.** Items marked `[N]` state why they are
 not-applicable for that stack; `[B]` items state the precise blocker and my
