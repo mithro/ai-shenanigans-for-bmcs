@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-18 — CLOSED another gap: dropped the phantom 2nd WDT (second #144 increment)
+
+- Continuing to close #144 phantoms with the proven method. **Dropped the phantom 2nd
+  watchdog:** the AST2050 (G3) has ONE WDT (datasheet: "AST2050/AST1100 integrates one
+  set of ... Watchdog Timer"), but the ast2050 SoC class inherited `wdts_num=2` from the
+  AST2400, modeling a phantom WDT1 at 0x1E785020. Set `wdts_num=1`. Submodule `84a155e2a5`.
+- **Validated:** build OK; qtree count = **1 aspeed.wdt on kgpe-d16-bmc** (was 2), still
+  **3 on ast2500-evb** (no regression). The MAIN WDT (WDT0 @0x1E785000, used by U-Boot
+  reset.c + Linux /dev/watchdog) is untouched — only the phantom WDT1 is gone. Low-risk:
+  C2 already boots tolerating the absent wdt3 node, so an absent wdt2 is benign. Parent
+  bump + CI oracle re-validation to follow. Phantom set: ADC ✅ + WDT2 ✅ done; SPI1/SRAM/
+  UART (risky) + serial loop remain (#144).
+
 ## 2026-07-18 — CLOSED a gap: removed the phantom ADC from the G3 (first #144 increment)
 
 - Acting on the audit rather than only cataloguing it. **Removed the phantom ADC** the
