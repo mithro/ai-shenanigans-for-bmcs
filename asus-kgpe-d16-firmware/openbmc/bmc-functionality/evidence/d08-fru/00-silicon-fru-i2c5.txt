@@ -1,0 +1,25 @@
+D08 board FRU EEPROM (U25 HT24LC08) on silicon, 2026-07-18. The BMC reads it
+over its direct I2C5 engine (Linux i2c-4) — no mux, host-power independent.
+
+  # i2cdetect -y -r 4
+  50: -- -- -- -- UU UU UU UU  ...   (0x54-0x57 = at24-bound 24c08, 1 KB)
+  10: ... 18 19 ...                  (0x18/0x19 = the W83601G DIMM-LED
+                                       expanders U27/U28, also on I2C5 §10.2)
+
+  # hexdump -C /sys/bus/i2c/devices/4-0054/eeprom
+  00000000  ff ff ... ff                |................|
+  *
+  00000400                              (all 1024 bytes = 0xff)
+
+Findings:
+- The board FRU EEPROM is PRESENT and fully readable by the BMC (at24 binds
+  the 24c08 across 0x54-0x57). E2 strapped high -> 0x54 base (confirms the
+  netlist trace; §10.2's 0x50-0x53 was wrong). This validates the BMC's I2C5
+  FRU access path on real silicon.
+- It is BLANK (0xff) — ASUS did not program board FRU data into it. That is a
+  board-provisioning fact, not a BMC/driver problem; the device works.
+- 0x18/0x19 respond on the same bus = the two W83601G expanders (next D08
+  sub-device to model/drive).
+
+QEMU is modeled faithfully: a blank (0xff) 24c08 at 0x54 on i2c bus 4, so the
+at24 stack binds and reads 0xff exactly like silicon.
