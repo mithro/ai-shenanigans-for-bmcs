@@ -28,3 +28,24 @@ REMAINING for D09:
 - Silicon: SB-TSI answers only while the host CPU(s) are powered (it IS the AMD
   processor's interface). Reachable once the host is on + i2c3 is enabled on the
   silicon DTB. Host-presence-dependent, not a driver gap.
+
+--- Code review (2026-07-18): CLEAN ---
+Sub-agent code review of hw/sensor/sbtsi.c + the machine wiring found NO
+substantive correctness defects: regs[] bounds-checked (uint8_t idx truncated
+before the < NR_REGS test), pointer/SMBus contract matches jc42.c, the
+millidegree->INT/DEC conversion is correct at nominal (45500->0x2d/0x80) and
+max (255875->0xE0, clamped), VMState complete, RW mask exact, and the
+realize-then-object_property_set_int("temperature") ordering is the pre-existing
+QEMU idiom (same as tmp423 in palmetto_bmc_i2c_init).
+
+--- In-kernel sbtsi_temp driver (2026-07-18): QEMU PASS ---
+Added CONFIG_SENSORS_SBTSI=y to kernel/kgpe-d16.config and rebuilt. The REAL
+in-kernel sbtsi_temp hwmon driver now binds the amd,sbtsi DT nodes on i2c3 and
+reads the QEMU model over the aspeed I2C engine:
+  /sys/bus/i2c/devices/3-004c/hwmon/hwmonN/temp1_input = 45500 (P0, 45.5 C)
+  /sys/bus/i2c/devices/3-004d/hwmon/hwmonN/temp1_input = 43000 (P1, 43.0 C)
+scripts/sbtsi-test.py now validates via the hwmon sysfs path (the kernel driver
++ model together) -> D9 Linux-driver-in-QEMU (LQ) = done, userspace hwmon = done.
+This supersedes the earlier raw-i2cget check (which would now collide with the
+driver-owned device). Silicon still needs a host-CPU-on boot + i2c3 on the
+realhw DTB.

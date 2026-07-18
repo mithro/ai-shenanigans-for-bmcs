@@ -1,5 +1,14 @@
 # AST2050 / KGPE-D16 — explicit per-device task matrix
 
+> **This is the compact SUMMARY grid. [`FULL-TASK-LIST.md`](FULL-TASK-LIST.md) is
+> the AUTHORITATIVE per-stack/per-validation detail** (with explicit
+> `[x]/[~]/[ ]/[N]-with-reason/[B]-with-blocker` boxes and the §-by-§ coverage
+> assertion). On any disagreement between this grid and FULL-TASK-LIST.md, the
+> latter wins; this grid is kept in sync but may lag. (Re-synced 2026-07-18 after
+> the second completeness audit — NC-SI/USB/WDT/RTC/SOL/straps/PCI/VGA-DAC cells
+> reconciled; the row groupings here differ slightly from FULL-TASK-LIST's
+> A/B/C/D/E/F rows.)
+
 Systematic enumeration of **every device** wired to the AST2050 in
 [`../schematic-wiring/AST2050-BMC-WIRING.md`](../schematic-wiring/AST2050-BMC-WIRING.md)
 (§§2–15 + the §14 neighbour-chip table), each with the full deliverable grid the
@@ -45,8 +54,8 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 5 | LPC port-80h POST snoop (§5) | LPC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 6 | LPC vUART (§5) | LPC | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 7 | TPM1 LPC pass-through (§5/§15) | LPC | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 8 | PCI-33 / iKVM video-capture (§6) | video+P2A | ✅ | Ⓝ | Ⓝ | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ |
-| 9 | USB device / vhub (§9 → SP5100) | vhub | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | ✅ | ⬜ | ⬜ |
+| 8 | PCI-33 / iKVM video-capture (§6) | video+P2A | ✅ | Ⓝ | Ⓝ | 🔶 | 🔶 | 🔶 | ⬜ | ⬜ |
+| 9 | USB device / vhub (§9 → SP5100) | vhub | ✅ | Ⓝ | Ⓝ | ✅ | 🔷 | 🔶 | ⬜ | ⬜ |
 
 - **3** KCS/IPMI: `sdr`/host-KCS both sides (`evidence/host-kcs/`). UB Ⓝ (no boot need). D03.
 - **4/5/6** mailbox, POST-snoop, vUART: unmodeled/undriven (audit gap #5). vUART is register-present but no session. D03.
@@ -59,16 +68,16 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 10 | Eth MAC1 MII → RTL8201N U5 (§7 ch1) | ftgmac100#0 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 11 | Eth MAC2 RMII2/NC-SI → 82574L LU1/LU2 (§7 ch2) | ftgmac100#1 | ✅ | ⬜ | ⬜ | ✅ | 🔷 | ⬜ | ⬜ | ⬜ |
+| 11 | Eth MAC2 RMII2/NC-SI → 82574L LU1/LU2 (§7 ch2) | ftgmac100#1 | ✅ | ⬜ | ⬜ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 - **10** eth0 both sides (NFS-root + Redfish on silicon). UB both = Raptor TFTP. **Model-vs-schematic PHY-part note:** model = RTL8201**CP**, schematic = RTL8201**N** (unresolved). D06.
-- **11** QE = MAC2 wired + `net/ncsi` discovers a channel vs the generic slirp responder (MFR-0x0). **LS = 🔷 blocked on the G3 RMII2 pinmux** (mainline g4 pinctrl mis-selects RMII2 on the G3; `evidence/d07-ncsi/03-`). Faithful 82574L responder (2 pkgs, Intel OEM 0x157) ⬜. D07.
+- **11** QE = MAC2 wired + `net/ncsi` discovers a channel vs the generic slirp responder (MFR-0x0). **LS = ⬜ (HARD undone authoring work, NOT externally blocked):** "No channel found" is the deeper G3 RMII2 pinmux group divergence (mainline g4 pinctrl mis-selects RMII2 on the G3; `evidence/d07-ncsi/03-`) — needs the AST2050 RMII2/GPIOE routing RE + a G3 pinctrl group *written* (my code), plus a faithful 82574L responder (2 pkgs, Intel OEM 0x157). D07 / FULL-TASK-LIST C2.
 
 ## Video
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 12 | VGA DAC output → VGA1 (§8) | CRT/DAC | ✅ | Ⓝ | Ⓝ | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ |
+| 12 | VGA DAC output → VGA1 (§8) | CRT/DAC | 🔶 | Ⓝ | Ⓝ | 🔶 | 🔶 | 🔶 | ⬜ | ⬜ |
 | 13 | VGA sync buffer QU6 (§8) | — | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 14 | DDC / EDID I2C → VGA1 (§8) | I2C/DDC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | Ⓝ | Ⓝ |
 
@@ -88,7 +97,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | 🔶 | ⬜ | ✅ | ⬜ | ⬜ |
+| 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ✅ | ⬜ | ⬜ |
 | 24 | PSU PMBus (PSUSMB1, I2C1) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 25 | SMBus ALERT (SALT1/2, I2C7) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 26 | Aux front panel (AUX_PANEL1, I2C8) | I2C | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -117,7 +126,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
-| 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | 🔶 | Ⓝ | Ⓝ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 
 - **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the AST2050 port boots and runs application code — `*** Booting Zephyr OS ***` + `Hello World! kgpe_d16_bmc/ast2050` — via a static-mapped polling SoC console (`soc/aspeed/ast2050/console.c`, printk+stdout hooks), evidence `d14-zephyr/03`. The M1 VIC (`vic.c`) + aspeed timer (`aspeed_timer.c`) are written and deliver interrupts, but sustained tickful scheduling data-aborts at the arm_mmu L1 table (same brand-new ARM9 `arm_mmu` dynamic-mapping gap that also blocks `uart_ns16550.c`); left cooperative by default. Per-device Zephyr drivers build on this once preemption is clean. D10/D11/D14.
 - **31** SOL essentially unimplemented end-to-end (audit gap #2): no QU8-mux/Super-I/O model, no Linux SOL session, no host bytes on silicon. D10.
@@ -127,7 +136,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ⬜ | 🔶 | ⬜ | ⬜ |
-| 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | 34 | 24 MHz clock input (QOSC1) | SCU/clk | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | — | AST_JTAG1 (§13/§15) | ARM debug | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
@@ -140,14 +149,14 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | # | Device | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
-| 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
-| 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
-| 38 | Watchdog (WDT) | wdt | ✅ | ⬜ | ⬜ | ✅ | ❓ | 🔶 | ⬜ | ⬜ |
-| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
+| 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
+| 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
+| 38 | Watchdog (WDT) | wdt | ✅ | ⬜ | ⬜ | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
+| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
-- **38** WDT-silicon = ❓ **UNCITED** (audit #10) — the "120 s reset observed" claim has no transcript; capture one. D11.
+- **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 
 ## Roll-up (honest)

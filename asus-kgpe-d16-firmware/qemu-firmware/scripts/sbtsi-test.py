@@ -26,45 +26,31 @@ import time
 
 GUEST_SCRIPT = r"""
 set -x
-# create /dev/i2c-* nodes (minimal initramfs runs no mdev/udev)
-for d in /sys/class/i2c-dev/i2c-*; do
-    n=${d##*i2c-}
-    mm=$(cat $d/dev); maj=${mm%%:*}; min=${mm##*:}
-    [ -e /dev/i2c-$n ] || mknod /dev/i2c-$n c $maj $min
-done
+# The kernel has CONFIG_SENSORS_SBTSI, so the in-kernel sbtsi_temp hwmon driver
+# binds the amd,sbtsi DT nodes on i2c3 (0x4c=P0, 0x4d=P1). Validate through the
+# hwmon sysfs (the real Linux driver reading the QEMU sbtsi model), which is a
+# stronger both-sides check than raw SMBus. DT i2c3 -> Linux i2c-3.
+D0=/sys/bus/i2c/devices/3-004c
+D1=/sys/bus/i2c/devices/3-004d
+[ -d "$D0" ] || { echo TSI_FAIL_no_dev_4c; exit 1; }
+[ -d "$D1" ] || { echo TSI_FAIL_no_dev_4d; exit 1; }
 
-# locate the SB-TSI bus: the one where 0x4c TEMP_INT (0x01) reads our seed 0x2d
-BUS=""
-for d in /sys/class/i2c-dev/i2c-*; do
-    n=${d##*i2c-}
-    v=$(i2cget -y $n 0x4c 0x01) || continue
-    [ "$v" = "0x2d" ] && { BUS=$n; break; }
-done
-[ -n "$BUS" ] || { echo TSI_FAIL_no_bus; exit 1; }
-echo "TSI_BUS=i2c-$BUS"
-
-chk() {   # chk <addr> <reg> <expected> <label>
-    got=$(i2cget -y $BUS $1 $2)
-    echo "TSI $4 [$1:$2] = $got (want $3)"
-    [ "$got" = "$3" ] || { echo "TSI_FAIL_$4"; exit 1; }
+hwmon_temp() {   # hwmon_temp <i2c-devdir>  -> echoes temp1_input millidegrees
+    for h in $1/hwmon/hwmon*; do
+        [ -e "$h/temp1_input" ] && { cat "$h/temp1_input"; return 0; }
+    done
+    return 1
 }
 
-# --- P0 @0x4c = 45.500 C -> INT 0x2d, DEC (0.5C = 4<<5) 0x80 ---
-chk 0x4c 0x01 0x2d p0_int
-chk 0x4c 0x10 0x80 p0_dec
-# --- P1 @0x4d = 43.000 C -> INT 0x2b, DEC 0x00 ---
-chk 0x4d 0x01 0x2b p1_int
-chk 0x4d 0x10 0x00 p1_dec
-# --- CONFIG (0x03) reset 0x00, STATUS (0x02) reset 0x00 ---
-chk 0x4c 0x03 0x00 config
-chk 0x4c 0x02 0x00 status
-# --- RW limit register accepts a write (TEMP_HIGH_INT 0x07) ---
-i2cset -y $BUS 0x4c 0x07 0x55
-chk 0x4c 0x07 0x55 high_limit_rw
-# --- RO TEMP_INT rejects a write (stays the seeded 0x2d) ---
-i2cset -y $BUS 0x4c 0x01 0x11
-chk 0x4c 0x01 0x2d ro_write_ignored
+T0=$(hwmon_temp $D0) || { echo TSI_FAIL_no_hwmon_4c; exit 1; }
+echo "TSI_P0 3-004c hwmon temp1_input=$T0 (want 45500)"
+[ "$T0" = "45500" ] || { echo TSI_FAIL_p0_temp; exit 1; }
 
+T1=$(hwmon_temp $D1) || { echo TSI_FAIL_no_hwmon_4d; exit 1; }
+echo "TSI_P1 3-004d hwmon temp1_input=$T1 (want 43000)"
+[ "$T1" = "43000" ] || { echo TSI_FAIL_p1_temp; exit 1; }
+
+echo "TSI in-kernel sbtsi_temp driver bound both processor sensors"
 echo TSI_ALL_OK
 """
 

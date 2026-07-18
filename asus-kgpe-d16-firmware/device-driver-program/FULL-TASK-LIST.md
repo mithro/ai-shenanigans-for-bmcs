@@ -190,7 +190,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)  ✅ QEMU this session
 - [x] QEMU: `hw/sensor/sbtsi.c` datasheet/driver-faithful (P0@0x4c, P1@0x4d on i2c3); `scripts/sbtsi-test.py` 8/8 PASS (evidence d09-sbtsi/00)
 - U-Boot: [N] (CPU thermal is an OS function)
-- Linux: [~] QEMU (raw SMBus reads the exact `sbtsi_temp` register model; in-kernel bind needs CONFIG_SENSORS_SBTSI = a kernel rebuild — TODO) · [ ] silicon (**not done yet, ACHIEVABLE not blocked: the rig can power the host via the au-plug (plug 3W→103W proven), so bring the host up, enable i2c3 on the silicon DTB, and read 0x4c/0x4d. Just requires a host-on boot cycle**) · [x] userspace (raw i2cget/i2cset validated)
+- Linux: [x] QEMU (**in-kernel `sbtsi_temp` hwmon driver binds amd,sbtsi on i2c3 and reads the model: `3-004c/hwmon/.../temp1_input`=45500, `3-004d`=43000; CONFIG_SENSORS_SBTSI added + kernel rebuilt; `scripts/sbtsi-test.py` PASS via hwmon sysfs; CI `boot-sbtsi`**) · [ ] silicon (**not done yet, ACHIEVABLE not blocked: the rig can power the host via the au-plug (plug 3W→103W proven), so bring the host up, enable i2c3 on the silicon DTB, read via hwmon. Just requires a host-on boot cycle**) · [x] userspace (`/sys/class/hwmon` temp1_input)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)

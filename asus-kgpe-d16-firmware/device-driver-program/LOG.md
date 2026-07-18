@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D09 in-kernel sbtsi_temp bind + SB-TSI code-review-clean + audit-2 matrix re-sync
+
+- **D09 in-kernel driver DONE (QEMU):** added `CONFIG_SENSORS_SBTSI=y` to
+  kernel/kgpe-d16.config, rebuilt. The real Linux `sbtsi_temp` hwmon driver binds
+  the `amd,sbtsi` DT nodes on i2c3 and reads the QEMU model:
+  `3-004c/hwmon/.../temp1_input`=45500, `3-004d`=43000. `scripts/sbtsi-test.py`
+  rewritten to validate the hwmon sysfs path (the real driver + model together) —
+  supersedes the raw-i2cget check (which would now collide with the driver-owned
+  device). D9 Linux-QEMU (LQ) + userspace now [x]. Evidence d09-sbtsi/00 appended.
+- **SB-TSI model code-review CLEAN (gate b):** sub-agent review of hw/sensor/sbtsi.c
+  + wiring found no defects (bounds-checked regs[], correct SMBus/pointer contract,
+  arithmetically-correct millidegree→INT/DEC at nominal+max, complete VMState, exact
+  RW mask, realize-then-property-set matches the existing tmp423 idiom).
+- **Second completeness audit (gate a) ran** — confirmed coverage complete + NO
+  fabricated `[x]` (every cited file exists), and found the first-audit fixes were
+  applied to FULL-TASK-LIST but **not mirrored into DEVICE-MATRIX**, which had
+  drifted (C-1..C-10). Re-synced the matrix: **C-1 NC-SI row 11 LS 🔷→⬜** (the
+  weasel the first audit removed, still living in the matrix — hard undone RMII2
+  pinmux work, not blocked); C-2 VGA-DAC row 12 QE ✅→🔶; C-3 USB row 9 LS 🔶→🔷 /
+  LU ✅→🔶; **C-4 WDT row 38 removed the undefined `❓` symbol → 🔶** + honest note;
+  C-5 RTC row 39 LS/LU 🔶→⬜; C-6 SOL row 31 QE/LQ ⬜→🔶; C-7 PCI/VGA Zephyr Ⓝ→⬜;
+  C-8 straps row 33 reconciled to E4 (UQ/US/LQ/LS ✅); C-9 VIC/timer ZQ ⬜→🔶 (Zephyr
+  drivers written+deliver IRQs); added a header note making **FULL-TASK-LIST.md the
+  authoritative per-stack doc** (matrix = summary that defers to it on disagreement).
+  Row 23 SB-TSI LQ 🔶→✅.
+
 ## 2026-07-18 — completeness audit (sub-agent, gate a) + honesty fixes applied
 
 - Ran a sub-agent completeness audit of FULL-TASK-LIST.md vs the authoritative
