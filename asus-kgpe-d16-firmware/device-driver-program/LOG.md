@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-18 — silicon I2C inventory + an unidentified 0x69 responder
+
+- Silicon i2c buses present: i2c-1 (W83795 engine, schematic I2C2), i2c-4 (I2C5:
+  FRU + W83601G), and the QU5 mux children i2c-14/15/16 — same as QEMU. The other
+  schematic engines (I2C1/I2C4→SB-TSI, I2C7→SALT, etc.) are not DT-enabled yet.
+- `i2cdetect -y -r` on the mux children shows the W83795 (0x2f, UU=driver-bound)
+  AND a device at **0x69** on all three channels (so both are on the shared
+  sensor segment past QU5; the mux itself is proven-switching by the SPD test,
+  evidence d08-spd-silicon). 0x69 answers a read of reg 0x00 = 0x08 but NAKs regs
+  0xfe/0x4f/0x58 → a simple/limited responder, NOT a bank-switched register file.
+- **0x69 is NOT in the authoritative schematic §10 I2C table** (which lists only
+  W83795G@0x2F on this segment). Candidates: a clock/aux device, a W83795 alias,
+  or an i2cdetect artifact. Logged as an open completeness item to identify
+  (needs the schematic's sensor-bus sub-detail or a scope) — low priority, weak
+  responder; not claiming it as a modeled device.
+
 ## 2026-07-18 — origin/main merge check
 
 - `git fetch origin` + `git merge --no-ff origin/main` → **"Already up to date"**.
