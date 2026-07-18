@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Gate-(a)/(d) completeness+honesty audit: re-read the FULL schematic, dispatched 3 auditors
+
+- Re-grounded in the goal's PRIMARY deliverable (a Stop-hook flagged that recent work
+  drifted into gate-(b) code review without re-evidencing the schematic read): **read
+  the COMPLETE authoritative `schematic-wiring/AST2050-BMC-WIRING.md` end-to-end (all
+  597 lines, §§1-16)** this cycle, then cross-checked my fresh read against the
+  enumeration in `DEVICE-MATRIX.md`. RESULT: the matrix's 41 rows + its §-by-§
+  completeness table DO map every functional block — §2 power/PLL→SCU(35), §3 DDR2(1),
+  §4 SPI(2), §5 LPC KCS/mailbox/snoop/vUART/TPM(3-7), §6 PCI-33(8), §7 eth MII+NC-SI
+  (10-11), §8 VGA DAC/sync/DDC(12-14), §9 USB(9), §10 I²C ×12 devices+fabric(15-26),
+  §11 GPIO ×17(27-29), §12 SOL/QU8(30-31), §13 JTAG/LED/clk/strap(32-34), SoC-internal
+  SCU/VIC/timer/WDT/RTC/PWM/ADC(35-41). The enumeration EXISTS and is comprehensive.
+- **BUT completion is NOT done** — the matrix honestly carries many ⬜/🔶/🔷 (esp. the
+  whole Zephyr ZQ/ZS column, LPC mailbox, DDC/EDID, SOL mux, PSU PMBus, SMBus-ALERT,
+  NC-SI silicon, MTD-write, several §11 signals). So the goal's bar ("enumerate every
+  item AND show all drivers+emulation 100% complete") is correctly UNMET.
+- **Dispatched the gate-(a)/(d) audit the completion gates require** (3 independent
+  sub-agents, ≤5 concurrent; the hook demands "multiple reviews unable to find anything
+  missed" + "sub-agents unable to identify new tasks" + heeds "incorrect claims have
+  been made about functionality not-existing / features unconnected — the schematic is
+  authoritative"):
+  1. **Missed-device sweep** — every schematic §/ball vs the matrix; find anything with
+     no row or too-coarse a row (incl. a fresh per-pin 355-ball pass).
+  2. **Honesty audit** — every ✅ vs its cited evidence (over-claim?), and every Ⓝ/🔷
+     "n/a/impossible/unconnected" re-checked against the authoritative wiring (wrongly
+     dismissed? precedent: the NC-SI "impossible" claim was already wrong).
+  3. **Zephyr+U-Boot stack breakdown** — concrete per-device driver task list for the
+     two emptiest columns + challenge every U-Boot Ⓝ.
+  Findings will become tracked tasks (progress toward (d)) or honesty corrections to the
+  matrix (toward (a)/(c)). Results pending.
+
 ## 2026-07-18 — Gate-(b) review round 2 COMPLETE: 3 sub-agents, ~2500 LOC, 3 real bugs found (2 fixed, 1 routed)
 
 - Broadened the gate-(b) "full code review of all developed code" beyond the D08
