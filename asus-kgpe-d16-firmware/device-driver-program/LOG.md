@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D07 silicon NC-SI attempt 1 FAILED (my missing RMII2 pinmux)
+
+- Ran BMC-side NC-SI discovery on real silicon (addresses audit #3). Booted
+  the NET_NCSI realhw kernel with mac1 enabled (`kgpe-ncsi.dtb`). eth1 bound
+  `Using NCSI interface`, but `ip link set eth1 up` →
+  **`NCSI: No channel found to configure!`** + `Wrong NCSI state 0x100`. The
+  real 82574Ls did NOT respond.
+- **Root cause = MY DTS, not the hardware** (the principle holds). The
+  mainline aspeed-g4 `mac1` node has NO `pinctrl-0`, so the RMII2 data pins
+  (GPIOE group, §7 balls A5/B5/B6/C4/D4/D5) were never muxed to the RMII2
+  function → NC-SI frames never physically reached the NICs. The g4 pinctrl
+  HAS the group (`pinctrl_rmii2_default`) and SCU70[8:6]=110 strap-enables
+  RMII2 — the node just never referenced it. Confidence HIGH this is the
+  bug (not a hardware issue): the NVMs are confirmed NC-SI-enabled.
+- **Fix**: added `pinctrl-0 = <&pinctrl_rmii2_default>` to `&mac1`. Rebuilding
+  realhw kernel; will re-test on silicon. Honest failure captured in
+  `evidence/d07-ncsi/02-silicon-discovery-attempt1-FAIL-pinmux.txt`. This is
+  my bug #4 this session (all four: console baud, cross-worktree stale
+  artifact, test string compare, now the RMII2 pinmux) — the hardware has
+  been correct every time.
+
 ## 2026-07-18 — completeness audit + Zephyr feasibility; honesty fixes
 
 - **Completeness audit (skeptical sub-agent)** — key findings ACTED ON:

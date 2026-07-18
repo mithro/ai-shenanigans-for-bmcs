@@ -1,0 +1,28 @@
+D07 silicon NC-SI discovery — ATTEMPT 1 (2026-07-18): FAILED, root-caused to
+a missing RMII2 pinmux in MY DTS (not the hardware).
+
+Boot: realhw kernel (NET_NCSI) + kgpe-ncsi.dtb (mac1 status=okay, use-ncsi),
+JTAG-loaded U-Boot -> TFTP -> Linux on the real AST2050.
+
+Result on silicon console:
+  ftgmac100 1e680000.ethernet: Using NCSI interface
+  ftgmac100 1e680000.ethernet eth1: irq 22
+  (after `ip link set eth1 up`:)
+  ftgmac100 1e680000.ethernet eth1: NCSI: No channel found to configure!
+  ftgmac100 1e680000.ethernet eth1: Wrong NCSI state 0x100 in workqueue
+  eth1 operstate=unknown, carrier=1 (spurious default — discovery did NOT
+  find a channel)
+
+Diagnosis (confidence HIGH it is my config, not the hardware): the mainline
+aspeed-g4 mac1 node (arch/arm/boot/dts/aspeed/aspeed-g4.dtsi:139) has NO
+pinctrl-0, so the AST2050 RMII2 data pins (RMII2RXD0/1, TXD0/1, TXEN, CRSDV —
+schematic §7 balls A5/B5/B6/C4/D4/D5, GPIOE group) are NOT muxed to the RMII2
+function. The BMC's NC-SI control frames therefore never physically reach the
+82574L NICs, so no channel responds. The g4 pinctrl DOES have the group
+(`pinctrl_rmii2_default`, function/groups "RMII2", aspeed-g4.dtsi:1135), and
+SCU70[8:6]=110 strap-enables RMII2 on this board — the node just never
+references it.
+
+Fix: add `pinctrl-names="default"; pinctrl-0=<&pinctrl_rmii2_default>` to the
+mac1 node, rebuild, re-test. (The 82574L NVMs are confirmed NC-SI-enabled, so
+once the RMII2 pins are muxed the channels should respond.)

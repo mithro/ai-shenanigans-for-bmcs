@@ -244,6 +244,15 @@
 &mac1 {
 	status = "disabled";
 	use-ncsi;
+	/*
+	 * Mux the RMII2 data pins (schematic §7 balls A5/B5/B6/C4/D4/D5, GPIOE
+	 * group) to the RMII2 function — WITHOUT this the NC-SI control frames
+	 * never physically reach the 82574L NICs and discovery fails with "No
+	 * channel found to configure!" (silicon attempt 1, evidence
+	 * d07-ncsi/02-...). SCU70[8:6]=110 strap-enables RMII2 on this board.
+	 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_rmii2_default>;
 };
 
 &i2c1 {
