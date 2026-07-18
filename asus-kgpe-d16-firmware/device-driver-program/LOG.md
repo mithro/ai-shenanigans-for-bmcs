@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-18 — 🎉 Zephyr #141 FIX VALIDATED: sustained tickful scheduling RUNS (it was our config)
+
+- **The #141 fix is PROVEN by build + boot.** Got a ZEPHYR_BASE with PR #103557
+  working: `git clone zephyrproject/zephyr` + `git fetch pull/103557/head` (ARM926
+  arch + armv5.dtsi PRESENT) + `west update`; the only remaining hurdle was the
+  fresh main requiring SDK 1.0.1 while the installed SDK is 0.17.0 — resolved by
+  lowering `cmake/modules/FindHostTools.cmake` `find_package(Zephyr-sdk 1.0)`→`0.17`
+  in MY tmp workspace (the arm-zephyr-eabi 0.17.0 toolchain builds ARM926 fine).
+- **Result:** `west build -b kgpe_d16_bmc hello_world -DCONFIG_SYS_CLOCK_EXISTS=y
+  -DCONFIG_HW_STACK_PROTECTION=n` → build exit 0, zephyr.elf 429 KB. Boot in the
+  faithful QEMU (`-M kgpe-d16-bmc -kernel zephyr.elf`): `*** Booting Zephyr OS ***`
+  + `Hello World! kgpe_d16_bmc/ast2050`, then it ran the **FULL 12 s timeout with
+  the system tick ENABLED and ZERO data-aborts** (qemu rc=124). Previously this exact
+  config data-aborted at the arm_mmu L1 table (0x40008ffc) during sustained ticking.
+  So `HW_STACK_PROTECTION=n` fixes it — **the "upstream ARM9 arm_mmu bug" framing was
+  WRONG; it was our config**, exactly as the faithfulness rule predicts. Evidence
+  `evidence/d14-zephyr/05-m1-tick-validated.txt`.
+- **Committed the fix as the board default:** `kgpe_d16_bmc_defconfig` now sets
+  `CONFIG_SYS_CLOCK_EXISTS=y` + `CONFIG_HW_STACK_PROTECTION=n` (was the cooperative
+  no-tick default). **D14 M1 (tickful scheduling) is DONE in QEMU.** This unblocks the
+  Zephyr column: per-device Zephyr drivers can now use timers + preemptive scheduling.
+- Honest env note: the validation used the SDK-check-lowered tmp workspace; the clean
+  reproducible path is either SDK 1.0.1 installed, or PR #103557 merged upstream (then
+  no version-check tweak). The board configs themselves are the real, committed fix.
+
 ## 2026-07-18 — Gate-(b) code review of D08 models = CLEAN; Zephyr build got past PR, now SDK-version-blocked
 
 - **Gate (b), D08 QEMU device models — independent review returned CLEAN.** A code

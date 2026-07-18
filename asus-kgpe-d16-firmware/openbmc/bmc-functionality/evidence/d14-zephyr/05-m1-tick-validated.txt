@@ -1,0 +1,21 @@
+D14 Zephyr M1 — SUSTAINED TICKFUL SCHEDULING VALIDATED (#141 fix, 2026-07-18)
+
+The sustained-tick data-abort at arm_mmu L1 (0x40008ffc) was CONFIG_HW_STACK_PROTECTION
+(our config), NOT an upstream arm_mmu bug. Fix = HW_STACK_PROTECTION=n.
+
+Build: ZEPHYR_BASE = zephyrproject/zephyr main + git fetch pull/103557/head (ARM926 arch);
+  ZEPHYR_EXTRA_MODULES = asus-kgpe-d16-firmware/zephyr; SDK 0.17.0 (FindHostTools SDK
+  version check lowered 1.0->0.17 for the local SDK); west build -b kgpe_d16_bmc
+  samples/hello_world -- -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n.
+  -> build exit 0, zephyr.elf 429 KB (RAM 136 KB / 64 MB).
+
+Boot: qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -no-reboot -kernel zephyr.elf
+  ran the FULL 12s timeout (qemu rc=124, no early exit/reset), 0 data-aborts/faults.
+
+=== serial ===
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+Hello World! kgpe_d16_bmc/ast2050
+qemu-system-arm: terminating on signal 15 from pid 419097 (timeout)
+
+=== fault grep (expect 0) ===
+0

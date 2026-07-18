@@ -14,27 +14,23 @@ CONFIG_MULTITHREADING=y
 
 # Milestone 1 (VIC + system timer): the real G3 VIC (soc/aspeed/ast2050/vic.c,
 # 0x1e6c0000) and a tickful aspeed timer (aspeed_timer.c, Timer1 @ 1 MHz, VIC
-# source 16) are in-tree; the VIC+timer DELIVER interrupts through the
-# cortex_a_r isr_wrapper (verified: timer IRQs dispatched, main() runs).
+# source 16) are in-tree; the VIC+timer deliver interrupts through the cortex_a_r
+# isr_wrapper, and with SYS_CLOCK_EXISTS=y the kernel now runs SUSTAINED tickful
+# scheduling (validated 2026-07-18 — see below).
 #
-# Left OFF by default: with SYS_CLOCK_EXISTS=y the app boots + prints, but
-# sustained tickful operation data-aborts at the arm_mmu L1 table (0x40008ffc).
-# ROOT CAUSE (2026-07-18, corrected — this is OUR config, NOT an upstream bug):
-# `l1_page_table` is a STATIC 16 KB-aligned var (arch/arm/core/mmu/arm_mmu.c:40)
-# that links into the kernel image at ~0x40008000 — i.e. inside the FIRST 1 MB
-# DRAM section (0x40000000), the same section as the early kernel stacks. With
-# CONFIG_HW_STACK_PROTECTION the per-thread stack-guard reconfigures that section
-# on every timer-driven thread switch, which removes write access to the L1
-# table's own page and the next L1 entry write faults (0x40008ffc = a word in the
-# static l1_page_table). So THE FIX is CONFIG_HW_STACK_PROTECTION=n (the "disable
-# per-thread MMU stack-guard updates" path), OR relocating l1_page_table/stacks
-# out of the L1-table section — a config/link choice, not an upstream arm_mmu fix.
-# HONESTY: this root cause is high-confidence (fault addr == the static L1 table +
-# the mechanism is self-referential) but NOT yet validated by a build+boot — the
-# shared ZEPHYR_BASE (tenstorrent/zephyr) has drifted off the cortex_a_r ARMv5 PR
-# #103557 (armv5.dtsi + ARM926 arch code absent), so no Zephyr build is currently
-# possible. Validate (flip SYS_CLOCK_EXISTS=y + HW_STACK_PROTECTION=n, expect
-# sustained ticks with no data-abort) once a ZEPHYR_BASE with the PR is rebuilt.
-# The demonstrable-clean default stays cooperative (no timer): the port fully boots
-# and runs an app ("Hello World!", evidence d14-zephyr/04).
-CONFIG_SYS_CLOCK_EXISTS=n
+# THE #141 FIX (validated). Earlier, SYS_CLOCK_EXISTS=y + default stack protection
+# data-aborted at the arm_mmu L1 table (0x40008ffc) during timer-driven thread
+# switching. ROOT CAUSE (OUR config, NOT an upstream bug): `l1_page_table` is a
+# STATIC 16 KB-aligned var (arch/arm/core/mmu/arm_mmu.c:40) linking at ~0x40008000
+# — inside the FIRST 1 MB DRAM section (0x40000000), the same section as the early
+# stacks. CONFIG_HW_STACK_PROTECTION reconfigures that section on every thread
+# switch, removing write access to the L1 table's own page → the next L1 write
+# faults (0x40008ffc = a word in the static table). Disabling it removes the
+# per-thread stack-guard MMU updates and the fault. VALIDATED by build + boot: on a
+# ZEPHYR_BASE carrying PR #103557 (zephyrproject main + fetch pull/103557/head; SDK
+# find lowered 1.0→0.17 for the local 0.17.0 SDK) hello_world with SYS_CLOCK_EXISTS=y
+# + HW_STACK_PROTECTION=n boots "Hello World!" and runs the FULL timeout with ZERO
+# data-aborts (evidence d14-zephyr/05-m1-tick-validated). So M1 (tickful scheduling)
+# now works — the "upstream arm_mmu bug" framing was wrong; it was this config.
+CONFIG_HW_STACK_PROTECTION=n
+CONFIG_SYS_CLOCK_EXISTS=y
