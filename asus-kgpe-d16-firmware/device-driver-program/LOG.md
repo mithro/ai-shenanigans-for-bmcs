@@ -28,8 +28,42 @@
      dismissed? precedent: the NC-SI "impossible" claim was already wrong).
   3. **Zephyr+U-Boot stack breakdown** — concrete per-device driver task list for the
      two emptiest columns + challenge every U-Boot Ⓝ.
-  Findings will become tracked tasks (progress toward (d)) or honesty corrections to the
-  matrix (toward (a)/(c)). Results pending.
+  Findings become tracked tasks (toward (d)) or honesty corrections (toward (a)/(c)).
+- **ALL 3 AUDITORS RETURNED — the audit DID find real issues (so gates (a)/(d) are not
+  yet vacuously satisfied; there was genuine work to surface):**
+  - **Auditor 1 (missed devices):** 1 real omission + 3 under-dispositions. **PECI engine**
+    (balls A9 PECIO / B9 PECII) — a real AST2050 SoC block, entirely unenumerated (zero
+    "peci" hits in the matrix), despite the project's OWN ADC-row precedent (a repurposed
+    engine still gets a row). → **task #145** (+ GAP2 WDTRST-on-D9, GAP3 ROMA0→QQ11 strap,
+    GAP4 NC UART1 modem lines). Otherwise the enumeration is ~99% complete at block level.
+  - **Auditor 2 (honesty / wrongly-dismissed):** the standout over-claim is **row 17
+    mux-fabric LS=✅**, contradicted by its OWN evidence — the empty flash socket pulls
+    `BMC_PRESENT#` high → U23 gives QU5 select-ownership to the SP5100 permanently, so the
+    BMC's own select was BLOCKED and the SPD read only worked because the HOST steered the
+    mux. **Corrected: row 17 LS/LU ✅→🔶** (data-path proven, BMC-autonomous select not
+    silicon-validated); row 18 SPD carries the same U23 caveat; **row 27 "reset" corrected**
+    (on/off silicon-proven, reset QEMU-proven only). **Zero wrongly-dismissed Ⓝ/🔷 found**
+    (good for gate-(c) — TPM/QU6/jc42-TSOD/PWM/ADC-LS/JTAG/PIKE2/ENTEST all hold up). Also
+    flagged the **Zephyr rows still blaming "upstream arm_mmu"** for the tick failure —
+    **corrected** to the project's own newer `d14-zephyr/05` finding (root cause was OUR
+    `HW_STACK_PROTECTION`, #141 DONE; do NOT blame upstream). SB-TSI ~14°C is implausibly
+    cold (calibration caveat, not an over-claim).
+  - **Auditor 3 (Zephyr/U-Boot):** concrete per-device driver breakdown. **U-Boot needs
+    essentially NO new drivers** (Raptor covers boot); its defect is understated cells
+    (FRU row 20 Ⓝ, power-GPIO row 27 ⬜, WDT row 38 ⬜ all understate real Raptor coverage
+    → should be 🔶) + the ADC block. **ADC FAITHFULNESS VIOLATION:** the repo's own datasheet
+    extract (`AST2050-MEMORY-MAP.md`) says the ADC is ABSENT on the G3 (a G4/AST2400
+    addition) and IRQ22=RTC-second, yet row 41 wires a G4 ADC at 0x1E6E9000/IRQ22 → **task
+    #146** (resolve existence; likely a phantom to remove, like the #144 set). **Zephyr:**
+    ordered by leverage → **Z1 GPIO #147** (unlocks rows 27/28/29/32/33), **Z2 I2C #148**
+    (unlocks 8 on-bus device rows), **Z3 WDT #149** (small, boot-critical, gives the
+    dedicated WDT-reset transcript row 38 lacks); all build on #141 (done) + the static-
+    flat-map MMU pattern; silicon = JTAG-load zephyr.bin→DRAM (socket empty, so NOT netboot).
+- **Net gate-(a)/(c)/(d):** 4 substantive honesty corrections applied to DEVICE-MATRIX
+  (rows 17/18/27/30); 5 new tasks created (#145 PECI, #146 ADC-faithfulness, #147/#148/#149
+  Zephyr GPIO/I2C/WDT). Remaining matrix↔FULL-TASK-LIST doc-sync (FRU/power/WDT U-Boot
+  understatements, DDC/EDID + TSOD + SDMC/SCU Zephyr cells) queued as a follow-up sync.
+  The gates are NOT satisfied — the audits found real work, which IS the honest answer.
 
 ## 2026-07-18 — Gate-(b) review round 2 COMPLETE: 3 sub-agents, ~2500 LOC, 3 real bugs found (2 fixed, 1 routed)
 

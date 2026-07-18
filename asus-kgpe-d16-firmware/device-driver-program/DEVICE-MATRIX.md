@@ -91,7 +91,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 |---|---|---|---|---|---|---|---|---|---|---|
 | 15 | AST2050 I2C controller (8 engines) | I2C | ✅ | ✅ | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 16 | W83795G hwmon (QU4, I2C2 @0x2f) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
@@ -104,7 +104,16 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 - **15** i2cdetect + AC-timing fix proven on silicon. UB-Q = Raptor `libi2c`. D08.
 - **16** W83795 model silicon-seeded (fan1=2641 etc.); hwmon both sides. D08.
-- **17/18** fabric + real SPD read by the BMC on silicon (`evidence/d08-spd-silicon/`). D08.
+- **17/18** fabric DATA PATH proven on silicon (real 256-byte SPD read, CRC 0xf0b4,
+  part matches host dmidecode; `evidence/d08-spd-silicon/`). **HONESTY CORRECTION
+  (2026-07-18 audit):** row 17 LS/LU dropped ✅→🔶 — on THIS rig the BMC flash socket is
+  empty → `BMC_PRESENT#` pulls high → U23 hands QU5 select-ownership to the SP5100
+  PERMANENTLY, so the BMC's OWN QU5 select (the defining function of the fabric) is
+  BLOCKED; the SPD read only worked because the HOST steered the mux (`setpci` on the
+  SP5100), per the evidence README's own "board-arbitration reality". BMC-autonomous
+  select is validated in QEMU (LQ ✅, model drives it) but NOT on this silicon rig
+  (LS/LU 🔶, data-path only, channel-select host-assisted). Row 18 SPD read is genuine
+  but carries the same U23 caveat (BMC-autonomous SPD inventory not silicon-demonstrated). D08.
 - **19** the rig's A2 UDIMM has SPD byte32=0 (no TS) → 0x19 NAKs on QEMU+silicon; the `jc42` model is kept available for TS-equipped DIMMs. Ⓝ for this rig. D08.
 - **20** FRU EEPROM DONE both sides (2026-07-18): I2C5/i2c-4 enabled, at24 24c08 binds 0x54-0x57 on silicon (present but BLANK 0xff — ASUS unprogrammed) and in QEMU (blank model); `evidence/d08-fru/`. Corrects §10.2 (0x54, not 0x50).
 - **21–22** W83601G U27/U28: **BOTH-SIDES DONE** (datasheet-faithful `hw/gpio/w83601g.c`, `scripts/w83601g-test.py` 19/19 PASS incl. LED-drive; CI `boot-w83601g`; **silicon LED-drive proven on BOTH 0x18 and 0x19 — CR03/CR01 write + readback + restore**, evidence d08-w83601g/03; CR21 silicon-resolved to 0x13). No in-kernel driver by nature (raw userspace SMBus) → LQ/LS/LU all via userspace. **23** SB-TSI (D9): **QEMU DONE** (`hw/sensor/sbtsi.c`, `scripts/sbtsi-test.py` 8/8, CI `boot-sbtsi`); silicon needs host-CPU-on. **24–25** PSU PMBus (I2C1), SMBus-ALERT (I2C7): still to model (task #135). See FULL-TASK-LIST.md D3/D4/D9.
@@ -118,7 +127,14 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 28 | Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 | 29 | Platform control (CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCIRST#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 
-- **27** power on/off/reset both sides (`f2-power-sysfs` + plug-verified). GPIOB6 schematic(SYS_PWRGD)-vs-RE(reset-req) net-name conflict unresolved (audit #9). D09.
+- **27** power control both sides. **HONESTY CORRECTION (2026-07-18 audit):** power
+  ON/OFF are silicon-proven (`evidence/real-hw-f2sta/power-on-A4-fix.txt`: BMC drove the
+  plug 3W→103W ON, 46W→3W OFF, A4-lockout fix); **RESET is QEMU-proven only** — the
+  `f2-power-sysfs-onoffreset-PASS.txt` transcript is the QEMU run (`evidence/qemu/`), no
+  separate silicon reset transcript (same GPIO-pulse mechanism, so low-risk, but capture
+  one for a clean silicon reset ✅). U-Boot UQ/US ⬜ UNDERSTATES Raptor (commit 323b3ac
+  drives bank-A power/reset GPIO at boot_init) → should be 🔶. GPIOB6 schematic(SYS_PWRGD)
+  -vs-RE(reset-req) net-name conflict unresolved (audit #9). D09.
 - **28/29** ~10 §11 signals not yet mapped in DTS `gpio-line-names`; no silicon validation. D09.
 
 ## Serial (§12)
@@ -128,7 +144,20 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | 🔶 | Ⓝ | Ⓝ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 
-- **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the AST2050 port boots and runs application code — `*** Booting Zephyr OS ***` + `Hello World! kgpe_d16_bmc/ast2050` — via a static-mapped polling SoC console (`soc/aspeed/ast2050/console.c`, printk+stdout hooks), evidence `d14-zephyr/03`. The M1 VIC (`vic.c`) + aspeed timer (`aspeed_timer.c`) are written and deliver interrupts, but sustained tickful scheduling data-aborts at the arm_mmu L1 table (same brand-new ARM9 `arm_mmu` dynamic-mapping gap that also blocks `uart_ns16550.c`); left cooperative by default. Per-device Zephyr drivers build on this once preemption is clean. D10/D11/D14.
+- **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the
+  AST2050 port boots and runs application code — `*** Booting Zephyr OS ***` +
+  `Hello World! kgpe_d16_bmc/ast2050` — via a static-mapped polling SoC console
+  (`soc/aspeed/ast2050/console.c`, printk+stdout hooks). The M1 VIC (`vic.c`) + aspeed
+  timer (`aspeed_timer.c`) deliver interrupts and now run **SUSTAINED tickful scheduling**.
+  **HONESTY CORRECTION (2026-07-18 audit): the earlier "sustained tick data-aborts at the
+  upstream ARM9 arm_mmu L1 table" attribution was WRONG** — per the newer evidence
+  `d14-zephyr/05-m1-tick-validated`, the root cause was `CONFIG_HW_STACK_PROTECTION` (OUR
+  config: the per-thread stack-guard MMU reconfig removed write access from the static
+  `l1_page_table`'s own page), NOT an upstream bug. Fix = `HW_STACK_PROTECTION=n` +
+  `SYS_CLOCK_EXISTS=y`; the app then runs the FULL 12 s with 0 data-aborts (task #141
+  DONE). Do NOT blame upstream. (The standard `uart_ns16550.c` console IS still blocked
+  by the separate `z_phys_map` device-VA gap — that one is real + open.) Per-device Zephyr
+  drivers (GPIO #147, I2C #148, WDT #149) build on this now-clean tick. D10/D11/D14.
 - **31** SOL essentially unimplemented end-to-end (audit gap #2): no QU8-mux/Super-I/O model, no Linux SOL session, no host bytes on silicon. D10.
 
 ## JTAG / LEDs / clock / straps (§13)
