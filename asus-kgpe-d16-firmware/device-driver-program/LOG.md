@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C4 BISECTED to the I2C mux fabric commit (be673b284e) — strap EXONERATED
+
+- **Ran the bisect (resource-limited builds via `systemd-run --user --scope
+  -p CPUQuota=600% -p MemoryMax=8G nice -n 15`, C4 flash built once + reused).**
+  Signal = does QEMU exit early (guest WDT reset = BAD) or survive 100s (GOOD):
+  - `c67c1b6bda` (MAC2) → reset @27s = **BAD**
+  - `4ff6a74504` (strap) → reset @32s = **BAD**  ← my 3-turn prime suspect, now EXONERATED
+  - `be673b284e` (I2C mux fabric) → reset @33s = **BAD**
+  - `ae204f8` (merge just before the device work) → **survived 110s = GOOD**, and the
+    serial progressed FURTHER (`aim_function_execute netGetCurrentIfConfig`) where the
+    bad builds hang at `route: SIOCADDRT`.
+- **Culprit = `be673b284e` "hw: KGPE-D16 I2C mux fabric (QU9/QU5/U23) + JC-42.4
+  TSOD"** (adds `hw/i2c/kgpe_d16_i2c_fabric.c`, `hw/sensor/jc42.c`, wires them + 2
+  GPIO board-glue outputs in aspeed.c/aspeed_gpio.c). The C410X vendor firmware
+  probes I2C during post-network init; my mux fabric model hangs that access → the
+  daemon blocks → the vendor fw's `nowayout` 10s ASPEED WDT isn't petted → reset.
+  Faithfulness confirmed: it's MY model, exactly as the principle says. Lesson: a
+  git-bisect (tests states) beat 3 turns of the plausible-but-wrong strap theory.
+- **Next:** read `kgpe_d16_i2c_fabric.c` / `jc42.c` for the non-I2C-compliant
+  hang (bus-hold / infinite forward / bad NAK) and fix it faithfully, then re-boot
+  C4 to confirm it reaches steady-state. See [[c4-c2full-legacy-boot-regression-suspect]].
+
 ## 2026-07-18 — C2-full CI-confirmed (PASS); C4 confirmed a REAL regression (bisect range bracketed)
 
 - **C2-full: independent CI confirmation.** The run for the mkflash fix (47e073d)
