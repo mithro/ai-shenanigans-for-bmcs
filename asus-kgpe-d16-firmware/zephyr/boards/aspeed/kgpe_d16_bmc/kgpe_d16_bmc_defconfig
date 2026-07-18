@@ -7,3 +7,9 @@ CONFIG_UART_NS16550=y
 # Milestone 0: polling console, no system timer yet. M1 adds the aspeed timer.
 CONFIG_SYS_CLOCK_EXISTS=n
 CONFIG_MULTITHREADING=y
+# NOTE (M0 banner blocker): under CONFIG_MMU the ns16550 DEVICE_MMIO_MAP remaps
+# the UART to a virtual address that the arm_mmu (ARM926) is not translating
+# back to phys 0x1e784000 -> the driver busy-polls an unimplemented address
+# (QEMU trace: repeated aspeed.io read @0x1e7ff014) and never prints. Next:
+# make the console use the flat/identity APB mapping (or fix the ARM926
+# device-MMIO mapping). CONFIG_KERNEL_DIRECT_MAP=y alone did not resolve it.
