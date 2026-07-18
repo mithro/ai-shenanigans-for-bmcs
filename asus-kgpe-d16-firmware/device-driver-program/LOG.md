@@ -1,5 +1,37 @@
 # Device-driver program — running log
 
+## 2026-07-18 — completeness audit + Zephyr feasibility; honesty fixes
+
+- **Completeness audit (skeptical sub-agent)** — key findings ACTED ON:
+  - SILICON-STATUS row #5 still said "no DIMM SPDs / unreachable by BMC"
+    (contradicted its own D08 banner) → FIXED to ✅/✅ with honest scope.
+  - SILICON-STATUS row #9 said NC-SI "implementation not started" (stale) →
+    FIXED to reflect D07 QEMU pass + the honest silicon caveat.
+  - Header date "2026-07-16" stale → bumped to 2026-07-18.
+  - D07 evidence file `01-silicon-82574L-nvm-...` renamed to
+    `01-host-ethtool-82574L-nvm-...` — it's a HOST ethtool NVM dump, NOT a
+    BMC-side silicon discovery (the audit rightly flagged the name as
+    inviting miscount).
+  - D02 U-Boot SPI was understated ⬜ → the Raptor U-Boot QEMU log shows
+    `Flash: SPI Flash ID` working → marked ✅ QEMU.
+  - D02 SPI silicon "Ⓝ" corrected to "rig-blocked" (socket populated by
+    design; empty only on this bench — not n/a).
+  - D11 WDT-silicon "✅ 120 s reset observed" has NO evidence transcript →
+    marked UNCITED pending a captured reset log.
+  - Audit's honest scope reminders recorded: D05 USB-silicon = usbip-vudc
+    (not the real vhub datapath); D08 SPD-silicon select-drive came from the
+    SP5100 (data path proven, BMC-owns-fabric not); NC-SI-silicon not run.
+  - Real functional gaps confirmed: SOL end-to-end, LPC mailbox/snoop/vUART,
+    5 D08 far-end I2C devices, DDC/EDID, MTD write path, and the whole
+    Zephyr column.
+- **Zephyr feasibility (research sub-agent) — BREAKTHROUGH:** Zephyr now has
+  ARM926EJ-S (ARMv5TEJ) support from Microchip's SAM9X7 work — scaffolding
+  merged in `main` (PR #101016), arch core (~770 LOC) in open PR #103557, and
+  the existing `uart_ns16550.c` fits the AST2050 UART. So D14 is a tractable
+  SoC/board port (reuse the ARM9 core), not a from-scratch arch port.
+  Smallest milestone: `hello_world` banner under the faithful QEMU AST2050.
+  TASKLIST D14 rewritten with the concrete milestone ladder.
+
 ## 2026-07-18 — D15/U-Boot reframed HONESTLY: Raptor U-Boot meets the requirement
 
 - Re-merged origin/main (already up to date — merged at start via a981389;

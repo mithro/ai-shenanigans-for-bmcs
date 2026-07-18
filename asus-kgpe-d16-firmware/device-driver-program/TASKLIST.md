@@ -84,8 +84,9 @@ gap in the functional requirement. The genuine remaining greenfield column is
 | Layer | Status | Evidence / next step |
 |---|---|---|
 | QEMU model (SMC + flash device on CS0) | ✅ | faithful-QEMU program |
-| U-Boot driver (probe/read/erase/write) | ⬜ | modern U-Boot SPI driver; validate in QEMU |
-| U-Boot silicon validation | 🔶→Ⓝ-partial | **socket empty on the rig** (user-stated); silicon check = controller register behaviour + open-socket reads only; document explicitly |
+| U-Boot driver (probe/read) | ✅ QEMU | Raptor U-Boot `libspi_flash` — QEMU shows `Flash: SPI Flash ID: 1820c2 16 MiB` (`evidence/d15-uboot/`); was understated ⬜ (audit) |
+| U-Boot silicon validation | rig-blocked (not Ⓝ) | the socket is populated **by design** (§4 "socketed"); empty only on THIS bench rig, so silicon SPI r/w is rig-blocked, NOT n/a. On a production board the flash is present |
+| Linux driver (aspeed-smc on G3) | 🔶 | verify mtd probe in QEMU; **no MTD write path exists yet (audit)**; silicon = register-level only (empty socket) |
 | Linux driver (aspeed-smc on G3) | 🔶 | verify mtd probe in QEMU; silicon = register-level only (empty socket) |
 | Linux userspace (mtd-utils read/write in QEMU) | ⬜ | |
 | Zephyr flash driver | ⬜ | QEMU validation; silicon Ⓝ-partial (empty socket) |
@@ -191,7 +192,7 @@ U-Boot access + Zephyr, with the mux *fabric* modeled once):
 | Layer | Status | Evidence / next step |
 |---|---|---|
 | QEMU models | ✅ | faithful-QEMU 108 tests |
-| Linux ×3 | ✅ | g3 VIC irqchip PR #26; clk fixes; WDT proven (120 s reset observed) |
+| Linux ×3 | ✅ (VIC/clk); WDT-silicon UNCITED | g3 VIC irqchip PR #26; clk fixes. **Audit flag:** the "WDT 120 s reset observed on silicon" claim has NO transcript in `evidence/` — treat WDT-silicon as uncited until a reset log is captured (follow-up) |
 | U-Boot (timer/wdt) modern ×2 | ⬜ | |
 | Zephyr (systick-equiv timer, VIC intc, pinctrl/clk) ×2 | ⬜ | core of the Zephyr port |
 
@@ -212,12 +213,23 @@ DDR_THERM monitors) — fans are driven by W83795G FANCTL, not the AST2050 PWM.
 | Board-truth documentation + DTS: no fan on AST2050 PWM; pins as GPIO monitors | ⬜ | fold into D09 |
 
 ### D14 — Zephyr AST2050 port (cross-cutting foundation)
+**Feasibility SETTLED 2026-07-18 (research, cited in LOG): TRACTABLE, not a
+from-scratch arch port.** Zephyr gained ARM926EJ-S (ARMv5TEJ) support in
+2025-26 via Microchip's SAM9X7 work: the Kconfig/toolchain scaffolding
+(`CPU_ARM926EJ_S`, `-mcpu=arm926ej-s`) is **merged in `main`** (PR #101016), and
+the arch core (~770 LOC: reset/vectors/switch/mmu/isr) is in **open PR #103557**.
+The NS16550 console driver Zephyr already ships fits the AST2050 UART
+(0x1e784000) directly — no new console driver. So D14 = reuse the ARM9 core +
+write an AST2050 SoC/board/DTS + one VIC driver (0x1e6c0000).
 | Item | Status | Next step |
 |---|---|---|
-| ARM926EJ-S (ARMv5TEJ) arch support in Zephyr | ⬜ | assess mainline aarch32 state; port minimal arch layer (WallaBMC track) |
-| SoC + board (kgpe-d16-bmc) definition, DTS, linker | ⬜ | |
-| Boot via JTAG-load/netboot path on silicon | ⬜ | same 3-step JTAG chain |
-| Drivers: serial → timer → intc → gpio → i2c → wdt → eth → … (order of need) | ⬜ | each validated QEMU then silicon |
+| ARM926EJ-S arch core | reuse upstream | pull PR #103557's ARMv5 core onto a Zephyr checkout (do NOT rewrite) |
+| AST2050 SoC + board (kgpe-d16-bmc) + DTS + linker | ⬜ | model on Microchip sam9x7 SoC layout |
+| NS16550 console (existing `uart_ns16550.c`) | ⬜ | wire to 0x1e784000 |
+| **Milestone 0**: `hello_world` banner under the faithful QEMU AST2050 (MMU/caches off, timer stubbed) | ⬜ | reset→prep_c→switch→main→banner |
+| VIC intc driver (0x1e6c0000, `ARM_CUSTOM_INTERRUPT_CONTROLLER`) + system timer | ⬜ | Milestone 1: preemptive kernel + shell |
+| Silicon boot via JTAG-load/netboot | ⬜ | same 3-step JTAG chain |
+| Per-device Zephyr drivers (gpio/i2c/wdt/eth) | ⬜ | each validated QEMU then silicon |
 
 ### D15 — U-Boot: functional requirement MET (Raptor); modern port = enhancement
 See the "U-Boot column" section near the top. Summary:
