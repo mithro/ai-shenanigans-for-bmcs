@@ -1,5 +1,37 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C2-full fix CONFIRMED locally (SSH PASS); C4 diagnosed (late-boot WDT reset)
+
+- **C2-full fix verified end-to-end locally** (not just pushed). Built the OpenBMC
+  AST2400 U-Boot, assembled the flash with the fixed `mkflash.py`, booted via
+  `ssh-test.py`: the init ramdisk now `Verifying Checksum ... OK` (was "Bad Data
+  CRC"), `Starting kernel`, Linux 6.6.70 boots, `dropbear: listening`, SSH connects
+  → **`C2 RESULT: PASS`**. So the initrd-truncation root cause + fix are proven.
+- **C4 reproduced + diagnosed locally.** Built the C4 vendor flash (build-c4-flash.py
+  from the committed `c410xbmc135.zip` + the new u-boot) and booted `-M kgpe-d16-bmc
+  -m 128 -no-reboot` with serial capture. The Dell/Avocent MergePoint firmware boots
+  FAR: U-Boot ("SOC: AST1100/AST2050", "DRAM: 56 MiB") → vendor Linux → ASPEED WDT
+  installed (irq 27, **heartbeat=10s, nowayout=1**) → BusyBox init → eth0 DHCP
+  (10.0.2.15) → network/IPMI config → then QEMU exits rc=0 = a GUEST RESET. So C4 is
+  a **late-boot reset**, NOT an early-boot / strap-breaks-boot failure (C-UBOOT +
+  C2-full + all F-tests boot fine on the same binary).
+- **Mechanism:** the firmware reaches network-up (~18s, `waitforsm ... ended sec:18`)
+  then resets — consistent with the `nowayout` 10 s WDT firing once the boot state
+  machine stops petting it (before the web/steady-state daemon takes over).
+  `waitforaim: aim_config_get_int failed` is a NON-fatal early warning (later
+  `aim_function_execute() returned success`), and there are NO I2C/EEPROM/probe
+  errors in the log — so it's not an obvious device-model break.
+- **Leading (unconfirmed) hypothesis:** the measured-strap commit `4ff6a74504`
+  (SCU70 `0x00819582`, which also changed reported DRAM 128MB→56MB) affects the
+  C410X firmware — C4 runs *C410X* vendor firmware (a DIFFERENT board) on the
+  kgpe-d16 machine purely as a SoC-faithfulness probe, so a board-specific strap the
+  machine now reports faithfully for KGPE-D16 may not suit the C410X firmware. If
+  confirmed, the fix belongs in the C4 TEST (override the strap to a C410X-suitable
+  value for that probe), NOT the machine default (0x00819582 is correct for the real
+  KGPE-D16). **Confirm next:** rebuild QEMU with the pre-4ff6a74504 strap and re-boot
+  C4 (bounded bisect). Deferred to fresh context, not rushed. See
+  [[c4-c2full-legacy-boot-regression-suspect]] — C2-full half RESOLVED.
+
 ## 2026-07-18 — C2-full FIXED: it was MY regression (grown initramfs truncated by mkflash), NOT the firmware
 
 - **Followed the faithfulness principle to a real bug in my own tooling.** The
