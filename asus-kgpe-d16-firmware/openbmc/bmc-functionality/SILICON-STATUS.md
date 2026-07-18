@@ -22,6 +22,18 @@ the datasheet — and CORRECTING
 > *gadget* direction (the AST2050 has exactly the right silicon for it), and the
 > enumeration gap was a software-harness problem, not a hardware limit.
 
+> **2026-07-18 UPDATE — #5 DIMM inventory is now demonstrated on silicon.**
+> The BMC read the real DIMM's 256-byte SPD over its own I2C2 engine through
+> the QU9/QU5 mux fabric (`at24 15-0051`, part `RMR5030EF68F9W1600`, CRC
+> 0xf0b4 == host `dmidecode`; `evidence/d08-spd-silicon/`). The old "SPDs on
+> the host SMBus, not a BMC bus" verdict was wrong: the BMC's I2C2 reaches the
+> DIMM SPD through the netlist-traced QU9/QU5/U23 fabric. On this
+> flash-socket-empty rig the SP5100 owns the mux selects (BMC_PRESENT# high),
+> so the mux was pointed at bank Y2 from the SP5100 side; the BMC's SPD data
+> path is identical to a production board where the BMC (BMC_PRESENT# low)
+> drives the selects itself. QEMU carries the exact SPD and models the full
+> fabric (see `device-driver-program/` D08).
+
 Those corrections are folded in below. This is the candid ground
 truth, not a summary of claims. Legend: ✅ demonstrated · ◐ partial/scoped · ✋ architecturally
 bounded (cannot be fully delivered on this board) · ✗ not yet on this target.
