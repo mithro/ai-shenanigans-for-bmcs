@@ -1,0 +1,204 @@
+boot: /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -monitor none -serial stdio -nic user,model=ftgmac100,hostfwd=tcp::2225-:22 -nic user,model=ftgmac100 -kernel /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/out/zImage-kgpe-d16 -initrd /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/initramfs/out/initramfs.cpio.gz -dtb /tmp/tmpulskqzdp.dtb -append console=ttyS4,115200n8 earlyprintk
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #16 Sat Jul 18 09:55:53 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Reserved memory: created DMA memory pool at 0x43800000, size 8 MiB
+[    0.000000] OF: reserved mem: initialized node region@43800000, compatible id shared-dma-pool
+[    0.000000] OF: reserved mem: 0x43800000..0x43ffffff (8192 KiB) nomap non-reusable region@43800000
+[    0.000000] cma: Reserved 16 MiB at 0x47000000 on node -1
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000]   node   0: [mem 0x0000000043800000-0x0000000043ffffff]
+[    0.000000]   node   0: [mem 0x0000000044000000-0x0000000047ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk
+[    0.000000] Unknown kernel command line parameters "earlyprintk", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 32512
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 88604K/131072K available (8192K kernel code, 985K rwdata, 1996K rodata, 1024K init, 188K bss, 26084K reserved, 16384K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 31243 entries in 62 pages
+[    0.000000] ftrace: allocated 62 pages with 5 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] aspeed-g3-vic: SENSE=0x903897fe EVENT=0x983f97fe DUAL=0x7c00000 edge_sources=0x6fc76801
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 81547112397 ns
+[    0.000190] sched_clock: 32 bits at 23MHz, resolution 42ns, wraps every 91625968618ns
+[    0.002239] Switching to timer-based delay loop, resolution 42ns
+[    0.005900] Calibrating delay loop (skipped), value calculated using timer frequency.. 46.87 BogoMIPS (lpj=234375)
+[    0.006124] CPU: Testing write buffer coherency: ok
+[    0.007411] pid_max: default: 32768 minimum: 301
+[    0.022959] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.023037] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.063412] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.063976] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.065129] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.068208] ASPEED Unknown rev A0 (00000202)
+[    0.076599] devtmpfs: initialized
+[    0.103012] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.103148] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.105404] pinctrl core: initialized pinctrl subsystem
+[    0.116611] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.126430] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.196047] usbcore: registered new interface driver usbfs
+[    0.196397] usbcore: registered new interface driver hub
+[    0.196593] usbcore: registered new device driver usb
+[    0.197108] mc: Linux media interface: v0.10
+[    0.197389] videodev: Linux video capture interface: v2.00
+[    0.197557] pps_core: LinuxPPS API ver. 1 registered
+[    0.197578] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.197684] PTP clock support registered
+[    0.197789] EDAC MC: Ver: 3.0.0
+[    0.256437] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.300362] NET: Registered PF_INET protocol family
+[    0.301921] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.305807] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.305905] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.305988] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.306074] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.306207] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.307527] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.307753] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.309500] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.332024] RPC: Registered named UNIX socket transport module.
+[    0.332086] RPC: Registered udp transport module.
+[    0.332105] RPC: Registered tcp transport module.
+[    0.332120] RPC: Registered tcp-with-tls transport module.
+[    0.332137] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.341275] Unpacking initramfs...
+[    0.359580] workingset: timestamp_bits=30 max_order=15 bucket_order=0
+[    0.360752] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.368684] NFS: Registering the id_resolver key type
+[    0.369763] Key type id_resolver registered
+[    0.369808] Key type id_legacy registered
+[    0.370112] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.375581] NET: Registered PF_ALG protocol family
+[    0.376869] io scheduler bfq registered
+[    0.448140] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.488355] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1464843) is a ASPEED VUART
+[    0.522080] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.523389] printk: console [ttyS4] enabled
+[    0.618042] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.702661] random: crng init done
+[    0.707501] loop: module loaded
+[    0.980975] zram: Added device: zram0
+[    0.990572] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    1.008311] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    1.009620] RTL8201CP Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    1.012691] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at 41264831
+[    1.013956] ftgmac100 1e680000.ethernet: Read MAC address 52:54:00:12:34:57 from chip
+[    1.014379] ftgmac100 1e680000.ethernet: Using NCSI interface
+[    1.016222] ftgmac100 1e680000.ethernet eth1: irq 22, mapped at c1864810
+[    1.019946] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    1.020793] dummy_hcd dummy_hcd.0: Dummy host controller
+[    1.021263] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    1.078117] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    1.078442] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.078661] usb usb1: Product: Dummy host controller
+[    1.078821] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    1.079002] usb usb1: SerialNumber: dummy_hcd.0
+[    1.090258] hub 1-0:1.0: USB hub found
+[    1.091117] hub 1-0:1.0: 1 port detected
+[    1.172777] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+[    1.191326] Freeing initrd memory: 3052K
+[    1.213900] i2c_dev: i2c /dev entries driver
+[    1.220186] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 24
+[    1.243844] i2c i2c-1: Added multiplexed i2c bus 14
+[    1.282002] i2c i2c-1: Added multiplexed i2c bus 15
+[    1.283535] i2c i2c-1: Added multiplexed i2c bus 16
+[    1.283861] i2c-mux-gpio i2cmux: 3 port mux on 1e78a080.i2c-bus adapter
+[    1.299023] aspeed-video 1e700000.video: irq 25
+[    1.300187] aspeed-video 1e700000.video: alloc mem size(24576) at 0x47048000 for jpeg header
+[    1.305432] Driver for 1-wire Dallas network protocol.
+[    1.319681] usbcore: registered new interface driver usbhid
+[    1.320029] usbhid: USB HID core driver
+[    1.327245] NET: Registered PF_INET6 protocol family
+[    1.372282] Segment Routing with IPv6
+[    1.372800] In-situ OAM (IOAM) with IPv6
+[    1.374323] NET: Registered PF_PACKET protocol family
+[    1.375377] 8021q: 802.1Q VLAN Support v1.8
+[    1.376145] Key type dns_resolver registered
+[    1.494419] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    1.494753] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+[    1.497117] printk: console [netcon0] enabled
+[    1.497372] netconsole: network logging started
+[    1.501911] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    1.505666] clk: Disabling unused clocks
+[    1.543719] Freeing unused kernel image (initmem) memory: 1024K
+[    1.545502] Checked W+X mappings: passed, no W+X pages found
+[    1.545878] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+[    1.757109] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+eth0: 10.0.2.15
+Fingerprint: SHA256:yWZFg9u46HEuK8PEQJDdC+GDVFX0gGkUJbxUDZH/3Lc
+[70] Jan 01 00:00:02 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86399sec preferred_lft 14399sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (--- ssh attempt 1 ---
+=== interfaces ===
+eth0
+eth1
+lo
+=== dmesg NCSI ===
+[    1.014379] ftgmac100 1e680000.ethernet: Using NCSI interface
+[   13.519582] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.520123] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.520482] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.520824] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.521228] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.521643] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.521995] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.522357] ftgmac100 1e680000.ethernet eth1: NCSI: Handler for packet type 0x82 returned -19
+[   13.523818] ftgmac100 1e680000.ethernet eth1: NCSI: 'bad' packet ignored for type 0xd0
+[   13.538691] ftgmac100 1e680000.ethernet eth1: NCSI: No channel with link found, configuring channel 0
+[   13.539596] ftgmac100 1e680000.ethernet eth1: NCSI: No GMA handler available for MFR-ID (0x0)
+=== eth1 state ===
+1
+unknown
+NCSI_DISCOVERY_OK
+NCSI_CARRIER_UP
+NCSI_GUEST_DONE
+
+Warning: Permanently added '[127.0.0.1]:2225' (ED25519) to the list of known hosts.
++ echo '=== interfaces ==='
++ ls /sys/class/net/
++ '[' -e /sys/class/net/eth1 ]
++ ip link set eth1 up
++ sleep 8
++ echo '=== dmesg NCSI ==='
++ + grep -i ncsi
+dmesg
++ echo '=== eth1 state ==='
++ cat /sys/class/net/eth1/carrier
++ cat /sys/class/net/eth1/operstate
++ dmesg
++ grep -qi 'ncsi.*channel\|NCSI: .*package\|ncsi.*turned on\|ncsi.*link up'
++ echo NCSI_DISCOVERY_OK
++ cat /sys/class/net/eth1/carrier
++ '[' 1 '=' 1 ]
++ echo NCSI_CARRIER_UP
++ echo NCSI_GUEST_DONE
+
+
+NCSI RESULT: PASS

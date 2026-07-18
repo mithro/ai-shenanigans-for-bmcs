@@ -232,6 +232,20 @@
 	phy-mode = "rmii";
 };
 
+/*
+ * MAC2 (0x1e680000) = the RMII2 NC-SI sideband to the two Intel 82574L host
+ * NICs (schematic §7; SCU70[8:6]=110 strap-enables it on the real board).
+ * Disabled by DEFAULT so the single-NIC oracle boots (C2/C4) and the plain
+ * NFS/SSH boots are unaffected — MAC1 then has no QEMU backend. The D07 NC-SI
+ * test enables this node (fdtput status=okay) and runs QEMU with a second
+ * -nic whose slirp backend answers NC-SI. `use-ncsi` selects net/ncsi (no
+ * MDIO PHY on this channel). See device-driver-program/ D07.
+ */
+&mac1 {
+	status = "disabled";
+	use-ncsi;
+};
+
 &i2c1 {
 	status = "okay";
 

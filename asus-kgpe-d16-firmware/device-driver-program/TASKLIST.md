@@ -115,10 +115,11 @@ NVMs enable MNGM? Dump via host `ethtool -e` or observe NC-SI responses on
 silicon.**
 | Layer | Status | Evidence / next step |
 |---|---|---|
-| QEMU model (2nd MAC in RMII/NC-SI mode + NC-SI-responder 82574L model) | ⬜ | MAC2 device exists (SoC `macs_num=2`, 0x1E680000) but board `macs_mask=ASPEED_MAC0_ON` leaves it unwired; ftgmac100.c has no NC-SI responder. RMII2 is multi-drop to LU1+LU2, 50 MHz REF from clockgen `CU2` (external — nothing to model), `RMII2RXER` unconnected |
-| Reconcile F7-NCSI.md (its "not wired" verdict was MAC1-scoped) | ⬜ | update F7 + SILICON-STATUS #9 with the schematic §7 channel-2 facts |
-| Linux ncsi stack (ftgmac100 mac2 + net/ncsi) QEMU validation | ⬜ | DTS mac2 node exists but `status="disabled"`, no `use-ncsi`; `CONFIG_NET_NCSI` not built; recipe in F7-NCSI.md:256-269 |
-| Silicon validation | ⬜ | **power-domain ANSWERED: LU1/LU2 are on +3V3_AUX (netlist)** — NC-SI testable with host off. Need 82574L datasheet (not in repo) for NC-SI enable/EEPROM config |
+| QEMU: MAC2 wired (`macs_mask = MAC0\|MAC1`) faithful to schematic | ✅ | both MACs now instantiated; MAC1 peered only when a 2nd -nic is supplied (oracles unaffected; C2 still PASS) |
+| Linux ncsi stack (ftgmac100 mac1 + net/ncsi) QEMU validation | ✅ | **`NCSI RESULT: PASS`** — net/ncsi discovers + configures a channel via the slirp responder, eth1 carrier up (`evidence/d07-ncsi/`, CI `boot-ncsi`); `CONFIG_NET_NCSI`+OEM built; DTS mac1 `use-ncsi` (disabled by default) |
+| Reconcile F7-NCSI.md (its "not wired" verdict was MAC1-scoped) | ✅ | F7 corrected + SILICON-STATUS #9 REOPENED (done 2026-07-18) |
+| QEMU: faithful 82574L NC-SI responder (2 packages + Intel OEM 0x06/0x20) | ⬜ | Phase 2: slirp responder is generic (MFR-ID 0x0); a real 82574L responder (mfr 0x157) belongs in the MAC model (libslirp is external). Facts pinned (82574 datasheet, D07 header) |
+| Silicon validation | ⬜ | MAC2 strap-enabled (SCU70=0x00819582); LU1/LU2 on +3V3_AUX (host-off testable). Open: do the ASUS NIC NVMs enable MNGM? Check `ethtool -e` / observe NC-SI on silicon |
 | U-Boot / Zephyr NC-SI | ⬜ | scope after Linux path proven |
 
 ### D08 — I²C ×8 + board mux fabric + all far-end devices

@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D07 NC-SI Phase 1: Linux stack validated in QEMU
+
+- **`NCSI RESULT: PASS`** — the kernel's net/ncsi discovered + configured a
+  channel on eth1 (MAC2/0x1e680000) and brought carrier up:
+  `ftgmac100 1e680000.ethernet: Using NCSI interface` →
+  `NCSI: ... configuring channel 0` → carrier=1. Evidence
+  `evidence/d07-ncsi/`, CI job `boot-ncsi`.
+- Changes: kgpe-d16-bmc now wires BOTH MACs (`macs_mask=MAC0|MAC1`, faithful
+  to schematic §7 — MAC1 unpeered unless a 2nd -nic is given, so oracles are
+  safe); kernel +CONFIG_NET_NCSI +NCSI_OEM_CMD_{GET_MAC,KEEP_PHY}; QEMU DTS
+  gains a `&mac1 { use-ncsi; status="disabled" }` node (test enables it via
+  fdtput + runs QEMU with a 2nd slirp NIC that answers NC-SI).
+- **Regression clean:** C2 SSH boot still PASS; integration 114/114.
+- Honest scope: Phase 1 proves the LINUX NC-SI software path against the
+  generic slirp responder (returns MFR-ID 0x0). Phase 2 = a faithful 82574L
+  responder (2 packages, Intel OEM mfr 0x157 cmds 0x06/0x20) — belongs in the
+  MAC model since libslirp is an external subproject. Silicon needs the ASUS
+  NIC NVMs to have NC-SI (MNGM) enabled — open question, checkable via
+  `ethtool -e` on the host NICs.
+
 ## 2026-07-18 — 🎉 D08: BMC read the REAL DIMM SPD on silicon
 
 - **The BMC's at24 read the real 256-byte SPD** over I2C2 → QU9 → QU5-Y2 →
