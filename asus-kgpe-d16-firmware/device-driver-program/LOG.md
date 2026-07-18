@@ -47,6 +47,24 @@
   1 verified+routed with a concrete fix. The review process is doing its job (as the
   F7 rglob self-bug earlier). Parent submodule pointer bumped to `eec4fa471c`.
 
+### Gate-(b) COVERAGE MAP (completeness enumeration — gate-d evidence)
+
+Enumerated the full gate-b universe: `git diff --stat origin/ast2050-faithful..HEAD`
+for `hw/**/*.c` (14 modified/new custom files) + the base-branch ast2050 device
+models + the Zephyr SoC code. Coverage status:
+- **Reviewed CLEAN:** aspeed_video_ast2050.c, aspeed_p2a_ast2050.c, ftgmac100.c (G3),
+  kgpe_d16_i2c_fabric.c (round-1 D08).
+- **Reviewed, bug FIXED:** w83795.c (OOB), aspeed_scu.c (SCU78; clock→#55).
+- **Round 3 IN FLIGHT (dispatched 2026-07-18):** Zephyr M1 SoC (vic.c/aspeed_timer.c/
+  console.c/soc.c); aspeed_lpc_ast2050.c + aspeed_udc_ast2050.c; aspeed_smc_ast2050.c
+  + aspeed_rtc_ast2050.c + aspeed_pwm_ast2050.c.
+- **Round 4 IN FLIGHT:** jc42.c + sbtsi.c + w83601g.c (new I2C sensor/expander models).
+- **STILL UNREVIEWED (queued for round 5):** hw/arm/aspeed.c + hw/arm/aspeed_ast2400.c
+  (kgpe-d16-bmc machine wiring / G3 additions), hw/gpio/aspeed_gpio.c (G3 GPIO),
+  hw/misc/aspeed_sdmc.c (SDMC/DDR2). These 4 are the remaining gate-b gap; gate-b is
+  NOT clean-complete until they are reviewed. Honest: do not claim "full code review,
+  no issues" until rounds 3-5 return and their findings are resolved.
+
 # Device-driver program — running log
 
 ## 2026-07-18 — Zephyr ns16550 real-console: still no output via z_phys_map (honest negative; static workaround stays)
