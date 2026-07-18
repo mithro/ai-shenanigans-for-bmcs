@@ -105,11 +105,11 @@ parts.append(
     '<circle cx="152" cy="512" r="7" fill="var(--box)" stroke="var(--green)"'
     ' stroke-width="2.2"/><text class="leg" x="166" y="516">Power</text>'
     '<circle cx="228" cy="512" r="7" fill="var(--box)" stroke="var(--gold)"'
-    ' stroke-width="2.2"/><text class="leg" x="242" y="516">Strap / config</text>'
-    '<circle cx="344" cy="512" r="7" fill="var(--box)" stroke="var(--muted)"'
-    ' stroke-width="2.2"/><text class="leg" x="358" y="516">NC / GND</text>'
-    '<rect x="440" y="505" width="14" height="14" fill="var(--ink)"/>'
-    '<text class="leg" x="460" y="516">Keyed (no pin)</text>')
+    ' stroke-width="2.2"/><text class="leg" x="242" y="516">Strap</text>'
+    '<circle cx="330" cy="512" r="7" fill="var(--box)" stroke="var(--muted)"'
+    ' stroke-width="2.2"/><text class="leg" x="344" y="516">NC / GND</text>'
+    '<rect x="452" y="505" width="14" height="14" fill="var(--ink)"/>'
+    '<text class="leg" x="472" y="516">Keyed (no pin)</text>')
 parts.append(
     '<text class="m" x="596" y="540" text-anchor="end">'
     'odd pins = bottom row (1→13) · even = top row (2→14) · pin 14 (top-right) keyed</text>')
