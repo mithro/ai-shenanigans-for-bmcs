@@ -94,7 +94,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
@@ -123,7 +123,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | ⬜ | ⬜ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 28 | Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 | 29 | Platform control (CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCIRST#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 
@@ -180,7 +180,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ⬜ |
-| 38 | Watchdog (WDT) | wdt | ✅ | ⬜ | ⬜ | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
+| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (G4 phantom in model, remove) | adc | 🔷 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -207,7 +207,12 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 - **QEMU emulation**: ✅ for the SoC core + the boot/sensor/power/video/USB/
   fabric set; ⬜ for LPC mailbox/snoop, DDC/EDID, SOL mux, and 6 I2C far-ends.
 - **U-Boot**: boot-critical devices ✅ both sides (Raptor); the rest Ⓝ (no
-  runtime need). Modern-U-Boot enhancement separate (D15).
+  runtime need). Modern-U-Boot enhancement separate (D15). **Honesty correction
+  (2026-07-18 audit): rows 20/27/38 UQ/US Ⓝ/⬜→🔶** — Raptor U-Boot DOES touch the FRU
+  EEPROM (I2C ch5 `eeprom=y`), power/reset GPIO (bank-A init, commit 323b3ac), and the
+  WDT (`reset.c` reload/restart 0x4755) at boot; those cells understated it. 🔶 not ✅
+  because the driver's PRESENCE ≠ device-specific boot-time validation (mark ✅ only with
+  a transcript exercising that device under Raptor U-Boot).
 - **Linux**: ✅ both sides for the boot/power/sensors/IPMI/eth0/SPD set; the
   open items are NC-SI-silicon (🔷 G3 pinmux), USB-vhub-silicon (🔶),
   SOL (⬜), the 6 I2C far-ends (⬜), DDC/EDID (⬜), MTD-write (⬜), and
