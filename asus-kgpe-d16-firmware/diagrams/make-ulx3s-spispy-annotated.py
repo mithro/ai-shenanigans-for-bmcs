@@ -55,11 +55,21 @@ ay = (spi_box[1] + spi_box[3]) // 2
 d.line((px1, py0 + 60, spi_box[0], ay), fill=RED, width=4)
 d.polygon([(spi_box[0], ay), (spi_box[0] - 15, ay - 9), (spi_box[0] - 15, ay + 9)], fill=RED)
 
-d.text((238, 256), "J1", fill=BLUE, font=f_big)
-d.text((238, 292), "GP0–13", fill=BLUE, font=f_tiny)
-d.text((1690, 250), "J2", fill=BLUE, font=f_big)
-d.text((1636, 288), "GP14–27", fill=BLUE, font=f_tiny)
-d.text((1560, 314), "debug taps only", fill=BLUE, font=f_tiny)
+# J1 label chip in the left white margin, arrow to the header
+d.rectangle((12, 300, 212, 366), fill=WHITE, outline=BLUE, width=3)
+d.text((24, 304), "J1", fill=BLUE, font=f_big)
+d.text((92, 318), "GP0–13", fill=BLUE, font=f_tiny)
+d.line((212, 333, 250, 345), fill=BLUE, width=3)
+d.polygon([(250, 345), (234, 337), (236, 351)], fill=BLUE)
+
+# J2 label chip in the right white margin, arrow to the header
+d.rectangle((1666, 292, 1850, 380), fill=WHITE, outline=BLUE, width=3)
+d.text((1678, 296), "J2", fill=BLUE, font=f_big)
+d.text((1744, 308), "GP14–27", fill=BLUE, font=f_tiny)
+d.text((1678, 346), "debug only", fill=BLUE, font=f_tiny)
+d.line((1666, 330, 1628, 342), fill=BLUE, width=3)
+d.polygon([(1628, 342), (1644, 334), (1642, 348)], fill=BLUE)
+
 d.text((402, 198), "US1 (FTDI/prog → ttyUSB0)", fill=BLACK, font=f_tiny)
 d.text((1216, 198), "US2 (FPGA USB → ttyACM)", fill=BLACK, font=f_tiny)
 
