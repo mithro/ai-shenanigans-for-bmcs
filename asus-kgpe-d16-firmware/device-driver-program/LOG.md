@@ -1,5 +1,54 @@
 # Device-driver program — running log
 
+## 2026-07-18 — CI GREEN for my jobs; 4 pre-existing failures surfaced (triaged, NOT yet fixed)
+
+- With both CI root causes fixed (run 29635771812), the QEMU build + initramfs are
+  green and **my jobs now run and PASS in CI**: `B1 — LPC sub-blocks`, `D08 —
+  W83601G`, `D09 — SB-TSI`, `Boot new stack + SSH (C2)`, `F5b M2 (host KCS IPMI)`,
+  `F3 — sensors`. So B1c/B1d/D08/D09 are now genuinely CI-validated, not just local.
+- **4 OTHER jobs still fail.** They were masked by the broken QEMU build (all
+  downstream jobs were failing/skipped), so they surface only now. Triaged with
+  exact signatures — none claimed resolved:
+  1. **C3 (Build Raptor userspace)** — `failed: Network is unreachable / Connection
+     timed out` fetching the musl toolchain. **Environmental CI network flake**, not
+     code; should pass on re-run. (Hardening idea: cache/mirror the musl toolchain.)
+  2. **C4 (Boot proprietary firmware → web)** — `C4 RESULT: FAIL — qemu exited early
+     (rc=0)`. The Dell vendor firmware terminates before the web service comes up.
+  3. **C2 full chain (U-Boot → Linux + SSH)** — `FAIL: dropbear did not come up
+     within 240s`. The U-Boot-mediated boot never reaches SSH. NOTE: the *direct*
+     kernel boot `Boot new stack + SSH (C2)` PASSED in the same run — kernel +
+     initramfs + dropbear are fine — so the differentiator is the **U-Boot stage**.
+  4. **F7 (NC-SI ground-truth guard)** — 2 asserts fail: `CONFIG_NET_NCSI=y` present
+     in kgpe-d16.config + NC-SI refs in ftgmac100.c. See separate note below.
+- **FAITHFULNESS FLAG (C4 + C2-full).** Both exercise the *early boot* path (vendor
+  firmware / U-Boot), both went uncaught while CI was broken, and both could be
+  regressions from the 10 recent QEMU submodule commits (ast2050-faithful
+  `eda871c48f` → `512d56d217`). Leading suspect: `4ff6a74504` (kgpe-d16-bmc uses the
+  MEASURED strap `0x00819582`) — a strap change alters early clock/PLL/reset init
+  for U-Boot + vendor firmware but NOT the direct DTB kernel boot (which is why C2
+  direct passes and C2-full fails). Per the faithfulness principle a broken legacy
+  boot is a bug in MY model, so this MUST be reproduced locally + bisected (build
+  QEMU at `eda871c48f` vs `512d56d217`, run web-test.py / the U-Boot boot on each).
+  Deferred to a fresh context — not rushed, not hand-waved. Could also be a plain
+  240s-timeout under concurrent-CI load; the repro settles which.
+
+## 2026-07-18 — F7 guard vs schematic: NC-SI sideband DOES exist (guard too absolute)
+
+- The F7 "dedicated-PHY, not NC-SI" guard (`f7-ncsi-evidence.py`) now fails because
+  D07 work added `CONFIG_NET_NCSI=y` + NC-SI handling to `ftgmac100.c`. Checked the
+  **authoritative** schematic: `AST2050-BMC-WIRING.md` §7 is titled "Ethernet — dual
+  channel: **dedicated PHY + NC-SI sideband**" and documents BOTH — Channel 1
+  (RMII1/MII → RTL8201N mgmt PHY = the BMC's own eth0) AND **Channel 2 (RMII2/NC-SI
+  → 2× Intel 82574L host NICs)**. So NC-SI genuinely exists on this board as a
+  sideband; the D07 additions are schematic-faithful. My memory's "true NC-SI
+  architecturally impossible here" was an EARLIER, less-complete understanding that
+  the expanded schematic netlist supersedes (schematic > memory).
+- **Reconciliation needed (not rushed):** F7 conflates two invariants — "the BMC's
+  eth0/management is a dedicated PHY (RMII1→RTL8201, TRUE)" vs "the board has NO
+  NC-SI at all (FALSE per §7)". The guard must keep asserting the former and stop
+  asserting the latter. Requires reading the full `f7-ncsi-evidence.py` + `F7-NCSI.md`
+  to re-scope checks 4/5 correctly. Deferred to avoid getting the invariant wrong.
+
 ## 2026-07-18 — CI ROOT-CAUSE FIXES: unpushed QEMU submodule + initramfs missing usbip source
 
 - **Honest correction to a completion-gate claim.** Checked CI on the branch and
