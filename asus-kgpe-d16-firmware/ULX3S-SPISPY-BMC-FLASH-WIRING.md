@@ -63,11 +63,17 @@ prints a "+ −" legend by pin `11`). The right-edge header `J2` is debug-only (
 
 ![Annotated ULX3S top view — the spispy SPI pins GP7–GP10 on header J1](diagrams/ulx3s-spispy-j1-annotated.png)
 
-**On the motherboard:** `BMC_FW1` is a **2×7 socket** — **pin 1 is the red square
-pad**, the **odd** pins (1, 3, 5, 7, 9, 11, 13) are the **top** row and the
-**even** pins are the **bottom** row. Get pin 1 right, or the whole map mirrors.
+**On the motherboard:** find `BMC_FW1` — a **2×7 socket** ("BMC_FW" silkscreen,
+beside the AST2050 and the PCI/PCIe slots). **Pin 1 is the red square pad**; that
+is your orientation anchor, and each pin's signal is fixed however the board is
+turned. The photo below locates the socket and labels every pin; the SVG is the
+clean pinout. Both are drawn in the **same orientation** — the board rotated so
+the PCIe slots stand vertical (rear/bracket edge along the bottom), with **pin 1
+at bottom-left, odd pins in the left column, even pins in the right**.
 
-![BMC_FW1 socket pinout diagram](schematic-wiring/diagrams/kgpe-d16-bmc-fw1.svg)
+![Annotated KGPE-D16 photo — BMC_FW1 socket location and per-pin signals](diagrams/kgpe-d16-bmc-fw1-board.png)
+
+![BMC_FW1 socket pinout — vertical, matching the photo](diagrams/kgpe-d16-bmc-fw1-vertical.svg)
 
 ### Three rules that prevent damage (full list: §5)
 
