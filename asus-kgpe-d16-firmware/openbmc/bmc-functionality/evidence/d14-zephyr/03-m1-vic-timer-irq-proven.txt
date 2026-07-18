@@ -43,3 +43,28 @@ M1 VIC + system timer — written, IRQs delivered, tickful operation still WIP:
 
 Matrix: row 30 ZQ upgraded to reflect a RUNNING APP (not just a banner). Per-
 device Zephyr drivers (ZQ/ZS) build on this once preemptive scheduling is clean.
+
+--- Refined abort diagnosis (2026-07-18, deeper trace) ---
+`-d int,exec` on the SYS_CLOCK=y build pinpoints the abort:
+- The ARMv5 _isr_wrapper (arch/arm/core/cortex_a_r/isr_wrapper.S, the
+  CONFIG_ARMV5 variant) runs, calls z_soc_irq_get_active (my VIC, PC 0x40001aec),
+  then data-aborts in the wrapper's stack/dispatch ops (PC ~0x4000241c) at DFAR
+  0x40008bf8 (DFSR 0x5 translation fault). Afterwards the CPU LOOPS forever in
+  z_arm_data_abort (0x40002250) — the fault handler itself re-faults.
+- Ruled OUT as the cause:
+  * get_active out-of-bounds: the ARMv5 wrapper DOES bounds-check
+    (`mov r1,#CONFIG_NUM_IRQS; cmp r0,r1; bge spurious_continue`), and my
+    get_active returns __builtin_ctz(status) or CONFIG_NUM_IRQS (spurious) — both
+    in range. So a bad IRQ index is not it.
+  * per-thread MMU page-table updates on context switch: NONE — the build has no
+    HW_STACK_PROTECTION / MMU_STACK_GUARD / USERSPACE / MEM_DOMAIN, so thread
+    switching never calls arm_mmu.
+- REMAINING root cause: the arm_mmu L1 page table (0x40008000 region) is
+  CORRUPTED after ~2264 ticks (the faulting DFAR 0x40008bf8/0x40008ffc are L1
+  entries; the section-0x400 entry for 0x40000000 goes invalid, so a later DRAM
+  data access translation-faults even though code still runs from TLB). This is
+  a late, accumulate-then-corrupt failure. Localizing WHAT writes the bad L1
+  entry needs a gdb hardware watchpoint on the L1 table (qemu -s -S) — a focused
+  follow-up. The timer/VIC drivers themselves are correct (IRQs dispatch, app
+  runs); this is a memory-corruption bug reached only under sustained ticking on
+  the brand-new ARMv5 core. SYS_CLOCK stays OFF by default until it's found.
