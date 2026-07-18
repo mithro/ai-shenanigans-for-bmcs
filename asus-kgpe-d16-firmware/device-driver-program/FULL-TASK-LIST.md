@@ -352,7 +352,11 @@ model (folded into C1/C2, tracked here so it is not a silent omission). The thre
 `SU1` (SP5100 southbridge), `OU1` (W83667HG Super-I/O), `NU1` (SR5690 northbridge)
 are not BMC-internal devices — the BMC reaches them **through** the LPC (B1), PCI
 (B2), USB (B5) and I²C (D1) controller rows; their own register maps are host-
-side (documented in the SP5100/Super-I/O docs), not a BMC driver. §15 connectors→
+side (documented in the SP5100/Super-I/O docs), not a BMC driver. Likewise `ZU1`
+(LSI FW322 1394a FireWire controller) and the `PCI6` expansion slots are PEERS on
+the shared 33 MHz PCI bus — the BMC is a video-capture **target**, not their host
+or driver → `[N]`, exactly parallel to the TPM1/PIKE2 LPC-peer disposition (added
+for prose parity per the gate-(d) round-3 convergence audit). §15 connectors→
 the functional rows (VGA1→B3/B3b/B4, AST_UART1→F1, JTAG1→G1, BMC_FW1→A3,
 PANEL1/AUX_PANEL1→E1/E3/E5/D12, PSUSMB1→D10, TPM1→B1, jumpers→E4). Passive parts
 (LDOs UP7706U8, series-R nets QRN*, sync buffer QU6, RS-232 AZ75232, glue 74LVCxx)

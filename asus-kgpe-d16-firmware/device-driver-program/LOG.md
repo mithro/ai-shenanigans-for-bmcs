@@ -33,7 +33,18 @@
     `LPCPD#` (D15), B1g `PIKE2` peer `[N]`, B2 PCI `INTA#`/GPIOB0 (B11), E6
     `GPIOE6/E7↔SP5100` (U4/U3, sibling of D13), E6 `ENTEST` (R21) `[N]`, E6
     `AST_SRST#` (R20) reset→PHY. None are large subsystems — individual pins/peers.
-    Gate (d) is NOT yet satisfied (this round found new tasks); re-run until dry.
+  - **Gate (d) CONVERGENCE (round-3, independent per-ball sweep):** with the 6 gaps
+    folded, a THIRD independent sub-agent did a ball-by-ball sweep of all 355 balls
+    and returned **"CONVERGED — no new functional enumeration gaps found"**; it
+    verified all 6 round-2 additions are correctly placed, and every functional net
+    resolves to a row or `[N]`/`[B]`. The ONLY item was a prose-parity nit: the PCI
+    peers `ZU1` (FW322) + `PCI6` slots were implicitly covered but not explicitly
+    `[N]`-dispositioned like the LPC peers — **added** for parity. So the ENUMERATION
+    gate (d) is now satisfied for the schematic: two independent audits, the second
+    converging (round-1 found 5+1 → folded → round-3 found 0 new functional gaps).
+    NOTE: gate (d) for the ENUMERATION ≠ the WORK being complete — the un-`[x]`
+    boxes (Zephyr column, U-Boot per-device, silicon validations, etc.) remain the
+    open deliverables; convergence means "every device is on the list", not "done".
 
 ## 2026-07-18 — CI GREEN confirmed for C4+F7+C2-full; C3 fix = force IPv4 (musl.cc)
 
