@@ -75,6 +75,21 @@ void fwtest_run(void)
     fwt_check("hpll.reset", hpll,   G_HPLL);
     fwt_check("resetflag",  rflags, G_RESETFLAG);
     fwt_check("pinmux1",    pinmux, G_PINMUX1);
+
+    /* --- SCU78 R/W faithfulness (G3 Multi-function Pin Control #2) --- */
+    /*
+     * On the G3, offset 0x78 is a plain R/W pinmux register (Init=0), NOT the
+     * AST2400 RNG_DATA: bit4 = disable PCI INTA# output, bit3 = enable WDT-reset-
+     * event output, bit2/bit0 = Video-Port-A mode (A3 datasheet V1.05 §15/§18). A
+     * model that reused RNG_DATA here would return a fresh random value on every
+     * read and silently drop the write. Prove faithful R/W: write the two defined
+     * control bits and read them straight back. (The SCU is pre-unlocked on the
+     * -kernel boot, so this protected write goes through.)
+     */
+    writel(SCU_BASE + 0x78, 0x00000018u);
+    u32 pinmux2 = fwt_reg("pinmux2", SCU_BASE + 0x78);
+    fwt_check("pinmux2.rw", pinmux2, 0x00000018u);
+
     /*
      * NOTE: SCU00 lock-state is NOT checked here. Real silicon resets locked
      * (read 0), but QEMU deliberately pre-unlocks the SCU on a `-kernel` boot

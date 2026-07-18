@@ -77,3 +77,17 @@ def test_reset_value_faithful(scu, label):
     got = scu.regs.get(label)
     assert got is not None, f"SCU reg '{label}' missing from transcript:\n{scu.raw}"
     assert got == want, f"SCU {label}: got {got:#010x}, want {want:#010x}"
+
+
+def test_scu78_is_readwrite_not_rng(scu):
+    """SCU78 on the G3 is Multi-function Pin Control #2 (plain R/W), not the
+    AST2400 RNG_DATA. The fwtest writes 0x18 (bit4 disable-INTA# | bit3 WDT-
+    reset-out) and reads it back; a model that reused RNG_DATA would return a
+    random value here (write dropped, read randomised). Assert the write
+    persisted -- proving faithful pinmux #2 R/W, not RNG behaviour."""
+    got = scu.regs.get("pinmux2")
+    assert got is not None, f"SCU 'pinmux2' missing from transcript:\n{scu.raw}"
+    assert got == 0x00000018, (
+        f"SCU78 read-back: got {got:#010x}, want 0x00000018 "
+        f"(0x78 treated as RNG_DATA instead of pinmux #2?)"
+    )

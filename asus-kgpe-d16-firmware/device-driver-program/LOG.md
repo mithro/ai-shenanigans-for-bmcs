@@ -1,15 +1,51 @@
 # Device-driver program — running log
 
-## 2026-07-18 — Gate-(b) review round 2: 3 parallel sub-agents on the big custom G3 models
+## 2026-07-18 — Gate-(b) review round 2 COMPLETE: 3 sub-agents, ~2500 LOC, 3 real bugs found (2 fixed, 1 routed)
 
-- Broadening the gate-(b) "full code review of all developed code" beyond the D08
-  models (already clean). Dispatched 3 independent code reviewers (≤5 concurrent):
-  (A) `hw/misc/aspeed_video_ast2050.c` (~1013 LOC, G3 JPEG/video engine); (B)
-  `hw/sensor/w83795.c` (hwmon banked regs) + `hw/misc/aspeed_p2a_ast2050.c` (PCI→AHB
-  window); (C) the G3-specific ADDITIONS (vs `origin/ast2050-faithful`) to
-  `hw/misc/aspeed_scu.c` (strap/PLL/clock-stop/g3-resets) + `hw/net/ftgmac100.c`
-  (NC-SI sideband + FAST_MODE RX fix). ~2500 LOC of load-bearing custom emulation.
-  Findings will be fixed (as the F7 rglob bug was) or confirm-clean; results pending.
+- Broadened the gate-(b) "full code review of all developed code" beyond the D08
+  models (already clean): 3 independent reviewers over ~2500 LOC of load-bearing
+  custom G3 emulation. **Results:**
+  - (A) `hw/misc/aspeed_video_ast2050.c` (~1013 LOC JPEG/video engine): **CLEAN.**
+    Reviewer traced quant-table clamp (`MIN(q_index,7)` before the [8][64] index),
+    DMA bounds (width/height range-checked; VGA carve-out + comp-buffer addresses
+    bounded in u64), VR004 trigger edge-detect across two full frame cycles, the
+    JPEG encoder (Huffman/zigzag/DQT/DHT/SOF0/SOS lengths vs ITU-T T.81, 0xFF
+    stuffing), and IRQ/reset. No ≥80% bug.
+  - (B) `hw/misc/aspeed_p2a_ast2050.c`: **CLEAN** (translation, protection-key gate,
+    SCU2C gate, endianness, reset all verified). `hw/sensor/w83795.c`: **1 real OOB
+    bug FIXED** — `regs[W83795_NUM_BANKS=4][256]` indexed by `bank & 0x07` (0-7), so
+    BANKSEL 4-7 read/wrote past the array. Fix: banks 4-7 are undefined (only 0-3
+    exist) → read 0xff / drop writes. Submodule `19067300f0`.
+  - (C) `hw/net/ftgmac100.c` G3 additions: **CLEAN** (PHY-ID/BMSR/BMCR G3 defaults,
+    FAST_MODE/GIGA_MODE RX-drop gate, SW_RST-clears-MACCR branch — all correctly
+    behind the `aspeed-g3` per-instance prop, default false, no non-G3 regression).
+    `hw/misc/aspeed_scu.c` G3 additions: **2 real bugs.**
+    1. **SCU78-as-RNG (FIXED, validated).** The G3 SCU reused the shared read/write
+       verbatim, so 0x78 inherited AST2400 RNG_DATA semantics (random on read, write
+       dropped). On G3 there is no RNG — 0x78 is Multi-function Pin Control #2 (R/W,
+       Init=0). Fix: G3-specific `aspeed_ast2050_scu_read` + write treat 0x78 as a
+       normal stored register (still honoring the SCU protect-key lock); AST2400/
+       2500/2600 keep RNG behavior. Validated: fwtest writes 0x18→reads 0x18;
+       `test_scu.py` 10 passed (8 golden reset values unaffected). Submodule `eec4fa471c`.
+    2. **G3 H-PLL/CLKIN strap decode reuses AST2400 layout (ROUTED to task #55, the
+       already-deferred PCLK-rate work).** Verified real in code: `get_clkin` returns
+       25 MHz when strap bit23 is set, but on G3 bit23 is the LPC-reset-pin, not
+       `CLK_25M_IN` — and the KGPE-D16 strap `0x00819582` HAS bit23=1; and
+       `calc_hpll=aspeed_2400_scu_calc_hpll` decodes H-PLL from bits[9:8] (AST2400)
+       instead of the G3's bits[11:9]. At the G3 reset state (SCU24=0x4291, PROGRAMMED
+       bit clear) `calc_hpll` takes the strap-fallback path, so `aspeed_timer.c`
+       (rate = `aspeed_scu_get_apb_freq`) runs off the wrong H-PLL. **Why routed not
+       rushed:** `test_timer.py:5` explicitly defers PCLK-rate to task #55, so NO test
+       validates the computed rate; the only signal is the timing-tolerant oracle
+       boots (C2/C4/C-UBOOT), which per the faithfulness rule MUST keep booting. A
+       clock-rate change with no validation oracle is exactly what #55 must do
+       *properly* — with a G3 `calc_hpll`/`clkin` (bit23=LPC-reset, CLKIN fixed 24 MHz,
+       H-PLL bits[11:9] + G3 freq table) AND a new rate-validation test. Captured
+       here + on #55 so it is not lost. NOT a weasel: it is a real bug, verified, with
+       the exact fix written down, deliberately sequenced behind its validation.
+- **Net gate-(b) round-2:** 5 files reviewed, 3 real bugs found, 2 fixed+validated,
+  1 verified+routed with a concrete fix. The review process is doing its job (as the
+  F7 rglob self-bug earlier). Parent submodule pointer bumped to `eec4fa471c`.
 
 # Device-driver program — running log
 
