@@ -1,5 +1,14 @@
 # Device-driver program — running log
 
+## 2026-07-18 — origin/main merge check
+
+- `git fetch origin` + `git merge --no-ff origin/main` → **"Already up to date"**.
+  origin/main tip `85bd82a` (PR #29 schematic-wiring) is an ANCESTOR of the
+  working branch HEAD (`git merge-base --is-ancestor origin/main HEAD` = yes);
+  the branch is 378 commits ahead / 0 behind. So the authoritative schematic
+  `AST2050-BMC-WIRING.md` that DEVICE-MATRIX.md is verified against IS the latest
+  main. Nothing to integrate.
+
 ## 2026-07-18 — D14 Zephyr RUNS AN APPLICATION ("Hello World") + M1 VIC/timer 🎉
 
 - The AST2050 Zephyr port now **boots and runs application code** under QEMU:
