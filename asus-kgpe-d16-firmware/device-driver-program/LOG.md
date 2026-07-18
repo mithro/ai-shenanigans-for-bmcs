@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-18 — complete schematic read + formal per-device/per-stack task list
+
+- Read the **complete** `AST2050-BMC-WIRING.md` end-to-end again (all 597 lines,
+  §§1–16: block diagram, power, DDR2, SPI, LPC, PCI, Ethernet, VGA, USB, the full
+  §10 I²C device-by-device breakdown + mux fabric + bus-assignment tables, GPIO
+  power/reset, Serial/SOL, JTAG/LED/clock/strap, neighbour chips, connectors,
+  per-pin table).
+- Created **FULL-TASK-LIST.md** — the formal task list in the exact required
+  structure: for EVERY device/function block a task for {QEMU emulation; U-Boot
+  driver → validate QEMU + silicon; Linux driver → validate QEMU + silicon +
+  userspace; Zephyr driver → validate QEMU + silicon}, each box marked with an
+  honest status (`[x]` done+evidenced / `[~]` partial / `[ ]` todo / `[N]` N/A
+  WITH reason / `[B]` blocked WITH the precise blocker + confidence). Rows A1–A8
+  (core SoC), B1–B5 (host interfaces), C1–C2 (Ethernet), D1–D13 (I²C + on-bus),
+  E1–E4 (GPIO/LED/strap), F1–F2 (serial/SOL), G1 (JTAG harness). Ends with a
+  §-by-§ coverage assertion proving nothing in the schematic is skipped.
+- This supersedes the loose "honestly remaining" prose from the prior cycle with
+  the required formal structure; DEVICE-MATRIX.md remains the compact grid view.
+
 ## 2026-07-18 — silicon I2C inventory + an unidentified 0x69 responder
 
 - Silicon i2c buses present: i2c-1 (W83795 engine, schematic I2C2), i2c-4 (I2C5:

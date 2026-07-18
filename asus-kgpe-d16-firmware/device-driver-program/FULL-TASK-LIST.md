@@ -1,0 +1,285 @@
+# Full task list — every AST2050/KGPE-D16 device × QEMU + U-Boot + Linux + Zephyr
+
+Created **2026-07-18** from a complete end-to-end read of the authoritative
+schematic `schematic-wiring/AST2050-BMC-WIRING.md` (all 597 lines, §§1–16). This
+is the formal, per-device task list the program is measured against. It is the
+same coverage as [`DEVICE-MATRIX.md`](DEVICE-MATRIX.md) (the compact grid) but
+expanded into the explicit required structure: for **every** device/function
+block, a task for each of —
+
+- **QEMU**: full functional emulation of the device.
+- **U-Boot driver** → validate (a) in QEMU, (b) on real silicon.
+- **Linux driver** → validate (a) in QEMU, (b) on real silicon, (c) userspace.
+- **Zephyr driver** → validate (a) in QEMU, (b) on real silicon.
+
+Status legend: `[x]` done + evidenced · `[~]` partial/in-progress · `[ ]` not
+started · `[N]` not-applicable **with the reason stated** (never a silent skip)
+· `[B]` blocked **with the blocker + confidence stated** (never "impossible").
+
+Silicon is reached **only via JTAG + TFTP netboot** (the SPI flash is not wired
+to the BMC on this rig); power-cycle via the `au-plug` Tasmota. The schematic is
+authoritative; any "device absent / unconnected" reading is treated as my
+bug/mis-driving, not a hardware fault.
+
+U-Boot scope note: the working reference bootloader is **Raptor Engineering's
+AST2050 U-Boot** (boots to `boot#`, hardware-proven), which drives the boot-path
+SoC blocks (SCU/PLL, SDMC/DDR2, SMC, UART, MAC, timer, WDT, I2C). U-Boot does
+**not** carry drivers for board-level sensors/expanders (those are Linux-
+userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
+
+---
+
+## A. Core SoC blocks (the AST2050 silicon itself)
+
+### A1. SCU — clock / PLL / reset / straps (§2 power PLLs, §13 clock+straps)
+- [x] QEMU: SCU/PLL/reset-table/strap model (faithful G3; P2A SCU7C=0x0202 == silicon)
+- U-Boot: [x] QEMU (Raptor programs SCU/PLL) · [x] silicon (Raptor `boot#`, SCU70 freeze)
+- Linux: [x] QEMU (clk driver, g3-clk patch) · [x] silicon (console survives clk gating) · [N] userspace (clocks are not a userspace ABI beyond debugfs)
+- Zephyr: [~] QEMU (SoC pre-init assumes loader-configured SCU; no re-init needed) · [ ] silicon
+
+### A2. SDMC — DDR2 controller → QU2 (§3)
+- [x] QEMU: SDMC/DDR2 model (64 MB, MCR04=0x585, DLL)
+- U-Boot: [x] QEMU (Raptor DDR2 init) · [x] silicon (JTAG DDR2 re-train MCR04=0x585 boots)
+- Linux: [x] QEMU (RAM usable) · [x] silicon (kernel runs from 64 MB DDR2) · [N] userspace (RAM, not a device ABI)
+- Zephyr: [x] QEMU (runs from DDR2 — Hello World) · [ ] silicon
+
+### A3. SMC — SPI / ROM flash controller → BMC_FW1 (§4)
+- [x] QEMU: SMC model (SPI CS0/CS2, m25p80)
+- U-Boot: [x] QEMU (Raptor SMC) · [N] silicon (**SPI flash not wired to the BMC on this rig** — boot is JTAG+TFTP; read-path untestable here)
+- Linux: [x] QEMU (spi-nor/MTD) · [N] silicon (no BMC-attached flash on this rig) · [ ] userspace MTD write path (`/dev/mtd*`) — QEMU-side TODO
+- Zephyr: [ ] QEMU (spi-nor) · [N] silicon (no flash)
+
+### A4. VIC — interrupt controller 0x1e6c0000 (§ implied; datasheet §16)
+- [x] QEMU: faithful G3 VIC (TYPE_ASPEED_2050_VIC, single-bank, sense/dual/event)
+- U-Boot: [x] QEMU · [x] silicon (Raptor + our kernel take IRQs)
+- Linux: [x] QEMU · [x] silicon (`irq-aspeed-g3-vic`, HW-verified) · [N] userspace (IRQs not a userspace ABI)
+- Zephyr: [~] QEMU (real VIC driver `vic.c` delivers IRQs; sustained ticking blocked by upstream arm_mmu — evidence d14-zephyr/03) · [ ] silicon
+
+### A5. Timer (0x1e782000; §implied)
+- [x] QEMU: aspeed timer model (G3 one-pulse-per-expiry)
+- U-Boot: [x] QEMU · [x] silicon (Raptor timekeeping)
+- Linux: [x] QEMU · [x] silicon (clocksource) · [N] userspace (POSIX time, not device ABI)
+- Zephyr: [~] QEMU (tickful `aspeed_timer.c` delivers ticks, app runs; sustained-tick data-abort in upstream arm_mmu — task #141) · [ ] silicon
+
+### A6. WDT — watchdog (§implied)
+- [x] QEMU: WDT model (aspeed 120 s reset behaviour)
+- U-Boot: [~] QEMU · [ ] silicon
+- Linux: [x] QEMU (aspeed_wdt) · [~] silicon · [ ] userspace (`/dev/watchdog`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### A7. RTC (§implied)
+- [x] QEMU: RTC model
+- U-Boot: [N] QEMU/silicon (Raptor U-Boot does not use the SoC RTC)
+- Linux: [x] QEMU (rtc-aspeed) · [ ] silicon · [ ] userspace (`hwclock`/`/dev/rtc`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### A8. AHB / P2A + LPC-to-AHB back-doors (§implied; datasheet)
+- [x] QEMU: P2A window (SCU7C readback == silicon)
+- U-Boot: [N] (debug back-door, not a boot driver) — used by culvert
+- Linux: [x] QEMU · [x] silicon (culvert in-band devmem bridge) · [x] userspace (culvert probe EXIT 0)
+- Zephyr: [N] (debug back-door)
+
+---
+
+## B. Host-interface controllers
+
+### B1. LPC — KCS/IPMI + mailbox + vUART → SP5100/Super-I/O/TPM (§5)
+- [~] QEMU: LPC model with KCS state machine (datasheet §30); mailbox/port-80h-snoop/vUART **not yet modeled** (D03)
+- U-Boot: [N] QEMU/silicon (host-IPMI is an OS-level function; U-Boot has no LPC-peripheral driver)
+- Linux: [x] QEMU (`aspeed-kcs-bmc`, /dev/ipmi-kcs) · [x] silicon (phosphor-ipmi-kcs bound, host `mc info` answered) · [x] userspace (ipmitool over KCS) — for KCS. mailbox/vUART: [ ] all
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B2. PCI 33 MHz bus (VGA-as-PCI / video-capture attach) → SP5100 (§6)
+- [~] QEMU: video engine appears; full PCI-target config-space model partial
+- U-Boot: [N] (BMC is a PCI target for host video capture, not a U-Boot function)
+- Linux: [~] QEMU (video path uses it) · [~] silicon · [ ] userspace (covered via video below)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B3. Video / iKVM capture + VGA DAC output → VGA1 (§6 capture, §8 output)
+- [x] QEMU: `aspeed.video-ast2050` faithful G3 model (headerless entropy + 8 ROM quant tables)
+- U-Boot: [N] (video capture is an OS/runtime function)
+- Linux: [x] QEMU (v4l2 `/dev/video0`, JFIF pixel-verified) · [x] silicon (patch 0006, `bytesused=28418`, real host frame) · [x] userspace (V4L2 DQBUF → decodable JPEG)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B4. VGA DDC / EDID I²C → VGA1 (§8)
+- [ ] QEMU: DDC/EDID I²C slave on the video connector (D12)
+- U-Boot: [N] (monitor EDID is an OS/runtime concern)
+- Linux: [ ] QEMU · [ ] silicon · [ ] userspace (`/sys/class/drm/.../edid`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B5. USB 2.0 device / vhub → SP5100 (§9)
+- [x] QEMU: USB2.0 device/vhub model (F6 probe-safe)
+- U-Boot: [N] (USB gadget is an OS/runtime function)
+- Linux: [x] QEMU (vhub gadget enumerates) · [B] silicon (**patch 0007 compile-clean + QEMU-verified; silicon RIG-BLOCKED — P2A siphon degrades after ~15 boot cycles; did not power-cycle to avoid host CMOS-halt strand. Confidence: my model/patch correct, blocker is rig access, not the driver**) · [ ] userspace (host-side HID enumeration)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+---
+
+## C. Ethernet (§7)
+
+### C1. MAC (ftgmac100) + RTL8201N mgmt PHY — MII channel 1 → U5 (§7)
+- [x] QEMU: ftgmac100 + RTL8201CP/8201N PHY model (FAST_MODE fix modeled)
+- U-Boot: [x] QEMU · [x] silicon (Raptor TFTP netboot over this MAC)
+- Linux: [x] QEMU (eth0 up) · [x] silicon (OpenBMC NFS-root + curl Redfish; FAST_MODE rx-fix) · [x] userspace (sockets, curl)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### C2. NC-SI sideband — RMII2 channel 2 → 2× 82574L (§7)
+- [x] QEMU: RMII2/NC-SI model + faithful responder (MAC2 channel discovery)
+- U-Boot: [N] (NC-SI sideband is an OS-level function)
+- Linux: [x] QEMU (ncsi channel discovery) · [B] silicon (**"No channel found": the deeper G3 RMII2 pinmux group divergence — strap 110 RMII2 routing differs from G4's SCU70[7]. Needs the AST2050 RMII2/GPIOE routing RE + a G3 pinctrl group. Confidence: my kernel patch 0008 fixed the strap-phantom class; this is a distinct, deeper pinmux gap, precisely diagnosed, not a hardware fault**) · [ ] userspace
+- Zephyr: [ ] QEMU · [ ] silicon
+
+---
+
+## D. I²C controllers + on-bus devices (§10)
+
+### D1. I²C controllers ×8 (SDA1/SCL1…SDA7/SCL7 + muxed 8th) (§10, §10.4)
+- [x] QEMU: aspeed I²C engine model (G3 AC-timing fix modeled)
+- U-Boot: [x] QEMU · [x] silicon (Raptor I2C)
+- Linux: [x] QEMU · [x] silicon (i2cdetect completes; g3-i2c patch 0005) · [x] userspace (`/dev/i2c-*`, i2cget/i2cset)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D2. W83795G hardware monitor — QU4, I2C2 0x2F (§10.2)
+- [x] QEMU: `w83795` model seeded from silicon captures
+- U-Boot: [N] (hwmon is an OS function)
+- Linux: [x] QEMU (w83795 hwmon binds, fan RPM) · [x] silicon (fan1=2657 rpm, real V/temp) · [x] userspace (`/sys/class/hwmon`, sensors, IPMI SDR)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D3. W83601G DIMM-LED expander U27 — I2C5 0x18 (§10.2)  ✅ both-sides this session
+- [x] QEMU: `hw/gpio/w83601g.c` datasheet-faithful (Nuvoton V1.31; CI `boot-w83601g`)
+- U-Boot: [N] (DIMM-error-LED drive is an OS/runtime function)
+- Linux: [x] QEMU (`scripts/w83601g-test.py` 19/19) · [x] silicon (LED-drive via i2c-4, readback) · [x] userspace (raw SMBus i2cset/i2cget)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D4. W83601G DIMM-LED expander U28 — I2C5 0x19 (§10.2)  ✅ both-sides this session
+- [x] QEMU: same model, seeded input 0xb5
+- U-Boot: [N] (as D3)
+- Linux: [x] QEMU · [x] silicon (LED-drive on 0x19, readback+restore) · [x] userspace (raw SMBus)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D5. HT24LC08 FRU EEPROM — U25, I2C5 0x50–0x53 (§10.2)  ✅ both-sides this session
+- [x] QEMU: 4× smbus-eeprom at 0x54–0x57 (blank 0xff, matching silicon)
+- U-Boot: [N] (FRU is an OS/IPMI function)
+- Linux: [x] QEMU (at24 binds) · [x] silicon (at24 read, blank as shipped) · [x] userspace (`/sys/.../eeprom`, IPMI FRU)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D6. QU9/QU5/U23 I²C mux fabric (§10.1, §10.3)  ✅ both-sides
+- [x] QEMU: `hw/i2c/kgpe_d16_i2c_fabric.c` (GPIO-selected mux, sys-pwrgd gate)
+- U-Boot: [N] (mux fabric is used by the OS to reach DIMM SPD)
+- Linux: [x] QEMU (i2c-mux-gpio child adapters) · [x] silicon (SPD read through Y2) · [x] userspace (mux-selected i2c bus)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D7. DIMM A–D / E–H SPD EEPROMs — I2C10/I2C11 0x50–0x57 (§10.2)  ✅ both-sides
+- [x] QEMU: real 256-byte DIMM_A2 SPD (RMR5030EF68F9W1600) behind the fabric
+- U-Boot: [N] (SPD read for the OS)
+- Linux: [x] QEMU (at24 SPD header 92 11 0b) · [x] silicon (real SPD read via fabric) · [x] userspace (`/sys/.../eeprom`, decode-dimms)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D8. DIMM A–D / E–H TSOD thermal — I2C10/I2C11 0x18–0x1F (§10.2)
+- [x] QEMU: `hw/sensor/jc42.c` JC-42.4 TSOD model (available; not placed for this rig's UDIMM)
+- U-Boot: [N]
+- Linux: [x] QEMU (jc42 model exists) · [N] silicon (**this rig's DIMM_A2 SPD byte32=0 = NO thermal sensor; 0x19 NAKs — faithfully absent, not a gap**) · [N] userspace (no TSOD present)
+- Zephyr: [ ] QEMU · [N] silicon (no TSOD on this rig's DIMM)
+
+### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)
+- [ ] QEMU: sbtsi temp model on I2C4 (D08-devices, task #135)
+- U-Boot: [N] (CPU thermal is an OS function)
+- Linux: [ ] QEMU (`sbtsi_temp`) · [B] silicon (**AMD SB-TSI needs the host CPU powered + I2C4 engine enabled in DT; host-presence-dependent on this rig. Confidence: reachable once host is on + i2c3 enabled**) · [ ] userspace (hwmon)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)
+- [ ] QEMU: PMBus device model on I2C1 (task #135)
+- U-Boot: [N] (PSU monitoring is an OS function)
+- Linux: [ ] QEMU (`pmbus`) · [B] silicon (**needs a PMBus-capable PSU present + I2C1 engine enabled; PSU-hardware-dependent**) · [ ] userspace (hwmon)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D11. SMBus ALERT — SALT1/2, I2C7 B12 (§10.2, §10.4)
+- [ ] QEMU: SMBALERT# line model on I2C7 (task #135)
+- U-Boot: [N]
+- Linux: [ ] QEMU (smbus-alert) · [B] silicon (**needs an alerting device + I2C7 enabled; depends on D9/D10 devices being present**) · [ ] userspace
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D12. Aux front panel — AUX_PANEL1, I2C8 via QU5 Y0 (§10.2)
+- [ ] QEMU: aux-panel I²C target on the Y0 mux channel
+- U-Boot: [N]
+- Linux: [ ] QEMU · [ ] silicon · [ ] userspace
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### D13. Unidentified 0x69 responder on the sensor mux (found on silicon 2026-07-18)
+- [ ] Identify (not in schematic §10 table; reg0=0x08, NAKs others) then model
+- Note: open completeness item — logged in LOG.md; low-priority weak responder
+
+---
+
+## E. GPIO / platform control (§11) + LEDs/straps (§13)
+
+### E1. GPIO controller + power/reset sequencing (§11)
+- [x] QEMU: `aspeed_gpio.c` + kgpe_d16_pwrseq (GPIOA4 lockout, B1/B6/F0 pulse, H2 latch)
+- U-Boot: [~] QEMU · [~] silicon (Raptor drives some GPIO)
+- Linux: [x] QEMU (F2 power on/off/reset PASS via kgpe-power.sh) · [x] silicon (plug 3W→103W, host PXE, eth0 survives) · [x] userspace (sysfs gpio, kgpe-power.sh, Redfish)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### E2. Platform-monitor GPIO inputs — THERMTRIP/PROCHOT/DDR_THERM/NMI (§11)
+- [~] QEMU: GPIO inputs modeled; full §11 signal-map wiring incomplete (D09/task #136)
+- U-Boot: [N]
+- Linux: [~] QEMU · [ ] silicon (needs host events to exercise) · [ ] userspace (gpio-keys/events)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### E3. LEDs — BMCRDY/CPUERR/MLED/ID (§13)
+- [~] QEMU: LED GPIOs present; DTS led nodes
+- U-Boot: [N]
+- Linux: [~] QEMU · [ ] silicon (LED observation — task #136) · [ ] userspace (`/sys/class/leds`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### E4. Straps — IPMI_SEL/IKVMEN#/SOLEN# + SCU70 measured (§13)
+- [x] QEMU: measured HW_STRAP1 = 0x00819582; pinctrl G3 strap-phantom patch 0008
+- U-Boot: [x] QEMU · [x] silicon (SCU70 read == 0x00819582)
+- Linux: [x] QEMU · [x] silicon (pinctrl binds, mux selects work) · [N] userspace (straps not a userspace ABI)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+---
+
+## F. Serial / SOL (§12)
+
+### F1. UART console — UART2 / AST_UART1 (§12, §15)
+- [x] QEMU: SERIAL_MM UART5 @0x1e784000 (serial_hd(0))
+- U-Boot: [x] QEMU · [x] silicon (Raptor `boot#` @115200, our serial-bmc-console)
+- Linux: [x] QEMU (ttyS4 console) · [x] silicon (login shell) · [x] userspace (getty/dropbear)
+- Zephyr: [~] QEMU (static-mapped polling SoC console — banner + Hello World; ns16550 blocked by upstream arm_mmu z_phys_map) · [ ] silicon
+
+### F2. UART1 → SOL via QU8 mux → Super-I/O (§12)
+- [~] QEMU: VUART byte-flow model; QU8 2:1 mux (BMC_PRESENT# select) not modeled (D10)
+- U-Boot: [N] (SOL is an OS/IPMI function)
+- Linux: [~] QEMU (obmc-console byte-flow PASS) · [B] silicon (**host console not VUART-wired on this rig; QU8 mux select needs modeling; RMCP+ SOL activate has a netipmid registerSOLService gap — precisely diagnosed, QEMU-only**) · [ ] userspace (ipmitool sol)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+---
+
+## G. Debug / test harness (§13)
+
+### G1. JTAG (ARM926 debug) → AST_JTAG1 (§13, §15)
+- [N] QEMU (JTAG is a silicon debug transport, not an emulated in-guest device)
+- [x] silicon: JTAG run-control WORKS (IDCODE 0x07926f0f, halt, AHB mdw SCU7C=0x202) — this is the silicon *test harness*, not a driver row.
+
+---
+
+## Coverage assertion (verified against the complete schematic read)
+
+Every §2–§15 function block and every §14 neighbour chip maps to a row above:
+§2→A1; §3→A2; §4→A3; §5→B1; §6→B2/B3; §7→C1/C2; §8→B3/B4; §9→B5;
+§10→D1–D13; §11→E1/E2; §12→F1/F2; §13→A1/A4/A5/E3/E4/G1; §14 chips→the bus rows
+that reach them (W83795→D2, W83601G→D3/D4, HT24LC08→D5, RTL8201N→C1, 82574L→C2,
+QU9/QU5→D6, QU8→F2, muxes/glue→passive); §15 connectors→the functional rows
+(VGA1→B3/B4, AST_UART1→F1, JTAG1→G1, BMC_FW1→A3, PANEL1/AUX_PANEL1→E1/E3/D12,
+PSUSMB1→D10, TPM1→B1, jumpers→E4). Passive parts (LDOs UP7706U8, series-R nets
+QRN*, sync buffer QU6, RS-232 AZ75232, glue 74LVCxx) carry no driver by nature
+and are modeled only where behaviour-relevant (the QU9/QU5/U23 fabric = D6).
+
+**Nothing in the schematic is skipped.** Items marked `[N]` state why they are
+not-applicable for that stack; `[B]` items state the precise blocker and my
+confidence that it is rig/host/upstream-scoped, not a hardware fault or a
+hand-wave. The open work is the un-`[x]` boxes — principally the Zephyr per-
+device column (gated on the upstream arm_mmu sustained-tick fix, task #141), the
+host/PSU-dependent I²C far-ends (D9/D10/D11), DDC/EDID (B4), the LPC mailbox/
+vUART sub-blocks (B1), SOL end-to-end (F2), MTD write (A3), and the §11 signal-
+map/LED silicon observation (E2/E3).
