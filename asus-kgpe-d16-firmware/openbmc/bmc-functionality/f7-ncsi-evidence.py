@@ -125,21 +125,17 @@ def check_ncsi_scoped_to_mac1():
     The AST2050 G3 MAC has no NC-SI *hardware* mode (check 3) -- NC-SI is the
     software protocol (kernel CONFIG_NET_NCSI over RMII2), so that config being
     enabled is EXPECTED here, not a red flag."""
-    # The sideband needs the software NC-SI stack built.
-    kdir = KGPE / "qemu-firmware/kernel"
-    kncsi = False
-    if kdir.exists():
-        for p in kdir.rglob("*"):
-            if p.is_file() and p.suffix in (".config", ".cfg", "") and p.name != "out":
-                try:
-                    t = p.read_text(errors="replace")
-                except (IsADirectoryError, PermissionError):
-                    continue
-                if re.search(r"CONFIG_NET_NCSI\s*=\s*y", t):
-                    kncsi = True
-                    break
+    # The sideband needs the software NC-SI stack built. Read the SPECIFIC board
+    # config fragment directly -- do NOT rglob qemu-firmware/kernel/, which (when a
+    # kernel has been built locally) contains the gitignored kernel/linux/ tree with
+    # ~88k files incl. unrelated aspeed_g4/g5 defconfigs that ALSO set
+    # CONFIG_NET_NCSI=y. A tree-walk would false-PASS (mask a real "NC-SI dropped
+    # from kgpe-d16.config" regression) and be very slow. (code-review 2026-07-18.)
+    kcfg = read(KGPE / "qemu-firmware/kernel/kgpe-d16.config") or ""
+    kncsi = bool(re.search(r"CONFIG_NET_NCSI\s*=\s*y", kcfg))
     check("kernel builds CONFIG_NET_NCSI for the RMII2/MAC1 host-NIC sideband", kncsi,
-          "the Channel-2 NC-SI sideband (schematic §7) needs the software NC-SI stack")
+          "expected CONFIG_NET_NCSI=y in qemu-firmware/kernel/kgpe-d16.config "
+          "(the Channel-2 NC-SI sideband, schematic §7, needs the software NC-SI stack)")
     # The DTS must scope use-ncsi to &mac1 (never &mac0 -- check 1 guards mac0).
     dts = KGPE / "qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts"
     text = read(dts) or ""

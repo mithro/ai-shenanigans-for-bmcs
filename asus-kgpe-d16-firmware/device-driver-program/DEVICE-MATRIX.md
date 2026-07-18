@@ -203,10 +203,18 @@ connector maps to a row above — nothing in the spec is unrepresented:
 | §14 Neighbour chips | QU2/BMC_FW1/U5/LU1-2/QU4/U27-28/U25/QU9/QU5/QU8/QU6/U23/AZ75232/glue U6-8/LDOs/SU1/OU1/NU1 | all active chips have rows; passive glue (U6/U7/U8/U23) modeled in the fabric+power-seq; LDOs = passive power; **SU1/OU1 = host chips reached via LPC/PCI/I2C (rows 3/8/15); NU1 SR5690 = host northbridge, reached only via the shared I2C3/I2C6 multi-master bus (row 15 note), not a distinct BMC-driven device** |
 | §15 Connectors | VGA1/AST_UART1/AST_JTAG1/BMC_FW1/PANEL1/AUX_PANEL1/PSUSMB1/TPM1/VGA_SW1/IPMI_SEL1/RECOVERY1 | VGA1→12, UART1→30, JTAG1→harness, FW1→2, PANEL1→27/32, AUX_PANEL1→26/32, PSUSMB1→24, TPM1→7, jumpers→29/33 |
 
-**Verdict:** the 40-row matrix is comprehensive against the authoritative
-schematic. The only spec elements without their own driver row are (a) passive
-power/glue (LDOs, series-R nets, FET switches, buffers — modeled where they
-affect behaviour, e.g. the QU9/QU5/U23 fabric device, not driven), (b) the JTAG
-header (the silicon test harness, explicitly Ⓝ), and (c) the host-side chips
-SU1/OU1/NU1 (reached through the LPC/PCI/I²C rows, not BMC-internal). Each is
-justified above, not skipped.
+**Verdict:** the matrix is comprehensive against the authoritative schematic. The
+only spec elements without their own driver row are (a) passive power/glue (LDOs,
+series-R nets, FET switches, buffers — modeled where they affect behaviour, e.g.
+the QU9/QU5/U23 fabric device, not driven), (b) the JTAG header (the silicon test
+harness, explicitly Ⓝ), and (c) the host-side chips SU1/OU1/NU1 (reached through
+the LPC/PCI/I²C rows, not BMC-internal). Each is justified above, not skipped.
+
+**Gate-(d) round-2 correction (independent sub-agent per-pin sweep, 2026-07-18):**
+the audit against the 355-ball pinmap found 6 individual signals the section-level
+read had missed, now folded into FULL-TASK-LIST (the authoritative doc): **B1f**
+`LPCPD#` (D15), **B1g** `PIKE2` LPC peer `[N]`, **B2** PCI `INTA#`/GPIOB0 (B11),
+**E6** unidentified `GPIOE6/E7↔SP5100` (U4/U3), **E6** `ENTEST` (R21) `[N]`, **E6**
+`AST_SRST#` (R20) reset-output→PHY. So the "nothing skipped" claim was ~95% true
+at the section level but not at the per-pin level — these 6 rows are now explicit
+(honestly `[ ]`/`[~]`/`[N]`). See FULL-TASK-LIST B1f/B1g/B2/E6 for the stack cells.

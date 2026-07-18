@@ -117,8 +117,18 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### B1e. LPC — TPM header pass-through → TPM1 (§5, §15)  [split per gate-(d) audit]
 - [N] QEMU/U-Boot/Linux/Zephyr: TPM1 shares the *host's* LPC bus; the BMC is a peer LPC peripheral, it does not drive the TPM. No BMC driver — the TPM is a host device on the shared bus (DEVICE-MATRIX row 7). Documented, not a BMC deliverable.
 
+### B1f. LPC — LPCPD# power-down / clock-run handshake (§5, ball D15 net N39511964)  [added: gate-(d) round-2 enumeration audit 2026-07-18]
+- [ ] QEMU: model the G3 LPC `LPCPD#` (LPC power-down / clock-run) so a host sleep/resume drives the handshake faithfully (the one §5 LPC signal not covered by B1a–e's KCS/mailbox/snoop/vUART/TPM).
+- U-Boot: [N] (host-driven low-power handshake, not a U-Boot function)
+- Linux: [~] QEMU · [~] silicon — the mainline aspeed-lpc handles LPCPD internally; verify/state explicitly rather than omit · [N] userspace
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B1g. PIKE2 storage-mezzanine connector — LPC-bus peer (§15, shares LPCPD# net)  [added: gate-(d) round-2]
+- [N] QEMU/U-Boot/Linux/Zephyr: PIKE2[A11] shares only the `LPCPD#` net with the BMC; the BMC does not drive PIKE2 (analogous to the TPM1/B1e disposition). Documented for completeness, not a BMC deliverable.
+
 ### B2. PCI 33 MHz bus (VGA-as-PCI / video-capture attach) → SP5100 (§6)
 - [~] QEMU: video engine appears; full PCI-target config-space model partial
+- [ ] QEMU: PCI `INTA#` / GPIOB0 interrupt output (ball B11, net N36033607 → PCI6[B8], SU1[AC4]) — a real PCI target asserts INTA#; model it or record [N] if the capture path never raises it  [added: gate-(d) round-2]
 - U-Boot: [N] (BMC is a PCI target for host video capture, not a U-Boot function)
 - Linux: [~] QEMU (video path uses it) · [~] silicon · [ ] userspace (covered via video below)
 - Zephyr: [ ] QEMU · [ ] silicon
@@ -299,7 +309,10 @@ pin the B2/B3b PCI-target model must generate)**)
   undone, not blocked**) · [ ] userspace (`/sys/class/gpio` per-line)
 - Zephyr: [ ] QEMU · [ ] silicon
 
----
+### E6. Unidentified + test/reset pins (§13 + per-pin netlist)  [added: gate-(d) round-2 enumeration audit 2026-07-18]
+- [ ] **GPIOE6/GPIOE7 ↔ SP5100** (balls U4/U3, nets N85607608/N85622904 → NQ5/NQ6/SR137/SR157/SU1[AE18,B8]): two unidentified BMC↔southbridge GPIO handshake signals. RE the function from the netlist (sibling of the D13 unidentified-responder open item), then model or dispose. Currently untracked.
+- [N] **ENTEST** (ball R21, net AST_ENTEST): SoC manufacturing test-mode enable — not an in-guest device (like the JTAG/G1 harness). Disposition [N]; recorded so the pin is accounted for.
+- [~] **AST_SRST#** (ball R20): the BMC's OWN global reset OUTPUT, tied to JTAG SRST# and wired to reset the RTL8201N PHY (U5[38]). Implicit in A1 (SoC reset) + G1 (JTAG), but a faithful QEMU model should PROPAGATE SRST# → PHY reset (affects the C1 MAC/PHY). QEMU: [ ] propagate to PHY · silicon: [x] JTAG SRST# works (G1). Add the board-effect note to the A1/C1 models.
 
 ## F. Serial / SOL (§12)
 
@@ -359,6 +372,16 @@ QU9/QU5/U23 fabric = D6).
   split, the D1b I²C slave/multi-master, and CU2 were all ADDED by the gate-(d)
   task-discovery audit (2026-07-18) — the prior coverage assertion had overstated
   completeness; these are now explicit rows/items, honestly `[ ]`/`[~]`/`[N]`.
+
+**Gate-(d) round-2 (independent sub-agent per-pin sweep, 2026-07-18):** a second
+completeness audit against the 355-ball pinmap found 6 more individual signals the
+round-1 sweep had not reached — now folded in above: **B1f** `LPCPD#` (D15, the one
+uncovered §5 LPC signal), **B1g** `PIKE2` LPC-bus peer `[N]`, **B2** PCI `INTA#`/
+GPIOB0 (B11) interrupt output, **E6** the unidentified `GPIOE6/E7↔SP5100` handshake
+(U4/U3, sibling of the D13 open item), **E6** `ENTEST` test-mode pin `[N]`, and
+**E6** `AST_SRST#` (R20) BMC reset-output → PHY reset (a board effect a faithful
+model must propagate). The audit judged the enumeration otherwise ~95% complete and
+rigorously self-audited; these are missing rows, not missing stack-columns.
 
 **Nothing in the schematic is skipped.** Items marked `[N]` state why they are
 not-applicable for that stack; `[B]` items state the precise blocker and my

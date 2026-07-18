@@ -14,7 +14,26 @@
      `DEVICE-MATRIX.md`/`FULL-TASK-LIST.md` — enumerate every schematic device, flag
      any missing from the enumeration, and identify concrete NEW tasks (gate d).
 - Findings will be folded back: code issues fixed, enumeration gaps + new tasks added.
-  Results pending (agents running).
+- **RESULTS — both agents found real, actionable items (gates working as intended):**
+  - **Code review (gate b):** vhub `deadlock-model` property + `mkflash.py` copy-size
+    logic reviewed CLEAN (property wiring, vmstate omission, roundup/slot-bound
+    algebra all correct). Found ONE real bug in MY F7 re-scope:
+    `check_ncsi_scoped_to_mac1()` did `rglob("*")` over `qemu-firmware/kernel/`,
+    which (when a kernel is built locally) walks the gitignored `kernel/linux/`
+    (~88k files) whose unrelated `aspeed_g4/g5_defconfig` ALSO set
+    `CONFIG_NET_NCSI=y` → the `break`-on-first-match could FALSE-PASS (mask a real
+    "NC-SI dropped from kgpe-d16.config" regression) and was very slow. **FIXED:**
+    read `qemu-firmware/kernel/kgpe-d16.config` directly (guard now 8/8 in 0.048s,
+    was going to scan 88k files). Latent for CI (that job doesn't populate
+    kernel/linux) but real for local dev — the exact path these changes were
+    validated on. Good catch by the independent reviewer.
+  - **Enumeration audit (gates a/d):** enumeration judged ~95% complete + rigorously
+    self-audited, but a per-pin sweep of the 355-ball pinmap found 6 signals missed
+    at the section level → **folded into FULL-TASK-LIST + DEVICE-MATRIX**: B1f
+    `LPCPD#` (D15), B1g `PIKE2` peer `[N]`, B2 PCI `INTA#`/GPIOB0 (B11), E6
+    `GPIOE6/E7↔SP5100` (U4/U3, sibling of D13), E6 `ENTEST` (R21) `[N]`, E6
+    `AST_SRST#` (R20) reset→PHY. None are large subsystems — individual pins/peers.
+    Gate (d) is NOT yet satisfied (this round found new tasks); re-run until dry.
 
 ## 2026-07-18 — CI GREEN confirmed for C4+F7+C2-full; C3 fix = force IPv4 (musl.cc)
 
