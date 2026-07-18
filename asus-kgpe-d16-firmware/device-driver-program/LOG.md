@@ -21,6 +21,20 @@
   can't reproduce the runner's network locally; the CI run for this commit is the
   real test. If `-4` doesn't clear it, the fallback is a release-asset mirror
   (needs the user to authorize the publish).
+- **RESULT (run 29640421665): `-4` narrowed it but did NOT fix it.** The error
+  changed from `Network is unreachable` (IPv6) to `Connection timed out` (IPv4) —
+  so musl.cc IS blocked/dropped from the GitHub runner IP ranges over BOTH
+  families, not merely an IPv6 gap. No fetch-side option (retry/IPv4/mirror-URL on
+  musl.cc) can work. **The only robust fix is hosting the toolchain somewhere
+  runners CAN reach — a GitHub *release* asset in this repo** (runners reach
+  github.com fine). The 102 MB `arm-linux-musleabi-cross.tgz` is downloaded +
+  sha256-verified (d70c6071…) and ready to upload, but `gh release create` is an
+  outward-facing publish that the auto-mode classifier BLOCKED — it needs user
+  authorization. Kept `-4` (harmless + correct: it removes the IPv6-unreachable
+  failure mode). **C3 is therefore BLOCKED on a user decision:** (a) authorize the
+  release-asset mirror (fastest), or (b) switch to a source build (musl-cross-make,
+  reachable but ~20-30 min) or a bootlin toolchain (different prefix, needs rework).
+  Surfaced to the user. This is the ONE item this session I cannot close myself.
 
 ## 2026-07-18 — F7 guard FIXED: it was an "incorrect claim that functionality doesn't exist"
 
