@@ -1,0 +1,33 @@
+D08 W83601G QEMU validation — PASS (2026-07-18).
+
+scripts/w83601g-test.py boots the kgpe-d16-bmc machine and drives both W83601G
+expanders (hw/gpio/w83601g.c) over the BMC's direct I2C5 engine (Linux i2c-4)
+exactly as firmware does on silicon — raw SMBus register access, no driver. All
+19 assertions pass against the Nuvoton V1.31 datasheet + silicon captures:
+
+  W836_BUS=i2c-4
+  p1in_u27      [0x18:0x00] = 0x0f   (silicon-seeded Port-1 input latch)
+  p1out_reset   [0x18:0x01] = 0x00   (CR01 output data reset)
+  p1pol_reset   [0x18:0x02] = 0xf0   (CR02 polarity reset)
+  p1iocfg_reset [0x18:0x03] = 0xff   (CR03 all-input reset)
+  p2out_reset   [0x18:0x09] = 0x00   (CR09 output data reset)
+  p2pol_reset   [0x18:0x0a] = 0x70   (CR0A polarity reset)
+  p2iocfg_reset [0x18:0x0b] = 0x7f   (CR0B all-input reset)
+  idhigh        [0x18:0x20] = 0x60   (chip ID high)
+  idlow         [0x18:0x21] = 0x12   (chip ID low, table value)
+  reserved      [0x18:0x07] = 0xff   (open-bus, matches silicon)
+  p1in_u28      [0x19:0x00] = 0xb5   (U28 seeded input)
+  u28_p1out     [0x19:0x01] = 0x00
+  u28_idhigh    [0x19:0x20] = 0x60
+  ro_write_ignored [0x18:0x00] = 0x0f   (write to read-only CR00 ignored)
+  LED-DRIVE PATH (the BMC's DIMM-error-LED sequence):
+    iocfg_gp10_output [0x18:0x03] = 0xfe  (clear CR03 bit0 -> GP10 output)
+    led_on            [0x18:0x01] = 0x01  (drive GP10 high via CR01)
+    p2_led_on         [0x18:0x09] = 0x01  (Port-2 LED via CR0B/CR09)
+    led_off           [0x18:0x01] = 0x00  (clear)
+  W836_ALL_OK / RESULT: PASS
+
+Model bug found + fixed during bring-up: the 34-register file (0x22) is not a
+power of two, so an `& (NR_REGS-1)` pointer mask (copied from the 8-register
+jc42 model) aliased CR02->CR00 etc. Replaced with an explicit range check; the
+pointer is a plain uint8_t that wraps mod 256 like the hardware.

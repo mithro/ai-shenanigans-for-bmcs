@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D08 W83601G: faithful QEMU model + validation (QEMU PASS)
+
+- Obtained the official Nuvoton W83601G datasheet V1.31 (register map in
+  `evidence/d08-w83601g/01-datasheet-register-map.md`); it cross-checks the
+  silicon capture (CR01 reset 0x00 == the `0x18 reg01` I read), so the part is
+  confirmed and can be modelled faithfully rather than guessed.
+- Wrote `hw/gpio/w83601g.c` — a datasheet-faithful SMBus GPIO-expander: full
+  CR00-CR21 file, correct resets (out 0x00, iocfg all-input 0xff/0x7f, polarity
+  0xf0/0x70, ID 0x60/0x12), read-only + reserved(open-bus 0xff) semantics, and a
+  per-instance `port1-input` seeded from silicon. Wired both U27/U28 on the
+  machine's I2C5 (bus 4) at 0x18/0x19 (inputs 0x0f / 0xb5).
+- Bug found + fixed during bring-up (honest note): the 34-register file (0x22)
+  is NOT a power of two, so the `& (NR_REGS-1)` pointer mask I copied from the
+  8-register jc42 model aliased CR02->CR00 (QEMU test caught it: CR02 read 0x0f
+  instead of 0xf0). Replaced with an explicit range check; pointer is a plain
+  uint8_t wrapping mod 256 like the hardware.
+- `scripts/w83601g-test.py` boots kgpe-d16-bmc and drives both expanders over
+  Linux i2c-4 exactly as firmware does (raw SMBus, no driver): **19/19 assertions
+  PASS**, including the DIMM-error-LED sequence (CR03 output-enable -> CR01 drive
+  -> readback -> clear) and the Port-2 CR0B/CR09 path. Evidence
+  `evidence/d08-w83601g/02-qemu-pass.txt`; CI job `boot-w83601g` added.
+- Also had to rebuild the KGPE-D16 DTB: the cached `kernel/out` dtb was stale and
+  did not enable `&i2c4`, so Linux never registered the I2C5 adapter. Rebuilt
+  from the current DTS (`make dtbs`) — i2c-4 now enumerates.
+- Matrix rows 21/22: QE ✅, LU ✅ (raw userspace), LS 🔶 (silicon reach proven;
+  LED-drive-on-silicon next). QEMU submodule commit d0556622ed.
+
 ## 2026-07-18 — D08 W83601G DIMM-LED expanders characterized on silicon
 
 - Read the two W83601G I2C GPIO expanders (U27/U28, §10.2 DIMM-error-LED
