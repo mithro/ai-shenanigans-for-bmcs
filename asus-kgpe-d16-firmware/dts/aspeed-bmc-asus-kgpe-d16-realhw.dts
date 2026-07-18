@@ -1375,7 +1375,21 @@
 					interrupt-parent = <0x07>;
 					pinctrl-names = "default";
 					pinctrl-0 = <0x09>;
-					status = "disabled";
+					status = "okay";
+
+					/* D09: AMD SB-TSI processor thermal (schematic §10.2,
+					 * I2C4 = DT i2c3, 0x4c=P0 / 0x4d=P1, via QU4 FETs). Binds
+					 * the sbtsi_temp hwmon driver -> real CPU die temps when
+					 * the host is powered. */
+					sbtsi@4c {
+						compatible = "amd,sbtsi";
+						reg = <0x4c>;
+					};
+
+					sbtsi@4d {
+						compatible = "amd,sbtsi";
+						reg = <0x4d>;
+					};
 				};
 
 				i2c-bus@140 {
