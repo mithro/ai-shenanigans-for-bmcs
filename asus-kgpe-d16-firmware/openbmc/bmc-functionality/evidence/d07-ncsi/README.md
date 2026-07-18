@@ -33,11 +33,16 @@ System MAC Address (0x06) and keep-PHY (0x20). The kernel is already built with
 `CONFIG_NCSI_OEM_CMD_GET_MAC`/`KEEP_PHY`. This responder would live in the MAC
 model (libslirp is an external subproject) — planned as a new QEMU device.
 
-## Silicon — TODO (needs the NICs' NVM to enable NC-SI)
+## Silicon — the NICs are NC-SI-enabled ✅ (`01-silicon-82574L-nvm-ncsi-enabled.txt`); full discovery TODO
 
-MAC2 is strap-enabled on the board (SCU70 above) and the 82574Ls are on
-+3V3_AUX (host-off testable). The open question (82574 datasheet, NVM word 0x0F
-`MNGM`): do the ASUS-programmed NIC NVMs actually enable NC-SI mode? Determine
-by `ethtool -e` on the host NICs or by observing NC-SI responses on silicon,
-then boot the net/ncsi kernel and confirm channel discovery against the real
-82574Ls.
+The open question is **answered**: `ethtool -e` on both real 82574Ls
+(SystemRescue host, 2026-07-18) shows **NVM word 0x0F = 0xa558 → MNGM bits
+[14:13] = 01 = NC-SI enabled** on BOTH NICs, with **package IDs 0 and 1**
+(word 0x2E = 0x00a0 / 0x10a0) — exactly the two-package multi-drop sideband.
+So the BMC's MAC2 NC-SI WILL discover them. MAC2 is strap-enabled
+(SCU70=0x00819582) and LU1/LU2 are on +3V3_AUX.
+
+Remaining: boot the BMC with the net/ncsi kernel and mac1 enabled (a realhw
+build with the mac1+NET_NCSI DTS/config, then JTAG+netboot) and confirm the
+BMC discovers the two real channels. This is now de-risked — the responders
+exist and are configured.

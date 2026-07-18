@@ -1,0 +1,23 @@
+### enp2s0
+driver: e1000e
+bus-info: 0000:02:00.0
+word0x0F(MNGM): 0x001e:		58 a5 
+word0x2E(pkgID): 0x005c:		a0 00 
+### enp3s0
+driver: e1000e
+bus-info: 0000:03:00.0
+word0x0F(MNGM): 0x001e:		58 a5 
+word0x2E(pkgID): 0x005c:		a0 10 
+
+--- DECODE (82574 datasheet: NVM word 0x0F [14:13]=MNGM, 0x2E [14:12]=NC-SI pkg ID) ---
+word 0x0F (both NICs) = bytes 58 a5 = little-endian 0xa558
+  = 1010 0101 0101 1000 -> bit15(APM)=1, bits[14:13]=01 = MNGM = NC-SI ENABLED
+word 0x2E:
+  enp2s0 (0000:02:00.0) = a0 00 = 0x00a0 -> [14:12]=0 -> NC-SI package ID 0
+  enp3s0 (0000:03:00.0) = a0 10 = 0x10a0 -> [14:12]=1 -> NC-SI package ID 1
+
+CONCLUSION: both real 82574L NICs (LU1/LU2) have NC-SI enabled in their NVM,
+as packages 0 and 1 — the multi-drop two-package sideband the schematic §7 and
+the 82574 datasheet describe. The BMC's MAC2 NC-SI WILL discover them. This
+answers the open D07 silicon question and gives the package IDs for the
+faithful Phase-2 QEMU 82574L responder.
