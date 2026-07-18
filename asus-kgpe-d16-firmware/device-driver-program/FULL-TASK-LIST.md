@@ -181,10 +181,10 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU (jc42 model exists) · [N] silicon (**this rig's DIMM_A2 SPD byte32=0 = NO thermal sensor; 0x19 NAKs — faithfully absent, not a gap**) · [N] userspace (no TSOD present)
 - Zephyr: [ ] QEMU · [N] silicon (no TSOD on this rig's DIMM)
 
-### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)
-- [ ] QEMU: sbtsi temp model on I2C4 (D08-devices, task #135)
+### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)  ✅ QEMU this session
+- [x] QEMU: `hw/sensor/sbtsi.c` datasheet/driver-faithful (P0@0x4c, P1@0x4d on i2c3); `scripts/sbtsi-test.py` 8/8 PASS (evidence d09-sbtsi/00)
 - U-Boot: [N] (CPU thermal is an OS function)
-- Linux: [ ] QEMU (`sbtsi_temp`) · [B] silicon (**AMD SB-TSI needs the host CPU powered + I2C4 engine enabled in DT; host-presence-dependent on this rig. Confidence: reachable once host is on + i2c3 enabled**) · [ ] userspace (hwmon)
+- Linux: [~] QEMU (raw SMBus reads the exact `sbtsi_temp` register model; in-kernel bind needs CONFIG_SENSORS_SBTSI = a kernel rebuild — TODO) · [B] silicon (**AMD SB-TSI answers only while the host CPU is powered; reachable once host is on + i2c3 enabled on the silicon DTB — host-presence-dependent, not a driver gap**) · [x] userspace (raw i2cget/i2cset validated)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)

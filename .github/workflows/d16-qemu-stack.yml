@@ -233,6 +233,40 @@ jobs:
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240
 
+  boot-sbtsi:
+    name: D09 — AMD SB-TSI CPU thermal sensors on I2C4
+    runs-on: ubuntu-latest
+    needs: [build-kernel, build-initramfs]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $QEMU_DEPS openssh-client
+      - uses: astral-sh/setup-uv@v5
+      - name: Build qemu-system-arm (from the submodule)
+        run: sh asus-kgpe-d16-firmware/qemu-firmware/scripts/build-qemu.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel
+          path: kernel-out
+      - uses: actions/download-artifact@v4
+        with:
+          name: initramfs
+          path: initramfs-out
+      - name: SB-TSI register map (raw SMBus, both processor sensors)
+        run: |
+          chmod 600 initramfs-out/id_kgpe_d16_test
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/sbtsi-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test \
+            --boot-timeout 240
+
   boot-ncsi:
     name: D07 — NC-SI channel discovery on MAC2
     runs-on: ubuntu-latest

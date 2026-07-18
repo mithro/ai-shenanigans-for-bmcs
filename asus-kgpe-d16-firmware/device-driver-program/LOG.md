@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D09 SB-TSI CPU thermal: faithful QEMU model + validation (QEMU PASS)
+
+- `hw/sensor/sbtsi.c` — AMD SB-TSI processor thermal sensor, register file
+  matching the Linux `sbtsi_temp` driver (TEMP_INT 0x01, STATUS 0x02, CONFIG
+  0x03, hi/lo-limit 0x07/0x08/0x13/0x14, TEMP_DEC 0x10 bits[7:5]=0.125C); a
+  `temperature` QOM property (millidegrees) drives TEMP_INT/TEMP_DEC. Wired P0
+  @0x4c (45.5C) + P1 @0x4d (43.0C) on the machine's i2c bus 3 (DT i2c3 =
+  schematic I2C4). DTS `&i2c3` enabled with `amd,sbtsi` nodes; DTB rebuilt.
+- `scripts/sbtsi-test.py` boots kgpe-d16-bmc and reads both sensors over Linux
+  i2c-3 via raw SMBus: **8/8 PASS** (int/dec temps for both sockets, CONFIG/
+  STATUS resets, RW-limit accepts a write, RO TEMP_INT rejects one). Evidence
+  `evidence/d09-sbtsi/00-qemu-pass.txt`; CI job `boot-sbtsi` added.
+- FULL-TASK-LIST D9: QEMU [x], Linux userspace(raw) [x]; in-kernel sbtsi_temp
+  bind needs CONFIG_SENSORS_SBTSI (kernel rebuild, TODO); silicon [B]
+  host-CPU-power-dependent (SB-TSI *is* the AMD processor interface). QEMU
+  submodule 512d56d217.
+
 ## 2026-07-18 — complete schematic read + formal per-device/per-stack task list
 
 - Read the **complete** `AST2050-BMC-WIRING.md` end-to-end again (all 597 lines,

@@ -272,6 +272,26 @@
 	};
 };
 
+/*
+ * BMC I2C4 engine (DT i2c3) — schematic §10.2 "AMD SB-TSI 0x4C/0x4D", reached
+ * through the QU4 level-shift FETs Q56-Q59. The two AMD processor thermal
+ * interfaces (P0 @0x4c, P1 @0x4d) bind the Linux sbtsi_temp hwmon driver. On
+ * real silicon these only respond while the host CPU(s) are powered.
+ */
+&i2c3 {
+	status = "okay";
+
+	sbtsi@4c {
+		compatible = "amd,sbtsi";
+		reg = <0x4c>;
+	};
+
+	sbtsi@4d {
+		compatible = "amd,sbtsi";
+		reg = <0x4d>;
+	};
+};
+
 &i2c1 {
 	status = "okay";
 

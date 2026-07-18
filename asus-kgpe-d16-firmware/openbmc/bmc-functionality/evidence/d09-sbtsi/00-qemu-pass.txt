@@ -1,0 +1,30 @@
+D09 SB-TSI (AMD CPU thermal) — QEMU model validated (2026-07-18).
+
+Schematic §10.2: "CPU thermal (SB-TSI/PECI) via QU4, AMD SB-TSI 0x4C/0x4D on
+I2C4 (C13/D13) → QU4 pins 29/30, through level-shift FETs Q56-Q59." QEMU bus
+index 3 = DT i2c3 = schematic I2C4.
+
+hw/sensor/sbtsi.c models the AMD SB-TSI register file matching the Linux
+sbtsi_temp driver (TEMP_INT 0x01, STATUS 0x02, CONFIG 0x03, TEMP_HIGH/LOW_INT
+0x07/0x08, TEMP_DEC 0x10 [bits7:5 = 0.125C], TEMP_HIGH/LOW_DEC 0x13/0x14). A
+"temperature" QOM property (millidegrees) drives TEMP_INT/TEMP_DEC. Two instances
+wired on i2c3: P0 @0x4c (45.5 C), P1 @0x4d (43.0 C). DTS i2c3 enabled with
+amd,sbtsi nodes.
+
+scripts/sbtsi-test.py boots kgpe-d16-bmc and reads the sensors over Linux i2c-3
+via raw SMBus (no kernel driver): 8/8 assertions PASS:
+  TSI_BUS=i2c-3
+  p0_int [0x4c:0x01] = 0x2d (45 C)     p0_dec [0x4c:0x10] = 0x80 (0.5 C)
+  p1_int [0x4d:0x01] = 0x2b (43 C)     p1_dec [0x4d:0x10] = 0x00
+  config [0x4c:0x03] = 0x00            status [0x4c:0x02] = 0x00
+  high_limit_rw [0x4c:0x07] = 0x55     (RW limit register accepts a write)
+  ro_write_ignored [0x4c:0x01] = 0x2d  (RO TEMP_INT rejects a write)
+  TSI_ALL_OK / RESULT: PASS
+
+REMAINING for D09:
+- Linux in-kernel driver: needs CONFIG_SENSORS_SBTSI (a kernel rebuild) so the
+  sbtsi_temp hwmon driver binds amd,sbtsi -> /sys/class/hwmon tempN_input. The
+  raw-SMBus read above already exercises the exact register model the driver uses.
+- Silicon: SB-TSI answers only while the host CPU(s) are powered (it IS the AMD
+  processor's interface). Reachable once the host is on + i2c3 is enabled on the
+  silicon DTB. Host-presence-dependent, not a driver gap.
