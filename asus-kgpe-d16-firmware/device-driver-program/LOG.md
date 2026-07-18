@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C4 CULPRIT (corrected): the USB vhub DEADLOCK model (192c4ef4da), NOT the mux fabric
+
+- **Self-corrected a premature bisect conclusion (the empirical method caught it).**
+  I'd logged "culprit = be673b284e (mux fabric)" below, but an isolation test
+  falsified it: neutering the fabric's I2C forwarding AND fully disabling the
+  fabric init BOTH still reset C4. Re-reading history, `be673b284e` is NOT adjacent
+  to the good boundary `ae204f8` — 4 commits sit between them. My bisect had skipped
+  testing the immediate neighbours. Corrected range = ae204f8..be673b284e.
+- **Proper bisect (resource-limited builds):** `192c4ef4da` (USB vhub deadlock
+  model) → reset @27s = **BAD**; its parent `d67f9e4d8a` → survived 110s = **GOOD**.
+  So the definitive culprit is **`192c4ef4da` "faithful AST2050 (G3) USB vhub
+  deadlock model — reproduces the probe hang"** (wires the udc IRQ → VIC INT#5 +
+  latches HUB0C[18] "USB command bus dead-lock" when UPSTREAM_CONNECT is asserted
+  into a not-ready PHY). The C410X vendor firmware asserts connect without the
+  PHY-ready poll our patched C2 kernel (patch 0007) does → hits the modeled
+  livelock → CPU stuck in the unmaskable ISR → doesn't pet the WDT → reset.
+- **Faithfulness call + fix direction.** Per [[qemu-must-model-real-hardware]] a
+  broken legacy boot is a bug in MY model. The vendor firmware boots on real
+  AST2050 silicon, so my model must not deadlock it. Root approximation: the model
+  makes PHY-ready *poll-triggered* (for cross-host-speed determinism), but real
+  silicon readies the PHY on a physical delay after reset-release (HUB00[11]); a
+  driver that WAITS-then-connects (likely the vendor fw) is fine on silicon but the
+  poll-triggered model still reports "not ready" → false deadlock. **Fix (next,
+  focused):** trace the vendor fw's udc/HUB register access (QEMU `-d`/model log)
+  to see its reset-release→connect sequence, then broaden the model's PHY-ready
+  condition to also become true on that faithful pattern WITHOUT losing the
+  mainline-driver deadlock that C2/patch-0007 verification relies on (C2 must stay
+  green). Keep both the deadlock repro (for the unpatched mainline path) and a
+  legal path the vendor fw + patched kernel take. Deferred to fresh context — a
+  model refinement I won't rush at depth (risk: regress the C2 deadlock repro).
+
 ## 2026-07-18 — C4 BISECTED to the I2C mux fabric commit (be673b284e) — strap EXONERATED
 
 - **Ran the bisect (resource-limited builds via `systemd-run --user --scope
