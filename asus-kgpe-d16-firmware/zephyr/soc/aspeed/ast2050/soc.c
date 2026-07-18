@@ -23,14 +23,19 @@ static const struct arm_mmu_region mmu_regions[] = {
 			      MT_NORMAL | MPERM_R | MPERM_W | MPERM_X),
 
 	/*
-	 * Do NOT flat-map the 0x1e600000 APB window here: Zephyr's device-MMIO
-	 * virtual allocator (used by the ns16550 DEVICE_MMIO_MAP) hands out
-	 * virtual addresses inside that same range, so a flat identity region
-	 * collides with it and the UART access lands on the raw virtual==phys
-	 * address (0x1e7ff000, unimplemented) instead of translating to the
-	 * real UART at 0x1e784000. Each peripheral driver maps its own reg via
-	 * DEVICE_MMIO instead.
+	 * UART5 (0x1e784000) flat-mapped as device memory so the M0 polling
+	 * console (console.c) can reach the SFRs at their physical address with
+	 * the MMU on. This is a STATIC region installed at boot (like dram /
+	 * vectors) and is reliable, unlike the dynamic ns16550 DEVICE_MMIO_MAP
+	 * path: under CONFIG_MMU that path's z_phys_map returns a virtual base
+	 * (observed 0x1e7ff000) that the ARM926 arm_mmu does not translate back
+	 * to 0x1e784000, so the ns16550 console busy-polls an unimplemented
+	 * address and never prints. The identity region sits well outside the
+	 * kernel VM window (0x40000000+8M), so it does not collide with the
+	 * device-VA allocator. Kept narrow (one 1 MB section covers it).
 	 */
+	MMU_REGION_FLAT_ENTRY("uart5", 0x1e784000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {

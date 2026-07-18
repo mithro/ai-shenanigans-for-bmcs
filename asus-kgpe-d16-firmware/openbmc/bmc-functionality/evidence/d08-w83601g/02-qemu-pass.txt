@@ -14,7 +14,7 @@ exactly as firmware does on silicon — raw SMBus register access, no driver. Al
   p2pol_reset   [0x18:0x0a] = 0x70   (CR0A polarity reset)
   p2iocfg_reset [0x18:0x0b] = 0x7f   (CR0B all-input reset)
   idhigh        [0x18:0x20] = 0x60   (chip ID high)
-  idlow         [0x18:0x21] = 0x12   (chip ID low, table value)
+  idlow         [0x18:0x21] = 0x13   (chip ID low, silicon-resolved; see 03-*)
   reserved      [0x18:0x07] = 0xff   (open-bus, matches silicon)
   p1in_u28      [0x19:0x00] = 0xb5   (U28 seeded input)
   u28_p1out     [0x19:0x01] = 0x00

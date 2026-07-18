@@ -116,10 +116,10 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-- **30** console both sides (all boots). Zephyr will reuse `uart_ns16550.c`. D10/D11.
+- **30** console both sides (all boots). **Zephyr M0 RUNS in QEMU** (ZQ 🔶): the AST2050 port boots and prints `*** Booting Zephyr OS ***` via a static-mapped polling SoC console (`soc/aspeed/ast2050/console.c`), evidence `d14-zephyr/02`. The standard `uart_ns16550.c` is blocked on the upstream ARM9 `arm_mmu` z_phys_map gap; M1 (aspeed timer) unblocks the app thread + then the ns16550 path. D10/D11/D14.
 - **31** SOL essentially unimplemented end-to-end (audit gap #2): no QU8-mux/Super-I/O model, no Linux SOL session, no host bytes on silicon. D10.
 
 ## JTAG / LEDs / clock / straps (§13)
@@ -160,8 +160,12 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
   open items are NC-SI-silicon (🔷 G3 pinmux), USB-vhub-silicon (🔶),
   SOL (⬜), the 6 I2C far-ends (⬜), DDC/EDID (⬜), MTD-write (⬜), and
   several §11 signals + LED silicon observation.
-- **Zephyr**: entire column ⬜ pending the D14 port (feasibility settled;
-  tractable).
+- **Zephyr**: the D14 port now **BUILDS, LINKS, and RUNS its M0 banner in
+  QEMU** (`*** Booting Zephyr OS ***`, evidence `d14-zephyr/02`) — the ARM926
+  arch core (upstream PR #103557) + the authored AST2050 SoC/board + a
+  static-mapped polling console all work. Row 30 ZQ is 🔶. Remaining: M1
+  (aspeed system timer → app thread → per-device Zephyr drivers → ZS silicon);
+  the standard ns16550 console awaits the upstream ARM9 `arm_mmu` z_phys_map fix.
 
 ---
 

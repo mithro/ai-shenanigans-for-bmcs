@@ -1,0 +1,42 @@
+D14 Zephyr M0 — BANNER RUNS (2026-07-18). The AST2050 Zephyr port now BOOTS and
+prints under QEMU:
+
+  $ qemu-system-arm -M kgpe-d16-bmc -m 128 -display none -serial stdio \
+        -kernel zbuild/zephyr/zephyr.elf
+  *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+
+This is the canonical Zephyr proof-of-life: reaching the banner proves the whole
+boot path works on real ARM926/AST2050 modelling —
+  reset vector (0x40002068) -> ARM926 arch init (svc/fiq/irq/abt/und/sys mode
+  stacks, seen in -d int) -> MMU enable -> C runtime/BSS -> kernel init ->
+  console output.
+
+HOW the M0 banner blocker (evidence 01) was solved — it was TWO stacked bugs,
+both mine, not a hardware or arch-structure problem:
+
+1. ns16550 + CONFIG_MMU DEVICE_MMIO_MAP: z_phys_map hands the ns16550 driver a
+   virtual base the brand-new ARM9 arm_mmu resolves to phys 0x1e7ff000 (not the
+   real UART 0x1e784000) -> the standard console busy-polls an unimplemented
+   address and never prints. Worked around for M0 by a SoC polling console
+   (soc/aspeed/ast2050/console.c) that writes UART5 at its PHYSICAL address via a
+   STATIC identity MMU region in soc.c (static regions install correctly at boot,
+   unlike the dynamic z_phys_map path), with CONFIG_UART_CONSOLE=n so the broken
+   ns16550 poll_out never becomes the printk hook.
+
+2. Access width: the first console used 32-bit UART accesses; QEMU's serial_mm
+   (regshift=2, like the Linux ns16550 which uses size-1 accesses) needs BYTE
+   accesses -> the THR write was mishandled and never reached the chardev.
+   Fixed to volatile uint8_t accesses.
+
+Diagnostic technique: writing marker values to a deliberately-unimplemented SFR
+(0x1e7ff0f0/f4) so they surface in QEMU's `-d unimp` log — this proved the printk
+hook WAS being called with the banner text ('*',' ','B','o','o','t'...) and that
+the LSR read returned the real UART's 0x60 (THRE|TEMT), separating "hook called?"
+from "write lands?".
+
+STILL M1 (honest): only the banner prints, not the hello_world main() "Hello
+World!" — the app thread is blocked by the absent system timer
+(CONFIG_SYS_CLOCK_EXISTS=n; the banner is printed by the kernel init thread
+before the app thread runs). M1 adds the aspeed timer driver -> app thread ->
+"Hello World" -> then per-device Zephyr drivers. Matrix: the Zephyr QEMU (ZQ)
+core now RUNS (banner); ZS/silicon and per-device drivers remain.

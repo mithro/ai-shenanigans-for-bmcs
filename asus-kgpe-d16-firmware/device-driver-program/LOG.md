@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D14 Zephyr M0 BANNER RUNS in QEMU 🎉
+
+- The AST2050 Zephyr port now **boots and prints** under `qemu-system-arm -M
+  kgpe-d16-bmc`: `*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***`.
+  The canonical Zephyr proof-of-life — reset vector → ARM926 arch init → MMU
+  enable → C runtime → kernel init → console all work. Evidence
+  `evidence/d14-zephyr/02-m0-banner-RUNS.txt`.
+- Root cause of the old blocker was TWO stacked bugs (both mine): (1) the
+  ns16550 CONFIG_MMU DEVICE_MMIO_MAP z_phys_map path is broken on the brand-new
+  ARM9 arm_mmu (resolves the UART VA to 0x1e7ff000, not 0x1e784000); (2) my
+  first console workaround used 32-bit UART accesses where QEMU's serial_mm
+  (regshift=2) needs BYTE accesses. Fix = a SoC polling console
+  (`soc/aspeed/ast2050/console.c`) writing UART5 at its physical address via a
+  STATIC identity MMU region in soc.c, byte-wide, installed as the printk hook
+  with CONFIG_UART_CONSOLE=n so the broken ns16550 poll_out never runs.
+- Diagnostic technique worth keeping: write marker values to a deliberately
+  UNIMPLEMENTED SFR (0x1e7ff0f0/f4) so QEMU `-d unimp` surfaces them — proved the
+  printk hook WAS called with the banner text and that the LSR read returned the
+  real UART's 0x60, separating "hook called?" from "write lands?".
+- Honest boundary: only the banner prints, not hello_world's "Hello World!" —
+  the app thread is blocked by the absent system timer (SYS_CLOCK_EXISTS=n).
+  That is M1 (the aspeed timer driver), the documented next step. Matrix row 30
+  ZQ → 🔶; the Zephyr column is no longer "entirely pending" — the port RUNS.
+
 ## 2026-07-18 — D08 W83601G: BOTH-SIDES done (silicon LED-drive + datasheet fix)
 
 - Silicon reset-default reads (U27 @0x18) match the datasheet AND the model
