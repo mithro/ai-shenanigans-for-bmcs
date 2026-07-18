@@ -7,4 +7,10 @@ if SOC_SERIES_AST2050
 configdefault NUM_IRQS
 	default 32
 
+# M0 has no system-timer driver yet; give the cycle rate a placeholder so the
+# headers compile (Milestone 1's aspeed timer driver sets the real value from
+# its DT clock-frequency). The 24 MHz SoC reference is the natural value.
+configdefault SYS_CLOCK_HW_CYCLES_PER_SEC
+	default 24000000
+
 endif # SOC_SERIES_AST2050

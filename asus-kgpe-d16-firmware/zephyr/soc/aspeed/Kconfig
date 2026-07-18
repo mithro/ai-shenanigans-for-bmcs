@@ -1,0 +1,14 @@
+# ASPEED AST2050 (G3) family arch selects.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Mirrors soc/microchip/sam/sam9/Kconfig (the ARM926EJ-S precedent, PR #103557):
+# the family pulls in the ARM AArch32 arch, the ARM926 CPU, a custom (non-GIC)
+# interrupt controller, the MMU, and the C-based atomics (ARMv5TE has no
+# LDREX/STREX).
+
+config SOC_FAMILY_ASPEED
+	select ARM
+	select CPU_ARM926EJ_S
+	select ARM_CUSTOM_INTERRUPT_CONTROLLER
+	select MMU
+	select ATOMIC_OPERATIONS_C

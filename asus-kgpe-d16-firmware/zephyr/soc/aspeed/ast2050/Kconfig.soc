@@ -4,7 +4,6 @@
 config SOC_SERIES_AST2050
 	bool
 	select SOC_FAMILY_ASPEED
-	select CPU_ARM926EJ_S
 	help
 	  ASPEED AST2050 / AST1100 (ARM926EJ-S, ARMv5TEJ) server BMC SoC.
 

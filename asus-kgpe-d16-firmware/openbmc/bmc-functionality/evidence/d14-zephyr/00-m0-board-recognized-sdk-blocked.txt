@@ -1,0 +1,23 @@
+D14 Zephyr M0 build (2026-07-18): the AST2050 SoC + kgpe_d16_bmc board port
+files are STRUCTURALLY VALID — Zephyr's build system recognizes the board and
+SoC. The build stops only on an SDK version mismatch (environment, not port).
+
+  west build -b kgpe_d16_bmc samples/hello_world (ZEPHYR_EXTRA_MODULES=<the
+  asus-kgpe-d16-firmware/zephyr module>):
+
+  -- Board: kgpe_d16_bmc, qualifiers: ast2050        <-- board+SoC ACCEPTED
+  CMake Error ... FindZephyr-sdk.cmake:
+    Could not find a configuration file for package "Zephyr-sdk" that is
+    compatible with requested version "1.0".
+    considered: /home/tim/zephyr-sdk-0.17.0/... version: 0.17.0
+
+Interpretation: Zephyr main (4.4.99, carrying PR #103557's ARM9 core) requires
+a newer Zephyr SDK than the 0.17.0 installed here. This is a toolchain-version
+step, NOT a port problem — the board/SoC/module/dts files all parse and the
+board is selected with the `ast2050` qualifier.
+
+Next (M0 completion): install the matching Zephyr SDK (>= the version Zephyr
+main pins), then `west build` should proceed to compile hello_world with the
+ARM926 arch core; run the ELF under the repo's faithful `qemu-system-arm -M
+kgpe-d16-bmc` for the banner. Alternatively pin Zephyr to a commit compatible
+with SDK 0.17.0 and cherry-pick PR #103557.

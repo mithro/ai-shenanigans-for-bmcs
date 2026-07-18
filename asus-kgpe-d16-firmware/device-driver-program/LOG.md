@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D14 Zephyr M0 BUILD SUCCEEDS (run/banner debug pending)
+
+- Iterated the Zephyr AST2050 port to a **successful build+link** of
+  `hello_world` for `kgpe_d16_bmc` (RAM 136 KB / 64 MB, zephyr.elf entry
+  0x40002068, -mcpu=arm926ej-s). Evidence `evidence/d14-zephyr/01-...`.
+- Bring-up sequence (each a small, real fix — the port structure was sound):
+  1. Board recognized (`qualifiers: ast2050`) — SoC/board/module files valid.
+  2. Fixed the SDK-1.0-vs-0.17 gate by using the 0.17 arm-zephyr-eabi as a
+     cross-compiler (`ZEPHYR_TOOLCHAIN_VARIANT=cross-compile`).
+  3. DTS compiled clean (zephyr.dts generated).
+  4. Added `soc/aspeed/Kconfig` (the missing family arch selects: ARM,
+     CPU_ARM926EJ_S, ARM_CUSTOM_INTERRUPT_CONTROLLER, MMU, ATOMIC_OPERATIONS_C
+     — mirrors sam9's `Kconfig`).
+  5. Added a SYS_CLOCK_HW_CYCLES_PER_SEC default (24 MHz).
+  6. Provided the SoC glue the linker needed: `vic.c` (M0 stubs for
+     z_soc_irq_*), `soc_reset_hook`, and `SYS_CLOCK_EXISTS=n` for M0.
+  → links cleanly.
+- **RUN**: `qemu -M kgpe-d16-bmc -kernel zephyr.elf` gives NO banner yet — the
+  kernel hangs in early boot before console. Confidence HIGH it is a
+  bring-up/config detail (MMU-enable / CP15 path), NOT the port or hardware:
+  the fwtests link at the same 0x40000000 and print to the same UART5, so the
+  load addr + UART are proven-good. Next: `qemu -d int,mmu,cpu_reset` to find
+  the early fault → banner completes M0.
+- **This is the milestone that was the real risk** (brand-new upstream ARMv5
+  support + a from-scratch SoC/board port). Zephyr for the AST2050 now BUILDS.
+  The Zephyr column in DEVICE-MATRIX.md stays ⬜ (honestly) until the banner
+  runs.
+
 ## 2026-07-18 — D14 Zephyr port: real foundation files authored + committed
 
 - Fetched upstream PR #103557 (the ARM926 arch core + sam9x7/sam9x75_curiosity

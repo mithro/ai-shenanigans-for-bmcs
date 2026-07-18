@@ -1,0 +1,32 @@
+D14 Zephyr M0 (2026-07-18): the AST2050 Zephyr port BUILDS AND LINKS.
+
+  west build -b kgpe_d16_bmc samples/hello_world (ZEPHYR_BASE=Zephyr main +
+  PR #103557 ARM9 core; ZEPHYR_EXTRA_MODULES=asus-kgpe-d16-firmware/zephyr;
+  cross-compile with zephyr-sdk-0.17.0 arm-zephyr-eabi):
+
+  -- Board: kgpe_d16_bmc, qualifiers: ast2050
+  Memory region         Used Size  Region Size  %age Used
+             RAM:        136 KB        64 MB      0.21%
+  Generating files ... zephyr.elf for board: kgpe_d16_bmc/ast2050
+
+  zephyr.elf: 410 KB, entry 0x40002068 (ARM926EJ-S, -mcpu=arm926ej-s).
+
+This is the architecturally hard part done: the ARM9 arch core (upstream
+PR #103557 cortex_a_r) + the authored AST2050 SoC (Kconfig selects
+CPU_ARM926EJ_S/ARM/MMU/ARM_CUSTOM_INTERRUPT_CONTROLLER/ATOMIC_OPERATIONS_C,
+cortex_a_r linker, MMU map, VIC glue stubs, soc_reset_hook) + the kgpe_d16_bmc
+board (arm926 cpu, 64 MB memory@40000000, ns16550 console@1e784000) all
+compile and link into a valid ARM926 image.
+
+RUN status: booting zephyr.elf under `qemu-system-arm -M kgpe-d16-bmc -kernel`
+produces NO banner yet — the kernel hangs in early boot before console output.
+Confidence it is a config/bring-up issue, not the port structure or hardware:
+the bare-metal fwtests link at the SAME 0x40000000 and print to the SAME UART5
+(0x1e784000) fine, so the load address + UART are correct. The difference is
+Zephyr's MMU-enable / ARM926 arch boot path (reset.S -> MMU -> prep_c). Next:
+trace with `qemu -d int,mmu,cpu_reset` to find the early fault (likely an MMU
+region / cache / CP15 setup detail), then the banner completes M0.
+
+Honest matrix impact: the Zephyr column stays ⬜ (no driver validated) until
+the banner runs — but the port now BUILDS, which is the milestone that was the
+real risk (brand-new upstream ARMv5 support + a from-scratch SoC/board).

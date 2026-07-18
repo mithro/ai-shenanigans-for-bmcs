@@ -17,6 +17,11 @@ static const struct arm_mmu_region mmu_regions[] = {
 	MMU_REGION_ENTRY("vectors", CONFIG_KERNEL_VM_BASE, 0, 0x1000,
 			 MT_STRONGLY_ORDERED | MPERM_R | MPERM_X),
 
+	/* Whole 64 MB DDR2 window, flat-mapped cacheable-normal, so the kernel
+	 * image + stacks are reachable once the MMU turns on. */
+	MMU_REGION_FLAT_ENTRY("dram", 0x40000000, 0x04000000,
+			      MT_NORMAL | MPERM_R | MPERM_W | MPERM_X),
+
 	/* AST2050 APB peripheral window covering UART2/SCU/timer/VIC. */
 	MMU_REGION_FLAT_ENTRY("apb", 0x1e600000, 0x00200000,
 			      MT_STRONGLY_ORDERED | MPERM_R | MPERM_W),
@@ -32,4 +37,9 @@ void soc_early_init_hook(void)
 	/* AST2050 SCU/DDR/console are pre-initialised by the loader (U-Boot on
 	 * silicon, the machine in QEMU); nothing to do at M0.
 	 */
+}
+
+/* Called from reset.S before prep_c. MMU/caches are still off here. */
+void soc_reset_hook(void)
+{
 }
