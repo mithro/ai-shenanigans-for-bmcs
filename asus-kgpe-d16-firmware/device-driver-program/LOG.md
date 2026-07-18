@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-18 — C2-full FIXED: it was MY regression (grown initramfs truncated by mkflash), NOT the firmware
+
+- **Followed the faithfulness principle to a real bug in my own tooling.** The
+  C2-full failure (`FAIL: dropbear did not come up within 240s`) is NOT a strap /
+  legacy-boot-model regression. Discriminating evidence: in the SAME green-build run
+  the **C-UBOOT oracle (Raptor G3 U-Boot → `boot#`) PASSES**, and C5/F2/F3/F4/F5 +
+  C2-direct all pass — so the strap `0x00819582` (`4ff6a74504`) is EXONERATED (early
+  SCU/PLL init is fine).
+- **Actual root cause (mine).** Pulled the C2-full boot log: OpenBMC U-Boot boots,
+  loads the kernel, then on the init ramdisk prints `Verifying Checksum ... Bad Data
+  CRC` → bootm aborts → Linux never starts. `mkflash.py`'s bootcmd copied the initrd
+  with `cp.b … 0x200000` (2 MB), but the uInitrd is **3,123,642 B (2.98 MiB)** —
+  because my earlier CI fix (`ensure_usbip_src`) correctly restored the usbip
+  userspace, growing the initramfs past 2 MB. The 2 MB copy truncated the ramdisk →
+  bad CRC. This is the exact twin of the kernel-slot truncation the code already
+  documented (NFS kernel grew past 3 MB → 0x300000 copy truncated it).
+- **Fix (`scripts/mkflash.py`), best-practice + fail-loud.** Stop hardcoding copy
+  sizes: compute kernel/initrd DRAM-copy sizes from the ACTUAL file (rounded up to a
+  64 KB erase block) and FAIL LOUD if either overflows its flash slot (kernel
+  0x400000, initrd 0xB00000). Verified locally: kernel 3.5 MB → copy `0x360000`,
+  initrd 2.98 MB → copy `0x300000` (was 0x200000 = the bug); flash assembles clean.
+  Can't run the full chain locally (no OpenBMC `u-boot.bin`); CI confirms end-to-end.
+  NOTE: kernel is now 3.5 MB, close to its 4 MB slot — the new guard will fail loud
+  if it overflows (rather than silently truncating like before).
+- **C4 is SEPARATE + still open** (`qemu exited early rc=0`, Dell vendor fw — doesn't
+  use our initrd). Investigate next. See [[c4-c2full-legacy-boot-regression-suspect]]
+  (the C2-full half is now RESOLVED as my-tooling, not a model regression).
+
 ## 2026-07-18 — CI GREEN for my jobs; 4 pre-existing failures surfaced (triaged, NOT yet fixed)
 
 - With both CI root causes fixed (run 29635771812), the QEMU build + initramfs are
