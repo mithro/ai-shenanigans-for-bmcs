@@ -65,6 +65,53 @@ models + the Zephyr SoC code. Coverage status:
   NOT clean-complete until they are reviewed. Honest: do not claim "full code review,
   no issues" until rounds 3-5 return and their findings are resolved.
 
+### Gate-(b) rounds 3-5 COMPLETE + CI validated — sweep of ALL developed code
+
+All 5 reviewers returned. Full tally (17 files/units across the whole custom stack):
+- **Round 3 — ALL CLEAN:** aspeed_lpc_ast2050.c (KCS RW0C status semantics, IRQ
+  recompute coverage, bounds, reset Init vs datasheet §30), aspeed_udc_ast2050.c
+  (unmaskable ISR[18] deadlock gating correct-by-design, bounds, no DMA path yet),
+  aspeed_smc_ast2050.c (SMC00=0x240 CE decode, User-Mode CS, 96MB window),
+  aspeed_rtc_ast2050.c (0x5A/0x99 magic, RO fields), aspeed_pwm_ast2050.c (PTCR map).
+- **Round 4 — ALL CLEAN:** jc42.c / sbtsi.c / w83601g.c — encodings cross-checked
+  vs the vendored Linux drivers + the w83601g-test.py regression; pointer bounds,
+  two's-complement temp, writable/RO/reserved classification all verified.
+- **Round 5a (Zephyr M1) — ALL CLEAN:** vic.c (offsets vs §16 + EDGE_CLR-before-enable
+  + JTAG-confirmed SENSE/DUAL/EVENT for src16), aspeed_timer.c (TMC30 bits, no-preload
+  pattern from platform.S, ISR spinlock excludes torn read), console.c (16550 offsets),
+  soc.c. → **#141 marked COMPLETE** (tick fix validated AND reviewed clean).
+- **Round 5b (machine/GPIO/SDMC):** GPIO + strap + DIMM-SPD **CLEAN** (reviewer
+  independently recomputed every GPIO SET/BIT from the HW-verified wiring doc: A4,B1,
+  F0,B6,H2,F4,F5 all match). **6 findings:**
+  - **#5 DDR2 max 256→128 MB: FIXED + validated.** Datasheet §1.4 p27 (verified in
+    source: AST2100=256/AST2050=128/AST1100=128, the 16-bit parts cap at 128) — the
+    model mistook the MCR04[3:2] field encoding (can encode 256M) for the chip max.
+    Dropped 256M from aspeed_2050_ram_sizes[] + max_ram_size=128M. -m 64M/128M boot,
+    -m 256M now rejected ("Invalid RAM size 256 MiB"); 64 MB oracle path untouched.
+    Submodule `de3df37cc3`.
+  - **#1-4 phantom UART3-5/WDT2/SRAM/SPI1 + #6 serial off-by-one: ROUTED to task #144.**
+    Real (80-85%): the G3 SoC class inherits AST2400 device COUNTS, so the machine
+    instantiates peripherals the real AST2050 lacks. DELICATE — the console is UART5 @
+    the AST2400 enum slot (naive uarts_num=2 deletes it), U-Boot may use the phantom
+    SRAM for early stack; removing needs coordinated DTS changes + FULL CI oracle
+    re-validation. Not rushed at depth; captured with the reviewer's precise analysis.
+- **Sub-80 notes dispositioned (recorded, not fixed):** SMC CE-aliasing (deliberate —
+  serves CE0/Dell + CE2/Raptor oracles on one machine); jc42 cmd-0x22 `&7` aliasing
+  (unreachable — jc42 not instantiated on the board); LPC IBF-drop edge case (needs
+  BMC to clear LPCnE with IBF pending — not in normal boot); UDC phy_ready proxy
+  (documented intentional); Zephyr soc.c "vectors" region shadowed by dram (dead, no
+  functional impact, boot+IRQ confirmed).
+- **CI (parent 1d1b49b) confirmed my fixes clean:** KVM run 6/6 GREEN (video+HID+
+  USB/IP+frame capture); stack run — ONLY red is C3 musl-userspace build (musl.cc
+  IP-blocks runners — environmental, NOT a model bug; C-UBOOT proves the U-Boot boots;
+  → task #143). ALL oracles boot: C2, C2-full, C4, C-UBOOT, C5/NFS + D07/D08×2/D09/B1
+  + F2-F9 all green. The w83795/scu78 fixes did not regress anything.
+- **GATE-(b) STATUS (honest):** every custom unit reviewed; 3 real bugs FIXED+validated
+  (w83795 OOB, SCU78 R/W, SDMC 128MB) + 1 clock routed (#142) + 5 machine findings
+  routed (#144). Gate-b is NOT "clean-complete" while #142 + #144 are open — those are
+  verified-real bugs with concrete fixes, deliberately sequenced behind the DTS-coord +
+  CI oracle re-validation each needs. Parent submodule → `de3df37cc3`.
+
 # Device-driver program — running log
 
 ## 2026-07-18 — Zephyr ns16550 real-console: still no output via z_phys_map (honest negative; static workaround stays)
