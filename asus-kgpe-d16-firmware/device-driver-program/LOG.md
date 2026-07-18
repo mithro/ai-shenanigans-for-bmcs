@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Gate-(b) code review of D08 models = CLEAN; Zephyr build got past PR, now SDK-version-blocked
+
+- **Gate (b), D08 QEMU device models — independent review returned CLEAN.** A code
+  reviewer checked `kgpe_d16_i2c_fabric.c`, `jc42.c`, `w83601g.c`, `sbtsi.c` against
+  the QEMU I2C core + the `pca954x` reference: transparent-mux forwarding correct
+  (no hang on the NAK/broadcast path), channel-select GPIO math verified end-to-end,
+  word endianness / sign / rounding correct, all bounds-checked, the earlier
+  w83601g range-check (0x22 not power-of-two) confirmed correct. NO ≥80% bugs. One
+  faithfulness polish applied (QEMU submodule `39638707b5`): `sb-select` defaults to
+  the pull-up idle 3, not 0. So these 4 load-bearing models are now independently
+  gate-(b)-vetted clean.
+- **Zephyr #141 background build — env approach PROVEN, now SDK-version-blocked (not
+  my code).** The dedicated ZEPHYR_BASE built out correctly: clone zephyrproject +
+  `git fetch pull/103557/head` (armv5.dtsi + `arch/arm/core/arm9/` PRESENT — the PR
+  IS complete + fetchable) + `west update` all succeeded. The build then failed at
+  `FindZephyr-sdk.cmake`: the freshly-cloned main (PR rebased onto it) requests SDK
+  cmake-package version **"1.0"** but the installed **zephyr-sdk-0.17.0** provides
+  "0.17.0". So it's a Zephyr-main↔SDK alignment mismatch (the PR has been rebased
+  onto newer main since the prior session's aligned build), NOT my module or the
+  #141 fix. **Next:** either install a newer Zephyr SDK, or base the ARM9 arch on a
+  main compatible with SDK 0.17.0 (rebase the ~770-LOC PR onto the shared base's
+  commit, which accepts 0.17.0). The `tmp/zws` workspace is kept staged for that.
+
 ## 2026-07-18 — Zephyr #141: dedicated ZEPHYR_BASE build launched (background) to validate the fix
 
 - To validate the #141 `HW_STACK_PROTECTION=n` fix (root-caused below) without the
