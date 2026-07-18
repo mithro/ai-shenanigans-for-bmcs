@@ -30,3 +30,31 @@ region / cache / CP15 setup detail), then the banner completes M0.
 Honest matrix impact: the Zephyr column stays ⬜ (no driver validated) until
 the banner runs — but the port now BUILDS, which is the milestone that was the
 real risk (brand-new upstream ARMv5 support + a from-scratch SoC/board).
+
+--- UPDATE 2 (precise root cause) ---
+Full QEMU trace of the boot shows the ns16550 console driver runs a COMPLETE,
+CORRECT init sequence — just at the wrong base 0x1e7ff000 (should be
+0x1e784000):
+  write LCR(0xc)=0x80 (DLAB=1); write DLL(0x0)=0x0d; write DLH(0x4)=0x00
+  write LCR(0xc)=0x03 (8N1); write FCR(0x8)=0x87/0x06; write MCR(0x10)=0x0b
+  read  LSR(0x14) repeatedly (waiting THRE) -> spins forever.
+DLL=0x0d is the exact 115200 divisor for 24 MHz/16 = 13, so the driver + clock
+are RIGHT; only the base address is wrong.
+
+Root cause: under CONFIG_MMU the ns16550 uses DEVICE_MMIO_MAP -> z_phys_map,
+which returns virtual 0x1e7ff000 for the UART, but the ARM926 arm_mmu does NOT
+translate 0x1e7ff000 -> phys 0x1e784000 (the access lands on the raw identity
+address 0x1e7ff000, unimplemented). Removing my flat "apb" static region did
+not change it. This is a DYNAMIC-device-mapping gap in the brand-new upstream
+ARM9 arm_mmu (PR #103557, not yet merged): the ARM926 MMU maps in 1 MB sections
+by default, so a 4 KB z_phys_map device page inside the 0x1e700000 section is
+overridden by the section's identity mapping. Confidence HIGH this is the
+mechanism (the init is otherwise perfect and the fwtests prove the UART works
+at 0x1e784000).
+
+Workaround options for M0 (focused follow-up): (a) a UART driver that uses the
+physical address directly like sam9's DBGU (the sam9 console works precisely
+because it does NOT z_phys_map), (b) force a static identity 1 MB section for
+the UART that the ns16550 reuses, or (c) run ARM926 with CONFIG_MMU=n (flat) if
+the arch permits. Not a hardware issue and not a port-structure issue — the
+port builds + runs; this is one MMU-mapping detail in brand-new upstream code.

@@ -22,9 +22,15 @@ static const struct arm_mmu_region mmu_regions[] = {
 	MMU_REGION_FLAT_ENTRY("dram", 0x40000000, 0x04000000,
 			      MT_NORMAL | MPERM_R | MPERM_W | MPERM_X),
 
-	/* AST2050 APB peripheral window covering UART2/SCU/timer/VIC. */
-	MMU_REGION_FLAT_ENTRY("apb", 0x1e600000, 0x00200000,
-			      MT_STRONGLY_ORDERED | MPERM_R | MPERM_W),
+	/*
+	 * Do NOT flat-map the 0x1e600000 APB window here: Zephyr's device-MMIO
+	 * virtual allocator (used by the ns16550 DEVICE_MMIO_MAP) hands out
+	 * virtual addresses inside that same range, so a flat identity region
+	 * collides with it and the UART access lands on the raw virtual==phys
+	 * address (0x1e7ff000, unimplemented) instead of translating to the
+	 * real UART at 0x1e784000. Each peripheral driver maps its own reg via
+	 * DEVICE_MMIO instead.
+	 */
 };
 
 const struct arm_mmu_config mmu_config = {
