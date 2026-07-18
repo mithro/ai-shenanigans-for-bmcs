@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Gate-(b) review round 2: 3 parallel sub-agents on the big custom G3 models
+
+- Broadening the gate-(b) "full code review of all developed code" beyond the D08
+  models (already clean). Dispatched 3 independent code reviewers (≤5 concurrent):
+  (A) `hw/misc/aspeed_video_ast2050.c` (~1013 LOC, G3 JPEG/video engine); (B)
+  `hw/sensor/w83795.c` (hwmon banked regs) + `hw/misc/aspeed_p2a_ast2050.c` (PCI→AHB
+  window); (C) the G3-specific ADDITIONS (vs `origin/ast2050-faithful`) to
+  `hw/misc/aspeed_scu.c` (strap/PLL/clock-stop/g3-resets) + `hw/net/ftgmac100.c`
+  (NC-SI sideband + FAST_MODE RX fix). ~2500 LOC of load-bearing custom emulation.
+  Findings will be fixed (as the F7 rglob bug was) or confirm-clean; results pending.
+
+# Device-driver program — running log
+
 ## 2026-07-18 — Zephyr ns16550 real-console: still no output via z_phys_map (honest negative; static workaround stays)
 
 - With the #141 fix validated + the working env staged, tried to replace the static
