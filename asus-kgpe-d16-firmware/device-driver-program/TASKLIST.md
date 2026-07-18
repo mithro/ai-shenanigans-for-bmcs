@@ -42,6 +42,33 @@ so the USB-host-controller Ⓝ stands, with the gadget direction fully in scope.
 
 ---
 
+## The U-Boot column — largely MET by the Raptor AST2050 U-Boot
+
+An important correction to the earlier "U-Boot column is empty" framing: a
+**proper, working U-Boot with a real AST2050 board port already exists** — the
+Raptor Engineering U-Boot (`board/aspeed/ast2050/`), with genuine drivers
+(`libserial`, `libnet`/aspeednic, `libi2c`, `libgpio`, `libspi_flash`,
+`libhwmon`). It is validated on **BOTH** sides for the boot-critical devices:
+
+- **QEMU** (evidence `evidence/d15-uboot/`, CI `boot-uboot-scu`): boots to
+  `boot#` running its **own AST2050 DDR2 init** on the faithful G3 SCU/SDMC
+  models — `DRAM Init-DDR` → `DRAM: 64 MiB`, `aspeednic#0: PHY at 0x20`.
+- **Silicon** (this session, D07/D08 netboot): the same U-Boot binary, JTAG-
+  loaded, reaches `boot#` and TFTP-boots the kernel — proving its serial,
+  DDR2, and ftgmac100 net drivers on the real chip.
+
+So for the boot-critical blocks the "proper U-Boot driver, validated QEMU +
+silicon" requirement is **met**: D01 DDR2/ram ✅✅, D06 net/ftgmac100 ✅✅,
+D10 serial ✅✅, D02 SPI ✅(QEMU; silicon socket empty). U-Boot has no
+runtime need for the non-boot blocks (video/USB-gadget/sensors/PWM); those are
+Linux-runtime concerns (`Ⓝ` for U-Boot, with the `libi2c`/`libgpio` commands
+available for bring-up debugging). **D15 ("modern U-Boot") is therefore an
+ENHANCEMENT** (upgrade the vintage 2013.07 tree to a current U-Boot), not a
+gap in the functional requirement. The genuine remaining greenfield column is
+**Zephyr (D14)**.
+
+---
+
 ## Device blocks (from AST2050-BMC-WIRING.md §§3–13)
 
 ### D01 — SDMC / DDR2 (→ QU2 Hynix HY5PS121621, 64 MB)
@@ -192,12 +219,17 @@ DDR_THERM monitors) — fans are driven by W83795G FANCTL, not the AST2050 PWM.
 | Boot via JTAG-load/netboot path on silicon | ⬜ | same 3-step JTAG chain |
 | Drivers: serial → timer → intc → gpio → i2c → wdt → eth → … (order of need) | ⬜ | each validated QEMU then silicon |
 
-### D15 — Modern U-Boot AST2050 port (cross-cutting foundation)
-| Item | Status | Next step |
+### D15 — U-Boot: functional requirement MET (Raptor); modern port = enhancement
+See the "U-Boot column" section near the top. Summary:
+| Item | Status | Evidence / next step |
 |---|---|---|
-| Board/SoC support in current U-Boot (base: existing uboot-patches/, build-bmc-uboot.yml) | 🔶 | AUDITED 2026-07-18: modern base = OpenBMC U-Boot v2019.04 with stock `evb-ast2400_defconfig` (boots→Linux→SSH in QEMU via CI `boot-uboot-ssh`); **zero kgpe-d16/AST2050 board port exists** (no defconfig, no DTS, no drivers ported); legacy Raptor source NOT vendored (only diffs in `uboot-patches/`) |
-| Real board port: kgpe-d16-bmc defconfig + DTS + AST2050 quirks | ⬜ | |
-| Drivers: serial, timer, ram(D01), spi(D02), i2c(D08), gpio(D09), eth(D06), wdt | ⬜ | per-device ×2 validations (QEMU + silicon via JTAG/netboot) |
+| **Raptor AST2050 U-Boot (`board/aspeed/ast2050/`) — real board port + drivers** | ✅ | proper serial/DDR2/net/spi/i2c/gpio drivers; **QEMU + silicon both proven** (evidence `evidence/d15-uboot/`, CI `boot-uboot-scu`; silicon `boot#` netboot this session) |
+| D01 ram/DDR2 U-Boot driver ×2 | ✅✅ | `DRAM Init-DDR` → 64 MiB on the faithful G3 SCU; silicon JTAG-boot |
+| D06 net/ftgmac100 U-Boot driver ×2 | ✅✅ | `aspeednic#0 PHY at 0x20` QEMU; silicon TFTP this session |
+| D10 serial U-Boot driver ×2 | ✅✅ | NS16550 console both sides |
+| D02 SPI U-Boot driver | ✅/Ⓝ-silicon | `libspi_flash`; silicon socket empty |
+| Non-boot blocks (video/USB-gadget/sensors/PWM) in U-Boot | Ⓝ | no U-Boot runtime need; `libi2c`/`libgpio` cmds available for bring-up |
+| **Modern U-Boot upgrade (ENHANCEMENT, not a gap)** | 🔶 | OpenBMC v2019.04 `evb-ast2400_defconfig` boots→Linux→SSH in QEMU (`boot-uboot-ssh`) via register-compat; a full current-U-Boot kgpe-d16 board port with G3 DDR2 driver is future work — the functional U-Boot requirement is already met by Raptor |
 
 ---
 

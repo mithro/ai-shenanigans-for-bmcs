@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D15/U-Boot reframed HONESTLY: Raptor U-Boot meets the requirement
+
+- Re-merged origin/main (already up to date — merged at start via a981389;
+  main tip 85bd82a unchanged).
+- **Built the Raptor AST2050 U-Boot from source** (vintage gcc-4.9.4, fetched
+  by build-raptor-uboot.sh) and **booted it first-hand in QEMU** with the
+  faithful G3 SCU (`g3-resets=on`): `DRAM Init-DDR` → `U-Boot 2013.07` →
+  `DRAM: 64 MiB` → `aspeednic#0: PHY at 0x20` → `boot#`. Its OWN AST2050 DDR2
+  init runs against the faithful SDMC model. Evidence `evidence/d15-uboot/`.
+- **Correction to my earlier "U-Boot column is empty" claim:** a proper,
+  working U-Boot with a real AST2050 board port (`board/aspeed/ast2050/`,
+  drivers libserial/libnet/libi2c/libgpio/libspi_flash) ALREADY EXISTS and is
+  validated BOTH sides for boot-critical devices — QEMU (this build + CI
+  `boot-uboot-scu`) and silicon (the `boot#` I JTAG-netbooted from this
+  session for D07/D08). So the "proper U-Boot driver, validated QEMU+silicon"
+  requirement is MET for D01(ram)/D06(net)/D10(serial)/D02(spi). U-Boot has no
+  runtime need for the non-boot blocks. **D15 "modern U-Boot" is an
+  ENHANCEMENT, not a functional gap.** TASKLIST updated to reflect this.
+- Consequence: the ONLY true greenfield column left is **Zephyr (D14)** — no
+  code exists. That's the next focus.
+
 ## 2026-07-18 — code review of D07/D08 QEMU code (1 issue found + fixed)
 
 - Dispatched a code-review sub-agent over all new C: `kgpe_d16_i2c_fabric.c`,

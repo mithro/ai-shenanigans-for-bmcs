@@ -1,0 +1,28 @@
+boot: /home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -monitor none -serial stdio -global driver=aspeed.scu-ast2050,property=g3-resets,value=on -drive file=/home/tim/github/mithro/ai-shenanigans-for-bmcs/.worktrees/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/raptor/out/flash-raptor-uboot.img,format=raw,if=mtd
+
+DRAM Init-DDR
+...Done
+
+
+U-Boot 2013.07 (Jul 18 2026 - 10:20:22)
+
+I2C:   ready
+DRAM:  64 MiB
+WARNING: Caches not enabled
+Flash: SPI Flash ID: 1820c2 
+16 MiB
+Using default environment
+
+In:    serial
+Out:   serial
+Err:   serial
+H/W:   AST2050/AST2150 series chip
+Net:   aspeednic#0: PHY at 0x20
+aspeednic#0
+Warning: aspeednic#0 using MAC address from net device
+
+autoboot in 3 seconds (stop with 'Delete' key)...
+Wrong Image Format for bootm command
+ERROR: can't get kernel image!
+boot# 
+boot: OK — saw 'boot#'
