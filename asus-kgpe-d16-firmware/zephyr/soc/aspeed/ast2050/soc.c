@@ -44,6 +44,14 @@ static const struct arm_mmu_region mmu_regions[] = {
 			      MT_DEVICE | MPERM_R | MPERM_W),
 	MMU_REGION_FLAT_ENTRY("timer", 0x1e782000, 0x1000,
 			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* G3/AST2400-compatible GPIO controller (0x1e780000, drivers/gpio/
+	 * gpio_aspeed_g3.c) — device memory, statically mapped like the UART/VIC/
+	 * timer so the driver's MMIO reads/writes reach the SFRs at their physical
+	 * address with the MMU on. One 0x1000 page covers all GPIO bank registers
+	 * (the highest, set YZAAAB, ends at 0x1e7801e7). */
+	MMU_REGION_FLAT_ENTRY("gpio", 0x1e780000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {

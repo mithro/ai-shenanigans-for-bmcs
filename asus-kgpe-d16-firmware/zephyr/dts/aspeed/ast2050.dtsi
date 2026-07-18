@@ -35,5 +35,80 @@
 			reg-shift = <2>;
 			status = "disabled";
 		};
+
+		/*
+		 * G3/AST2400-compatible GPIO controller at 0x1E780000 (datasheet
+		 * §GPIO). Each 32-pin Aspeed "set" is a separate node / Zephyr GPIO
+		 * port because gpio_port_value_t is 32-bit; a node's reg points at
+		 * that set's data-value register (direction at reg + 0x04). Offsets
+		 * from QEMU hw/gpio/aspeed_gpio.c (GPIO_<set>_DATA_VALUE), matching
+		 * Linux gpio-aspeed.c aspeed_gpio_banks[]. ngpios = 32 = one full
+		 * 32-bit port per set; the true bonded pin count / direction
+		 * capability of the upper sets (UVWX, YZAAAB) is narrower on real
+		 * silicon — cross-check against the AST2050 datasheet before wiring
+		 * board pins there. All seven sets ABCD..YZAAAB are modelled.
+		 */
+		gpio0: gpio@1e780000 { /* set ABCD */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780000 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio1: gpio@1e780020 { /* set EFGH */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780020 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio2: gpio@1e780070 { /* set IJKL */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780070 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio3: gpio@1e780078 { /* set MNOP */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780078 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio4: gpio@1e780080 { /* set QRST */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780080 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio5: gpio@1e780088 { /* set UVWX */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e780088 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
+
+		gpio6: gpio@1e7801e0 { /* set YZAAAB */
+			compatible = "aspeed,ast2050-gpio";
+			reg = <0x1e7801e0 0x8>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			ngpios = <32>;
+			status = "okay";
+		};
 	};
 };

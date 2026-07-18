@@ -1,0 +1,39 @@
+# ASPEED AST2050 (G3) GPIO bank controller binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  ASPEED AST2050 (G3) GPIO controller bank.
+
+  The AST2050 / AST2400 (G3/G4) GPIO block at 0x1E780000 groups its pins into
+  32-pin "sets" (ABCD, EFGH, IJKL, MNOP, QRST, UVWX, YZAAAB). Each set exposes a
+  32-bit "data value" register and a 32-bit "direction" register (0 = input,
+  1 = output) at fixed, per-set offsets:
+
+    set ABCD    data 0x000  dir 0x004
+    set EFGH    data 0x020  dir 0x024
+    set IJKL    data 0x070  dir 0x074
+    set MNOP    data 0x078  dir 0x07C
+    set QRST    data 0x080  dir 0x084
+    set UVWX    data 0x088  dir 0x08C
+    set YZAAAB  data 0x1E0  dir 0x1E4
+
+  A Zephyr GPIO port is a single 32-bit word (gpio_port_value_t), so each Aspeed
+  32-pin set is modelled as its own controller node. A node's "reg" points at
+  that set's data-value register; the direction register is at reg + 0x04.
+
+compatible: "aspeed,ast2050-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  ngpios:
+    description: |
+      Number of pins in this bank. One Aspeed set is a single 32-bit Zephyr
+      GPIO port, so this is at most 32 (inherited default: 32).
+
+gpio-cells:
+  - pin
+  - flags

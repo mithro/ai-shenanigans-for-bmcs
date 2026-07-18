@@ -1,0 +1,10 @@
+=== Zephyr AST2050 GPIO driver — QEMU validation (2026-07-18) ===
+Build: west build -b kgpe_d16_bmc samples/gpio_smoke (CONFIG_GPIO_ASPEED_G3=y)
+Boot: qemu-system-arm -M kgpe-d16-bmc -kernel zephyr.elf
+Test pin: GPIOI0 (set IJKL, gpio2 @0x1e780070) — safe, no board wiring
+---8<--- boot log ---8<---
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+GPIO set=1 read=1
+GPIO set=0 read=0
+---8<--- end ---8<---
+RESULT: PASS — pin_configure(OUTPUT_HIGH)->read=1, set(0)->read=0, no data-abort

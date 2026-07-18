@@ -1,0 +1,19 @@
+# ASPEED AST2050 (G3) GPIO driver.
+# SPDX-License-Identifier: Apache-2.0
+
+# Only offered once the GPIO subsystem itself is enabled (mirrors the in-tree
+# drivers/gpio "if GPIO" menu). Auto-enables when a matching devicetree node is
+# present and left okay.
+if GPIO
+
+config GPIO_ASPEED_G3
+	bool "ASPEED AST2050 (G3) GPIO driver"
+	default y
+	depends on DT_HAS_ASPEED_AST2050_GPIO_ENABLED
+	help
+	  Enable the GPIO driver for the ASPEED AST2050 (G3, ARM926EJ-S) BMC SoC.
+	  Each 32-pin Aspeed GPIO set (ABCD, EFGH, ...) is a separate devicetree
+	  node / Zephyr GPIO port whose reg points at that set's data-value
+	  register (direction register at reg + 0x04).
+
+endif # GPIO

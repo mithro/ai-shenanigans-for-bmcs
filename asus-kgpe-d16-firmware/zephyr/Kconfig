@@ -1,0 +1,5 @@
+# Out-of-tree module Kconfig entry point (referenced by zephyr/module.yml
+# build.kconfig = "Kconfig").  Sources the AST2050 driver Kconfig fragments.
+# SPDX-License-Identifier: Apache-2.0
+
+rsource "drivers/gpio/Kconfig"
