@@ -98,6 +98,70 @@ spispy assigns the emulated-flash SPI to the ULX3S **left header J1**, pins
 Optional debug taps (`verilog/spispy.v`): `gn[19]`=`SCK` echo (J2_15),
 `gn[20]`=`CS#` echo (J2_17), `gn[15]`=asserted on any non-`0x03` read (J2_7).
 
+**All four required connections are on header J1, pins 23–29 (GP7–GP10),
+contiguous** — plus a ground. The J2 pins are only optional scope/debug taps.
+
+### 3.1 Complete J1 / J2 header map (physical layout)
+
+Both `J1` and `J2` are 2.54 mm **double-row** headers: the **`GP` (`+`) row** and
+the **`GN` (`−`) row** share a position number (e.g. position 23 has `GP7` on the
+`+` row and `GN7` on the `−` row). Data below is authoritative from
+`verilog/ulx3s_v20.lpf` (which v3.0.x boards also use); FPGA balls in
+parentheses. `★` = spispy signal you wire; `◦` = optional debug tap.
+
+**Header J1** (carries every wired spispy signal):
+
+| Pos | `GP` (`+` row) — FPGA ball | `GN` (`−` row) — FPGA ball |
+|---|---|---|
+| 1, 3 | *power / GND rail — see silkscreen (§ note)* | |
+| 5  | GP0 (B11) | GN0 (C11) |
+| 7  | GP1 (A10) | GN1 (A11) |
+| 9  | GP2 (A9)  | GN2 (B10) |
+| 11 | GP3 (B9)  | GN3 (C10) |
+| 13 | GP4 (A7)  | GN4 (A8)  |
+| 15 | GP5 (C8)  | GN5 (B8)  |
+| 17 | GP6 (C6)  | GN6 (C7)  |
+| 19, 21 | *power / GND rail — see silkscreen* | |
+| **23** | **★ GP7 = CS#  (A6)** | GN7 (B6) |
+| **25** | **★ GP8 = SCK  (A4)** | GN8 (A5) |
+| **27** | **★ GP9 = MOSI (A2)** | GN9 (B1) |
+| **29** | **★ GP10 = MISO (C4)** | GN10 (B4) |
+| 31 | GP11 (F4) | GN11 (E3) |
+| 33 | GP12 (G3) | GN12 (F3) |
+| 35 | GP13 (H4) | GN13 (G5) |
+| 37, 39 | *power / GND rail — see silkscreen* | |
+
+**Header J2** (only optional debug taps — no wired signal is here):
+
+| Pos | `GP` (`+` row) — FPGA ball | `GN` (`−` row) — FPGA ball |
+|---|---|---|
+| 1, 3 | *power / GND rail — see silkscreen* | |
+| 5  | GP14 (U18) | GN14 (U17) |
+| **7**  | GP15 (N17) | **◦ GN15 (P16) = read≠0x03 marker** |
+| 9  | GP16 (N16) *(TOCTOU CS-out, unused)* | GN16 (M17) |
+| 11 | GP17 (L16) | GN17 (L17) |
+| 13 | GP18 (H18) | GN18 (H17) |
+| **15** | GP19 (F17) | **◦ GN19 (G18) = SCK echo** |
+| **17** | GP20 (D18) | **◦ GN20 (E17) = CS# echo** |
+| 19, 21 | *power / GND rail — see silkscreen* | |
+| 23 | GP21 (C18) | GN21 (D17) |
+| 25 | GP22 (B15) | GN22 (C15) |
+| 27 | GP23 (B17) | GN23 (C17) |
+| 29 | GP24 (C16) | GN24 (D16) |
+| 31 | GP25 (D14) | GN25 (E14) |
+| 33 | GP26 (B13) | GN26 (C13) |
+| 35 | GP27 (D13) | GN27 (E13) |
+| 37, 39 | *power / GND rail (J2 also carries 5V — not 5 V tolerant)* | |
+
+> **Ground & power caveat:** the `GN` (`−`) row pins are FPGA **signals**, *not*
+> ground. Take your SPI ground return from a header position marked GND on the
+> ULX3S silkscreen (the non-signal positions above), and **confirm it with a
+> continuity meter to a known ground** (e.g. the USB shield) before wiring. J2
+> exposes **5 V** — the GPIO pins are **not** 5 V tolerant, so keep it clear of
+> the signal jumpers. The exact 3V3/5V/GND assignment of the non-signal
+> positions is per the board silkscreen; the GP/GN signal positions above are the
+> authoritative, verified part.
+
 spispy defaults to pure **emulation** (`ENABLE_EMULATION=1`,
 `ENABLE_TOCTOU=0`) — the FPGA is the only device on the bus, which is exactly our
 "carrier removed" case, so the real-chip-reset / TOCTOU pins (`gp[11]`/`gp[16]`)
