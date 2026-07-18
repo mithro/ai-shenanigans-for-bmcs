@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-18 — 🎉 D09 SB-TSI validated ON SILICON (BOTH-SIDES DONE)
+
+- Honored the audit's "achievable, not blocked" reclassification by actually
+  DOING the SB-TSI silicon read. Steps: added amd,sbtsi + enabled i2c-bus@100
+  (i2c3) in the real-HW DTS; built the real-HW kernel (CONFIG_SENSORS_SBTSI) +
+  DTB; confirmed host powered (GPIOH2/SYS_PWRGD=1); JTAG-booted to U-Boot
+  (boot-silicon-uboot.sh) and TFTP-booted the new kernel/initrd/dtb (proven
+  load-address sequence from the boot log).
+- **The in-kernel sbtsi_temp driver bound the REAL AMD CPU SB-TSI @0x4c on I2C4
+  (Linux i2c-3) and read a live temperature: temp1_input=14375 (stable x3),
+  cross-checked against raw regs TEMP_INT=0x0e / TEMP_DEC=0x60 = 14.375°C — the
+  hwmon value MATCHES the registers.** P1@0x4d NAKs (socket-2 CPU absent — a
+  faithful result). **Host STAYED ON through the BMC reset** (GPIOH2 still 1 —
+  the F2 reset-glitch fix held; no power drop, as I'd assessed). Evidence
+  d09-sbtsi/01-silicon-pass.txt.
+- D9 is now BOTH-SIDES: QEMU (model, 45500/43000) + silicon (real CPU, 14375).
+  FULL-TASK-LIST D9 silicon [x]; DEVICE-MATRIX row 23 LS ✅. Board left booted on
+  uImage-sbtsi (host on).
+
 ## 2026-07-18 — explicit origin/main merge command run (Already up to date)
 
 - Ran, THIS SESSION, the actual merge command (not just a status check):

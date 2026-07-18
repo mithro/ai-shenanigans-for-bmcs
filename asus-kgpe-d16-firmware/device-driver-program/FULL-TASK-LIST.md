@@ -187,10 +187,10 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU (jc42 model exists) · [N] silicon (**this rig's DIMM_A2 SPD byte32=0 = NO thermal sensor; 0x19 NAKs — faithfully absent, not a gap**) · [N] userspace (no TSOD present)
 - Zephyr: [ ] QEMU · [N] silicon (no TSOD on this rig's DIMM)
 
-### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)  ✅ QEMU this session
+### D9. SB-TSI CPU thermal — I2C4 0x4C/0x4D via QU4 FETs (§10.2)  ✅ BOTH-SIDES DONE
 - [x] QEMU: `hw/sensor/sbtsi.c` datasheet/driver-faithful (P0@0x4c, P1@0x4d on i2c3); `scripts/sbtsi-test.py` 8/8 PASS (evidence d09-sbtsi/00)
 - U-Boot: [N] (CPU thermal is an OS function)
-- Linux: [x] QEMU (**in-kernel `sbtsi_temp` hwmon driver binds amd,sbtsi on i2c3 and reads the model: `3-004c/hwmon/.../temp1_input`=45500, `3-004d`=43000; CONFIG_SENSORS_SBTSI added + kernel rebuilt; `scripts/sbtsi-test.py` PASS via hwmon sysfs; CI `boot-sbtsi`**) · [ ] silicon (**not done yet, ACHIEVABLE not blocked: the rig can power the host via the au-plug (plug 3W→103W proven), so bring the host up, enable i2c3 on the silicon DTB, read via hwmon. Just requires a host-on boot cycle**) · [x] userspace (`/sys/class/hwmon` temp1_input)
+- Linux: [x] QEMU (in-kernel `sbtsi_temp` hwmon driver binds amd,sbtsi on i2c3 and reads the model: `3-004c/hwmon/.../temp1_input`=45500, `3-004d`=43000; CONFIG_SENSORS_SBTSI; CI `boot-sbtsi`) · [x] **silicon (DID IT — netbooted the i2c3-enabled real-HW kernel with the host powered; the sbtsi_temp driver bound the REAL AMD CPU SB-TSI @0x4c, temp1_input=14375, raw regs 0x0e/0x60 confirm 14.375°C; P1@0x4d NAKs = socket-2 CPU absent. Host stayed on through the BMC reset. Evidence d09-sbtsi/01-silicon-pass.txt)** · [x] userspace (`/sys/class/hwmon` temp1_input)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)

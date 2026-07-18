@@ -1,0 +1,33 @@
+D09 SB-TSI — SILICON validation (2026-07-18). BOTH-SIDES DONE.
+
+Procedure (honoring the "achievable, not blocked" reclassification — I did it):
+1. Added the amd,sbtsi nodes + enabled i2c-bus@100 (i2c3) in the real-HW DTS
+   (dts/aspeed-bmc-asus-kgpe-d16-realhw.dts); CONFIG_SENSORS_SBTSI already in
+   kernel/kgpe-d16.config. Built tmp/uImage-kgpe-d16-realhw + DTB.
+2. Confirmed the host is powered: GPIOH2/SYS_PWRGD = 1 (AMD CPUs running).
+3. Staged uImage-sbtsi + kgpe-sbtsi.dtb to the bridge Pi TFTP; JTAG-booted to
+   U-Boot (boot-silicon-uboot.sh: reset-halt -> DDR2 re-train MCR04=0x585 ->
+   Raptor U-Boot); TFTP-booted the kernel/initrd/dtb (proven load-address
+   sequence, initrd=0x42000000,0x2fa990).
+4. New kernel booted: Linux 6.6.70-dirty, eth0 192.168.66.2. **Host STAYED ON
+   through the BMC reset (GPIOH2 still 1)** — the F2 reset-glitch fix held.
+
+RESULT — the in-kernel sbtsi_temp hwmon driver bound the REAL AMD processor's
+SB-TSI at 0x4c on the BMC's I2C4 engine (Linux i2c-3) and reads a live CPU temp:
+
+  /sys/bus/i2c/devices/3-004c/hwmon/hwmonN/name        = sbtsi
+  /sys/bus/i2c/devices/3-004c/hwmon/hwmonN/temp1_input = 14375   (stable x3)
+
+Cross-checked against the raw registers (i2cget -f -y 3 0x4c):
+  TEMP_INT (0x01) = 0x0e = 14
+  TEMP_DEC (0x10) = 0x60 = (0b011 in bits[7:5]) = 3 x 0.125 = 0.375 C
+  CONFIG   (0x03) = 0x00 (read-order: int first)
+  => 14*1000 + 375 = 14375 mC -> the hwmon value MATCHES the raw registers.
+
+  P0 (0x4c) responds; P1 (0x4d) NAKs ("No such device or address") = socket-2
+  CPU absent/not responding on this rig (a faithful result, not a driver gap).
+
+So D09 SB-TSI is validated BOTH-SIDES: QEMU (sbtsi_temp binds the model,
+45500/43000 — evidence 00) AND silicon (sbtsi_temp binds the real CPU SB-TSI,
+14375, raw-register-confirmed). The QEMU register model exactly matches how the
+real driver reads the real device. Board left booted on uImage-sbtsi, host on.
