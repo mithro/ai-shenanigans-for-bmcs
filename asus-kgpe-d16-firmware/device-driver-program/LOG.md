@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-18 — B1c/B1d LPC snoop + vUART drivers bind in QEMU (BMC-side done)
+
+- The gate-(d) audit split LPC B1 into KCS/mailbox/snoop/vUART; drove the snoop +
+  vUART to QEMU BMC-side done. Enabled `&lpc_snoop { snoop-ports=<0x80> }` +
+  `&lpc_ctrl` (were disabled g4-dtsi children) alongside the already-enabled
+  `&vuart` in the QEMU DTS; rebuilt the DTB.
+- New `scripts/lpc-test.py` (CI job `boot-lpc`) boots kgpe-d16-bmc and confirms
+  against the faithful G3 LPC model (`aspeed_lpc_ast2050.c`):
+  * `8250_aspeed_vuart` binds the vUART @0x1e787000 as **ttyS5 "ASPEED VUART"** (B1d)
+  * `aspeed-lpc-snoop` binds **`1e789090.lpc-snoop` → `/dev/aspeed-lpc-snoop0`** (B1c)
+  * `ast-kcs-bmc` → `/dev/ipmi-kcs3` (B1a, already done)
+  * `aspeed-lpc-ctrl` binds (`1e789080.lpc-ctrl`) but needs a `memory-region` to
+    create its char device (host-mapped window) — partial.
+- Matrix rows 5/6 QE+LQ → ✅. FULL-TASK-LIST B1c/B1d QEMU [x]. **Honest limit:**
+  full POST-code CAPTURE (snoop) and a host-visible vUART SESSION need a host LPC
+  master driving I/O cycles — present on real silicon (the SP5100), absent in the
+  BMC-only QEMU machine; those are silicon-side (catch a host mid-POST). B1b
+  mailbox still needs a separate node + host peer.
+
 ## 2026-07-18 — E3 LEDs validated on SILICON + userspace; E1/D6 GPIO map confirmed
 
 - Leveraged the live silicon board (host on, uImage-sbtsi) to validate the GPIO

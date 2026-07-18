@@ -101,16 +101,17 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [ ] QEMU (`aspeed-lpc-mbox`) · [ ] silicon · [ ] userspace (`/dev/aspeed-lpc-mbox`)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### B1c. LPC — port-80h POST-code snoop (§5)  [split per gate-(d) audit]
-- [ ] QEMU: `aspeed-lpc-snoop` (host I/O-port 0x80 capture) not modeled (DEVICE-MATRIX row 5)
+### B1c. LPC — port-80h POST-code snoop (§5)  [split per gate-(d) audit]  ✅ QEMU BMC-side this session
+- [x] QEMU: the G3 LPC model (`aspeed_lpc_ast2050.c`) services the snoop registers; enabled `&lpc_snoop { snoop-ports=<0x80> }` in the DTS → **the `aspeed-lpc-snoop` driver binds (`1e789090.lpc-snoop`) and creates `/dev/aspeed-lpc-snoop0`** (`scripts/lpc-test.py` PASS)
 - U-Boot: [N]
-- Linux: [ ] QEMU (`aspeed-lpc-snoop`) · [ ] silicon (needs host POSTing) · [ ] userspace (`/dev/aspeed-lpc-snoop*`)
+- Linux: [x] QEMU (driver binds + snoop configured for port 0x80; `/dev/aspeed-lpc-snoop0` created) · [ ] silicon (**needs a host mid-POST to capture codes — the KGPE-D16's SP5100 IS the host LPC master, but the running board is booted past POST; catch a host reset**) · [~] userspace (`/dev/aspeed-lpc-snoop0` present; a captured byte needs host POST I/O)
 - Zephyr: [ ] QEMU · [ ] silicon
+- NB: full POST-code CAPTURE (not just driver bind) needs a host LPC master writing I/O port 0x80 — the BMC-only QEMU machine has none; silicon has the SP5100.
 
-### B1d. LPC — vUART (host-visible virtual UART) (§5)  [split per gate-(d) audit]
-- [~] QEMU: register-present in the LPC model, no session (DEVICE-MATRIX row 6)
+### B1d. LPC — vUART (host-visible virtual UART) (§5)  [split per gate-(d) audit]  ✅ QEMU BMC-side this session
+- [x] QEMU: `&vuart` enabled → **the `8250_aspeed_vuart` driver binds the G3 vUART @0x1e787000 as `ttyS5` ("ASPEED VUART")** (`scripts/lpc-test.py` PASS; boot dmesg confirms)
 - U-Boot: [N]
-- Linux: [~] QEMU (`aspeed-vuart`, no host consumer wired) · [ ] silicon · [ ] userspace (`/dev/ttyVUART0`)
+- Linux: [x] QEMU (vUART bound = ttyS5; obmc-console binds it as /dev/ttyVUART0 on the full OpenBMC image) · [ ] silicon (needs the vuart node in the realhw DTS + a host consumer) · [~] userspace (ttyS5 is a real tty; a host-visible session needs the host LPC side)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### B1e. LPC — TPM header pass-through → TPM1 (§5, §15)  [split per gate-(d) audit]

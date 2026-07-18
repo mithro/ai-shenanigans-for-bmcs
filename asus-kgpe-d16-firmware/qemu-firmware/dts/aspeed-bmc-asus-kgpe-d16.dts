@@ -176,6 +176,25 @@
 };
 
 /*
+ * LPC host-to-BMC control + port-80h POST-code snoop (B1b/B1c). The AST2050 G3
+ * LPC block (0x1e789000) carries the same HICRx/SNPWADR/SNPWDR registers as the
+ * AST2400 at identical offsets, so mainline aspeed-lpc-ctrl / aspeed-lpc-snoop
+ * bind unchanged. lpc-snoop captures the host's I/O-port-0x80 (POST code) writes
+ * into a kfifo exposed at /dev/aspeed-lpc-snoop0; lpc-ctrl exposes the host
+ * LPC-mapped window at /dev/aspeed-lpc-ctrl0. Full capture needs a host LPC
+ * master (present on real silicon = the SP5100; the BMC-only QEMU machine
+ * validates the BMC-side driver bind + register setup).
+ */
+&lpc_ctrl {
+	status = "okay";
+};
+
+&lpc_snoop {
+	status = "okay";
+	snoop-ports = <0x80>;
+};
+
+/*
  * Host-side IPMI over LPC KCS (F5b — local host<->BMC channel). The AST2050 (G3)
  * LPC controller at 0x1e789000 exposes three H8S/2168-style KCS channels; each is
  * an IDRn/ODRn/STRn register triple (datasheet §30.3, p.315; DATASHEET-LPC.md):

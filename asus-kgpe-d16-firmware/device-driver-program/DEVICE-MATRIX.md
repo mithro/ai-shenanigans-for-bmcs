@@ -51,14 +51,14 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 |---|---|---|---|---|---|---|---|---|---|---|
 | 3 | LPC KCS / IPMI (§5 → SP5100) | LPC | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 4 | LPC mailbox (§5) | LPC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 5 | LPC port-80h POST snoop (§5) | LPC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 6 | LPC vUART (§5) | LPC | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | LPC port-80h POST snoop (§5) | LPC | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | 🔶 | ⬜ | ⬜ |
+| 6 | LPC vUART (§5) | LPC | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | 🔶 | ⬜ | ⬜ |
 | 7 | TPM1 LPC pass-through (§5/§15) | LPC | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 8 | PCI-33 / iKVM video-capture (§6) | video+P2A | ✅ | Ⓝ | Ⓝ | 🔶 | 🔶 | 🔶 | ⬜ | ⬜ |
 | 9 | USB device / vhub (§9 → SP5100) | vhub | ✅ | Ⓝ | Ⓝ | ✅ | 🔷 | 🔶 | ⬜ | ⬜ |
 
 - **3** KCS/IPMI: `sdr`/host-KCS both sides (`evidence/host-kcs/`). UB Ⓝ (no boot need). D03.
-- **4/5/6** mailbox, POST-snoop, vUART: unmodeled/undriven (audit gap #5). vUART is register-present but no session. D03.
+- **5/6** POST-snoop + vUART: **QEMU BMC-side DONE (2026-07-18)** — enabled `&lpc_snoop {snoop-ports=<0x80>}` + `&vuart` in the DTS; `scripts/lpc-test.py` (CI `boot-lpc`) confirms the `aspeed-lpc-snoop` driver binds (`1e789090.lpc-snoop`, `/dev/aspeed-lpc-snoop0`) and the `8250_aspeed_vuart` driver binds the G3 vUART as ttyS5, against the faithful G3 LPC model. Full POST-code CAPTURE / host-visible vUART session needs a host LPC master (the SP5100 on silicon; the BMC-only QEMU has none) — LS ⬜ (catch a host mid-POST), LU 🔶. **4** mailbox (iBT) still unmodeled — needs a separate `aspeed-lpc-mbox` node + a host peer. D03.
 - **7** TPM1 shares the LPC bus + a QU9-switched I2C segment; the BMC is not the TPM driver (host owns TPM) → Ⓝ for driver stacks, but QEMU should model the LPC/I2C reachability (⬜). D03.
 - **8** capture proven (`#3a`, `evidence/real-hw-video/`); the 45-ball PCI bus itself is only P2A/video-modeled, not a full PCI target. UB/ZP Ⓝ (no runtime need). D04.
 - **9** LS = 🔷 (blocked): the real vhub EP-DMA datapath on silicon is rig-blocked (patch 0007 is QEMU-verified + compile-clean, but the P2A siphon degrades after ~15 boot cycles; Test B not run to avoid a host-CMOS-halt strand). Earlier `usbip-vudc` gadget-path enumeration is a different, non-vhub route. LU = 🔶 (BMC-side gadget configured; host-side HID enumeration not validated). D05 / FULL-TASK-LIST B5.
