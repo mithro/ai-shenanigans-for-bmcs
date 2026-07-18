@@ -31,3 +31,15 @@ So D09 SB-TSI is validated BOTH-SIDES: QEMU (sbtsi_temp binds the model,
 45500/43000 — evidence 00) AND silicon (sbtsi_temp binds the real CPU SB-TSI,
 14375, raw-register-confirmed). The QEMU register model exactly matches how the
 real driver reads the real device. Board left booted on uImage-sbtsi, host on.
+
+--- Live-sensor cross-validation (2026-07-18, host on) ---
+The SB-TSI is a LIVE sensor, not a static read: temp1_input changed 14375 -> 13875
+between successive reads. CROSS-CHECK against the independent W83795 hardware
+monitor (i2c-1, 0x2f) reading the CPU via its own PECI/TSI channel:
+  W83795 temp7_input = 13750 (13.75 C)   <-> SB-TSI temp1_input = 13875 (13.875 C)
+Two independent BMC->CPU thermal paths AGREE at ~14 C, so the value is the real
+idle-CPU die temperature (cool room + idle Opteron), not an artifact. The full
+W83795 stack is also live with the host on: fan1=2576 RPM, rails in12/13/14 =
+3306/3276/3366 mV (~3.3V), temp1=59500 (59.5 C VRM/CPU-area). This strengthens
+BOTH D02 (W83795, host-on real readings) and D09 (SB-TSI, live-tracking +
+independently cross-validated).
