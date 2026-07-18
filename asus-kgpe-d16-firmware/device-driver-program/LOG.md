@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-18 — code review of D07/D08 QEMU code (1 issue found + fixed)
+
+- Dispatched a code-review sub-agent over all new C: `kgpe_d16_i2c_fabric.c`,
+  `jc42.c`, the `aspeed_gpio.c` kgpe outputs, the `aspeed.c` fabric/strap/SPD/
+  MAC2 changes, and kernel patch 0008. Verdict: **all clean except ONE Medium**:
+  `kgpe_d16_host_on` (host-power latch) was absent from VMState and not
+  re-synced on reset → after loadvm/migration (or transiently after a warm
+  reset) the next GPIO write could clobber the GPIOH2 power bit back to "off".
+- **Fixed**: `VMSTATE_BOOL_V(kgpe_d16_host_on, …, 2)` + reset re-syncs GPIOH2
+  and the board-glue outputs from the persisted latch (the latch is board
+  glue, outside the BMC GPIO reset domain). Verified `qemu_set_irq` is
+  NULL-safe so the reset-time output drive is safe regardless of connect
+  order. Integration 114/114 after the fix. The reviewer verified jc42's
+  word-swapped register logic, the fabric's bounded channel select + VMState,
+  the pinctrl patch's enable-path-untouched skip, and the SPD array (256 bytes,
+  CRC bytes, g_memdup2 ownership) all correct; build wiring (Kconfig/meson) OK.
+
 ## 2026-07-18 — D07 NC-SI Phase 1: Linux stack validated in QEMU
 
 - **`NCSI RESULT: PASS`** — the kernel's net/ncsi discovered + configured a
