@@ -84,8 +84,8 @@ def tag(x, y, txt, col, f=F_B, anchor="lt"):
 
 
 tag(hx0 - 12, p1y - 14, "pin 1", RED, anchor="rt")
-d.line((kx, hy0 - 6, kx, ky - 12), fill=BLACK, width=2)          # tag -> key marker
-tag(kx - 68, hy0 - 38, "key = pin 14", BLACK, F_S, anchor="lt")
+# the key (top-right) is shown by the black square marker; the legend labels it
+# (no floating tag here — it would collide with the signal panel)
 
 # ---- signal legend (right side), rows matching the SVG numbering ----
 # bottom row L->R = pins 1..7 ; top row L->R = key,13,12,11,10,9,8
@@ -95,8 +95,9 @@ sig = {1: ("MOSI", RED), 2: ("+3V3", GREY), 3: ("IKVMEN#", ORANGE),
        12: ("CS0", RED), 13: ("GND", GREEN)}
 lines = [("BMC_FW1 — pin signals", RED, F_H)]
 lines += [(f"{n:>2} {sig[n][0]}", sig[n][1], F_B) for n in range(1, 14)]
-lines.append(("pin 1 = square pad · pin 14 top-right keyed", BLACK, F_S))
-lines.append(("full pinout: kgpe-d16-bmc-fw1-pinout.svg", GREY, F_S))
+lines.append(("key (filled hole) = pin 14, top-right", BLACK, F_S))
+lines.append(("pin 1 = bottom-left (opposite the key)", BLACK, F_S))
+lines.append(("full pinout: kgpe-d16-bmc-fw1.svg", GREY, F_S))
 lw = max(tw(t, f) for t, _, f in lines)
 lx, ly = base.width - lw - 34, 54
 d.rectangle((lx - 14, ly - 8, lx + lw + 14, ly + sum(f.size + 8 for _, _, f in lines) + 8),
