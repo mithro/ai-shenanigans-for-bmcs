@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D14 Zephyr port: real foundation files authored + committed
+
+- Fetched upstream PR #103557 (the ARM926 arch core + sam9x7/sam9x75_curiosity
+  precedent) and read every template file (soc.yml, Kconfig.soc/defconfig,
+  soc.c/h, CMakeLists, board.yml/dts/defconfig/yaml, armv5.dtsi).
+- **Authored the real AST2050 Zephyr port** (16 files, `asus-kgpe-d16-firmware/
+  zephyr/`) modeled precisely on that precedent: an out-of-tree module
+  (`zephyr/module.yml`), the SoC (`soc/aspeed/ast2050/` — Kconfig selects
+  `CPU_ARM926EJ_S`, reuses the cortex_a_r linker, minimal MMU map covering the
+  0x1e600000 APB window + vectors, `soc_early_init` no-op since the loader
+  brings up DRAM/console), the SoC DTSI (`dts/aspeed/ast2050.dtsi` — arm926ej-s
+  cpu, 64 MB memory@40000000, ns16550 serial@1e784000), and the board
+  (`boards/aspeed/kgpe_d16_bmc/` — chosen console/sram, 115200). The ARM9 arch
+  core comes from upstream; this module is only the SoC+board. PORT-PLAN.md
+  records the approach + milestone ladder. Committed `a480a99`.
+- **M0 build environment being set up**: west workspace initialized on the PR
+  branch; SDK `/home/tim/zephyr-sdk-0.17.0` (arm-zephyr-eabi); `west update`
+  of the essential modules running. Next: `west build -b kgpe_d16_bmc
+  samples/hello_world` → banner under the repo's faithful QEMU AST2050.
+- Honest state: the port FILES are real + committed, but no Zephyr build has
+  succeeded yet — the whole Zephyr column in DEVICE-MATRIX.md stays ⬜ until
+  M0 (hello_world banner) actually runs. This is a genuine start on the
+  biggest gap, not a claim of completion.
+
 ## 2026-07-18 — explicit per-device task matrix created (DEVICE-MATRIX.md)
 
 - Re-merged origin/main (already up to date). Re-read the authoritative
