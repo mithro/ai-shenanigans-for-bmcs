@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-18 — B1c snoop: silicon kernel BUILT + STAGED; POST-capture scoped (not yet run)
+
+- Built the real-HW kernel/DTB from the snoop-armed source and **verified the
+  shipped DTB**: `build-realhw-kernel.py` → `tmp/uImage-kgpe-d16-realhw` +
+  `tmp/aspeed-bmc-asus-kgpe-d16-realhw.dtb`; `fdtget` confirms
+  `lpc-snoop@90 status=okay`, `snoop-ports=0x80`, `lpc-ctrl status=okay`,
+  `serial@1e787000 status=okay`. Staged to the bridge Pi as
+  `/srv/tftp-bmc/uImage-kgpe-d16-lpcsnoop` + `kgpe-lpcsnoop.dtb`.
+- **Trap caught + documented:** the flat `dts/aspeed-bmc-asus-kgpe-d16-realhw.dts`
+  is a doc MIRROR — `build-realhw-kernel.py:51` compiles the overlay tree
+  `qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts` for *both* QEMU and silicon;
+  editing the mirror alone changes nothing shipped. The overlay tree already
+  carries `&vuart/&lpc_ctrl/&lpc_snoop(0x80)` okay (grep-verified). Added a header
+  note to the mirror + synced its vuart/snoop `status` so it can't mislead.
+- **Honest status — NOT run on silicon yet.** The POST-code CAPTURE is a discrete
+  hardware experiment with a genuine open question: does the KGPE-D16 route the
+  host's port-80h I/O writes over LPC to the BMC snoop, or does the SP5100
+  southbridge claim port 0x80 internally and not forward it? Answering it requires
+  a JTAG re-netboot of the *live* BMC onto the snoop kernel, then a **host-only**
+  reset (BMC-GPIO-driven; the whole-board Tasmota plug won't do — an AC cycle
+  drops the JTAG-netbooted BMC too), then reading `/dev/aspeed-lpc-snoop0` while
+  the host POSTs. Deferred to a dedicated hardware session rather than started at
+  the tail of a long context, where running out mid-session could leave the BMC
+  JTAG-halted (violating "legacy must always boot"). Board left healthy + untouched
+  (BMC pings 192.168.66.2, uImage-sbtsi, host on). Artifact is staged so the next
+  session goes straight to netboot. Matrix row 5 silicon stays ⬜ (honest), NOT ✅.
+
 ## 2026-07-18 — B1c/B1d LPC snoop + vUART drivers bind in QEMU (BMC-side done)
 
 - The gate-(d) audit split LPC B1 into KCS/mailbox/snoop/vUART; drove the snoop +

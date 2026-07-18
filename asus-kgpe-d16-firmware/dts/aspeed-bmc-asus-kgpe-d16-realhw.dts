@@ -1,5 +1,15 @@
 /dts-v1/;
 
+/*
+ * NOTE: This is a flattened, human-readable REFERENCE MIRROR of the real-HW
+ * device tree. It is NOT the source the build compiles. build-realhw-kernel.py
+ * copies qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts (the overlay-style tree
+ * on aspeed-g4.dtsi) into the kernel and builds THAT for both QEMU and silicon.
+ * Keep this mirror consistent with that source, but editing it alone changes
+ * nothing about the shipped DTB. (Verified 2026-07-18: only docs reference this
+ * file; no build/deploy script does.)
+ */
+
 / {
 	model = "ASUS KGPE-D16 BMC";
 	compatible = "asus,kgpe-d16-bmc", "aspeed,ast2400";
@@ -1210,7 +1220,7 @@
 				interrupts = <0x08>;
 				clocks = <0x02 0x1a>;
 				no-loopback-test;
-				status = "disabled";
+				status = "okay";
 			};
 
 			lpc@1e789000 {
@@ -1233,7 +1243,8 @@
 					reg = <0x90 0x08>;
 					interrupts = <0x08>;
 					clocks = <0x02 0x08>;
-					status = "disabled";
+					snoop-ports = <0x80>;
+					status = "okay";
 				};
 
 				lhc@a0 {
