@@ -14,10 +14,17 @@
   editing the mirror alone changes nothing shipped. The overlay tree already
   carries `&vuart/&lpc_ctrl/&lpc_snoop(0x80)` okay (grep-verified). Added a header
   note to the mirror + synced its vuart/snoop `status` so it can't mislead.
-- **Honest status — NOT run on silicon yet.** The POST-code CAPTURE is a discrete
-  hardware experiment with a genuine open question: does the KGPE-D16 route the
-  host's port-80h I/O writes over LPC to the BMC snoop, or does the SP5100
-  southbridge claim port 0x80 internally and not forward it? Answering it requires
+- **Schematic resolves the connectivity half (authoritative).** `AST2050-BMC-WIRING.md`
+  §5 (lines 205-228): "The AST2050 is an **LPC peripheral** on the SP5100 southbridge's
+  LPC bus", shared with the Super-I/O + TPM header; every AST2050 LPC ball
+  (`LCLK`/`LFRAME#`/`LAD0-3`=A16/B16/B17/A17/D16/C16, `LPCSIRQ`=C15) wires straight
+  to the SP5100. So the BMC snoop hardware physically sees every LPC I/O cycle the
+  SP5100 emits — the "is the BMC even on the host LPC bus?" question is answered YES.
+- **Honest status — NOT run on silicon yet.** What remains is narrower: does the
+  SP5100 (as LPC host bridge) *forward* the host CPU's port-80h I/O writes onto LPC,
+  or claim port 0x80 internally? On AMD SB700/SP5100 + coreboot this is conventionally
+  forwarded (it's how BMC POST snoop works on these boards), so the expectation is
+  positive — but that's config/firmware behavior, not proven on this board. Capture requires
   a JTAG re-netboot of the *live* BMC onto the snoop kernel, then a **host-only**
   reset (BMC-GPIO-driven; the whole-board Tasmota plug won't do — an AC cycle
   drops the JTAG-netbooted BMC too), then reading `/dev/aspeed-lpc-snoop0` while
