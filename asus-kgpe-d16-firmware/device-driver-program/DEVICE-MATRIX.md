@@ -89,8 +89,8 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 15 | AST2050 I2C controller (8 engines) | I2C | ✅ | ✅ | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 16 | W83795G hwmon (QU4, I2C2 @0x2f) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 15 | AST2050 I2C controller (8 engines) | I2C | ✅ | ✅ | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
+| 16 | W83795G hwmon (QU4, I2C2 @0x2f) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -103,6 +103,13 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 26 | Aux front panel (AUX_PANEL1, I2C8) | I2C | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 - **15** i2cdetect + AC-timing fix proven on silicon. UB-Q = Raptor `libi2c`. D08.
+  **ZQ = 🔶 (2026-07-19): the Zephyr I2C master driver (`i2c_aspeed_g3.c`, #148) is
+  QEMU-VALIDATED** — it reads the modeled W83795 @0x2F CHIP_ID (0xFE=0x79) over the full
+  START/write/repeated-START/read/STOP path, incl. the G3 SCU reset-release + AC-timing +
+  INTR_CTRL gotchas (evidence `d14-zephyr/07`). This makes rows 16-23 (all the on-bus
+  devices) REACHABLE from Zephyr; row 16 (W83795) ZQ → 🔶 (raw register read demonstrated;
+  a full Zephyr hwmon sensor driver + the other devices' per-device Zephyr drivers + ZS
+  silicon remain).
 - **16** W83795 model silicon-seeded (fan1=2641 etc.); hwmon both sides. D08.
 - **17/18** fabric DATA PATH proven on silicon (real 256-byte SPD read, CRC 0xf0b4,
   part matches host dmidecode; `evidence/d08-spd-silicon/`). **HONESTY CORRECTION

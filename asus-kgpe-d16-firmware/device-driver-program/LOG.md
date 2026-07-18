@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉 SECOND Zephyr driver: AST2050 I2C master — QEMU-VALIDATED (Z2, #148)
+
+- Same write(sub-agent)→validate(me) pattern as the GPIO driver. Polled I2C master
+  `drivers/i2c/i2c_aspeed_g3.c` for the G3 controller @0x1E78A000 (per-engine stride 0x40,
+  engine i at +0x40*(i+1)): configure + transfer (START/addr/write/repeated-START/read/
+  STOP). Handles the three real G3 gotchas: (1) AC-timing 0x77743335 (anti-wedge tHDSTA,
+  Raptor value) or the FSM hangs; (2) INTR_STS masked by INTR_CTRL after each command →
+  enable the polled status bits; (3) the 7 I2C engines power up held in reset via SCU04[2]
+  → the driver unlocks the SCU (0x1688A8A8) + clears SCU04[2] on this bare-metal boot.
+  MMIO via static MMU maps (i2c 0x1e78a000 + scu 0x1e6e2000). Parent commit `509f0edd4`.
+- **VALIDATED IN QEMU (evidence d14-zephyr/07):** engine 1 (i2c1 @0x1e78a080) reads the
+  modeled **W83795G @0x2F CHIP_ID reg 0xFE = 0x79** (expected) → PASS. So the full I2C
+  master datapath works against a REAL modeled device.
+- **Debug note (honest):** the first `build-i2c.sh` run reported FAIL — but that was a
+  FALSE NEGATIVE from MY botched `sed` on the copied check-script (it still grepped for
+  "GPIO set" + the old RESULT strings). A clean diagnostic boot (`-d guest_errors`)
+  immediately showed the real `I2C read ... PASS`. The driver was correct first try; my
+  harness copy was the bug. (The `unimplemented aspeed.io 0x1ff0xx` traces are the pre-
+  existing early-boot catch-all, unrelated.)
+- **Advances #148** (ZQ done). Row 15 (I2C controller) ZQ → 🔶; the I2C-device rows
+  (16 W83795, 17 mux, 18 SPD, 20 FRU, 21/22 W83601G, 23 SB-TSI) are now REACHABLE from
+  Zephyr via this validated bus driver (per-device Zephyr sensor drivers + ZS silicon
+  remain). Next Zephyr: Z3 WDT (#149). Cycle tally: 2 phantoms removed+CI-validated (ADC,
+  WDT2) + 2 Zephyr drivers QEMU-validated (GPIO, I2C).
+
 ## 2026-07-18 — 🎉 FIRST per-device Zephyr driver: AST2050 GPIO — QEMU-VALIDATED (Z1, #147)
 
 - Built the first per-device Zephyr driver on the validated #141 tick foundation. The G3
