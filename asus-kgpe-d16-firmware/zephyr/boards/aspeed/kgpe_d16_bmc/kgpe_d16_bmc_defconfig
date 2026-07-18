@@ -17,12 +17,24 @@ CONFIG_MULTITHREADING=y
 # source 16) are in-tree; the VIC+timer DELIVER interrupts through the
 # cortex_a_r isr_wrapper (verified: timer IRQs dispatched, main() runs).
 #
-# Left OFF by default: with SYS_CLOCK_EXISTS=y the app still boots and prints,
-# but sustained tickful operation trips the SAME brand-new ARM9 arm_mmu
-# dynamic-mapping breakage that forced the static M0 console — timer-driven
-# thread switching updates page tables and data-aborts at the arm_mmu L1 table
-# (0x40008ffc). So the demonstrable-clean default is cooperative (no timer):
-# the port fully boots and runs an application ("Hello World!", evidence
-# d14-zephyr/04). Flip to y once the upstream ARM9 arm_mmu dynamic mapping is
-# fixed (or per-thread MMU stack-guard updates are disabled).
+# Left OFF by default: with SYS_CLOCK_EXISTS=y the app boots + prints, but
+# sustained tickful operation data-aborts at the arm_mmu L1 table (0x40008ffc).
+# ROOT CAUSE (2026-07-18, corrected — this is OUR config, NOT an upstream bug):
+# `l1_page_table` is a STATIC 16 KB-aligned var (arch/arm/core/mmu/arm_mmu.c:40)
+# that links into the kernel image at ~0x40008000 — i.e. inside the FIRST 1 MB
+# DRAM section (0x40000000), the same section as the early kernel stacks. With
+# CONFIG_HW_STACK_PROTECTION the per-thread stack-guard reconfigures that section
+# on every timer-driven thread switch, which removes write access to the L1
+# table's own page and the next L1 entry write faults (0x40008ffc = a word in the
+# static l1_page_table). So THE FIX is CONFIG_HW_STACK_PROTECTION=n (the "disable
+# per-thread MMU stack-guard updates" path), OR relocating l1_page_table/stacks
+# out of the L1-table section — a config/link choice, not an upstream arm_mmu fix.
+# HONESTY: this root cause is high-confidence (fault addr == the static L1 table +
+# the mechanism is self-referential) but NOT yet validated by a build+boot — the
+# shared ZEPHYR_BASE (tenstorrent/zephyr) has drifted off the cortex_a_r ARMv5 PR
+# #103557 (armv5.dtsi + ARM926 arch code absent), so no Zephyr build is currently
+# possible. Validate (flip SYS_CLOCK_EXISTS=y + HW_STACK_PROTECTION=n, expect
+# sustained ticks with no data-abort) once a ZEPHYR_BASE with the PR is rebuilt.
+# The demonstrable-clean default stays cooperative (no timer): the port fully boots
+# and runs an app ("Hello World!", evidence d14-zephyr/04).
 CONFIG_SYS_CLOCK_EXISTS=n

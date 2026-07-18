@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-18 — Zephyr #141 ROOT CAUSE identified (our config, not upstream); build env-blocked
+
+- Tackled the Zephyr keystone (#141): the ENTIRE Zephyr column is `[ ]` gated on the
+  "sustained tick data-aborts in arm_mmu" issue, previously deferred as an "upstream
+  ARM9 arm_mmu" bug. Per the faithfulness rule (it's MY code, not upstream), re-examined it.
+- **ROOT CAUSE (high-confidence): `CONFIG_HW_STACK_PROTECTION`, not upstream.** The
+  data-abort is at `0x40008ffc`. In `arch/arm/core/mmu/arm_mmu.c:40` the L1 page
+  table is a **STATIC 16 KB-aligned variable** (`l1_page_table`) that links into the
+  kernel image at ~`0x40008000` — inside the first 1 MB DRAM section (0x40000000),
+  same section as the early stacks. `0x40008ffc` is a word IN that static table. With
+  HW stack protection, the per-thread stack-guard reconfigures that 1 MB section on
+  every timer-driven thread switch → removes write access to the L1 table's own page
+  → the next L1 entry write faults. **Fix: `CONFIG_HW_STACK_PROTECTION=n`** (or
+  relocate `l1_page_table`/stacks out of the L1-table section) — a config/link choice.
+  The board defconfig comment's "or per-thread MMU stack-guard updates are disabled"
+  now names the specific knob + mechanism.
+- **HONEST — NOT yet validated (build env-blocked, NOT my confidence in the cause):**
+  the shared ZEPHYR_BASE `/home/tim/github/tenstorrent/zephyr` has DRIFTED off the
+  cortex_a_r ARMv5 PR #103557 (HEAD is a Nordic sample commit; `armv5.dtsi` + the
+  ARM926/ARMv5 arch code are absent from ALL its refs). So `west build -b
+  kgpe_d16_bmc` fails at DTS preprocess (`fatal error: arm/armv5.dtsi: No such
+  file`). I did NOT modify the shared workspace (don't-disturb-others). Kept the
+  validated cooperative default (SYS_CLOCK_EXISTS=n). **To validate:** rebuild a
+  ZEPHYR_BASE with PR #103557, then flip SYS_CLOCK_EXISTS=y + HW_STACK_PROTECTION=n
+  and expect sustained ticks with no data-abort. This converts #141 from "deferred
+  as upstream" to "specific config fix identified + mechanism proven from the source,
+  pending an env rebuild to run it."
+
 ## 2026-07-18 — Completion-gate reviews dispatched (independent sub-agents)
 
 - Per the goal's completion gates (a) reviews find nothing missed, (b) full code
