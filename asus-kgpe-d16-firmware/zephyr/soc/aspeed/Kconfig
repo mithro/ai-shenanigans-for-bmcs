@@ -13,9 +13,10 @@ config SOC_FAMILY_ASPEED
 	select MMU
 	select ATOMIC_OPERATIONS_C
 	# MMU is required by the ARM9 arch (CONFIG_MMU stays y even if not
-	# selected here). M0 banner RUNS (evidence d14-zephyr/02): the port boots
-	# and prints "*** Booting Zephyr OS ***" under QEMU via a static-mapped
-	# physical-address SoC console (soc/aspeed/ast2050/console.c), which
-	# sidesteps the brand-new upstream ARM9 arm_mmu not translating the
-	# ns16550 z_phys_map device VA. M1 (aspeed system timer -> app thread ->
-	# "Hello World") is the next step.
+	# selected here). The port RUNS AN APPLICATION under QEMU (evidence
+	# d14-zephyr/03): "*** Booting Zephyr OS ***" + "Hello World!" via a
+	# static-mapped physical-address SoC console (soc/aspeed/ast2050/console.c,
+	# printk+stdout hooks), sidestepping the brand-new upstream ARM9 arm_mmu not
+	# translating the ns16550 z_phys_map device VA. The M1 VIC + aspeed timer
+	# (vic.c/aspeed_timer.c) deliver interrupts; sustained tickful scheduling
+	# awaits the upstream arm_mmu dynamic-mapping fix.

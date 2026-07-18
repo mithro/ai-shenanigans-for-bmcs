@@ -22,6 +22,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/init.h>
 #include <zephyr/sys/printk-hooks.h>
+#include <zephyr/sys/libc-hooks.h>
 #include <zephyr/sys/util.h>
 
 #define UART5_PHYS_BASE  0x1e784000u
@@ -60,7 +61,10 @@ static int ast2050_console_out(int c)
 
 static int ast2050_console_init(void)
 {
+	/* printk (kernel/banner) and printf/stdout (application, e.g. the
+	 * hello_world sample) both route to the polling UART backend. */
 	__printk_hook_install(ast2050_console_out);
+	__stdout_hook_install(ast2050_console_out);
 	return 0;
 }
 

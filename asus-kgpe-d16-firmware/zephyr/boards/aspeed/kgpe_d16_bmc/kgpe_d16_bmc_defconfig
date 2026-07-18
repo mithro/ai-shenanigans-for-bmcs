@@ -2,14 +2,27 @@
 
 CONFIG_CONSOLE=y
 CONFIG_SERIAL=y
-# M0 console: a direct-physical polling backend (soc/aspeed/ast2050/console.c)
-# installs itself as the printk hook and writes UART5 at 0x1e784000 via the
-# static identity MMU region in soc.c. UART_CONSOLE is OFF so the ns16550
-# poll_out (whose CONFIG_MMU DEVICE_MMIO_MAP z_phys_map returns a virtual base
-# the ARM926 arm_mmu does not translate back to 0x1e784000 -> busy-poll of an
-# unimplemented address, QEMU trace read @0x1e7ff014) never becomes the console
-# and never hangs. ns16550 still builds/inits harmlessly for later milestones.
 CONFIG_UART_NS16550=y
-# Milestone 0: polling console, no system timer yet. M1 adds the aspeed timer.
-CONFIG_SYS_CLOCK_EXISTS=n
+# M0 console = the direct-physical polling backend (soc/aspeed/ast2050/console.c)
+# installed as the printk hook, writing UART5 @ 0x1e784000 via the static
+# identity MMU region in soc.c. UART_CONSOLE is OFF so the ns16550 poll_out
+# (whose CONFIG_MMU DEVICE_MMIO_MAP z_phys_map returns a VA the brand-new ARM9
+# arm_mmu does not translate to 0x1e784000 -> busy-poll of an unimplemented
+# address) never becomes the console.
+CONFIG_UART_CONSOLE=n
 CONFIG_MULTITHREADING=y
+
+# Milestone 1 (VIC + system timer): the real G3 VIC (soc/aspeed/ast2050/vic.c,
+# 0x1e6c0000) and a tickful aspeed timer (aspeed_timer.c, Timer1 @ 1 MHz, VIC
+# source 16) are in-tree; the VIC+timer DELIVER interrupts through the
+# cortex_a_r isr_wrapper (verified: timer IRQs dispatched, main() runs).
+#
+# Left OFF by default: with SYS_CLOCK_EXISTS=y the app still boots and prints,
+# but sustained tickful operation trips the SAME brand-new ARM9 arm_mmu
+# dynamic-mapping breakage that forced the static M0 console — timer-driven
+# thread switching updates page tables and data-aborts at the arm_mmu L1 table
+# (0x40008ffc). So the demonstrable-clean default is cooperative (no timer):
+# the port fully boots and runs an application ("Hello World!", evidence
+# d14-zephyr/04). Flip to y once the upstream ARM9 arm_mmu dynamic mapping is
+# fixed (or per-thread MMU stack-guard updates are disabled).
+CONFIG_SYS_CLOCK_EXISTS=n

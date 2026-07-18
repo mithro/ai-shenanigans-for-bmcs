@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-18 — D14 Zephyr RUNS AN APPLICATION ("Hello World") + M1 VIC/timer 🎉
+
+- The AST2050 Zephyr port now **boots and runs application code** under QEMU:
+  `*** Booting Zephyr OS ***` + `Hello World! kgpe_d16_bmc/ast2050`. The kernel
+  reaches and runs the sample's main(). Evidence `evidence/d14-zephyr/03`.
+- **Faithfulness win (my instinct was right):** I had *wrongly* concluded the
+  boot "hangs before main() → upstream ARM9 core bug." A `-d exec` trace proved
+  the kernel actually reaches z_thread_entry → bg_thread_main → main() → idle
+  cleanly. The real bug was MINE: the sample uses printf() (stdout) but the SoC
+  console only hooked printk, so main()'s output went nowhere. Fix = also
+  `__stdout_hook_install(ast2050_console_out)` in console.c. Never blame the
+  hardware/upstream while my own code is in the loop.
+- **M1 VIC + system timer written** (soc/aspeed/ast2050/vic.c real G3 VIC at
+  0x1e6c0000 using the Linux irq-aspeed-g3-vic SENSE/DUAL/EVENT constants;
+  aspeed_timer.c tickful Timer1 @ 1 MHz, VIC src 16). With SYS_CLOCK=y the timer
+  DELIVERS interrupts through the cortex_a_r isr_wrapper and the app still prints
+  Hello World — but sustained ticking then data-aborts at the arm_mmu L1 table
+  (0x40008ffc), the SAME brand-new-ARM9 arm_mmu dynamic-mapping breakage that
+  forced the static M0 console (now via timer-driven thread-switch page-table
+  updates). So SYS_CLOCK left OFF by default (clean cooperative Hello World, no
+  crash); timer/VIC code committed + re-armed once the upstream arm_mmu is fixed.
+- Matrix row 30 ZQ = 🔶 now means a RUNNING APP, not just a banner.
+
 ## 2026-07-18 — D14 Zephyr M0 BANNER RUNS in QEMU 🎉
 
 - The AST2050 Zephyr port now **boots and prints** under `qemu-system-arm -M

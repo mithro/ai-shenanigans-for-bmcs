@@ -36,6 +36,14 @@ static const struct arm_mmu_region mmu_regions[] = {
 	 */
 	MMU_REGION_FLAT_ENTRY("uart5", 0x1e784000, 0x1000,
 			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* M1: the G3 VIC (0x1e6c0000, vic.c) and the timer block (0x1e782000,
+	 * aspeed_timer.c) — device memory, statically mapped like the UART so
+	 * IRQ setup + the system tick work with the MMU on. */
+	MMU_REGION_FLAT_ENTRY("vic", 0x1e6c0000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
+	MMU_REGION_FLAT_ENTRY("timer", 0x1e782000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {

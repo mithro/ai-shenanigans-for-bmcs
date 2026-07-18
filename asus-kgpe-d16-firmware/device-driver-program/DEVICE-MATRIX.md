@@ -119,7 +119,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-- **30** console both sides (all boots). **Zephyr M0 RUNS in QEMU** (ZQ 🔶): the AST2050 port boots and prints `*** Booting Zephyr OS ***` via a static-mapped polling SoC console (`soc/aspeed/ast2050/console.c`), evidence `d14-zephyr/02`. The standard `uart_ns16550.c` is blocked on the upstream ARM9 `arm_mmu` z_phys_map gap; M1 (aspeed timer) unblocks the app thread + then the ns16550 path. D10/D11/D14.
+- **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the AST2050 port boots and runs application code — `*** Booting Zephyr OS ***` + `Hello World! kgpe_d16_bmc/ast2050` — via a static-mapped polling SoC console (`soc/aspeed/ast2050/console.c`, printk+stdout hooks), evidence `d14-zephyr/03`. The M1 VIC (`vic.c`) + aspeed timer (`aspeed_timer.c`) are written and deliver interrupts, but sustained tickful scheduling data-aborts at the arm_mmu L1 table (same brand-new ARM9 `arm_mmu` dynamic-mapping gap that also blocks `uart_ns16550.c`); left cooperative by default. Per-device Zephyr drivers build on this once preemption is clean. D10/D11/D14.
 - **31** SOL essentially unimplemented end-to-end (audit gap #2): no QU8-mux/Super-I/O model, no Linux SOL session, no host bytes on silicon. D10.
 
 ## JTAG / LEDs / clock / straps (§13)
