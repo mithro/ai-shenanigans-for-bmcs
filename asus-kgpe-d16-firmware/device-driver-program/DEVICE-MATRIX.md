@@ -154,10 +154,12 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 38 | Watchdog (WDT) | wdt | ✅ | ⬜ | ⬜ | ✅ | 🔶 | ⬜ | ⬜ | ⬜ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 41 | ADC (voltage monitor, 0x1E6E9000, IRQ22) | adc | 🔶 | Ⓝ | Ⓝ | ⬜ | Ⓝ | ⬜ | ⬜ | Ⓝ |
 
 - **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
 - **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
+- **41** ADC (added by gate-(d) audit): SoC voltage-monitor ADC at 0x1E6E9000, IRQ22, needs an `aspeed,ast2050-adc` binding. QE=🔶 (aspeed_adc in the SoC model, G3 semantics to verify); LS=Ⓝ (board disposition: the ADC's VP0-17 analog inputs are repurposed as GPIOE/F THERMTRIP/PROCHOT/DDR_THERM lines and rail monitoring is the W83795's job — the SoC ADC isn't wired to analog rails here); LQ/LU=⬜ (`aspeed_adc` IIO driver in QEMU). See FULL-TASK-LIST A9.
 
 ## Roll-up (honest)
 

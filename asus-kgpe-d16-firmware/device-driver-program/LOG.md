@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-18 — gate (d) task-discovery audit found MISSING tasks → folded them in
+
+- A sub-agent task-discovery audit (gate d: "can anyone find tasks that SHOULD be
+  on the list?") found REAL gaps by cross-checking the per-pin netlist
+  (`pinmaps/QU1_pins.md`) — the prior "nothing skipped" coverage assertion was
+  OVERSTATED. Honestly folded all of them in:
+  - **GAP 1 (biggest): the SoC ADC block** (0x1E6E9000, IRQ22, RAPTOR "Change 16",
+    needs `aspeed,ast2050-adc`) had NO row → added FULL-TASK-LIST A9 + matrix row
+    41 (QE 🔶, silicon Ⓝ board-disposition since VP0-17 are GPIO here, IIO driver ⬜).
+  - **GAPs 2-3,9: three §11 monitor INPUTS** — `AST_BIOS_POST_COMPLT#` (A10),
+    `AST_SYNCFLOODIN#` (B8), `FP_NMIBNT#` (U1) → added to E2's input set.
+  - **GAPs 4-5: three control OUTPUTS** — `AST_RESETDIS#` (C10), `AST_PWRBNTDIS#`
+    (C11), `AST_BRST#` (P21, the BMC's own PCI/VGA reset) → added to E5.
+  - **GAP 6: LPC split** — B1 was one collapsed row; split into B1a KCS (done),
+    B1b mailbox, B1c port-80h snoop, B1d vUART, B1e TPM-passthrough (matches the
+    matrix rows 4-7 the FULL-TASK-LIST had lumped).
+  - **GAP 7: I²C slave/multi-master** — D1 was master-only; added D1b (target mode
+    + SP5100 co-master arbitration).
+  - **GAPs 8,10,11: CU2 RMII clock-gen, VGA_HDR1, ROMA0-23 spare GPIO** — explicit
+    dispositions in the coverage assertion.
+- This is gate (d) working as intended: the audit found genuine omissions, and
+  they are now tracked (honestly `[ ]`/`[~]`/`[N]`), not silently skipped. The
+  new items are the next work to drive to completion. Re-run gate (d) after
+  building the ADC/LPC-split/etc. to confirm nothing else is discoverable.
+
 ## 2026-07-18 — 🎉 D09 SB-TSI validated ON SILICON (BOTH-SIDES DONE)
 
 - Honored the audit's "achievable, not blocked" reclassification by actually

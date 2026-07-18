@@ -79,15 +79,42 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU · [x] silicon (culvert in-band devmem bridge) · [x] userspace (culvert probe EXIT 0)
 - Zephyr: [N] (debug back-door)
 
+### A9. ADC — voltage-monitor ADC 0x1E6E9000, IRQ 22 (RAPTOR-PORTING-GUIDE §"Change 16"; needs `aspeed,ast2050-adc`)  [added by gate-(d) audit 2026-07-18]
+- [~] QEMU: the aspeed ADC is present in the SoC model (`hw/adc/aspeed_adc.c`); verify the G3 register semantics + IRQ22 wiring on the kgpe-d16 machine (TODO)
+- U-Boot: [N] (voltage-monitor ADC is an OS/runtime function, not a boot driver)
+- Linux: [ ] QEMU (`aspeed_adc` IIO driver + a G3 `aspeed,ast2050-adc` compatible) · [N] silicon (**board disposition: the ADC's VP0–VP17 analog inputs are repurposed on the KGPE-D16 as GPIOE/F digital lines — THERMTRIP#/PROCHOT#/DDR_THERM# (§11) — and board voltage monitoring is done by the W83795 (D2), so the SoC ADC is not wired to analog rails here; faithfully board-N/A**) · [ ] userspace (`/sys/bus/iio`, only if QEMU model exercised)
+- Zephyr: [ ] QEMU · [N] silicon (board-N/A as above)
+
 ---
 
 ## B. Host-interface controllers
 
-### B1. LPC — KCS/IPMI + mailbox + vUART → SP5100/Super-I/O/TPM (§5)
-- [~] QEMU: LPC model with KCS state machine (datasheet §30); mailbox/port-80h-snoop/vUART **not yet modeled** (D03)
-- U-Boot: [N] QEMU/silicon (host-IPMI is an OS-level function; U-Boot has no LPC-peripheral driver)
-- Linux: [x] QEMU (`aspeed-kcs-bmc`, /dev/ipmi-kcs) · [x] silicon (phosphor-ipmi-kcs bound, host `mc info` answered) · [x] userspace (ipmitool over KCS) — for KCS. mailbox/vUART: [ ] all
+### B1a. LPC — KCS/IPMI channel → SP5100 (§5)
+- [x] QEMU: LPC model with KCS state machine (datasheet §30, DEVICE-MATRIX row 3)
+- U-Boot: [N] (host-IPMI is an OS-level function; U-Boot has no LPC-peripheral driver)
+- Linux: [x] QEMU (`aspeed-kcs-bmc`, /dev/ipmi-kcs) · [x] silicon (phosphor-ipmi-kcs bound, host `mc info` answered) · [x] userspace (ipmitool over KCS)
 - Zephyr: [ ] QEMU · [ ] silicon
+
+### B1b. LPC — iBT/mailbox (host↔BMC message registers) (§5)  [split per gate-(d) audit]
+- [ ] QEMU: `aspeed-lpc-mbox` register block not modeled (DEVICE-MATRIX row 4)
+- U-Boot: [N]
+- Linux: [ ] QEMU (`aspeed-lpc-mbox`) · [ ] silicon · [ ] userspace (`/dev/aspeed-lpc-mbox`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B1c. LPC — port-80h POST-code snoop (§5)  [split per gate-(d) audit]
+- [ ] QEMU: `aspeed-lpc-snoop` (host I/O-port 0x80 capture) not modeled (DEVICE-MATRIX row 5)
+- U-Boot: [N]
+- Linux: [ ] QEMU (`aspeed-lpc-snoop`) · [ ] silicon (needs host POSTing) · [ ] userspace (`/dev/aspeed-lpc-snoop*`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B1d. LPC — vUART (host-visible virtual UART) (§5)  [split per gate-(d) audit]
+- [~] QEMU: register-present in the LPC model, no session (DEVICE-MATRIX row 6)
+- U-Boot: [N]
+- Linux: [~] QEMU (`aspeed-vuart`, no host consumer wired) · [ ] silicon · [ ] userspace (`/dev/ttyVUART0`)
+- Zephyr: [ ] QEMU · [ ] silicon
+
+### B1e. LPC — TPM header pass-through → TPM1 (§5, §15)  [split per gate-(d) audit]
+- [N] QEMU/U-Boot/Linux/Zephyr: TPM1 shares the *host's* LPC bus; the BMC is a peer LPC peripheral, it does not drive the TPM. No BMC driver — the TPM is a host device on the shared bus (DEVICE-MATRIX row 7). Documented, not a BMC deliverable.
 
 ### B2. PCI 33 MHz bus (VGA-as-PCI / video-capture attach) → SP5100 (§6)
 - [~] QEMU: video engine appears; full PCI-target config-space model partial
@@ -139,11 +166,19 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 
 ## D. I²C controllers + on-bus devices (§10)
 
-### D1. I²C controllers ×8 (SDA1/SCL1…SDA7/SCL7 + muxed 8th) (§10, §10.4)
+### D1. I²C controllers ×8 (SDA1/SCL1…SDA7/SCL7 + muxed 8th) — MASTER mode (§10, §10.4)
 - [x] QEMU: aspeed I²C engine model (G3 AC-timing fix modeled)
 - U-Boot: [x] QEMU · [x] silicon (Raptor I2C)
 - Linux: [x] QEMU · [x] silicon (i2cdetect completes; g3-i2c patch 0005) · [x] userspace (`/dev/i2c-*`, i2cget/i2cset)
 - Zephyr: [ ] QEMU · [ ] silicon
+
+### D1b. I²C — SLAVE/target mode + multi-master arbitration (§10.3, I2C-SMBUS-TOPOLOGY §3.2)  [added by gate-(d) audit]
+(the shared sensor bus I2C2/3/6 is genuinely multi-master with the SP5100 SMBus1/2, arbitrated by U23 + the D27/QQ9/QQ10 hardware ownership mutex; and the BMC can be *addressed as a target* — IPMB/SSIF-style inbound)
+- [~] QEMU: the aspeed_i2c model supports master + basic slave; the KGPE-D16 multi-master arbitration (U23 source-select + the ownership mutex) is modeled at the fabric level (D6, `kgpe_d16_i2c_fabric.c` gates on ownership) but lost-arbitration/target-addressing of the BMC is not exercised
+- U-Boot: [N] (slave/multi-master is an OS-runtime concern)
+- Linux: [ ] QEMU (i2c slave backend `i2c-slave-*` bound to an engine + a multi-master contention test) · [ ] silicon (drive a bus contention with the SP5100 as co-master) · [ ] userspace
+- Zephyr: [ ] QEMU · [ ] silicon
+- NB: if the KGPE-D16 never addresses the BMC as an I²C target (no IPMB/SSIF wired to the BMC), the target-mode boxes become `[N]`-with-reason once confirmed from the netlist — currently `[ ]` pending that confirmation.
 
 ### D2. W83795G hardware monitor — QU4, I2C2 0x2F (§10.2)
 - [x] QEMU: `w83795` model seeded from silicon captures
@@ -225,10 +260,11 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU (F2 power on/off/reset PASS via kgpe-power.sh) · [x] silicon (plug 3W→103W, host PXE, eth0 survives) · [x] userspace (sysfs gpio, kgpe-power.sh, Redfish)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### E2. Platform-monitor GPIO inputs — THERMTRIP/PROCHOT/DDR_THERM/NMI (§11)
-- [~] QEMU: GPIO inputs modeled; full §11 signal-map wiring incomplete (D09/task #136)
-- U-Boot: [N]
-- Linux: [~] QEMU · [ ] silicon (needs host events to exercise) · [ ] userspace (gpio-keys/events)
+### E2. Platform-monitor GPIO INPUTS — THERMTRIP/PROCHOT/DDR_THERM/NMI + POST-complete/sync-flood/NMI-button (§11 + per-pin netlist)
+(full input set from `pinmaps/QU1_pins.md`: `TTL_P1/P2_THERMTRIP#` V4/V3, `TTL_P1/P2_PROCHOT#` V2/V1, `AST_P0/P1_DDR_THERM#` T3/T2, `AST_NMI#` T1; **plus gate-(d)-found inputs: `AST_BIOS_POST_COMPLT#` A10/GPIOB5 (host POST-complete monitor), `AST_SYNCFLOODIN#` B8/GPIOC4 (HyperTransport fatal-error monitor), `FP_NMIBNT#` U1/GPIOH6 (front-panel NMI-button sense)**)
+- [~] QEMU: aspeed GPIO inputs modeled; the full §11 signal-map wiring (incl. the three added inputs) is incomplete — needs DTS `gpio-line-names` + input nodes
+- U-Boot: [N] (platform-event monitoring is an OS function)
+- Linux: [~] QEMU · [ ] silicon (**needs DTS `gpio-line-names` exposing these balls as GPIO inputs + a reboot; on 2026-07-18 a `/sys/kernel/debug/gpio` dump on silicon showed only `bmc-ctl-lockout-n` named — the §11 monitor pins are not yet line-named/exported, several are in TACH alt-mode**) · [ ] userspace (gpio sysfs / gpio-keys)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### E3. LEDs — BMCRDY/CPUERR/MLED/ID (§13)
@@ -243,10 +279,15 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU · [x] silicon (pinctrl binds, mux selects work) · [N] userspace (straps not a userspace ABI)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### E5. Platform-control OUTPUT lines — CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCI_RST#/ATXPSON#/SYSRESET# (§11)
+### E5. Platform-control OUTPUT lines — CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCI_RST#/ATXPSON#/SYSRESET# + RESETDIS#/PWRBNTDIS#/BRST# (§11 + per-pin netlist)
 (the discrete BMC-driven control signals beyond the E1 power-latch: `AST_CLRTC#`
 B9, `AST_BIOSREVRY#` C9, `AST_CPU1DISABLE#` D8, `AST_CPU2DISABLE#` C8,
-`SB_PCI_RST#` B10, `AST_ATXPSON#` A9, `AST_SYSRESET#` D10 — DEVICE-MATRIX row 29)
+`SB_PCI_RST#` B10, `AST_ATXPSON#` A9, `AST_SYSRESET#` D10 — DEVICE-MATRIX row 29;
+**plus gate-(d)-found outputs: `AST_RESETDIS#` C10/GPIOB3 (reset-disable),
+`AST_PWRBNTDIS#` C11/GPIOA5 (power-button-disable; alt-fn PHYPD# overlaps the C1
+MAC/PHY power-down — note the dual role), and `AST_BRST#` P21 (the BMC's OWN
+dedicated PCI/VGA reset OUTPUT to the VGA_SW1 jumper — not a GPIO, a hard reset
+pin the B2/B3b PCI-target model must generate)**)
 - [~] QEMU: driven as aspeed GPIOs by the model (the power-latch ones are in the
   kgpe_d16_pwrseq path; CLRTC#/BIOSREVRY#/CPUxDISABLE# are plain GPIO outputs,
   togglable but not yet each behaviour-verified)
@@ -289,7 +330,11 @@ Every §2–§15 function block and every §14 neighbour chip maps to a row abov
 §2→A1; §3→A2; §4→A3; §5→B1; §6→B2/B3/B3b; §7→C1/C2; §8→B3b/B4; §9→B5;
 §10→D1–D13; §11→E1/E2/E5; §12→F1/F2; §13→A1/A4/A5/E3/E4/G1; §14 chips→the bus rows
 that reach them (W83795→D2, W83601G→D3/D4, HT24LC08→D5, RTL8201N→C1, 82574L→C2,
-SB-TSI→D9, QU9/QU5→D6, QU8→F2, muxes/glue→passive). The three **host chips**
+SB-TSI→D9, QU9/QU5→D6, QU8→F2, muxes/glue→passive). **CU2 (ICS9112AM-16LFT
+clock generator)** supplies the 50 MHz RMII1/2 reference clocks to the MAC — an
+active support chip absent from §14; it is load-bearing for a faithful RMII/NC-SI
+model (folded into C1/C2, tracked here so it is not a silent omission). The three
+**host chips**
 `SU1` (SP5100 southbridge), `OU1` (W83667HG Super-I/O), `NU1` (SR5690 northbridge)
 are not BMC-internal devices — the BMC reaches them **through** the LPC (B1), PCI
 (B2), USB (B5) and I²C (D1) controller rows; their own register maps are host-
@@ -299,6 +344,20 @@ PANEL1/AUX_PANEL1→E1/E3/E5/D12, PSUSMB1→D10, TPM1→B1, jumpers→E4). Passi
 (LDOs UP7706U8, series-R nets QRN*, sync buffer QU6, RS-232 AZ75232, glue 74LVCxx)
 carry no driver by nature and are modeled only where behaviour-relevant (the
 QU9/QU5/U23 fabric = D6).
+
+**Explicit disposition of the remaining per-pin/netlist items (gate-(d) audit 2026-07-18):**
+- `VGA_HDR1` (secondary internal VGA pin-header): carries the same DAC/DDC/sync
+  nets as VGA1 in parallel → covered by B3b/B4; noted here as an unlisted §15
+  connector so it is not a silent skip.
+- `ROMA0–ROMA23` (24 balls W5–AB8): legacy parallel-ROM address pins, series-
+  terminated only, act as SPARE GPIO in SPI-boot mode (§4). Disposition: `[N]`
+  no dedicated driver — unused spare GPIO on this board; togglable via the aspeed
+  GPIO model + sysfs if ever needed (folds into E1's GPIO controller).
+- The A9 ADC, the three E2 monitor inputs (BIOS_POST_COMPLT#/SYNCFLOODIN#/
+  FP_NMIBNT#), the three E5 outputs (RESETDIS#/PWRBNTDIS#/BRST#), the B1a–e LPC
+  split, the D1b I²C slave/multi-master, and CU2 were all ADDED by the gate-(d)
+  task-discovery audit (2026-07-18) — the prior coverage assertion had overstated
+  completeness; these are now explicit rows/items, honestly `[ ]`/`[~]`/`[N]`.
 
 **Nothing in the schematic is skipped.** Items marked `[N]` state why they are
 not-applicable for that stack; `[B]` items state the precise blocker and my
