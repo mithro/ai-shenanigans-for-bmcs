@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b) cont'd: WDT driver + samples review — 2 real bugs FIXED (rtc_smoke tolerance, gpio_smoke fail-loud)
+
+Independent code review of the previously-unreviewed Zephyr WDT driver + 5 samples:
+- **wdt_aspeed_g3.c, i2c_smoke, wdt_smoke, fru_smoke: CLEAN** (register offsets/magics cross-checked
+  vs the QEMU WDT model; i2c_smoke's 0x79 W83795 chip-id gate is the REAL chip id (not a QEMU seed);
+  fru "all 0xff" already silicon-corroborated).
+- **rtc_smoke [Major, conf 92] FIXED**: the `delta <= 10` PASS window contradicts the driver's own
+  documented ~732x-fast test-clock (#158) and the LOG-observed silicon `delta=38s` — it would
+  false-FAIL correct-but-fast hardware (the same QEMU-tuned-gate class already fixed for
+  w83601g/w83795/sbtsi, missed here). Fix: forward-only test (`mday==set && delta>=0`) — the real
+  failure signal is a negative delta / day=0 (counter never loaded), not the exact rate. QEMU
+  re-validated PASS (delta=0). (This also means rtc_smoke would now PASS on silicon — the ZS 🔶
+  status stands, though: 'functional, not real-time-accurate'.)
+- **gpio_smoke [Minor, conf 80] FIXED**: the clear-phase `gpio_pin_set_raw` failure was silently
+  swallowed (no else branch) — added a fail-loud message, per the repo convention + the sibling
+  smokes. (The GPIOI0-unbonded readback quirk is separately tracked #163.)
+Session independent-review bug tally now: 5 real bugs fixed (power_smoke ×2, vic.c, rtc_smoke,
+gpio_smoke) + 1 finding silicon-disproven (soc.c vectors). QEMU machine-wiring review still running.
+
 ## 2026-07-20 — GATES (a)×2 + (d): 2nd enumeration review CONFIRMS complete; 1st gate-d task-list audit finds real soft-skips (fixed/tasked)
 
 - **GATE (a) — SECOND independent enumeration review**: an independent agent re-walked the schematic

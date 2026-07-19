@@ -53,6 +53,8 @@ int main(void)
 	if (ret == 0) {
 		val = gpio_pin_get_raw(gpio, GPIO_SMOKE_PIN);
 		printk("GPIO set=0 read=%d\n", val);
+	} else {
+		printk("GPIO smoke: clear failed (%d)\n", ret);
 	}
 
 	return 0;
