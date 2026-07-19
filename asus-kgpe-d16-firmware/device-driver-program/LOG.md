@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b/c): independent code review of the unreviewed Zephyr code — 2 bugs found + FIXED
+
+Ran an independent code-review sub-agent on the code NOT covered by the earlier review (which had
+done i2c pin-mux + w83601g): the RTC driver (SCU08 clock-select + CONTROL[5] poll), power_smoke
+(GPIO power sequence + trajectory), and tally.py.
+- **rtc_aspeed_g3.c: CLEAN** (register offsets/magics, byte-lane unpack, range checks, write
+  ordering, SCU08 unlock+RMW all verified correct; the 24MHz test-clock choice is a documented
+  evidence-backed tradeoff, not a hidden bug).
+- **tally.py: CLEAN** (verified against real DEVICE-MATRIX content: 43-row match, the 26b
+  alphanumeric id handled, the snapshot table + repeated sub-table headers correctly excluded,
+  the ✅ inside row-41's device-name text falls outside the status slice, fail-loud on missing file).
+- **power_smoke: 2 Major issues, BOTH FIXED (commit e1ce55c):** (1) all gpio_pin_configure/set_raw/
+  get_raw returns were (void)-discarded → masked actuation failures on a live host-power path;
+  now every op is checked via a chk() helper + io_ok flag + negative-read guard, folded into the
+  verdict (fail loud, matching the sibling smokes). (2) the PASS verdict didn't use h2_start, so it
+  could PASS with the host already on (only force-off exercised); now requires the full documented
+  trajectory h2_start==0 → on_seen → !off_seen AND io_ok. QEMU re-validated PASS
+  (io_ok=1 start=0 on=1 off=0). Both are the "fail loud / don't fake a PASS" class the project cares
+  about — real gate-(b/c) value from the independent review.
+
 ## 2026-07-20 — GATE (a): independent enumeration verification — schematic→matrix, 0 gaps
 
 Ran an independent sub-agent that read AST2050-BMC-WIRING.md END TO END (§§1–16, not skimmed) and
