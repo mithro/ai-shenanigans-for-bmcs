@@ -208,19 +208,19 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: `hw/gpio/w83601g.c` datasheet-faithful (Nuvoton V1.31; CI `boot-w83601g`)
 - U-Boot: [N] (DIMM-error-LED drive is an OS/runtime function)
 - Linux: [x] QEMU (`scripts/w83601g-test.py` 19/19) · [x] silicon (LED-drive via i2c-4, readback) · [x] userspace (raw SMBus i2cset/i2cget)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`drivers/gpio/gpio_w83601g.c` + `samples/w83601g_smoke`, port_get 0x000f + CR01 HIGH/LOW round-trip PASS) · [x] silicon (U27 0x0807, HIGH→CR01=0x08 LOW→0x00, after the SCU74[12] I2C5 pin-mux fix #156, commit 355a9c7; LOG 2026-07-19)
 
 ### D4. W83601G DIMM-LED expander U28 — I2C5 0x19 (§10.2)  ✅ both-sides this session
 - [x] QEMU: same model, seeded input 0xb5
 - U-Boot: [N] (as D3)
 - Linux: [x] QEMU · [x] silicon (LED-drive on 0x19, readback+restore) · [x] userspace (raw SMBus)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (same driver+smoke, U28 seed 0x00b5) · [x] silicon (U28 0x61b5, HIGH→CR01=0x08 LOW→0x00; #156)
 
 ### D5. HT24LC08 FRU EEPROM — U25, I2C5 0x54–0x57 (§10.2)  ✅ both-sides this session
 - [x] QEMU: 4× smbus-eeprom at 0x54–0x57 (blank 0xff, matching silicon; E2 strapped to VCC → upper block 0x54–0x57 per I2C-MUX-FABRIC-ARBITRATION.md, DEVICE-MATRIX row 20)
 - U-Boot: [N] (FRU is an OS/IPMI function)
 - Linux: [x] QEMU (at24 binds) · [x] silicon (at24 read, blank as shipped) · [x] userspace (`/sys/.../eeprom`, IPMI FRU)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`samples/fru_smoke`, at2x read `ff ff ff ff` PASS) · [x] silicon (`FRU RESULT: PASS`, after the SCU74[12] I2C5 pin-mux fix #156)
 
 ### D6. QU9/QU5/U23 I²C mux fabric (§10.1, §10.3)  ✅ both-sides
 - [x] QEMU: `hw/i2c/kgpe_d16_i2c_fabric.c` (GPIO-selected mux, sys-pwrgd gate)
