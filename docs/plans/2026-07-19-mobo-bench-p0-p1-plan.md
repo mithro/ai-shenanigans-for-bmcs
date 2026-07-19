@@ -169,7 +169,10 @@
   PY
   python3 litex_setup.py --init --install --user   # or --config=full
   ```
-  Record exact commands that worked in `docs/toolchain.md`.
+  Record exact commands that worked in `docs/toolchain.md`. **Note:** LiteX's
+  `litex_setup.py` installer is the sanctioned exception to the repo's "never
+  bare `python`/`pip`" rule — it manages its own multi-repo checkout; wrap
+  subsequent one-off scripts in `uv run` as usual.
 - [ ] **Step 2: Sanity-build the stock target** (no custom code yet), ECP5 45F,
   toolchain = trellis (oss-cad-suite):
   ```sh
@@ -189,7 +192,8 @@
 
 - [ ] **Step 1:** On the Pi 5 (or workstation if the ULX3S is local), load SRAM:
   `openFPGALoader -b ulx3s build/.../gateware/radiona_ulx3s.bit`.
-  Expected: `Done`, IDCODE `0x41111043` (45F).
+  Expected: `Done`, IDCODE `0x41112043` (LFE5U-45F; note 25F=`0x41111043`,
+  85F=`0x41113043`, 12F=`0x21111043`).
 - [ ] **Step 2: Verify** the LiteX BIOS banner on the console UART
   (`litex_term /dev/ttyUSB0` on the FTDI port) shows `LiteX SoC on ULX3S`.
 - [ ] **Step 3:** Save `test/load.sh` wrapper. Commit.
@@ -200,10 +204,14 @@
 
 **Files:** Modify `mobo_bench/soc.py`; Create `test/hil_remoteclient.py`
 
-- [ ] **Step 1:** In `soc.py`, subclass the ULX3S `BaseSoC` and add a bridge —
-  keep the console on the FTDI UART and add UARTBone on a second link:
-  build with `--uart-name=crossover+uartbone` (crossover console + UARTBone),
-  and `--csr-csv=csr.csv`.
+- [ ] **Step 1:** In `soc.py`, subclass the ULX3S `BaseSoC` and add a bridge.
+  Build with `--uart-name=crossover+uartbone` and `--csr-csv=csr.csv`: this puts
+  **UARTBone on the physical FTDI serial** and moves the **console to the
+  crossover** (a virtual UART reached over the bridge, e.g. `litex_term
+  crossover` / via `litex_server`). The ULX3S has only one FTDI UART, so the two
+  cannot both be physical — after this task the console is the crossover, not a
+  second COM port. (This is superseded in Task 1.6 when the console/CDC move to
+  USB.)
 - [ ] **Step 2: Build:** `python3 -m mobo_bench.soc --device LFE5U-45F --build --csr-csv=csr.csv`. Expected: `csr.csv` generated, bitstream built.
 - [ ] **Step 3 [HW]: Verify from the Pi 5:** run `litex_server --uart --uart-port=/dev/ttyUSB0` and:
   ```python
