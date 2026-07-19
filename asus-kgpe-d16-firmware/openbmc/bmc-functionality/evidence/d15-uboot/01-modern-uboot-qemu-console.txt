@@ -66,3 +66,18 @@ NOTE the UQ/US matrix columns track the RAPTOR legacy U-Boot (the faithfulness o
 boot# on silicon, drives the boot-path SoC blocks). This modern U-Boot is the separate D15/#137
 deliverable. Most non-boot devices are justified Ⓝ for U-Boot (a bootloader has no runtime need
 to drive the hwmon/FRU/DIMM-LEDs/PSU).
+
+===== PER-DEVICE DRIVER PROBE (interactive console, non-interactive drive) =====
+Drove the `ast#` prompt with commands (tmp/uboot-boot/uboot_probe.py: stop autoboot -> version,
+i2c bus, i2c dev/probe, sf probe). Results:
+  * `sf probe` -> "SF: Detected mx25l12805d with page size 256 Bytes, erase size 64 KiB, total
+    16 MiB". The SPI-flash (SMC) U-Boot driver WORKS in QEMU on the G3 machine -> row 2 (BMC_FW1
+    SPI flash) modern-U-Boot driver validated in QEMU. (Boot-critical; also read the env above.)
+  * `i2c dev 0|1|4` -> "Failure changing bus number (-19)" (-ENODEV) / "No I2C bus selected";
+    `i2c bus` lists nothing. The evb-ast2400 defconfig does NOT register any I2C bus (no
+    CONFIG_DM_I2C aspeed bus / no i2c DT nodes for this board). => concrete #137 deliverable:
+    enable the aspeed I2C driver + add the G3 i2c engine nodes to the board DT so `i2c probe`
+    can exercise the sensor/FRU buses (the QEMU machine already wires W83795@0x2f, FRU@0x54-57,
+    etc.). This is the U-Boot analog of the Zephyr i2c_aspeed_g3 driver.
+  * The console is fully interactively drivable (commands echo + execute), so per-device probes
+    are a viable validation method going forward.
