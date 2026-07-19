@@ -71,3 +71,31 @@ either (b1) move the SCU40[6] skip check to the VERY TOP of lowlevel_init so a J
 init_dram including the early timer/USB/LPC writes, or (b2) guard/fix the specific G3-unmapped access.
 Confidence: HIGH that it's an early-init_dram unconditional access faulting on G3 (SCU40[6] is set yet
 it still aborts before the skip check); the SPECIFIC instruction is still UNCONFIRMED.
+
+--- ROOT CAUSE FOUND + PARTIAL FIX (same session) ---
+Caught the first fault with a HW breakpoint at the 0x10 data-abort vector: DFSR=0x1 = ALIGNMENT
+FAULT. Read SCTLR (CP15 c1) = 0x5107a => bit 1 (A, alignment-fault-checking) = 1. Grep of the U-Boot
+source found the smoking gun: arch/arm/cpu/arm926ejs/start.S:97 `orr r0,r0,#0x00000002 /* set bit 1
+(A) Align */` — the modern U-Boot's cpu_init_cp15 DELIBERATELY enables alignment-fault checking, then
+its early aspeed code does an UNALIGNED access that data-aborts on REAL silicon (which enforces
+alignment) while QEMU (lenient — ignores the A bit) boots either way. That is the complete
+"boots in QEMU, faults on silicon" explanation. (The double-fault loop on the poison SP is a
+downstream effect: any early fault re-enters the abort handler before exception stacks exist.)
+
+FIX (uboot-patches/0004-arm926-disable-alignment-fault-checking-g3.patch): change start.S:97
+`orr`->`bic` (clear the A bit — disable alignment-fault checking, standard on ARM systems that do
+unaligned accesses). RESULTS:
+  * QEMU: still boots fully to `ast#` (A bit is ignored in QEMU) — no regression.
+  * SILICON: the alignment abort is GONE. Post-fix JTAG post-mortem: mode = SUPERVISOR (NOT Abort),
+    PC = 0x00038480 (running RELOCATED/init code, ~0x38000 bytes deep — vs the old immediate abort at
+    0x10), SCTLR = 0x51078 (A bit now 0). So the U-Boot now EXECUTES far into its init on real
+    silicon instead of crashing on the first unaligned access. Big step.
+
+REMAINING (new, separate blocker — honestly open): still NO console output on silicon at 115200 OR
+1200 baud (88-90 bytes = capture header only). The CPU is in Supervisor mode at PC=0x38480 (past the
+abort), so it is either (i) hung in an early loop BEFORE console-init at 0x38480, or (ii) the console
+baud is neither 115200 nor 1200 (the modern U-Boot's ns16550 divisor from its DT clock-frequency may
+not match the AST2050 UART clock). NEXT: halt twice to see if PC advances (hung vs running); read the
+UART DLL/DLM divisor the U-Boot programmed at 0x1e784000 and compute the actual baud; or single-step
+board_init_f to console_init. The A-bit fix is COMMITTED (real, validated: QEMU-clean + silicon-past-
+abort); this console blocker is the next #168 sub-step.

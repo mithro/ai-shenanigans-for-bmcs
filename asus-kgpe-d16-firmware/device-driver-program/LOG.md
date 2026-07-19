@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168 ROOT CAUSE FOUND + partial fix: modern U-Boot's alignment abort on G3 silicon FIXED (start.S A-bit); now runs past the abort
+
+Root-caused the modern-U-Boot silicon abort with a HW breakpoint at the 0x10 data-abort vector:
+DFSR=0x1 = ALIGNMENT FAULT, SCTLR=0x5107a (bit1 A=1). Source smoking gun: arch/arm/cpu/arm926ejs/
+start.S:97 `orr r0,r0,#0x00000002 /* set bit 1 (A) Align */` — the modern U-Boot DELIBERATELY enables
+alignment-fault checking, then its early aspeed code does an UNALIGNED access that aborts on real
+silicon (enforces alignment) while QEMU (lenient) boots either way — the complete "boots in QEMU,
+faults on silicon" story. FIX (uboot-patches/0004): start.S:97 orr->bic (clear the A bit). RESULTS:
+QEMU still boots to ast# (no regression — A ignored in QEMU); SILICON now runs in SUPERVISOR mode at
+PC=0x38480 (~0x38000 deep, A=0) instead of aborting at 0x10 — the alignment abort is GONE. Big step.
+REMAINING (new, honestly-open blocker): still no console at 115200 OR 1200 — the CPU is past the abort
+(Supervisor, PC=0x38480) so it's either hung before console-init at 0x38480 OR the console baud is
+neither tried value (ns16550 divisor vs AST2050 UART clock). Next: halt-twice (hung vs running) + read
+the UART divisor to compute the real baud. A-fix COMMITTED (validated QEMU + silicon-past-abort). This
+is the classic project lesson AGAIN: the hardware wasn't weird — U-Boot enabled alignment faults + did
+an unaligned access; QEMU's leniency hid it. Evidence d15-uboot/03 (ROOT CAUSE FOUND section). #168 updated.
+
 ## 2026-07-20 — modern U-Boot FIRST silicon attempt FAILED (early data abort) — documented honestly
 
 Attempted the modern U-Boot (#137) silicon boot over JTAG, same recipe as the Raptor U-Boot

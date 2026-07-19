@@ -1,0 +1,13 @@
+diff --git a/arch/arm/cpu/arm926ejs/start.S b/arch/arm/cpu/arm926ejs/start.S
+index 10456732..ca3d257c 100644
+--- a/arch/arm/cpu/arm926ejs/start.S
++++ b/arch/arm/cpu/arm926ejs/start.S
+@@ -94,7 +94,7 @@ flush_dcache:
+ #else
+ 	bic	r0, r0, #0x00002000	/* clear bit 13 (--V- ----) */
+ #endif
+-	orr	r0, r0, #0x00000002	/* set bit 1 (A) Align */
++	bic	r0, r0, #0x00000002	/* clear bit 1 (A) Align: the aspeed AST2050 (G3) U-Boot does early unaligned accesses that data-abort on real silicon when alignment-fault checking is on (QEMU is lenient and boots either way). See device-driver-program #168. */
+ #ifndef CONFIG_SYS_ICACHE_OFF
+ 	orr	r0, r0, #0x00001000	/* set bit 12 (I) I-Cache */
+ #endif
