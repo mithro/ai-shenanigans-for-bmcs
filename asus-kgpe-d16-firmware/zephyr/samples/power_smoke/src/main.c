@@ -75,10 +75,22 @@ static void reclaim_a4(void)
 	sys_write32(v & ~SCU74_A4_PHYLINK, SCU_BASE + SCU_MFP_CTL1);
 }
 
+/* Wrap a GPIO call: on failure print a diagnostic and flag *ok false (fail loud —
+ * never let a masked config/write error fake a result on a live power path). */
+static void chk(const char *what, int ret, bool *ok)
+{
+	if (ret != 0) {
+		printk("  POWER: %s failed: %d\n", what, ret);
+		*ok = false;
+	}
+}
+
 /* Sample GPIOH2 n times at ~1 s spacing, printing each, and return the OR of all
  * samples (1 if it was ever high). Lets us watch STA_LINE_POWER settle after a
- * transition instead of reading it once too early. */
-static int h2_trajectory(const struct device *efgh, const char *phase, int n)
+ * transition instead of reading it once too early. A negative read (errno) flags
+ * *ok false rather than being silently treated as "not high". */
+static int h2_trajectory(const struct device *efgh, const char *phase, int n,
+			 bool *ok)
 {
 	int seen = 0;
 
@@ -87,6 +99,11 @@ static int h2_trajectory(const struct device *efgh, const char *phase, int n)
 
 		busy_delay();
 		v = gpio_pin_get_raw(efgh, PIN_H2);
+		if (v < 0) {
+			printk("  POWER: H2 read %s failed: %d\n", phase, v);
+			*ok = false;
+			v = 0;
+		}
 		seen |= (v == 1);
 		printk("  H2 %s t+%ds = %d\n", phase, i + 1, v);
 	}
@@ -98,6 +115,7 @@ int main(void)
 	const struct device *abcd = DEVICE_DT_GET(GPIO_ABCD);
 	const struct device *efgh = DEVICE_DT_GET(GPIO_EFGH);
 	int h2_start, on_seen, off_seen;
+	bool io_ok = true;
 
 	if (!device_is_ready(abcd) || !device_is_ready(efgh)) {
 		printk("POWER smoke: gpio device(s) not ready\n");
@@ -105,45 +123,54 @@ int main(void)
 	}
 
 	/* Feedback line: STA_LINE_POWER as input. */
-	(void)gpio_pin_configure(efgh, PIN_H2, GPIO_INPUT);
+	chk("cfg H2 input", gpio_pin_configure(efgh, PIN_H2, GPIO_INPUT), &io_ok);
 	h2_start = gpio_pin_get_raw(efgh, PIN_H2);
+	if (h2_start < 0) {
+		printk("  POWER: H2 start read failed: %d\n", h2_start);
+		io_ok = false;
+		h2_start = -1;
+	}
 	printk("POWER: H2 start=%d\n", h2_start);
 
 	/* Reclaim A4 and drive it high = BMC in control. */
 	reclaim_a4();
-	(void)gpio_pin_configure(abcd, PIN_A4, GPIO_OUTPUT_HIGH);
+	chk("cfg A4", gpio_pin_configure(abcd, PIN_A4, GPIO_OUTPUT_HIGH), &io_ok);
 
 	/* De-assert all three active-low request lines (drive high). */
-	(void)gpio_pin_configure(efgh, PIN_F0, GPIO_OUTPUT_HIGH);
-	(void)gpio_pin_configure(abcd, PIN_B6, GPIO_OUTPUT_HIGH);
-	(void)gpio_pin_configure(abcd, PIN_B1, GPIO_OUTPUT_HIGH);
+	chk("cfg F0", gpio_pin_configure(efgh, PIN_F0, GPIO_OUTPUT_HIGH), &io_ok);
+	chk("cfg B6", gpio_pin_configure(abcd, PIN_B6, GPIO_OUTPUT_HIGH), &io_ok);
+	chk("cfg B1", gpio_pin_configure(abcd, PIN_B1, GPIO_OUTPUT_HIGH), &io_ok);
 
 	/* Power-ON: pulse reset + power-up low, hold, release (kgpe-power.sh on). */
-	(void)gpio_pin_set_raw(abcd, PIN_B6, 0);
-	(void)gpio_pin_set_raw(abcd, PIN_B1, 0);
+	chk("B6=0", gpio_pin_set_raw(abcd, PIN_B6, 0), &io_ok);
+	chk("B1=0", gpio_pin_set_raw(abcd, PIN_B1, 0), &io_ok);
 	busy_delay();
-	(void)gpio_pin_set_raw(abcd, PIN_B6, 1);
-	(void)gpio_pin_set_raw(abcd, PIN_B1, 1);
-	on_seen = h2_trajectory(efgh, "post-ON ", 3);
+	chk("B6=1", gpio_pin_set_raw(abcd, PIN_B6, 1), &io_ok);
+	chk("B1=1", gpio_pin_set_raw(abcd, PIN_B1, 1), &io_ok);
+	on_seen = h2_trajectory(efgh, "post-ON ", 3, &io_ok);
 
 	/* Force-OFF: pulse power-down low, release (kgpe-power.sh off). Restores the
 	 * host to OFF and lets us watch whether STA_LINE_POWER falls. */
-	(void)gpio_pin_set_raw(efgh, PIN_F0, 0);
+	chk("F0=0", gpio_pin_set_raw(efgh, PIN_F0, 0), &io_ok);
 	busy_delay();
-	(void)gpio_pin_set_raw(efgh, PIN_F0, 1);
-	off_seen = h2_trajectory(efgh, "post-OFF", 6);
+	chk("F0=1", gpio_pin_set_raw(efgh, PIN_F0, 1), &io_ok);
+	off_seen = h2_trajectory(efgh, "post-OFF", 6, &io_ok);
 
 	/* Two things to learn: does force-OFF drive the real PSU off (checked out of
-	 * band via the au-plug W draw), and does GPIOH2 TRACK the power state. If H2
-	 * is high after ON and falls low after OFF, it tracks (row 27 ZS). If it
-	 * stays high across a real power-down, it senses a standby rail, not host-on.
+	 * band via the au-plug W draw), and does GPIOH2 TRACK the power state. PASS
+	 * requires the full documented trajectory 0 (found off) -> 1 (after ON) -> 0
+	 * (after OFF) AND every GPIO op to have succeeded — if H2 was already high at
+	 * start we cannot claim the power-ON control worked, and a masked I/O error
+	 * must not fake a PASS. If H2 stays high across a real power-down it senses a
+	 * standby rail, not host-on (see #162).
 	 */
-	printk("POWER: H2 ever-high post-ON=%d  post-OFF=%d\n", on_seen, off_seen);
-	if (on_seen && !off_seen) {
+	printk("POWER: io_ok=%d H2 start=%d ever-high post-ON=%d post-OFF=%d\n",
+	       io_ok, h2_start, on_seen, off_seen);
+	if (io_ok && h2_start == 0 && on_seen && !off_seen) {
 		printk("POWER RESULT: PASS (GPIOH2 tracks host power)\n");
 	} else {
-		printk("POWER RESULT: FAIL (GPIOH2 did not track: on=%d off=%d)\n",
-		       on_seen, off_seen);
+		printk("POWER RESULT: FAIL (io_ok=%d start=%d on=%d off=%d)\n",
+		       io_ok, h2_start, on_seen, off_seen);
 	}
 
 	return 0;
