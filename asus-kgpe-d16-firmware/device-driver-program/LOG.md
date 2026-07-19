@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-19 — New Zephyr RTC driver (0x1E781000) — QEMU-validated (row 39 ZQ ⬜→🔶)
+
+Closed a Zephyr ⬜ safely (isolated module, no shared-QEMU-model/oracle risk — the
+disciplined alternative to rushing a shared-engine QEMU-⬜ or a risky host-power silicon
+run at depth). Wrote a per-device Zephyr RTC driver for the AST2050 G3 counter-style RTC:
+- `drivers/rtc/rtc_aspeed_g3.c` — `rtc_driver_api` set_time/get_time. Register map cited
+  from the faithful QEMU model `hw/misc/aspeed_rtc_ast2050.c` (base 0x1E781000: COUNTER
+  0x00 = packed binary sec/min/hour/day; RELOAD 0x08; CONTROL 0x0C[0]=enable; RESTART 0x10
+  magic 0x5A = latch RELOAD→COUNTER; RESET 0x14 magic 0x99). set packs the time into
+  RELOAD + pulses RESTART + enables; get reads COUNTER. Honest limitation documented: the
+  G3 counter holds sec/min/hour/day only (no calendar).
+- Wiring: drivers/rtc CMake/Kconfig + module-root add_subdirectory/rsource; dts binding
+  `aspeed,ast2050-rtc` (include base.yaml + rtc-device.yaml) + `&rtc0 @0x1e781000`; a static
+  MMU region in soc.c; a `samples/rtc_smoke/` + `tmp/build-rtc.sh`.
+- **VALIDATED IN QEMU:** `RTC set=12:45:30 day=7  get=12:45:30 day=7` → `RTC RESULT: PASS`
+  (set→load→get round-trip; the QEMU G3 RTC is register-accurate for load/read and doesn't
+  auto-advance the counter, so the round-trip is the correct check). Commit a7b8a94; row 39
+  ZQ ⬜→🔶. ZS (silicon) pending like the other Zephyr drivers.
+
 ## 2026-07-19 — Scoped the remaining 4 QEMU ⬜ (which are non-trivial new models, sequenced carefully)
 
 Investigated the 4 remaining QEMU ⬜ to pick the next safe closure. Finding: each is a

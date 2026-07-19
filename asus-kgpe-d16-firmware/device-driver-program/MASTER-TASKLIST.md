@@ -41,7 +41,7 @@ ZQ·ZS.
 | VIC interrupt controller (§impl) | [36] | ✅ | ✅ / ✅ | ✅ / ✅ / Ⓝ | 🔶 / **✅** | Zephyr ZS DONE this session (storm-free) |
 | Timers (§impl) | [37] | ✅ | ✅ / ✅ | ✅ / ✅ / Ⓝ | 🔶 / **✅** | Zephyr ZS DONE (steady ticks) |
 | Watchdog (§impl) | [38] | ✅ | 🔶 / ⬜ | ✅ / 🔶 / ⬜ | ✅ / **✅** | Zephyr ZS DONE (true reset); U-Boot/Linux WDT silicon + /dev/watchdog |
-| RTC (§impl) | [39] | ✅ | Ⓝ / Ⓝ | ✅ / ⬜ / ⬜ | ⬜ / ⬜ | Linux RTC silicon + Zephyr RTC driver |
+| RTC (§impl) | [39] | ✅ | Ⓝ / Ⓝ | ✅ / ⬜ / ⬜ | **🔶** / ⬜ | Zephyr RTC driver QEMU-DONE (rtc_aspeed_g3.c, set/get PASS); Linux RTC silicon + Zephyr ZS remain |
 | PWM (§13, VP*/TACH* repurposed) | [40] | ✅ | Ⓝ | Ⓝ (board: PWM pins = CPUnDISABLE# GPIO, fans on W83795) | Ⓝ | Board-disposition Ⓝ — §11-confirmed repurposed |
 | ADC | [41] | Ⓝ | Ⓝ | Ⓝ | Ⓝ | **ABSENT on G3** per datasheet §9 p97 (#146); no device |
 | PECI (A9/B9 = PECIO/PECII) | — (#145) | Ⓝ | Ⓝ | Ⓝ | Ⓝ | §11-confirmed: PECI pins repurposed as ATXPSON#/CLRTC# GPIO |
