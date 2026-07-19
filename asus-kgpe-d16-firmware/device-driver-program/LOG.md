@@ -1,5 +1,20 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #157 root-caused: QEMU can't gate i2c on the pinmux because SCU74 is modelled as the G4 RNG_CTRL, not the G3 pinmux
+
+Investigating #157 (make QEMU gate I2C5/6/7 on SCU74) explained the gate-b review's CONFIRMED-1
+("QEMU passes regardless of the pinmux"): the QEMU SCU model (hw/misc/aspeed_scu.c, AST2400/G4-based)
+has RNG_CTRL at offset 0x74 and the pinmux at 0x80-0x94 (PINMUX_CTRL1-6). But on the AST2050 (G3),
+SCU74 IS the Multi-Function-Pin Control #1 (SDA5/6/7 = SCU74[12/13/14]) — the SAME offset means
+different things on G3 vs G4. So the G3 drivers' SCU74[12] writes hit the QEMU model's RNG_CTRL (no
+i2c effect), which is why the muxed-channel FRU@0x54 passes in QEMU with or without the pin-mux, and
+why neither the Zephyr (#156) nor the U-Boot (review CONFIRMED-1) pinmux bug was caught in QEMU. This
+is a real G3-vs-G4 SCU register-map faithfulness gap. FIX is deferred (risky, not bounded for
+end-of-session): model SCU74 as the G3 pinmux for the kgpe machine, then gate aspeed_i2c engines 5/6/7
+on SCU74[12/13/14], then CAREFULLY re-validate all 3 legacy oracles (C2/C4/C-UBOOT) still boot (a
+broken legacy boot = a bug in my model). Plan recorded in #157. Value: it would make QEMU CATCH the
+pin-mux class of bug instead of only real silicon.
+
 ## 2026-07-20 — GATE (b): independent review of the session's U-Boot patches — 2 CONFIRMED fixed, 1 PLAUSIBLE dispositioned
 
 Dispatched an independent code review of the 4 developed U-Boot patches (0002 i2c-enable, 0003 SCU
