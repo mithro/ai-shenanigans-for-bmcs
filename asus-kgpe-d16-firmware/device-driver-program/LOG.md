@@ -1,5 +1,68 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Completion-gate round: independent code review + schematic audit → all findings resolved/tasked
+
+Ran two independent sub-agents (gates b + a/d), acted on every finding:
+
+**Code review of this session's driver changes (gate b) — 2 real bugs found + FIXED:**
+- **[Major] The silicon cache fix was wired only by a Kconfig NAME COLLISION.** My
+  `SOC_FAMILY_ASPEED` never `select`ed `SOC_RESET_HOOK`; it was on only because
+  upstream Zephyr's unrelated AST10x0 family declares the same-named symbol and the
+  SoC-root Kconfigs merge. A Zephyr bump would silently drop it → `soc_reset_hook()`
+  uncalled → the __start data-abort returns with NO CI signal. FIXED: explicit
+  `select SOC_RESET_HOOK` (commit 481ac22). Validated: config still y, QEMU+silicon
+  boot clean.
+- **[Major] `vic.c` had no masking for LEVEL sources.** Fine today (only the edge
+  timer) but I2C/GPIO/UART level IRQs (next consumers) would recurse/double-fire
+  since the isr_wrapper re-enables IRQs before the ISR. FIXED: `z_soc_irq_get_active`
+  reads INT_SENSE — masks level sources at claim (INT_ENABLE_CLR) + `z_soc_irq_eoi`
+  re-enables them; edge sources keep the verified ack-at-claim path (commit 4cf848d).
+  Validated: edge timer unchanged, QEMU+silicon boot + tick.
+- Verified-correct (no change): the CP15 opcodes, edge-ack-at-claim/EOI-no-op, timer
+  reorder. So the core silicon fixes are sound.
+
+**Schematic-coverage audit (gates a/d) — enumeration ~complete; fixed the drift/contradictions:**
+- **B1** PROGRESS.md:697 false "NC-SI/DIMM-inventory impossible" → retracted + cited
+  (commit d6a047b). **B2** F7-NCSI.md body "not wired/does not exist" → hard RETRACTED
+  banner (d6a047b). **C1** ZS-column vs prose/tasklist drift (mine) → synced to the
+  validated ✅ reality (0e5fbdd). **C2** 3-way ADC conflict → reconciled to the
+  datasheet (§9 p97 = no ADC on G3; Raptor's dev-adc.c is dead G4-BSP), FULL-TASK-LIST
+  A9 + RAPTOR Change-16 fixed (71a41c6). **C3** TSOD row-19 + **C4** FRU addr (d528902).
+- Remaining audit items TASKED (gate d): **#151** I2C8_SW/QU5-Y0 far-ends (PCIe-slot
+  1-5 SMBus + TPM-header I²C, A1/A2); **#152** identify QQ11 (A3); **#153** doc-hygiene
+  (authority-pointer C5 + CPU0/1 naming C6 + ADC PDF-p97 double-check).
+
+## 2026-07-19 — Independent schematic-coverage audit (sub-agent) — findings + fix plan
+
+Dispatched a general-purpose sub-agent to read the COMPLETE schematic
+(`AST2050-BMC-WIRING.md` + `QU1_pins.md` 355-ball pinmap + `I2C-SMBUS-TOPOLOGY.md`
++ `I2C-MUX-FABRIC-ARBITRATION.md` + `BMC-CONNECTORS.md`) and cross-check every
+device against DEVICE-MATRIX + FULL-TASK-LIST (gates a + d). Verdict: section-level
+enumeration is ~complete, but it found real **stale non-existence claims** (the
+goal's #1 concern) + **status drift** (some of it mine this session). Acting on all:
+
+- **B1 (fix first):** `openbmc/bmc-functionality/PROGRESS.md:697` STILL lists #9
+  NC-SI + #5 DIMM-inventory as "board/SoC-impossible" — the schematic shows the
+  RMII2/NC-SI sideband to both 82574L NICs (§7) and 16 DIMM SPD via QU9/QU5/U23
+  (§10); already reopened as D07/D08 in SILICON-STATUS.md. PROGRESS never updated.
+- **B2:** `F7-NCSI.md` body keeps un-retracted "NC-SI not wired / does not exist"
+  lines (18,51,78,96-98,227-228) behind only a header note.
+- **C1 (mine):** I set the ZS grid cells 15/16/36/37/38 → ✅ this session but did
+  NOT sync the matrix prose/roll-up or FULL-TASK-LIST (still say those ZS are
+  undone). The ✅ are correct + evidence-backed (LOG + commits 918bc7e..a5d101c);
+  fix = update the STALE prose/tasklist to match reality, not revert the ✅.
+- **C2 (substantive):** ADC three-way conflict — matrix "no ADC block at all",
+  FULL-TASK-LIST A9 "exists @0x1E6E9000", RAPTOR-PORTING-GUIDE documents an ADC
+  @0x1E6E9000/IRQ22 in Raptor's WORKING kernel (`dev-adc.c`). Must resolve against
+  the datasheet + Raptor source (task #146 marked ADC "absent" — may be wrong).
+- **A1/A2/A3:** enumeration gaps — PCIe-slot-1-5 SMBus + TPM-header I²C on the
+  QU5-Y0/I2C8_SW segment; `QQ11` on AST_ROMA0/AA9 unidentified.
+- **C3-C6:** TSOD row-19 QE=Ⓝ vs jc42.c complete; FRU addr 0x50-53 vs 0x54-57;
+  authority-pointer inversion (matrix newer than the "authoritative" tasklist);
+  CPU1/2-vs-CPU0/1 naming drift.
+
+Fixing B1/B2/C1 now (committed each); adding tasks for A1-A3/C2-C6.
+
 ## 2026-07-19 — 🎉 Zephyr I2C + W83795 read the REAL hwmon sensor on silicon (ZS #5,#6) — rows 15,16 ZS ✅
 
 The keystone I2C driver validated on real hardware: `w83795_smoke` JTAG-booted on
