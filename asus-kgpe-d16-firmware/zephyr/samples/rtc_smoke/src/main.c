@@ -46,12 +46,22 @@ int main(void)
 		return 0;
 	}
 
-	printk("RTC set=%02d:%02d:%02d day=%d  get=%02d:%02d:%02d day=%d\n",
-	       set.tm_hour, set.tm_min, set.tm_sec, set.tm_mday,
-	       got.tm_hour, got.tm_min, got.tm_sec, got.tm_mday);
+	/*
+	 * Compare with a small FORWARD tolerance, not exact-match: on real silicon
+	 * the counter runs at 1 Hz once enabled, so between the load completing and
+	 * this read it may legitimately have ticked a few seconds; in QEMU the model
+	 * does not advance, so delta is exactly 0. A negative delta or a day mismatch
+	 * means the value was NOT loaded (the pre-poll silicon bug read back 0x0).
+	 */
+	int set_tod = set.tm_hour * 3600 + set.tm_min * 60 + set.tm_sec;
+	int got_tod = got.tm_hour * 3600 + got.tm_min * 60 + got.tm_sec;
+	int delta = got_tod - set_tod;
 
-	if (got.tm_sec == 30 && got.tm_min == 45 && got.tm_hour == 12 &&
-	    got.tm_mday == 7) {
+	printk("RTC set=%02d:%02d:%02d day=%d  get=%02d:%02d:%02d day=%d  (delta=%ds)\n",
+	       set.tm_hour, set.tm_min, set.tm_sec, set.tm_mday,
+	       got.tm_hour, got.tm_min, got.tm_sec, got.tm_mday, delta);
+
+	if (got.tm_mday == set.tm_mday && delta >= 0 && delta <= 10) {
 		printk("RTC RESULT: PASS\n");
 	} else {
 		printk("RTC RESULT: FAIL\n");
