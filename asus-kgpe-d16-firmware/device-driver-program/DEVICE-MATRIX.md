@@ -1,13 +1,15 @@
 # AST2050 / KGPE-D16 — explicit per-device task matrix
 
-> **This is the compact SUMMARY grid. [`FULL-TASK-LIST.md`](FULL-TASK-LIST.md) is
-> the AUTHORITATIVE per-stack/per-validation detail** (with explicit
-> `[x]/[~]/[ ]/[N]-with-reason/[B]-with-blocker` boxes and the §-by-§ coverage
-> assertion). On any disagreement between this grid and FULL-TASK-LIST.md, the
-> latter wins; this grid is kept in sync but may lag. (Re-synced 2026-07-18 after
-> the second completeness audit — NC-SI/USB/WDT/RTC/SOL/straps/PCI/VGA-DAC cells
-> reconciled; the row groupings here differ slightly from FULL-TASK-LIST's
-> A/B/C/D/E/F rows.)
+> **This is the compact SUMMARY grid. [`FULL-TASK-LIST.md`](FULL-TASK-LIST.md) holds
+> the per-stack/per-validation DETAIL** (explicit `[x]/[~]/[ ]/[N]-with-reason/
+> `[B]-with-blocker` boxes + the §-by-§ coverage assertion). **The two are kept in
+> sync and must AGREE. On any divergence, the more-recently-dated entry that carries
+> cited evidence wins, and the divergence must be RECONCILED (not left standing) —
+> do NOT apply a blanket "one doc always wins" rule, which historically pointed at
+> whichever doc was staler.** (Cross-syncs: 2026-07-18 second completeness audit
+> [NC-SI/USB/WDT/RTC/SOL/straps/PCI/VGA-DAC]; 2026-07-19 [ADC row 41, Zephyr-silicon
+> rows 15/16/36/37/38, TSOD row 19, FRU address] — see LOG. The row groupings here
+> differ slightly from FULL-TASK-LIST's A/B/C/D/E/F rows.)
 
 Systematic enumeration of **every device** wired to the AST2050 in
 [`../schematic-wiring/AST2050-BMC-WIRING.md`](../schematic-wiring/AST2050-BMC-WIRING.md)
@@ -178,6 +180,12 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
   drives bank-A power/reset GPIO at boot_init) → should be 🔶. GPIOB6 schematic(SYS_PWRGD)
   -vs-RE(reset-req) net-name conflict unresolved (audit #9). D09.
 - **28/29** ~10 §11 signals not yet mapped in DTS `gpio-line-names`; no silicon validation. D09.
+  **Naming note (C6):** the §11 *narrative* labels the two CPU sockets CPU1/CPU2 (P1/P2), but
+  the authoritative 355-ball pinmap (`QU1_pins.md`) uses 0-indexed CPU0/CPU1 (P0/P1) — e.g.
+  `AST_CPU0DISABLE#`=D8, `TTL_P0_THERMTRIP#`=V4. These are the SAME two sockets:
+  CPUn(narrative) = CPU(n−1)(pinmap). BOTH sockets are covered here; the net-name strings in
+  rows 28/29 follow the schematic narrative. A full rename to the pinmap convention is tracked
+  in #153.
 
 ## Serial (§12)
 
