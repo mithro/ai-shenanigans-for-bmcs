@@ -6,3 +6,4 @@
 add_subdirectory_ifdef(CONFIG_GPIO_ASPEED_G3 drivers/gpio)
 add_subdirectory_ifdef(CONFIG_I2C_ASPEED_G3 drivers/i2c)
 add_subdirectory_ifdef(CONFIG_WDT_ASPEED_G3 drivers/watchdog)
+add_subdirectory_ifdef(CONFIG_W83795 drivers/sensor/w83795)

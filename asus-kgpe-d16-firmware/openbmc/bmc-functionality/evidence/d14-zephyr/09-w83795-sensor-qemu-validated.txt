@@ -1,0 +1,12 @@
+=== Zephyr W83795G hwmon sensor driver — QEMU validation (2026-07-19) ===
+I2C-CLIENT driver on the validated i2c_aspeed_g3 bus (full stack: I2C->sensor).
+Reads fan1 (reg 0x2E + VRLSB, rpm=1350000/count) + temp0 (reg 0x21 + VRLSB).
+Seeded in QEMU w83795.c: fan1@0x2E=2641rpm (line 184), temp0@0x21=50.500C (line 177).
+---8<--- boot log (captured under -d int; the plain -nographic path drops M0
+         console output for samples whose I2C init does the SCU reset-release —
+         a capture/timing artifact, NOT a driver bug; boot completes + ticks) ---8<---
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+W83795 fan1=2641 rpm temp0=50.500 C (expect fan1=2641) PASS
+(sustained: 2288 timer IRQs logged during the run)
+---8<--- end ---8<---
+RESULT: PASS — Zephyr sensor+I2C stack reads the modeled W83795 fan+temp

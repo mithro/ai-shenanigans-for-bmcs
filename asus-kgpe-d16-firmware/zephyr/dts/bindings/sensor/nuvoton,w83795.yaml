@@ -1,0 +1,29 @@
+# Nuvoton/Winbond W83795G hardware-monitor (I2C) binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Nuvoton/Winbond W83795G hardware monitor.
+
+  A bank-switched I2C "H/W monitoring IC" with 21 voltage inputs, analog +
+  DTS temperatures and 8 fan-tach / PWM channels. On the ASUS KGPE-D16 BMC it
+  sits on AST2050 I2C engine 1 at 7-bit address 0x2F (see
+  asus-kgpe-d16-firmware/zephyr/dts/aspeed/ast2050.dtsi, node i2c1, and the QEMU
+  kgpe-d16-bmc machine wiring in hw/arm/aspeed.c kgpe_d16_bmc_i2c_init).
+
+  Register model this driver relies on (QEMU hw/sensor/w83795.c):
+    - bank-select register 0x00 (low 3 bits pick the bank; measurement windows
+      live in bank 0), w83795_do_write() lines 266-268;
+    - chip-id register 0xFE == 0x79, w83795_do_read() lines 207-208;
+    - fan-tach high byte at 0x2E (fan1) + shared VRLSB latch 0x3C[7:4] low
+      nibble, w83795_set_fan()/w83795_do_read() lines 111-119 / 240-242;
+    - CPU thermal-diode temperature high byte at 0x21 + VRLSB 0x3C[7:6]
+      quarter-degrees, w83795_set_temp() lines 122-132.
+
+compatible: "nuvoton,w83795"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+  reg:
+    required: true
+    description: I2C device address (0x2F on the KGPE-D16 BMC).
