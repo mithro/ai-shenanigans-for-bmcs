@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — DTS/Kconfig review Finding 2 RESOLVED on silicon: FRU EEPROM is at 0x54-0x57 (dts correct, schematic was base-range)
+
+The review flagged Zephyr `fru_eeprom@0x54` as wrong vs the schematic's 0x50-0x53. Rather than
+blindly change it (which would have BROKEN the passing FRU read), I wrote a new sample
+`samples/i2c_scan` that probes I2C5 (engine 4) 0x50-0x57 and reports per-address ACK/NAK (the
+aspeed_g3 master returns -ENXIO on address NAK, 0 on ACK). Ran it on the REAL AST2050 at 4W:
+```
+I2C5 addr=0x50..0x53 -> ret=-6 (NAK)
+I2C5 addr=0x54..0x57 -> ret=0  (ACK)
+FRU-ADDR: 0x54-0x57 (A2/E2=VCC)
+```
+GROUND TRUTH: the HT24LC08 (U25) responds at 0x54-0x57, NOT 0x50-0x53. A 24C08 has one external
+A2 pin + 2 internal block bits, so ACKing 0x54-0x57 while NAKing 0x50-0x53 ⇒ A2/E2 strapped VCC.
+**So the Zephyr dts 0x54 is HARDWARE-CORRECT; Finding 2 is REFUTED by the hardware** (the schematic's
+0x50-0x53 is the unstrapped base range). This also proves the earlier fru_smoke PASS was a REAL ACK
+(the master demonstrably NAKs 0x50-0x53 with -ENXIO here), and QEMU matches silicon exactly (same
+NAK/ACK split → the QEMU FRU model address is faithful). Actions: (1) evidence d14-zephyr/16;
+(2) annotated the two schematic docs (AST2050-BMC-WIRING.md:352, I2C-SMBUS-TOPOLOGY.md:56) with the
+silicon-verified 0x54-0x57 + the A2=VCC reason, citing the scan; (3) i2c_scan committed as a reusable
+tool. Bonus: validates i2c address NAK detection on real silicon (never explicitly done before).
+
 ## 2026-07-20 — #163 CLOSED ON SILICON: gpio_smoke (real EFGH register) PASSes on the real AST2050
 
 Booted the fixed gpio_smoke (entry 0x400023f0, md5 7be98219…verified) on the real AST2050 at 4W

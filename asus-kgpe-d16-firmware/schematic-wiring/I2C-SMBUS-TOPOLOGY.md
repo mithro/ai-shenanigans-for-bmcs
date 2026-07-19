@@ -53,7 +53,7 @@ Seven I²C/SMBus-capable controllers drive buses on this board:
 | Device | Ref | Part | Addr (7-bit) | On bus |
 |---|---|---|---|---|
 | Hardware monitor | `QU4` | Winbond W83795G | `0x2F` (strap `ADDR0/1`) | shared sensor bus |
-| Board FRU EEPROM | `U25` | Holtek HT24LC08 (8 Kbit) | `0x50`–`0x53` | BMC `I2C5` |
+| Board FRU EEPROM | `U25` | Holtek HT24LC08 (8 Kbit) | `0x54`–`0x57` (A2=VCC; base `0x50`–`0x53`) | BMC `I2C5` |
 | DIMM-LED GPIO exp | `U27` | Winbond W83601G | strap `A0/A1/A2` | BMC `I2C5` |
 | DIMM-LED GPIO exp | `U28` | Winbond W83601G | strap `A0/A1/A2` | BMC `I2C5` |
 | DIMM SPD ×16 | `DIMM_A1…H2` | JEDEC SPD EEPROM | `0x50`–`0x57` per bank | `I2C10` / `I2C11` |

@@ -1,0 +1,40 @@
+D14 Zephyr — I2C5 bus scan on REAL AST2050 silicon: resolves the FRU EEPROM address
+    (DTS/Kconfig review Finding 2), 2026-07-20.
+
+Device: board-inventory bus I2C5 = DT i2c4 = engine 4 @ 0x1E78A140.
+Sample: asus-kgpe-d16-firmware/zephyr/samples/i2c_scan  (entry 0x40002490)
+Path: JTAG reset-halt -> DDR2 TRAINED -> load @0x40000000 -> resume; console
+      /dev/serial-bmc-console @115200. Board power at capture: 4W (deep S5) — the
+      FRU EEPROM is readable at standby (no host/sensor-rail power needed).
+md5(zephyr.bin) = f4ee03b23ada701f98e1cfc3f4e0fad4 (staged + verified before boot).
+
+===== CAPTURED CONSOLE (real silicon) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+I2C5 addr=0x50 -- (ret=-6)
+I2C5 addr=0x51 -- (ret=-6)
+I2C5 addr=0x52 -- (ret=-6)
+I2C5 addr=0x53 -- (ret=-6)
+I2C5 addr=0x54 ACK (ret=0)
+I2C5 addr=0x55 ACK (ret=0)
+I2C5 addr=0x56 ACK (ret=0)
+I2C5 addr=0x57 ACK (ret=0)
+I2C5 scan: 4 device(s) ACK in 0x50-0x57 (lo 0x50-53=0, hi 0x54-57=4)
+FRU-ADDR: 0x54-0x57 (A2/E2=VCC) — dts 0x54 is correct, schematic 0x50-0x53 is the base range
+SCAN RESULT: PASS
+
+CONCLUSION (ground truth from silicon):
+  * The board FRU EEPROM (U25, Holtek HT24LC08, 8 Kbit) responds at 0x54-0x57 and
+    NOT at 0x50-0x53. A 24C08 has one external address pin (A2) + 2 internal block
+    bits; ACKing 0x54-0x57 while NAKing 0x50-0x53 means A2/E2 is strapped to VCC.
+  * Therefore the Zephyr dts `fru_eeprom@54` (reg = <0x54>) is HARDWARE-CORRECT.
+    DTS/Kconfig-review Finding 2 ("dts 0x54 wrong, should be 0x50 per schematic") is
+    REFUTED by the hardware — the schematic's 0x50-0x53 is the unstrapped base range,
+    not the address this board actually presents.
+  * This also confirms the earlier fru_smoke PASS at 0x54 was a REAL ACK, not a
+    NAK-misread: the i2c_aspeed_g3 master returns -ENXIO on an address NAK
+    (verified here: 0x50-0x53 -> ret=-6 = -ENXIO), and 0x54-0x57 returned 0.
+  * QEMU and silicon AGREE exactly (QEMU run: same 0x50-53 NAK / 0x54-57 ACK), so
+    the QEMU kgpe-d16-bmc FRU model is faithful to the real board address.
+
+Cross-checks the SCU74[12] I2C5 pin-mux fix (#156) once more: the master reaches the
+bus and gets per-address ACK/NAK — the engine-4 pinmux is working on silicon.
