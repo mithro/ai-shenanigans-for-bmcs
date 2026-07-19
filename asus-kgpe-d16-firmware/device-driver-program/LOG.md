@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #153 DONE: doc-hygiene C5/C6/ADC all verified addressed (ADC double-checked vs the primary datasheet)
+
+Closed the stale #153 doc-hygiene task — all three items are addressed: (C5 authority-pointer) the
+DEVICE-MATRIX header already carries the reconciliation rule that fixes the old inversion ("most-
+recently-dated cited-evidence entry wins; do NOT apply a blanket 'one doc always wins' rule which
+historically pointed at whichever doc was staler"); (C6 CPU0/1 naming) the DEVICE-MATRIX Naming note
+(line ~216) documents the CPU1/CPU2-narrative vs CPU0/CPU1-pinmap drift; (ADC datasheet double-check)
+NOW VERIFIED against the PRIMARY datasheet (datasheets/aspeed/AST2050_V1.05.txt), not just the
+memory-map extract — the §1.3 peripheral ToC has NO ADC controller entry (lists Video/GPIO/WDT/PECI),
+and every "ADC" mention is an *external video-source ADC* into the video engine, not an on-SoC block.
+So the row-41 "ADC Absent on G3" disposition is confirmed at the primary source (strengthened the
+citation). #153 complete.
+
 ## 2026-07-20 — #159: excised the stale "NC-SI not wired" claim from F7-NCSI.md (the exact incorrect-claim the goal targets)
 
 F7-NCSI.md had a retraction banner at the top but its prominent "Bottom line" (right below the banner)

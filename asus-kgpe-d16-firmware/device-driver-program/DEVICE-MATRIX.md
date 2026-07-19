@@ -282,7 +282,12 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/
   AST2050-MEMORY-MAP.md:96` states: "ADC (10-bit analog-to-digital) — **Absent** — No ADC
   chapter and no ADC entry in the §9 map (p97). ADC (0x1E6E9000 on G4) was introduced with
-  the AST2400." Yet the SoC model (`hw/arm/aspeed_ast2400.c:230,574-580`) UNCONDITIONALLY
+  the AST2400." **PRIMARY-datasheet double-check (#153, 2026-07-20):** confirmed against
+  `datasheets/aspeed/AST2050_V1.05.txt` — the §1.3 peripheral table-of-contents has NO ADC
+  controller entry (it lists Video-Compression/GPIO/WDT/PECI etc.), and every "ADC" occurrence in
+  the datasheet refers to an *external video-source ADC* feeding the video engine (§ timing
+  generator), not an on-SoC ADC block. So "Absent" is confirmed at the primary source, not just the
+  extract. Yet the SoC model (`hw/arm/aspeed_ast2400.c:230,574-580`) UNCONDITIONALLY
   creates + maps an `aspeed.adc` at 0x1E6E9000 (IRQ 31 in the model, not even the IRQ 22
   the earlier note claimed — which the datasheet gives to the RTC-second). So the prior
   "QE=🔶, model+wire an ADC" was itself a faithfulness violation (a G4 device on the G3).
