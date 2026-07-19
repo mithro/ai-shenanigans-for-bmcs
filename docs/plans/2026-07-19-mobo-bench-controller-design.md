@@ -78,6 +78,31 @@ standard one exists:
 - **serprog ×N** — flashrom's serial programmer protocol → load/verify the
   emulated flash images with stock `flashrom`.
 
+### 3.1 Connector inventory (P0 input)
+
+In-scope KGPE-D16 connectors, from the schematic-derived docs under
+`asus-kgpe-d16-firmware/schematic-wiring/` (authoritative) and the older
+photo/manual docs (noted). All BMC-domain lines are 3V3 LVCMOS and directly
+drivable; host COM is RS-232 (needs on-harness MAX3232); AMD HDT is fine-pitch
++ proprietary.
+
+| Connector | Function / chip | Pins | Level | Source doc |
+|---|---|---|---|---|
+| `BMC_FW1` | BMC boot SPI **R/W** (AST2050) + 3 straps | 2×7 DIP (13) | 3V3 | `BMC-CONNECTORS.md`, `AST2050-BMC-WIRING.md §4`, `ULX3S-SPISPY-BMC-FLASH-WIRING.md §3` (spispy-compatible) |
+| `FU1` | host BIOS SPI **RO** (SP5100) | DIP-8 | 3V3 std-by | `SP5100-SOUTHBRIDGE-WIRING.md §8` |
+| `AST_UART1` | BMC console UART (TTL) | 1×4 | 3V3 TTL 115200 | `BMC-CONNECTORS.md`, `RPI4-OPENOCD-JTAG-WIRING.md §3` |
+| `COM1`/`COM2` | host serial (Super-I/O → AZ75232) | DB9 / 10-1 | **RS-232** | `W83667HG-SUPERIO-WIRING.md §4` |
+| `AST_JTAG1` | BMC ARM926 TAP (IDCODE `0x07926f0f`) | 2×10 · 2.54mm | 3V3 | `JTAG-HEADERS.md` (Header 1) |
+| `AMD HDT` | host CPU HDT (**proprietary**) | 2×10 · **1.27mm** | VDDIO | `JTAG-HEADERS.md` (Header 2) — needs adapter |
+| `PANEL1` | front panel: pwr/reset/NMI btn, LEDs, speaker | 2×10 | 3V3/5V | `BMC-CONNECTORS.md` |
+| `AUX_PANEL1` | aux panel: locator LED/btn, LAN-link LEDs | 2×10 | 3V3 | `BMC-CONNECTORS.md` |
+| jumpers | `VGA_SW1`, `IPMI_SEL1`, `RECOVERY1` (1×3), `CLRTC1` | 3-pin | 3V3 | `BMC-CONNECTORS.md`, `ASUS-KGPE-D16.md` |
+| straps | `IKVMEN#`, `BMC_PRESENT#`, `SOLEN#` (on `BMC_FW1`) | — | 3V3 | `BMC-CONNECTORS.md` |
+
+P0 pulls exact pin-by-pin nets from those docs and the KGPE-D16 schematic; the
+`BMC_FW1` mapping stays compatible with the existing spispy wiring where
+possible. Signal budget ≈ 35–40 ≤ 56 ULX3S GPIO.
+
 ## 4. Components (units, interfaces, dependencies)
 
 Each is a self-contained core with a CSR/stream interface to the SoC bus.
@@ -144,13 +169,17 @@ Each phase = its own spec → plan → build → review. Columns = dependency wa
   (§ inventory) → a ULX3S J1/J2 GPIO, noting MAX3232 for RS-232 and the 1.27 mm
   HDT adapter. Budget check: ~35–40 signals ≤ 56 GPIO — fits. Keep the spispy
   BMC_FW1 mapping compatible where possible.
+- **Gating decision (before repo creation, can't be cleanly changed after):**
+  confirm the **repo name** and the **submodule path** (`asus-kgpe-d16-firmware/
+  mobo-bench` vs a top-level `mobo-bench`).
 - Create the `mithro/<name>` repo (LiteX layout: `<name>/soc.py`, `cores/`,
   `firmware/`, `sim/`, `test/` HIL, `wiring/`, `docs/`), Apache-2.0, and add it
   as a **git submodule** under this repo. Push via HTTPS or SSH (both work).
 
 **P1 — LiteX SoC + soft USB hub + wishbone bridge**
-- Minimal LiteX SoC for `radiona_ulx3s` (ECP5 **45F**), small CPU, LiteDRAM up,
-  48 MHz USB PLL.
+- Minimal LiteX SoC for `radiona_ulx3s` (ECP5 **45F**), small CPU, 48 MHz USB
+  PLL. LiteDRAM is brought up as **foundational-only** here (its first real
+  consumer is P2's `spiflash_emu`) — it is *not* part of the P1 exit criteria.
 - Integrate the **soft USB hub** and a first standard device: the **wishbone
   bridge**; verify `litex_server`/`RemoteClient` CSR read/write + blinky from
   the Pi 5. Add one CDC-ACM as a smoke test.
