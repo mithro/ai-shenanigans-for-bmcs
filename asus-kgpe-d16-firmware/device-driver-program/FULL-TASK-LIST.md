@@ -79,11 +79,18 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU · [x] silicon (culvert in-band devmem bridge) · [x] userspace (culvert probe EXIT 0)
 - Zephyr: [N] (debug back-door)
 
-### A9. ADC — voltage-monitor ADC 0x1E6E9000, IRQ 22 (RAPTOR-PORTING-GUIDE §"Change 16"; needs `aspeed,ast2050-adc`)  [added by gate-(d) audit 2026-07-18]
-- [~] QEMU: VERIFIED the aspeed ADC IS modeled (`hw/adc/aspeed_adc.c`) and wired into the SoC at 0x1E6E9000 (aspeed_ast2400.c:41/574-580). One G3 faithfulness gap: the shared ast2400 irqmap gives the ADC **IRQ 31 (G4)**, but the AST2050 ADC is **IRQ 22** (Raptor guide). Moot for this board (ADC unused — VP pins are GPIO), so left as a small documented faithfulness note rather than forking the shared irqmap.
-- U-Boot: [N] (voltage-monitor ADC is an OS/runtime function, not a boot driver)
-- Linux: [ ] QEMU (`aspeed_adc` IIO driver + a G3 `aspeed,ast2050-adc` compatible) · [N] silicon (**board disposition: the ADC's VP0–VP17 analog inputs are repurposed on the KGPE-D16 as GPIOE/F digital lines — THERMTRIP#/PROCHOT#/DDR_THERM# (§11) — and board voltage monitoring is done by the W83795 (D2), so the SoC ADC is not wired to analog rails here; faithfully board-N/A**) · [ ] userspace (`/sys/bus/iio`, only if QEMU model exercised)
-- Zephyr: [ ] QEMU · [N] silicon (board-N/A as above)
+### A9. ADC — ABSENT on the AST2050 (G3): a G4 device NOT present on this SoC  [RESOLVED 2026-07-19, reconciled with DEVICE-MATRIX row 41 / #146]
+- **The AST2050 has NO ADC block.** Authoritative datasheet §9 memory map (p97): no ADC
+  chapter, no ADC entry — the ADC at `0x1E6E9000` was introduced with the AST2400/G4
+  (`qemu-model/AST2050-MEMORY-MAP.md:96`). The earlier "[~] QEMU: aspeed.adc IS modeled"
+  note here was itself the G4-PHANTOM faithfulness violation — a G4 device unconditionally
+  created on the G3 SoC — and it has since been **REMOVED** (DEVICE-MATRIX row 41, task #146).
+- All stacks: **[N] — the device does not exist on this SoC.** Board voltage monitoring is
+  done by the W83795 (D2); the VP*/analog balls are repurposed as GPIO (§11). Raptor's
+  `dev-adc.c` / `regs-adc.h` / `ast_add_device_adc` (RAPTOR-PORTING-GUIDE "Change 16") is
+  dead G4-BSP carryover, NOT a real AST2050 device to port.
+- FOLLOW-UP (optional rigor): read the datasheet PDF §9 map (printed p97) directly to
+  fully close the Raptor-vs-datasheet conflict with a verified quote.
 
 ---
 

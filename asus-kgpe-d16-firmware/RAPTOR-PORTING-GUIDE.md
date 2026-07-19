@@ -540,22 +540,26 @@ chassis fans (3-pin).
 
 **Risk:** Low.
 
-### Change 16: ADC (Analog to Digital Converter)
+### Change 16: ADC (Analog to Digital Converter) — ⚠️ NOT PRESENT ON THE AST2050 (G3)
 
-**Raptor files:**
+> **RESOLVED 2026-07-19 — do NOT port this.** The authoritative AST2050 datasheet §9
+> memory map (p97) has **no ADC chapter and no ADC entry**; the ADC at `0x1E6E9000`
+> was introduced with the **AST2400 (G4)** (`qemu-model/AST2050-MEMORY-MAP.md:96`,
+> DEVICE-MATRIX row 41, task #146). Raptor's `dev-adc.c` / `regs-adc.h` /
+> `ast_add_device_adc` is **dead G4-BSP carryover** — its shipping kernel registered
+> the platform device but the G3 SoC has no ADC block behind `0x1E6E9000`. Board
+> voltage monitoring on the KGPE-D16 is done by the W83795 hwmon, and the SoC's
+> VP*/analog balls are repurposed as GPIO (§11). Adding an `aspeed,ast2050-adc` node
+> would model a device that does not exist — a faithfulness violation. Skip it.
+
+**Raptor files (dead BSP carryover):**
 - `arch/arm/plat-aspeed/dev-adc.c`
 - `arch/arm/plat-aspeed/include/plat/regs-adc.h`
 
-**What it does:** ADC at `0x1E6E9000` for voltage monitoring.
+**Porting action:** NONE — the AST2050 has no ADC. (Was: "add aspeed,ast2050-adc" —
+retracted; that would resurrect a G4 phantom.)
 
-**Mainline equivalent:**
-- `drivers/iio/adc/aspeed_adc.c` (IIO subsystem, not hwmon)
-
-**Porting action:**
-1. Add `"aspeed,ast2050-adc"` compatible string
-2. Verify register compatibility and number of channels
-
-**Risk:** Low.
+**Risk:** N/A — device absent on G3.
 
 ### Change 17: Video / Framebuffer
 
