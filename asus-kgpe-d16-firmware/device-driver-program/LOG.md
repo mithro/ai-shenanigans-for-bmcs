@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168 narrowed: modern U-Boot RUNS board_init_f but LOOPS (repeated pre-console printf); timer reads 0x0; next = CONFIG_PRE_CONSOLE_BUFFER
+
+Probed the A-fix modern-U-Boot on G3 silicon (no rebuild — already staged). Halt/resume/halt 3x over 6s:
+PC = 0x150 -> 0x384cc -> 0x38bdc, all in SUPERVISOR mode (not Abort). So it is RUNNING (PCs change), NOT
+hung at one address — but after 26 s it is still in the pre-relocation image (0x0-0x38xxx; board_init_f
+should finish in ms), so an init step is LOOPING. The recurring low PC (~0x140) is a function prologue
+(stm sp,{r0-r12}; ... bl 0x1038) and 0x38xxx is printf/vsnprintf (cmp #0x25='%') — i.e. it repeatedly
+calls PRINTF pre-console (output lost, no UART yet). The aspeed timer @0x1e782000 reads 0x00000000 twice
+(500 ms apart) = NOT counting, even though Zephyr's heartbeat just proved the timer HW works. U-Boot uses
+drivers/timer/ast_timer.c on that node (ast_timer_probe writes reload + sets EN|1MHz in ctrl1). So EITHER
+board_init_f panicked/looped BEFORE timer_init (timer never started), OR a retry/panic loop is spinning.
+This is a running-but-stuck board_init_f, NOT the earlier alignment abort (0004 fixed that) and NOT a
+baud issue. DECISIVE NEXT STEP: rebuild with CONFIG_PRE_CONSOLE_BUFFER (+ADDR/SIZE in a spare DRAM page)
+so the LOST early printf/panic text is stashed in RAM, then read that buffer over JTAG — it will say
+exactly what board_init_f is failing on. Also: read ctrl1 (0x1e782030) to see if the timer EN bit is set
+(did timer_init run?), and decode 0x1038 / the loop's call site. Rig tooling unchanged. #168 updated.
+
 ## 2026-07-20 — VIC(36)+Timer(37) SUSTAINED-TICKING captured on silicon (heartbeat_smoke) — closes a gate-d evidence gap
 
 The gate-d audit flagged that VIC(row 36)/Timer(row 37) are ZS ✅ but rest on LOG prose with no
