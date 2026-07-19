@@ -46,3 +46,28 @@ FIX PATH (next step, tracked as a #137 sub-task):
 
 STATE LEFT: target halted in Abort mode (harmless — any subsequent boot does reset-halt first). Board
 at 4W, JTAG-accessible. Raptor U-Boot bin untouched (modern bin staged to a distinct path).
+
+--- REFINEMENT (deeper JTAG probing, same session) ---
+Read the modern U-Boot's lowlevel_init in arch/arm/mach-aspeed/ast2400/platform.S and probed the
+halted target further:
+  * platform.S DOES have the SCU40[6] skip mechanism ("Check Scratch Register Bit 6", line ~330) —
+    the SAME flag the Raptor U-Boot uses. And SCU40 (0x1e6e2040) reads 0x000000c0 at fault time =>
+    BIT 6 IS SET (bits 7+6). So ddr2-init.tcl set the skip flag correctly.
+  * BUT the abort happens in the EARLY init_dram code (platform.S lines 205-330) that runs
+    UNCONDITIONALLY, BEFORE the line-330 bit-6 skip check. That early code writes timer regs
+    (0x1e782044, 0x1e782030), SCU (0x1e6e2000/40), USB config (0x1e6e200c, 0x1e6e2090), and an
+    AST2300 LPC-recover path — any of which could fault on the G3 if it hits an AST2400/2300-only
+    register unmapped on the AST2050 (an external AHB data-abort).
+  * HONEST CORRECTION: I do NOT yet have the exact faulting instruction. A JTAG disassembly of the
+    region the halted PC/LR pointed at (0x180-0x19c) turned out to be the ABORT-HANDLER save-context
+    stub (ldr sp,[pc,#-0x148]; str lr,[sp]; mrs lr,spsr; ...), NOT init_dram — the CPU is LOOPING in
+    the abort handler (the handler re-faults, same pattern seen in the M1 Zephyr arm_mmu analysis).
+    So PC/LR reads reflect the handler, not the original fault site. Pinning the faulting instruction
+    needs catching the FIRST fault (a hardware breakpoint at the 0x10 data-abort vector on a fresh
+    boot, then reading LR_abt = faulting_insn+8) or reading the LR the handler pushed to the abort
+    stack (SP loaded from 0x40).
+FIX PATH (sharpened): (a) catch the first fault to get the exact faulting register access, then
+either (b1) move the SCU40[6] skip check to the VERY TOP of lowlevel_init so a JTAG-boot skips ALL of
+init_dram including the early timer/USB/LPC writes, or (b2) guard/fix the specific G3-unmapped access.
+Confidence: HIGH that it's an early-init_dram unconditional access faulting on G3 (SCU40[6] is set yet
+it still aborts before the skip check); the SPECIFIC instruction is still UNCONFIRMED.

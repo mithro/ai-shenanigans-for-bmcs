@@ -17,6 +17,14 @@ so the blocker is the modern U-Boot's G4 low-level init, not my recipe. FIX PATH
 step from 0x0 to find the faulting instruction / read mach-aspeed lowlevel_init, then patch the modern
 U-Boot to SKIP low-level SDRAM init on the JTAG-boot (honor SCU40[6] or detect DRAM-up). Only then can
 #167's SCU04[2] i2c fix be silicon-validated. Evidence: d15-uboot/03-modern-uboot-silicon-attempt-FAILED.
+REFINEMENT (same session): platform.S DOES have the SCU40[6] skip check (line ~330) and SCU40 reads
+0x000000c0 at fault time (bit 6 SET) — so the skip flag is correct, but the abort is in the EARLY
+init_dram code (lines 205-330: timer 0x1e782044/30, USB 0x1e6e2090, AST2300-LPC) that runs BEFORE the
+skip check. HONEST CORRECTION: the exact faulting instruction is NOT pinned — a disassembly of where
+the halted PC/LR pointed (0x180) is the ABORT-HANDLER save-context stub (the CPU loops in the handler),
+not init_dram, so PC/LR reflect the handler not the fault site. Next: catch the FIRST fault (hw
+breakpoint at the 0x10 vector) to get the faulting access, then move the SCU40[6] check to the top of
+lowlevel_init (or fix the specific G3-unmapped access). #168 updated.
 
 ## 2026-07-20 — #167 FIXED: modern U-Boot I2C reads real devices on the G3 QEMU (SCU04[2] reset-release)
 
