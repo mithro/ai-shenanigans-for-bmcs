@@ -1,8 +1,8 @@
-# mobo-bench P0 + P1 Implementation Plan
+# asus-d16-ulx3s-interface P0 + P1 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the `mobo-bench` project — a new `mithro` repo (added here as a submodule) containing the KGPE-D16 harness wiring map and a minimal LiteX SoC on the ULX3S 45F that a Raspberry Pi 5 can control over a wishbone bridge, plus a soft USB hub presenting a first standard USB device.
+**Goal:** Stand up the `asus-d16-ulx3s-interface` project — a new `mithro` repo (added here as a submodule) containing the KGPE-D16 harness wiring map and a minimal LiteX SoC on the ULX3S 45F that a Raspberry Pi 5 can control over a wishbone bridge, plus a soft USB hub presenting a first standard USB device.
 
 **Architecture:** P0 is foundation (repo + submodule + a validated connector→GPIO pin map and wiring diagram). P1 is a LiteX SoC for `radiona_ulx3s` (ECP5 45F) with a small VexRiscv CPU, a UARTBone wishbone bridge (verified from the Pi 5 via `litex_server`/`RemoteClient`), an LED CSR (blinky), and a soft USB hub (Greg Davill hub emulation / valentyusb) exposing the wishbone bridge + one CDC-ACM as standard USB devices. LiteDRAM is brought up but foundational-only.
 
@@ -14,7 +14,7 @@
 
 - **Worktrees, not `main`.** All ai-shenanigans changes land on a branch in a
   `.worktrees/<name>` worktree; integrate via `--no-ff` merge/PR. The
-  `mobo-bench` repo uses its own `claude/*` branches.
+  `asus-d16-ulx3s-interface` repo uses its own `claude/*` branches.
 - **Python via `uv`** with PEP-723 inline metadata; never bare `python`/`pip`.
 - **Small, frequent commits.** End commit messages with
   `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
@@ -32,10 +32,10 @@
 
 ## File Structure (decomposition)
 
-**New repo `mobo-bench/`** (LiteX-conventional):
-- `mobo_bench/soc.py` — the SoC (platform target wrapper, CPU, bridges, hub).
-- `mobo_bench/platform.py` — ULX3S platform + the KGPE-D16 harness pin extension.
-- `mobo_bench/cores/` — custom cores (empty in P1; filled P2–P5).
+**New repo `asus-d16-ulx3s-interface/`** (LiteX-conventional):
+- `d16iface/soc.py` — the SoC (platform target wrapper, CPU, bridges, hub).
+- `d16iface/platform.py` — ULX3S platform + the KGPE-D16 harness pin extension.
+- `d16iface/cores/` — custom cores (empty in P1; filled P2–P5).
 - `firmware/` — CPU firmware (P1: default LiteX BIOS only).
 - `sim/` — `litex_sim`/verilator configs.
 - `test/` — Pi-5 hardware-in-the-loop scripts (`hil_remoteclient.py`, …).
@@ -56,20 +56,20 @@
 
 **Files:** none (records a decision in the plan/commit message).
 
-- [ ] **Step 1: Record repo name + submodule path.** Defaults (used unless the
-  user overrides): repo **`mobo-bench`**; submodule path **top-level
-  `mobo-bench/`** in ai-shenanigans (it is a general tool, not KGPE-D16-only).
+- [ ] **Step 1: Record repo name + submodule path.** Confirmed with the user:
+  repo **`asus-d16-ulx3s-interface`**; submodule path
+  **`asus-kgpe-d16-firmware/asus-d16-ulx3s-interface/`** in ai-shenanigans.
 - [ ] **Step 2: Confirm the license** is Apache-2.0 (repo default) and the
   GitHub owner is `mithro`.
 
-### Task 0.2: Scaffold the `mobo-bench` repo locally
+### Task 0.2: Scaffold the `asus-d16-ulx3s-interface` repo locally
 
 **Files:**
-- Create: `~/github/mithro/mobo-bench/{README.md,LICENSE,.gitignore}`
-- Create: `~/github/mithro/mobo-bench/mobo_bench/__init__.py`
-- Create dirs: `mobo_bench/cores/`, `firmware/`, `sim/`, `test/`, `wiring/`, `docs/`
+- Create: `~/github/mithro/asus-d16-ulx3s-interface/{README.md,LICENSE,.gitignore}`
+- Create: `~/github/mithro/asus-d16-ulx3s-interface/d16iface/__init__.py`
+- Create dirs: `d16iface/cores/`, `firmware/`, `sim/`, `test/`, `wiring/`, `docs/`
 
-- [ ] **Step 1:** `git init ~/github/mithro/mobo-bench` and create the directory
+- [ ] **Step 1:** `git init ~/github/mithro/asus-d16-ulx3s-interface` and create the directory
   tree above (empty `.gitkeep` where needed).
 - [ ] **Step 2:** Write `LICENSE` (Apache-2.0 full text) and a `README.md`
   describing the project (copy the goal/architecture from the spec header) with
@@ -77,37 +77,37 @@
 - [ ] **Step 3:** Write `.gitignore` for LiteX/Python builds:
   `build/ __pycache__/ *.pyc *.bit *.svf *.json *.config .venv/ csr.csv
   analyzer.csv soc.svd`.
-- [ ] **Step 4: Verify** the tree: `find ~/github/mithro/mobo-bench -maxdepth 2
+- [ ] **Step 4: Verify** the tree: `find ~/github/mithro/asus-d16-ulx3s-interface -maxdepth 2
   -not -path '*/.git/*'` shows the layout.
-- [ ] **Step 5: Commit** (in the mobo-bench repo, branch `main`):
-  `git add -A && git commit -m "Initial mobo-bench repo skeleton (LiteX layout, Apache-2.0)"`.
+- [ ] **Step 5: Commit** (in the new repo, branch `main`):
+  `git add -A && git commit -m "Initial asus-d16-ulx3s-interface repo skeleton (LiteX layout, Apache-2.0)"`.
 
 ### Task 0.3: Create the GitHub repo and push
 
 **Files:** none (remote).
 
-- [ ] **Step 1:** `gh repo create mithro/mobo-bench --public --source=~/github/mithro/mobo-bench --remote=origin --description "ULX3S LiteX bench controller for the ASUS KGPE-D16"` (or create empty + `git remote add`).
-- [ ] **Step 2:** `git -C ~/github/mithro/mobo-bench push -u origin main`.
-- [ ] **Step 3: Verify:** `gh repo view mithro/mobo-bench --json name,visibility,url`.
+- [ ] **Step 1:** `gh repo create mithro/asus-d16-ulx3s-interface --public --source=~/github/mithro/asus-d16-ulx3s-interface --remote=origin --description "ULX3S LiteX bench controller for the ASUS KGPE-D16"` (or create empty + `git remote add`).
+- [ ] **Step 2:** `git -C ~/github/mithro/asus-d16-ulx3s-interface push -u origin main`.
+- [ ] **Step 3: Verify:** `gh repo view mithro/asus-d16-ulx3s-interface --json name,visibility,url`.
 
-### Task 0.4: Add `mobo-bench` as a submodule
+### Task 0.4: Add `asus-d16-ulx3s-interface` as a submodule
 
 **Files:**
-- Modify: `.gitmodules` (created), submodule dir `mobo-bench/`
-- Work in: a fresh worktree `.worktrees/mobo-bench-submodule` off `origin/main`
+- Modify: `.gitmodules` (created), submodule dir `asus-kgpe-d16-firmware/asus-d16-ulx3s-interface/`
+- Work in: a fresh worktree `.worktrees/d16-interface-submodule` off `origin/main`
   (keep this plan's `claude/mobo-bench-spec` branch for docs).
 
 - [ ] **Step 1:** In the ai-shenanigans worktree:
-  `git submodule add https://github.com/mithro/mobo-bench.git mobo-bench`.
-- [ ] **Step 2: Verify:** `git submodule status` lists `mobo-bench`; `.gitmodules`
+  `git submodule add https://github.com/mithro/asus-d16-ulx3s-interface.git asus-kgpe-d16-firmware/asus-d16-ulx3s-interface`.
+- [ ] **Step 2: Verify:** `git submodule status` lists the submodule; `.gitmodules`
   has the entry.
-- [ ] **Step 3: Commit:** `git add .gitmodules mobo-bench && git commit -m
-  "Add mobo-bench as a submodule"`.
+- [ ] **Step 3: Commit:** `git add .gitmodules asus-kgpe-d16-firmware/asus-d16-ulx3s-interface && git commit -m
+  "Add asus-d16-ulx3s-interface as a submodule"`.
 
 ### Task 0.5: Connector→GPIO pin map (script + validation)
 
 **Files:**
-- Create: `~/github/mithro/mobo-bench/wiring/make_pinmap.py` (uv/PEP-723)
+- Create: `~/github/mithro/asus-d16-ulx3s-interface/wiring/make_pinmap.py` (uv/PEP-723)
 - Create (generated): `wiring/pinmap.csv`
 - Reference: spec §3.1 inventory + `asus-kgpe-d16-firmware/schematic-wiring/*`,
   `JTAG-HEADERS.md`, `ULX3S-SPISPY-BMC-FLASH-WIRING.md`, `spispy/verilog/ulx3s_v20.lpf`.
@@ -151,12 +151,12 @@
 
 ## Phase P1 — LiteX SoC + wishbone bridge + soft USB hub
 
-> Do P1 work inside the `mobo-bench` repo on branch `claude/p1-soc-skeleton`.
+> Do P1 work inside the `asus-d16-ulx3s-interface` repo on branch `claude/p1-soc-skeleton`.
 
 ### Task 1.1: Install LiteX; build a baseline ULX3S 45F bitstream
 
 **Files:**
-- Create: `mobo_bench/platform.py`, `mobo_bench/soc.py`
+- Create: `d16iface/platform.py`, `d16iface/soc.py`
 - Create: `docs/toolchain.md` (install notes)
 
 - [ ] **Step 1:** Install LiteX into a project venv via the official installer:
@@ -202,7 +202,7 @@
 
 ### Task 1.3: UARTBone wishbone bridge + Pi-5 RemoteClient
 
-**Files:** Modify `mobo_bench/soc.py`; Create `test/hil_remoteclient.py`
+**Files:** Modify `d16iface/soc.py`; Create `test/hil_remoteclient.py`
 
 - [ ] **Step 1:** In `soc.py`, subclass the ULX3S `BaseSoC` and add a bridge.
   Build with `--uart-name=crossover+uartbone` and `--csr-csv=csr.csv`: this puts
@@ -212,7 +212,7 @@
   cannot both be physical — after this task the console is the crossover, not a
   second COM port. (This is superseded in Task 1.6 when the console/CDC move to
   USB.)
-- [ ] **Step 2: Build:** `python3 -m mobo_bench.soc --device LFE5U-45F --build --csr-csv=csr.csv`. Expected: `csr.csv` generated, bitstream built.
+- [ ] **Step 2: Build:** `python3 -m d16iface.soc --device LFE5U-45F --build --csr-csv=csr.csv`. Expected: `csr.csv` generated, bitstream built.
 - [ ] **Step 3 [HW]: Verify from the Pi 5:** run `litex_server --uart --uart-port=/dev/ttyUSB0` and:
   ```python
   # test/hil_remoteclient.py
@@ -226,7 +226,7 @@
 
 ### Task 1.4: LED CSR (blinky controllable from the Pi 5)
 
-**Files:** Modify `mobo_bench/soc.py`; Create `test/hil_blinky.py`
+**Files:** Modify `d16iface/soc.py`; Create `test/hil_blinky.py`
 
 - [ ] **Step 1:** Add a `CSRStorage` driving the 8 ULX3S LEDs (a `leds` CSR),
   plus a hardware heartbeat on one LED so a bare board shows life.
@@ -238,7 +238,7 @@
 
 ### Task 1.5: SPIKE — soft USB hub integration (research + minimal enumerate)
 
-**Files:** `docs/usb-hub-spike.md`; Modify `mobo_bench/soc.py`
+**Files:** `docs/usb-hub-spike.md`; Modify `d16iface/soc.py`
 
 > The exact ULX3S LiteX soft-hub path (Greg Davill hub emulation vs valentyusb
 > `cdc_eptri` vs LiteX 2026.04 LUNA `usb_acm`) is not yet API-pinned — resolve
@@ -259,7 +259,7 @@
 
 ### Task 1.6: Wishbone bridge over USB + one CDC-ACM smoke test
 
-**Files:** Modify `mobo_bench/soc.py`; Create `test/hil_usb.py`
+**Files:** Modify `d16iface/soc.py`; Create `test/hil_usb.py`
 
 - [ ] **Step 1:** Route the wishbone bridge and one CDC-ACM UART through the
   USB device/hub from Task 1.5 (so control + a serial port are on USB, not just
@@ -278,7 +278,7 @@
 - [ ] **Step 1:** Write `docs/p1-bringup.md`: exact build/load/verify commands,
   the resource report, the USB device list, and the RemoteClient examples.
 - [ ] **Step 2:** Fill the `README.md` quickstart from the bring-up doc.
-- [ ] **Step 3: Commit**; open a PR on `mithro/mobo-bench`; bump the submodule
+- [ ] **Step 3: Commit**; open a PR on `mithro/asus-d16-ulx3s-interface`; bump the submodule
   pointer in ai-shenanigans (branch + PR). **P1 exit:** a Pi-5-controllable SoC
   skeleton on the 45F — RemoteClient over USB + blinky + one CDC-ACM — that the
   Wave-1 cores (P2–P5) plug into.
@@ -287,7 +287,7 @@
 
 ## Exit criteria (P0 + P1)
 
-- `mithro/mobo-bench` exists, is a submodule here, Apache-2.0.
+- `mithro/asus-d16-ulx3s-interface` exists, is a submodule here, Apache-2.0.
 - `wiring/pinmap.csv` + `harness.svg` validate all §3.1 signals ≤ ULX3S GPIO,
   spispy-compatible where possible → boards can be wired.
 - LiteX SoC builds for the 45F (resource report captured).

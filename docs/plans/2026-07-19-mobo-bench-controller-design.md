@@ -2,9 +2,10 @@
 
 Status: draft for review · Date: 2026-07-19 · Owner: mithro
 
-> Repository name **proposed** as `mobo-bench` (under the `mithro` GitHub user);
-> confirm before the repo is created in P0. Alternatives considered:
-> `bench-controller`, `ulx3s-bench`.
+> Repository name (confirmed 2026-07-19): **`asus-d16-ulx3s-interface`** under
+> the `mithro` GitHub user; submodule path
+> `asus-kgpe-d16-firmware/asus-d16-ulx3s-interface/`. Python package: `d16iface`.
+> ("mobo-bench" was the working name during brainstorming.)
 
 ## 1. Purpose
 
