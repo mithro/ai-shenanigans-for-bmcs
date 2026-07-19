@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b): SoC-low-level + QEMU-models code review — 1 real fix (vic.c), 1 finding silicon-DISPROVEN (soc.c)
+
+Ran 2 more independent code-review sub-agents over the remaining unreviewed developed code:
+- **QEMU G3 models** (w83601g/aspeed_rtc_ast2050/sbtsi/pmbus_psu): all CLEAN except the ALREADY-
+  TRACKED RTC sync-RESTART-vs-async-CONTROL[5] faithfulness gap (#158, confirmed + fix direction;
+  plus a below-threshold RESET-scope note added to #158).
+- **Zephyr SoC low-level + GPIO** (soc.c/vic.c/aspeed_timer.c/console.c/gpio_aspeed_g3.c): timer/
+  console/gpio CLEAN; 2 Major (conf-80) findings:
+  1. **vic.c z_soc_irq_eoi() clobbers a driver's in-ISR irq_disable() for a LEVEL source** — REAL
+     latent bug (only edge Timer1 wired today, so not yet hit). FIXED: added an atomic
+     `soc_irq_user_disabled` bitmask; z_soc_irq_disable() records intent, eoi() skips re-enabling a
+     source the driver disabled. QEMU + silicon boot re-validated (W83795 PASS). Unblocks the future
+     I2C/GPIO/UART-RX level-IRQ drivers.
+  2. **soc.c "vectors" MMU region overlaps "dram" (VA 0x40000000 → PA 0x0 vs identity)** — flagged
+     as a bug at conf-80, and QEMU boots fine WITHOUT it. **But a SILICON boot test DISPROVED the
+     finding: removing the region → NO banner (Zephyr never runs); restoring it → boots (W83795
+     fan1=2738/temp0=51 PASS).** So the region is INTENTIONAL / LOAD-BEARING on real hardware — the
+     ARM926 early boot needs the first VA page strongly-ordered (uncached), which QEMU (no cache-
+     attribute modelling) doesn't reveal. Kept the region + added a "DO NOT REMOVE — load-bearing on
+     silicon" comment so it's never mistakenly deleted. **Lesson: silicon is the faithfulness oracle
+     — a plausible conf-80 review finding + a clean QEMU boot would have shipped a boot-breaker;
+     silicon-validating the boot-critical change caught it.** Rig healthy (47W, sensor rail live).
+
 ## 2026-07-20 — W83795 hwmon: platform-agnostic smoke + fresh silicon LIVE read (rows 15/16); board-state/sensor-rail finding
 
 Made w83795_smoke PLATFORM-AGNOSTIC (commit 8797280): PASS = both channel reads succeed AND

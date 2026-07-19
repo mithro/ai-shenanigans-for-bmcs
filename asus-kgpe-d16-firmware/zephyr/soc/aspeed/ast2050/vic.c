@@ -17,7 +17,20 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/irq.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/sys_io.h>
+
+/*
+ * Which sources a DRIVER has explicitly masked via z_soc_irq_disable() (bit i =
+ * source i disabled). Needed to disambiguate the two things the VIC enable bit is
+ * used for: (a) z_soc_irq_get_active() transiently masks a LEVEL source for the
+ * claim→ISR→eoi re-entrancy window, and (b) a driver keeping its line masked
+ * (the "mask the IRQ + defer to a bottom half" pattern). Both clear the same
+ * enable bit, so z_soc_irq_eoi() cannot tell them apart from the register alone —
+ * it must NOT re-enable a source the driver disabled during its ISR. Atomic so
+ * thread-context enable/disable and ISR-context eoi don't race on the RMW.
+ */
+static atomic_t soc_irq_user_disabled;
 
 #define G3VIC_BASE		0x1e6c0000u
 
@@ -77,6 +90,7 @@ void z_soc_irq_enable(unsigned int irq)
 		 * unmasked, mid-kernel-init, and crashed the boot. Harmless for level
 		 * sources (their bit is not latched by EDGE_CLR).
 		 */
+		atomic_clear_bit(&soc_irq_user_disabled, irq);
 		vic_wr(G3VIC_EDGE_CLR, BIT(irq));
 		vic_wr(G3VIC_INT_ENABLE, BIT(irq));
 	}
@@ -85,6 +99,10 @@ void z_soc_irq_enable(unsigned int irq)
 void z_soc_irq_disable(unsigned int irq)
 {
 	if (irq < 32) {
+		/* Record the driver's intent so a following eoi() (for a level
+		 * source masked at claim) does not silently re-enable this line.
+		 */
+		atomic_set_bit(&soc_irq_user_disabled, irq);
 		vic_wr(G3VIC_INT_ENABLE_CLR, BIT(irq));
 	}
 }
@@ -163,8 +181,14 @@ void z_soc_irq_eoi(unsigned int irq)
 	 * arose during the ISR, the still-asserted level fires again — no loss).
 	 * EDGE sources were ACKed at claim and need nothing here: clearing the edge
 	 * again would discard an edge that re-triggered while the ISR ran.
+	 *
+	 * But do NOT re-enable a level source the ISR (or a bottom half) explicitly
+	 * disabled via z_soc_irq_disable() — that is the driver's intent to stay
+	 * masked (mask-and-defer). Re-enabling here would clobber it and let the
+	 * still-asserted level line re-storm the ISR every claim.
 	 */
-	if (irq < 32 && (vic_rd(G3VIC_INT_SENSE) & BIT(irq))) {
+	if (irq < 32 && (vic_rd(G3VIC_INT_SENSE) & BIT(irq)) &&
+	    !atomic_test_bit(&soc_irq_user_disabled, irq)) {
 		vic_wr(G3VIC_INT_ENABLE, BIT(irq));
 	}
 }

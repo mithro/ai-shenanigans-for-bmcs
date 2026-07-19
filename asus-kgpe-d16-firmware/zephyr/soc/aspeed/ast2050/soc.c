@@ -14,6 +14,21 @@
 #include <zephyr/kernel.h>
 
 static const struct arm_mmu_region mmu_regions[] = {
+	/*
+	 * DO NOT REMOVE — LOAD-BEARING ON SILICON. This region maps the first
+	 * page of the kernel VM window (VA CONFIG_KERNEL_VM_BASE = 0x40000000) as
+	 * a STRONGLY-ORDERED (uncached, non-reordered) page, with PA 0. It looks
+	 * like a redundant/wrong overlap with the "dram" identity map below (same
+	 * VA, different PA), and QEMU boots fine WITHOUT it — but on the real
+	 * AST2050 removing it makes the boot produce NO banner (Zephyr never runs).
+	 * Empirically the arm_mmu processes this entry such that the first VA page
+	 * ends up strongly-ordered, which the ARM926 needs during early boot before
+	 * the D-cache/MMU are fully coherent; the "dram" cacheable overlay of the
+	 * same VA does not supersede it in a way that breaks this. (A code review
+	 * flagged the overlap as a bug at confidence 80; a silicon boot test proved
+	 * it is intentional/required — QEMU does not model the cache behaviour that
+	 * makes it matter. See device-driver-program LOG 2026-07-20.)
+	 */
 	MMU_REGION_ENTRY("vectors", CONFIG_KERNEL_VM_BASE, 0, 0x1000,
 			 MT_STRONGLY_ORDERED | MPERM_R | MPERM_X),
 
