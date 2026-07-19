@@ -63,8 +63,8 @@ static void aspeed_timer_isr(const void *arg)
 	announced_cycles += CYC_PER_TICK;
 	k_spin_unlock(&lock, key);
 
-	/* Tickful: one tick per expiry. The VIC eoi (edge clear) is done by the
-	 * arch isr_wrapper after this returns.
+	/* Tickful: one tick per expiry. The VIC edge was ACKed at claim time in
+	 * z_soc_irq_get_active() (see vic.c), so nothing to clear here.
 	 */
 	sys_clock_announce(1);
 }
@@ -102,12 +102,19 @@ static int sys_clock_driver_init(void)
 	 * (0x00) is the read-only live count, so there is nothing to pre-load. */
 
 	IRQ_CONNECT(TIMER_IRQ, TIMER_IRQ_PRIO, aspeed_timer_isr, NULL, 0);
-	irq_enable(TIMER_IRQ);
 
-	/* Enable on the 1 MHz external clock with overflow interrupt (level-mode
-	 * counter, single rising-edge pulse to the VIC per expiry). */
+	/*
+	 * Enable the timer FIRST, THEN unmask its VIC IRQ. The enable transition can
+	 * latch a spurious overflow edge in the VIC before the counter settles at
+	 * RELOAD; irq_enable() (z_soc_irq_enable) clears that source's edge before
+	 * unmasking, so the first delivered interrupt is a real expiry — not a
+	 * power-on/enable glitch taken mid-kernel-init. (Raptor's init_delay_timer
+	 * likewise clears the timer's VIC edge before use.)
+	 */
 	ctrl |= (T1_CTRL_ENABLE | T1_CTRL_EXT_CLOCK | T1_CTRL_OVERFLOW_INT);
 	tmr_wr(TIMER_CTRL, ctrl);
+
+	irq_enable(TIMER_IRQ);
 
 	return 0;
 }

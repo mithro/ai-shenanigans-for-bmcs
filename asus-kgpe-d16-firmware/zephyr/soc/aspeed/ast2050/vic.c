@@ -67,6 +67,17 @@ void z_soc_irq_init(void)
 void z_soc_irq_enable(unsigned int irq)
 {
 	if (irq < 32) {
+		/*
+		 * Clear any latched/pending edge for this source BEFORE unmasking it,
+		 * so enabling an IRQ cannot immediately fire on a stale edge — e.g. a
+		 * prior boot's timer edge, or the glitch a peripheral latches on its own
+		 * enable transition. This mirrors Raptor's init_delay_timer, which
+		 * writes VIC EDGE_CLR for the timer source before enabling it. Without
+		 * it, on real silicon the timer's edge fired the instant its IRQ was
+		 * unmasked, mid-kernel-init, and crashed the boot. Harmless for level
+		 * sources (their bit is not latched by EDGE_CLR).
+		 */
+		vic_wr(G3VIC_EDGE_CLR, BIT(irq));
 		vic_wr(G3VIC_INT_ENABLE, BIT(irq));
 	}
 }
