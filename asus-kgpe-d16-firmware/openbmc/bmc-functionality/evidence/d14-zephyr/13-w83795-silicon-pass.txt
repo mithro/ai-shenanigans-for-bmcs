@@ -1,0 +1,30 @@
+D14 Zephyr — W83795G hwmon LIVE read on REAL SILICON (rows 15 I2C-master + 16 W83795), 2026-07-20.
+
+samples/w83795_smoke exercises the Zephyr W83795 sensor driver (drivers/sensor/w83795)
+end to end over the AST2050 (G3) I2C master (drivers/i2c/i2c_aspeed_g3.c) — the Nuvoton/
+Winbond W83795G at 0x2F on I2C engine 1 (schematic I2C2, DT i2c1 @0x1E78A080) — on the
+real ASUS KGPE-D16 AST2050 BMC, booted over JTAG.
+
+The PASS gate is PLATFORM-AGNOSTIC (a proper both-sides test): both channel reads must
+succeed and return physically plausible values (fan 100-30000 rpm, temp 0-125 C). In QEMU
+the model seeds a constant fan1=2641 rpm / temp0=50.5 C; on silicon the chip returns the
+LIVE fan RPM and thermal-diode temperature. (The prior exact-match gate fan1==2641
+false-FAILed on silicon despite a correct read.)
+
+Console (real AST2050, host powered):
+
+  [00:56:56] *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+  W83795 fan1=2710 rpm (ok=1) temp0=56.000 C (ok=1)  W83795 RESULT: PASS
+
+fan1=2710 rpm / temp0=56.0 C are LIVE values (distinct from the QEMU seed 2641/50.5 and
+drifting between reads across sessions, e.g. ~2631/58.5 earlier), proving a genuine read
+of the physical sensor — not a modeled constant. Validates the I2C master (row 15) + the
+W83795 hwmon client (row 16) on silicon.
+
+BOARD-STATE NOTE (honest): the W83795 read requires the sensor I2C bus rail to be powered.
+An earlier attempt this session returned sample_fetch -EIO because prior power_smoke
+experiments had left the board at 46 W after a 4 W deep-S5 (STA_LINE_POWER = "I2C bus
+power" — HW-WIRING §; the deep-off kills the sensor rail). A clean au-plug AC power-cycle
+(which the board's BIOS auto-power-on setting brings up through host-on) re-enabled the
+rail, after which the read succeeds — the driver was correct throughout; the -EIO was a
+board state I had created (per "hardware weird = my doing"), and fixable.

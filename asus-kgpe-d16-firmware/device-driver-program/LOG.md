@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — W83795 hwmon: platform-agnostic smoke + fresh silicon LIVE read (rows 15/16); board-state/sensor-rail finding
+
+Made w83795_smoke PLATFORM-AGNOSTIC (commit 8797280): PASS = both channel reads succeed AND
+values physically plausible (fan 100-30000 rpm, temp 0-125 C), not the QEMU-seed exact-match
+(fan1==2641) that false-FAILed on silicon. QEMU re-validated PASS (2641/50.5). Then captured a
+FRESH silicon read (evidence/d14-zephyr/13): `W83795 fan1=2710 rpm (ok=1) temp0=56.000 C (ok=1)
+W83795 RESULT: PASS` — LIVE values (≠ the seed, drift across sessions), proving a genuine read of
+the physical W83795G on engine 1. Rows 15/16 ZS re-confirmed with a captured transcript.
+
+SENSOR-RAIL / BOARD-STATE FINDING (honest, connects to #162): a first silicon attempt returned
+`W83795 sample_fetch FAIL (err -5)` = -EIO. Cause was NOT the driver (QEMU-valid, previously
+silicon-valid) — my earlier power_smoke experiments had left the board at 46 W after driving it to
+4 W deep-S5, and STA_LINE_POWER = "I2C bus power": deep-off kills the SENSOR I2C-bus rail, and a
+partial power-up doesn't re-enable it. A clean au-plug AC power-cycle restored it (the board's BIOS
+auto-power-on brings it up through host-on 97 W, re-enabling the rail; it then settled to 47 W
+standby with the rail live). So "weird hardware" (W83795 -EIO) was a board state I created — fixed
+by a proper power-cycle, exactly per the project principle. Rig now at 47 W standby (host off,
+sensor rail live) ≈ the as-found ~49 W. Also learned: on AC restore this board AUTO-POWERS-ON the
+host (~97 W) briefly, then drops (POST/CMOS) — a window that could be used to validate SB-TSI
+(row 23, needs host-CPU-on) if a Zephyr power_smoke holds the power-on latch (future).
+
 ## 2026-07-20 — GATE (b/c): independent code review of the unreviewed Zephyr code — 2 bugs found + FIXED
 
 Ran an independent code-review sub-agent on the code NOT covered by the earlier review (which had
