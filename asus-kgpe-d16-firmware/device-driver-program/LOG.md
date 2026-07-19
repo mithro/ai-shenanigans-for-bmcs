@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gpio_smoke @ 4W silicon: BMC boots at deep standby; output-readback hits the known IJKL-unbonded quirk
+
+Booted gpio_smoke on the real AST2050 at 4W (deep S5, host off). Two findings:
+- **BMC is JTAG-accessible at 4W deep standby** (BMC on 5V-SB): banner appears, DDR2 trains,
+  Zephyr runs — so the VIC/Timer/boot path work even at 4W. Useful: SoC-side Zephyr silicon
+  tests (VIC 36 / Timer 37 / WDT 38 / GPIO-write) don't need the board powered up.
+- **GPIO output-readback shows the KNOWN IJKL faithfulness quirk**: `GPIO set=1 read=0` on
+  silicon vs `set=1 read=1` in QEMU. gpio_smoke drives GPIOI0 (set IJKL), which is NOT bonded
+  out on the AST2050 (the upper GPIO sets have a narrower true bonded-pin count than the 32-bit
+  model assumes) — so a driven-high never reaches a pad and reads back 0; QEMU idealizes the
+  unbonded pin to readback-1. This is the pre-existing open faithfulness note (memory / DEVICE-
+  MATRIX snapshot), re-confirmed, NOT a new regression. FIX (tasked #163): either (a) point
+  gpio_smoke at a BONDED, board-safe GPIO whose driven level actually appears (needs the §11
+  GPIO map / #136 to pick a spare bonded pin), or (b) model the AST2050's real bonded-pin map in
+  the QEMU aspeed_gpio so unbonded upper-set pins read back their floating level, not 1. Until
+  then gpio_smoke is not a clean silicon-evidence PASS (the WRITE works; the unbonded READBACK is
+  the quirk). Rig left at 4W (host off, BMC accessible).
+
 ## 2026-07-20 — SB-TSI Zephyr silicon (row 23): honest attempt FAILED (-EIO); blocked by unstable host power
 
 sbtsi_smoke is platform-agnostic + QEMU PASS (temp=45.5). Attempted the silicon read (SB-TSI @0x4c
