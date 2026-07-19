@@ -7,8 +7,8 @@ Idempotent bootstrap that mirrors the workstation setup so a bitstream built on
 either host behaves identically (same oss-cad-suite, same clone path):
 
   1. install the pinned oss-cad-suite (linux-arm64) under ~/oss-cad-suite
-  2. clone mithro/spispy over HTTPS to ~/github/mithro/spispy   (SSH :22 is
-     firewalled on this network — HTTPS is the working git transport)
+  2. clone mithro/spispy over HTTPS to ~/github/mithro/spispy   (public fork,
+     so no SSH key is needed on the Pi; SSH to GitHub works too)
   3. install the udev rules so the ULX3S shows up as /dev/spispy-{jtag,ctrl}
 
 Run ON THE PI:

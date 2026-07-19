@@ -20,9 +20,10 @@ enumerate its USB-CDC control port identically, so both hosts run the **same
 pinned oss-cad-suite** and clone the **same fork to the same path**
 (`~/github/mithro/spispy`).
 
-> **Network note:** outbound SSH (port 22) is firewalled on this network, so
-> GitHub is cloned/pushed over **HTTPS**, and the Pi is reached through the
-> WireGuard tunnel (`10.1.90.0/24`), not public SSH.
+> **Network note:** the fork is cloned over **HTTPS** because it's public — no
+> SSH key is needed on a fresh host like the Pi. (SSH to GitHub works fine too;
+> use whichever you prefer.) The Pi itself is reached through the WireGuard
+> tunnel (`10.1.90.0/24`).
 
 ## Source: the mithro/spispy fork
 
