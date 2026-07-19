@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Confirming re-review of the 2 code fixes → CLEAN (gate b satisfied for this session's code)
+
+Dispatched an independent second code-review pass on the two fixes from the prior
+round (Kconfig `select SOC_RESET_HOOK` 481ac22, VIC level-masking 4cf848d). Verdict:
+**both correct + complete, no new bugs at/above confidence-80.** Specifically confirmed:
+- Fix 1: `SOC_RESET_HOOK` is a plain selectable bool (no unmet depends), the select is
+  unconditional via `SOC_AST2050→SOC_SERIES_AST2050→SOC_FAMILY_ASPEED`, `soc_reset_hook()`
+  is called from reset.S:364 pre-MMU, and no latent collision reliance remains.
+  `SOC_EARLY_INIT_HOOK` (configdefault) is robust and needs no change.
+- Fix 2: isr_wrapper calls `z_soc_irq_eoi` unconditionally on every path (incl. the
+  spurious irq==32, where the `irq<32` guard short-circuits before BIT/vic_rd), so level
+  sources are always re-enabled; `INT_SENSE` is written only in init (no TOCTOU); the edge
+  Timer1 path is byte-for-byte preserved; no bad interaction with the 78f5569 edge-clear.
+- Cross-checked vs the datasheet, the faithful QEMU VIC model, and Linux irq-aspeed-g3-vic.
+
+**Tangential PRE-EXISTING finding (NOT a defect in either commit) → tasked #154:** our
+`config SOC_FAMILY_ASPEED` shares its symbol NAME with upstream Zephyr's unrelated
+AST10x0 (Cortex-M4) family; our ARM926/MMU/custom-VIC selects would leak onto an ast1030
+build done from a workspace with our module registered (`soc_root: .`). Harmless in this
+project's ast2050 builds, but a real namespace/directory collision to harden. Deferred to
+#154 (a careful family rename, not a quick edit).
+
 ## 2026-07-19 — Completion-gate round: independent code review + schematic audit → all findings resolved/tasked
 
 Ran two independent sub-agents (gates b + a/d), acted on every finding:
