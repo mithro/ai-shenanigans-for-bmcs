@@ -53,7 +53,7 @@ tally over the rows, 2026-07-19):
 | Linux @ silicon | 18 | 4 | 2 | 12 | 6 |
 | Linux userspace | 12 | 6 | 0 | 12 | 12 |
 | Zephyr @ QEMU | 0 | 11 | 0 | 24 | 7 |
-| Zephyr @ silicon | 3 | 0 | 0 | 32 | 7 |
+| Zephyr @ silicon | 5 | 0 | 0 | 30 | 7 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
@@ -123,8 +123,8 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 15 | AST2050 I2C controller (8 engines) | I2C | ✅ | ✅ | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
-| 16 | W83795G hwmon (QU4, I2C2 @0x2f) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
+| 15 | AST2050 I2C controller (8 engines) | I2C | ✅ | ✅ | 🔶 | ✅ | ✅ | ✅ | 🔶 | ✅ |
+| 16 | W83795G hwmon (QU4, I2C2 @0x2f) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ✅ |
 | 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |

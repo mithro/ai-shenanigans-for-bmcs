@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉 Zephyr I2C + W83795 read the REAL hwmon sensor on silicon (ZS #5,#6) — rows 15,16 ZS ✅
+
+The keystone I2C driver validated on real hardware: `w83795_smoke` JTAG-booted on
+the live AST2050 and **read the real Winbond W83795G** (QU4, schematic **I2C2**
+@0x2f — = DT i2c1 / engine block 0x1E78A080, exactly where the faithful QEMU
+machine wires it):
+
+```
+QEMU:    W83795 fan1=2641 rpm temp0=50.500 C  PASS   (model's seeded values)
+Silicon: W83795 fan1=2631 rpm temp0=58.500 C  FALSE-FAIL (real chip)
+Silicon repeat reads: fan1=2631/2611/2631 rpm, temp0=58.5/59.0/58.5 C
+```
+
+The "FAIL" is a **false fail** — the smoke test hardcodes the QEMU-seeded
+expectation (2641). On silicon the values are the **real sensor's**, and they
+**drift across reads** (fan 2631↔2611↔2631, temp 58.5↔59.0↔58.5) — a live
+spinning fan + a warming board, not a static value. This proves, on real silicon:
+the `i2c_aspeed_g3` master driver (drove engine 1 = schematic I2C2, ACKed 0x2f,
+bank-switched + read fan/temp regs), the `w83795` sensor client, AND the driver's
+SCU04 reset-release that un-gates the I2C engine — all on the shared cache+VIC-fix
+base. It also confirms the QEMU machine's bus-1↔schematic-I2C2 wiring is faithful
+(the real chip answered exactly where the model put it). Rows 15 (I2C) + 16
+(W83795) ZS ⬜→✅; Zephyr@silicon 3→5. (Follow-up nicety: give the smoke test a
+silicon mode that accepts a plausible range instead of the hardcoded QEMU seed.)
+
 ## 2026-07-19 — Zephyr WDT driver RESETS the real AST2050 (ZS #4) — row 38 ZS ✅
 
 On the now-working silicon base (shared cache+VIC fixes), the wdt_smoke image
