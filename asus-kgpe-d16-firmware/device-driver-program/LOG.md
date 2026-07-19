@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168: SP hypothesis tested + REFUTED — the 0x0badc0de is the Abort-mode BANKED sp_abt (double-fault), not the cause; 0004 (A-fix) is the correct fix
+
+New lead this cycle: the JTAG-load sets PC+CPSR but not SP, so U-Boot's early code might fault on an
+uninitialized SP (the DFAR I'd seen was 0x0badc0de). TEST: added `reg sp 0x43f00000` to the boot tcl and
+booted BOTH the A-fix build AND a freshly-built A=1 (original, 0004 reverted) build. RESULT: still no
+console; A=1 post-mortem shows mode=Abort, pc=0x180 (the abort handler), **sp=0x0badc0de EVEN THOUGH I
+set sp**, DFAR=0x0badc0de. KEY REALISATION: `reg sp` set the SVC-mode sp (sp_svc), but the CPU faults into
+ABORT mode and uses the BANKED sp_abt, which is uninitialized (0x0badc0de). So DFAR=0x0badc0de is the abort
+HANDLER double-faulting on its own poison stack (`str lr,[sp_abt]`) — an EFFECT of the original fault, not
+its cause. So the SP hypothesis is REFUTED, and crucially this CONFIRMS 0004 (clear SCTLR.A) is the CORRECT
+fix for the ORIGINAL alignment fault: with A=0 the alignment fault never occurs, so the abort handler never
+runs, so the double-fault loop never happens, and the CPU advances to board_init_f (PC~0x38480, printf).
+The remaining no-console is a SEPARATE board_init_f / serial_init issue (UART LCR=0). To pin the ORIGINAL
+alignment-faulting instruction (to address the gate-b reviewer's "rotated read" concern about 0004 masking
+vs fixing), the next step must prevent the double-fault: set the Abort-mode BANKED sp_abt (openocd mode-
+switch, or `reg` the banked reg) before the fault so the handler saves the real faulting LR, OR install a
+minimal abort vector. Deferred. Restored 0004 + re-staged the A-fix build; removed the test `reg sp` from
+the Pi tcl. Repo clean. (Rig hygiene: A=1 test build was transient; committed code unchanged.)
+
 ## 2026-07-20 — #153 DONE: doc-hygiene C5/C6/ADC all verified addressed (ADC double-checked vs the primary datasheet)
 
 Closed the stale #153 doc-hygiene task — all three items are addressed: (C5 authority-pointer) the
