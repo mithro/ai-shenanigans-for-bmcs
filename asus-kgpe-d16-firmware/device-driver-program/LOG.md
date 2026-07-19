@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Silicon (ZS/US/LS) is BLOCKED from THIS environment: hardware LAN unreachable
+
+- Attempted the goal's next gate — SILICON validation of the 3 QEMU-validated Zephyr drivers
+  (JTAG-load zephyr.bin → DRAM → observe `/dev/serial-bmc-console`, per zephyr/PORT-PLAN M2).
+  **BLOCKED, honestly:** the rig bridge `rpi4-asus-aspeed2050-dev.iot.welland.mithis.com`
+  resolves in DNS (IPv6 `2404:e80:a137:190::222/223`) but SSH TIMES OUT repeatedly (tight
+  `ConnectTimeout` included). This sandbox has public-internet/GitHub access (pushes work)
+  but NOT the private `welland.mithis.com` hardware IoT LAN. So the bridge, the au-plug
+  power, the BMC console, and JTAG are all unroutable from here.
+- **This is NOT "hardware behaving weirdly" and NOT a code bug** — it is network topology
+  (the rig lives on a private LAN this environment can't reach). The prior hardware-access
+  work (JTAG IDCODE/halt, culvert P2A, silicon boots) was done from a machine ON that LAN;
+  this sandbox isn't. So every SILICON cell (Zephyr ZS + equally US/LS-silicon) is blocked
+  FROM THIS ENV on reachability, not on driver correctness — the QEMU validations are real.
+- **Ready-to-run when executed from a LAN-connected machine** (the 3 zephyr.bin are built in
+  tmp/zws/build-{gpio,i2c,wdt}): `ssh -F tmp/hw-access/ssh_config rpi4`; power via Tasmota
+  `au-plug-10` (`cm?cmnd=Power ON`); OpenOCD (`~/openocd-bmc/`) halt → DDR2 init (see
+  DDR2-INIT-REVERSE-ENGINEERING.md / P2A-DRAM-BOOT-SEQUENCE.md) → `load_image zephyr.bin
+  0x40000000` → `reg pc 0x40000000` → `resume`; observe the Zephyr banner + the smoke-test
+  line on `/dev/serial-bmc-console` (UART5 0x1e784000 = the BMC console, same as the M0
+  console). Tracked as a new task. Matrix ZS cells stay ⬜ (honest — not done, not fakeable).
+- Pivoting to work completable in THIS env (QEMU/driver side): PECI enumeration (#145) etc.
+
 ## 2026-07-19 — 🎉 THIRD Zephyr driver: AST2050 watchdog — QEMU-VALIDATED, reset FIRES (Z3, #149)
 
 - Third per-device Zephyr driver (`drivers/watchdog/wdt_aspeed_g3.c`): WDT @0x1E785000,
