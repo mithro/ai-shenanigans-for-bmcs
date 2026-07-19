@@ -1,5 +1,42 @@
 # Device-driver program — running log
 
+## 2026-07-19 — ⚠️ RETRACTION: the "silicon LAN-blocked (#150)" claim was FALSE — the rig IS reachable
+
+- **I must correct a false claim I committed earlier today.** The entry below headed
+  *"Silicon (ZS/US/LS) is BLOCKED … hardware LAN unreachable"* is **WRONG and RETRACTED.**
+  The rig is fully reachable from this environment. What actually happened:
+  - The SSH "timeouts" were a **stale SSH ControlMaster socket**, NOT network topology.
+    `tmp/hw-access/ssh_config` sets `ControlMaster auto` + a shared
+    `ControlPath /home/tim/.ssh/cm/%C`; a dead master socket left every new SSH hanging on
+    it. Overriding with `-o ControlMaster=no -o ControlPath=none` connects instantly —
+    proven THIS session: `REACHABLE: rpi4-asus-aspeed2050-dev up 850249s` over SSH, with
+    `/dev/serial-bmc-console` present. So the au-plug power, BMC console, and JTAG are ALL
+    reachable. Every "unroutable from here" line in the retracted entry is false. It was a
+    local SSH-multiplexing bug misread as a firewall — a bad conclusion I own.
+  - The gate-c auditor caught this (it proved #150's premise false), which is why I am
+    correcting it rather than letting it stand.
+- **HONEST silicon result so far (the REAL state of ZS):** with the rig reachable I ran the
+  JTAG Zephyr boot on the live AST2050 (`tmp/boot-zephyr.tcl` + `boot-zephyr-silicon.sh`,
+  scp'd to `~/openocd-bmc/`):
+  - ✅ DDR2 **trained** (SDMC up; `mww 0x40000000` read-back sticks).
+  - ✅ `zephyr.bin` **loads byte-for-byte correct** into DRAM @0x40000000 (verified vs the
+    local `.bin`).
+  - ❌ Zephyr **data-aborts at `__start`** (core halts in ABORT mode, PC≈0x40002304,
+    cpsr=0x80000097) — never reaches the console. This is an **early-boot entry/vector/MMU
+    gap**: QEMU `-kernel` hands the image an implicit boot state (exception base, CP15, CPU
+    mode) that a raw JTAG `load_image` + `reg pc` + `resume` does not replicate. This is a
+    CODE/entry issue that is **mine to solve** — NOT a hardware fault and NOT a reachability
+    block.
+- **The "JTAG scan chain all ones" I saw after the crash was ALSO not damage** — re-checked
+  this session: `au-plug-10` = **POWER OFF**, so TDO floated high (IDCODE `0x00000000`,
+  comms-ctrl `0xffffffff`). That is an *unpowered target*, not a broken interface. (New JTAG
+  probes were also being connected at the bench around then.) The SoC is fine.
+- **Corrected status:** ZS (Zephyr silicon) is **IN PROGRESS, not blocked** — DRAM-train +
+  byte-correct load are proven on silicon; the `__start` data-abort is the open work item.
+  #150 must be reworded from "BLOCKED on hardware LAN" to "solve the Zephyr `__start`
+  data-abort on the JTAG-loaded boot". Matrix ZS cells stay ⬜ (honestly not done), but the
+  *reason* is a solvable entry-state gap, not an environmental wall.
+
 ## 2026-07-19 — 🎉 FIFTH Zephyr driver: AMD SB-TSI CPU-thermal sensor — QEMU-VALIDATED (2nd I2C engine)
 
 - Second I2C-client sensor (after W83795), on the validated i2c_aspeed_g3 bus but on a
@@ -11,7 +48,8 @@
   (P0 seeded 45500 mC). ALSO proves the I2C driver works on a SECOND engine (3, not just
   1) → the per-block 0x40 stride math is correct across engines. Row 23 ZQ → 🔶.
 - **Zephyr tally: 5 QEMU-validated per-device drivers** (GPIO/I2C/WDT/W83795/SB-TSI), all
-  independently gate-b reviewed (2 bugs fixed). ZS silicon pending (#150, LAN-blocked).
+  independently gate-b reviewed (2 bugs fixed). ZS silicon pending (#150 — rig IS reachable;
+  the open item is the Zephyr `__start` data-abort on JTAG boot, see top-of-log RETRACTION).
 
 ## 2026-07-19 — Gate-(b) review of the 4 new Zephyr drivers + SPI1/FMC phantom investigation
 
@@ -73,9 +111,15 @@
   NOT declare a hang. (First `build-w83795.sh` FAIL + the "no output at 25s" were this
   same artifact — the -d int run is the truth.)
 - **Zephyr tally this session: 4 QEMU-validated per-device drivers** (GPIO/I2C/WDT/W83795)
-  on the validated #141 tick. ZS silicon pending (#150, LAN-blocked from this env).
+  on the validated #141 tick. ZS silicon pending (#150 — rig reachable; open item is the
+  Zephyr `__start` data-abort on JTAG boot, see top-of-log RETRACTION).
 
-## 2026-07-19 — Silicon (ZS/US/LS) is BLOCKED from THIS environment: hardware LAN unreachable
+## 2026-07-19 — [❌ RETRACTED — see the RETRACTION entry at the top] Silicon "BLOCKED: LAN unreachable"
+
+> **This entire entry is WRONG and superseded.** The rig LAN is reachable; the "SSH timeout"
+> was a stale SSH ControlMaster socket, fixed with `-o ControlMaster=no -o ControlPath=none`.
+> Kept verbatim (not deleted) so the mistake and its correction both stay on the record.
+> Read the top-of-log RETRACTION entry for the honest silicon status.
 
 - Attempted the goal's next gate — SILICON validation of the 3 QEMU-validated Zephyr drivers
   (JTAG-load zephyr.bin → DRAM → observe `/dev/serial-bmc-console`, per zephyr/PORT-PLAN M2).
