@@ -53,19 +53,19 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: faithful G3 VIC (TYPE_ASPEED_2050_VIC, single-bank, sense/dual/event)
 - U-Boot: [x] QEMU · [x] silicon (Raptor + our kernel take IRQs)
 - Linux: [x] QEMU · [x] silicon (`irq-aspeed-g3-vic`, HW-verified) · [N] userspace (IRQs not a userspace ABI)
-- Zephyr: [~] QEMU (real VIC driver `vic.c` delivers IRQs; sustained ticking blocked by upstream arm_mmu — evidence d14-zephyr/03) · [ ] silicon
+- Zephyr: [x] QEMU (`vic.c` delivers IRQs, storm-free after the edge-ack-at-claim fix) · [x] silicon (VIC delivers the timer IRQ storm-free on the real AST2050; commits b84ef58/78f5569, LOG 2026-07-19)
 
 ### A5. Timer (0x1e782000; §implied)
 - [x] QEMU: aspeed timer model (G3 one-pulse-per-expiry)
 - U-Boot: [x] QEMU · [x] silicon (Raptor timekeeping)
 - Linux: [x] QEMU · [x] silicon (clocksource) · [N] userspace (POSIX time, not device ABI)
-- Zephyr: [~] QEMU (tickful `aspeed_timer.c` delivers ticks, app runs; sustained-tick data-abort in upstream arm_mmu — task #141) · [ ] silicon
+- Zephyr: [x] QEMU (tickful `aspeed_timer.c`, app runs to main) · [x] silicon (steady tickful scheduling on the real AST2050 — the earlier "sustained-tick data-abort" was the missing cache/TLB invalidate + the VIC edge-storm, both now fixed; commits 918bc7e/b84ef58/78f5569, LOG 2026-07-19)
 
 ### A6. WDT — watchdog (§implied)
 - [x] QEMU: WDT model (aspeed 120 s reset behaviour)
 - U-Boot: [~] QEMU · [ ] silicon
 - Linux: [x] QEMU (aspeed_wdt) · [~] silicon · [ ] userspace (`/dev/watchdog`)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`wdt_aspeed_g3` reset fires + reboots) · [x] silicon (armed→fed→timeout→true SoC reset, JTAG-proven MMU/caches-off; #149, LOG 2026-07-19)
 
 ### A7. RTC (§implied)
 - [x] QEMU: RTC model
@@ -181,7 +181,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: aspeed I²C engine model (G3 AC-timing fix modeled)
 - U-Boot: [x] QEMU · [x] silicon (Raptor I2C)
 - Linux: [x] QEMU · [x] silicon (i2cdetect completes; g3-i2c patch 0005) · [x] userspace (`/dev/i2c-*`, i2cget/i2cset)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`i2c_aspeed_g3` + w83795_smoke PASS) · [x] silicon (drove engine 1 = schematic I2C2, SCU04 reset-release, read the real W83795 @0x2f; #148, LOG 2026-07-19)
 
 ### D1b. I²C — SLAVE/target mode + multi-master arbitration (§10.3, I2C-SMBUS-TOPOLOGY §3.2)  [added by gate-(d) audit]
 (the shared sensor bus I2C2/3/6 is genuinely multi-master with the SP5100 SMBus1/2, arbitrated by U23 + the D27/QQ9/QQ10 hardware ownership mutex; and the BMC can be *addressed as a target* — IPMB/SSIF-style inbound)
@@ -195,7 +195,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: `w83795` model seeded from silicon captures
 - U-Boot: [N] (hwmon is an OS function)
 - Linux: [x] QEMU (w83795 hwmon binds, fan RPM) · [x] silicon (fan1=2657 rpm, real V/temp) · [x] userspace (`/sys/class/hwmon`, sensors, IPMI SDR)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`w83795` client: fan1=2641/temp0=50.5 PASS) · [x] silicon (read the REAL W83795: fan1=2631/2611 rpm + temp0=58.5/59.0 C, live drift; #148, LOG 2026-07-19)
 
 ### D3. W83601G DIMM-LED expander U27 — I2C5 0x18 (§10.2)  ✅ both-sides this session
 - [x] QEMU: `hw/gpio/w83601g.c` datasheet-faithful (Nuvoton V1.31; CI `boot-w83601g`)

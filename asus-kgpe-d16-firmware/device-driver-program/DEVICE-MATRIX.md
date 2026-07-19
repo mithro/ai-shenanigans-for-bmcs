@@ -141,9 +141,10 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
   QEMU-VALIDATED** — it reads the modeled W83795 @0x2F CHIP_ID (0xFE=0x79) over the full
   START/write/repeated-START/read/STOP path, incl. the G3 SCU reset-release + AC-timing +
   INTR_CTRL gotchas (evidence `d14-zephyr/07`). This makes rows 16-23 (all the on-bus
-  devices) REACHABLE from Zephyr; row 16 (W83795) ZQ → 🔶 (raw register read demonstrated;
-  a full Zephyr hwmon sensor driver + the other devices' per-device Zephyr drivers + ZS
-  silicon remain).
+  devices) REACHABLE from Zephyr; row 16 (W83795) ZQ → 🔶. **UPDATE 2026-07-19: the I2C
+  master + W83795 hwmon client are now SILICON-validated (ZS ✅) — w83795_smoke read the
+  real W83795 @0x2f on the live AST2050 (fan1≈2631 rpm, temp0≈58.5 C, live drift). The other
+  devices' per-device Zephyr drivers on this bus remain to be written.**
 - **16** W83795 model silicon-seeded (fan1=2641 etc.); hwmon both sides. D08.
 - **17/18** fabric DATA PATH proven on silicon (real 256-byte SPD read, CRC 0xf0b4,
   part matches host dmidecode; `evidence/d08-spd-silicon/`). **HONESTY CORRECTION
@@ -283,10 +284,14 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
   **M1 tickful scheduling VALIDATED (#141, evidence `05`)** — the fix was OUR
   `HW_STACK_PROTECTION`, not upstream. **First per-device driver DONE: AST2050 GPIO
   (#147, `gpio_aspeed_g3.c`) QEMU-VALIDATED** — configure/set/clear/read a pin works
-  (evidence `06`); rows 27-29/32-33 ZQ → 🔶. Remaining: Z2 I2C (#148, unlocks ~8 device
-  rows), Z3 WDT (#149); per-driver ZS silicon (JTAG-load zephyr.bin→DRAM); GPIO interrupts
-  (per-bank INT regs → VIC); the standard ns16550 console still awaits the separate ARM9
-  `arm_mmu` z_phys_map fix (real, open — the M1 tick fix was unrelated).
+  (evidence `06`); rows 27-29/32-33 ZQ → 🔶. **UPDATE 2026-07-19: Z2 I2C (#148) + Z3 WDT
+  (#149) DONE, and 6 Zephyr drivers now boot on the REAL AST2050 silicon over JTAG —
+  GPIO/timer/VIC/WDT/I2C/W83795 (w83795_smoke read the real hwmon: fan1≈2631 rpm / temp0≈58.5
+  C, live drift). Fixed 4 silicon-only bugs QEMU hid: cache/TLB invalidate, VIC edge-ack +
+  level-mask, spurious enable-glitch tick, entry-addr staleness (commits 918bc7e..4cf848d,
+  LOG).** Remaining: SB-TSI silicon (needs the host CPU powered); GPIO interrupts (per-bank
+  INT regs → VIC); the standard ns16550 console still awaits the separate ARM9 `arm_mmu`
+  z_phys_map fix (real, open — unrelated to the tick/cache fixes).
 
 ---
 
