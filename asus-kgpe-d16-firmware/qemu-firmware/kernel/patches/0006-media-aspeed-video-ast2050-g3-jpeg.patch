@@ -60,7 +60,7 @@ index a9c2c69b2..4c6117fb1 100644
  };
  
  static const struct aspeed_video_config ast2400_config = {
-@@ -533,6 +570,106 @@ static void aspeed_video_update_jpeg_table(u32 *table, bool yuv420)
+@@ -533,6 +570,120 @@ static void aspeed_video_update_jpeg_table(u32 *table, bool yuv420)
  	}
  }
  
@@ -84,14 +84,26 @@ index a9c2c69b2..4c6117fb1 100644
 +	u16 width = video->pix_fmt.width;
 +	u16 height = video->pix_fmt.height;
 +	u8 *h = video->jpeg_hdr;
++	unsigned long flags;
 +	u32 sof;
 +
 +	if (!video->jpeg_only)
 +		return;
 +
++	/*
++	 * jpeg_hdr[] + the *_len/sel/w/h cache are shared with the hard-IRQ
++	 * reader aspeed_video_wrap_jfif() (under video->lock); this builder
++	 * runs in process context (incl. a mid-stream VIDIOC_S_CTRL), so take
++	 * the same lock — irqsave here pairs with the plain spin_lock() in the
++	 * IRQ handler — to avoid emitting a torn JFIF header.
++	 */
++	spin_lock_irqsave(&video->lock, flags);
++
 +	if (video->jpeg_hdr_len && video->jpeg_hdr_sel == sel &&
-+	    video->jpeg_hdr_w == width && video->jpeg_hdr_h == height)
++	    video->jpeg_hdr_w == width && video->jpeg_hdr_h == height) {
++		spin_unlock_irqrestore(&video->lock, flags);
 +		return;			/* already current */
++	}
 +
 +	memcpy(h, aspeed_video_jpeg_header, sizeof(aspeed_video_jpeg_header));
 +	h += sizeof(aspeed_video_jpeg_header);
@@ -123,6 +135,8 @@ index a9c2c69b2..4c6117fb1 100644
 +	video->jpeg_hdr_sel = sel;
 +	video->jpeg_hdr_w = width;
 +	video->jpeg_hdr_h = height;
++
++	spin_unlock_irqrestore(&video->lock, flags);
 +
 +	v4l2_dbg(1, debug, &video->v4l2_dev,
 +		 "built JFIF header: %ux%u sel=%u len=%u\n",

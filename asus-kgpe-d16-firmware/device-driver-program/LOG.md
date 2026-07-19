@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b) FRONTIER CLOSED: Linux kernel-patches review — 9/10 CLEAN, 1 concurrency bug FIXED (aspeed-video JFIF)
+
+Independent review of all 10 AST2050 Linux enablement patches (the last major unreviewed developed
+code). 9 CLEAN with detailed cross-checks: clk-aspeed G3 gate table (clock_idx/reset_idx pairs
+hand-decoded vs the clock-binding enum — correct; G4 paths is_ast2050-gated), ftgmac100 cur_speed +
+macclk (both correctly scoped), w83795 hwmon (channel bit-widths match), kcs optional-lclk (resolves
+to the populated LCLK gate), i2c AC-timing (FIELD_PREP → 0x777xxxxx verified), aspeed-vhub G3
+(defensive no-op on G4), pinctrl G3 strap-quirk (of_device_is_compatible-gated), irq-aspeed-g3-vic
+(new file, SENSE/EVENT/DUAL bit-for-bit vs Table-36, edge/level ack correct).
+**1 Important bug (conf 80) FIXED** — patch 0006 (aspeed-video G3 software-JFIF-wrap):
+aspeed_video_build_jfif_header() writes the shared jpeg_hdr[]/_len/_sel/_w/_h state from process
+context (reachable mid-stream via VIDIOC_S_CTRL quality/chroma change) WITHOUT taking video->lock,
+while the hard-IRQ reader aspeed_video_wrap_jfif() holds it — a mid-stream S_CTRL could tear the
+header → silently-wrong JPEG frame on the vKVM/capture path. FIXED: wrap the read-check + build +
+state-update in spin_lock_irqsave(&video->lock) (pairs with the IRQ's plain spin_lock). Patch
+hunk-count updated 106→120 + linted (all hunks consistent); kernel/linux is gitignored/regenerated
+so the patch is the canonical artifact.
+**Gate-b code-review frontier now closed across ALL major developed code**: Zephyr drivers+samples,
+SoC low-level, QEMU device models, QEMU machine wiring, AND the Linux patches. **Session review
+tally: 7 real bugs fixed** (power_smoke ×2, vic.c, rtc_smoke, gpio_smoke, aspeed-video lock) + 1
+finding silicon-disproven (soc.c), everything else CLEAN.
+
 ## 2026-07-20 — GATE (b) cont'd: WDT driver + samples review — 2 real bugs FIXED (rtc_smoke tolerance, gpio_smoke fail-loud)
 
 Independent code review of the previously-unreviewed Zephyr WDT driver + 5 samples:
