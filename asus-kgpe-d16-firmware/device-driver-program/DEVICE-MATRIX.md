@@ -80,6 +80,14 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 
 - **1** UB both = Raptor `DRAM Init-DDR`→64 MiB (QEMU `evidence/d15-uboot/`, silicon boot#). LU=Ⓝ (RAM is memblock, no userspace driver). D01.
 - **2** UB-Q = Raptor `libspi_flash` (`Flash: SPI Flash ID` in QEMU). US/LS = 🔷 rig-blocked (socket empty on THIS bench; populated by design). LU (mtd-utils) ⬜ — **no MTD write path exists yet** (audit). D02.
+  **QQ11/ROMA0 disposition (#152, 2026-07-19 from my schematic read):** the pinmap
+  (`QU1_pins.md:88`) shows AA9 `ROMA0`→`QQ11[3]` is the ONLY connected legacy-ROM address
+  pin (all other `ROMA*` are `—`). Schematic §4 states the whole `AST_ROMA0–23` bus is
+  "only series-terminated … spare GPIO" (the BMC boots SPI, not parallel ROM), so this net
+  is **board-N/A for BMC function** and needs no driver/model. `QQ11`'s exact part identity
+  is NOT in the extracted netlist docs (only the one pin-map reference; the `.FZ`
+  part-description wasn't captured) — a netlist re-extract (schematic-wiring/tools/) would
+  name it, but the disposition (unused spare-GPIO series/glue on ROMA0) stands regardless.
 
 ## Host-interface buses
 
@@ -137,6 +145,7 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 | 24 | PSU PMBus (PSUSMB1, I2C1) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 25 | SMBus ALERT (SALT1/2, I2C7) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 26 | Aux front panel (AUX_PANEL1, I2C8) | I2C | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 26b | PCIe-slot 1–5 SMBus + TPM-hdr I²C (I2C8_SW far-ends, host-on) | I2C | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 - **15** i2cdetect + AC-timing fix proven on silicon. UB-Q = Raptor `libi2c`. D08.
   **ZQ = 🔶 (2026-07-19): the Zephyr I2C master driver (`i2c_aspeed_g3.c`, #148) is
@@ -160,7 +169,7 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
   but carries the same U23 caveat (BMC-autonomous SPD inventory not silicon-demonstrated). D08.
 - **19** the rig's A2 UDIMM has SPD byte32=0 (no TS) → 0x19 NAKs on QEMU+silicon; the `jc42` model is kept available for TS-equipped DIMMs. Ⓝ for this rig. D08.
 - **20** FRU EEPROM DONE both sides (2026-07-18): I2C5/i2c-4 enabled, at24 24c08 binds 0x54-0x57 on silicon (present but BLANK 0xff — ASUS unprogrammed) and in QEMU (blank model); `evidence/d08-fru/`. Corrects §10.2 (0x54, not 0x50).
-- **21–22** W83601G U27/U28: **BOTH-SIDES DONE** (datasheet-faithful `hw/gpio/w83601g.c`, `scripts/w83601g-test.py` 19/19 PASS incl. LED-drive; CI `boot-w83601g`; **silicon LED-drive proven on BOTH 0x18 and 0x19 — CR03/CR01 write + readback + restore**, evidence d08-w83601g/03; CR21 silicon-resolved to 0x13). No in-kernel driver by nature (raw userspace SMBus) → LQ/LS/LU all via userspace. **23** SB-TSI (D9): **QEMU DONE** (`hw/sensor/sbtsi.c`, `scripts/sbtsi-test.py` 8/8, CI `boot-sbtsi`); silicon needs host-CPU-on. **24–25** PSU PMBus (I2C1), SMBus-ALERT (I2C7): still to model (task #135). See FULL-TASK-LIST.md D3/D4/D9.
+- **21–22** W83601G U27/U28: **BOTH-SIDES DONE** (datasheet-faithful `hw/gpio/w83601g.c`, `scripts/w83601g-test.py` 19/19 PASS incl. LED-drive; CI `boot-w83601g`; **silicon LED-drive proven on BOTH 0x18 and 0x19 — CR03/CR01 write + readback + restore**, evidence d08-w83601g/03; CR21 silicon-resolved to 0x13). No in-kernel driver by nature (raw userspace SMBus) → LQ/LS/LU all via userspace. **23** SB-TSI (D9): **QEMU DONE** (`hw/sensor/sbtsi.c`, `scripts/sbtsi-test.py` 8/8, CI `boot-sbtsi`); silicon needs host-CPU-on. **24–25** PSU PMBus (I2C1), SMBus-ALERT (I2C7): still to model (task #135). See FULL-TASK-LIST.md D3/D4/D9. **26b** (#151, added 2026-07-19 from my independent schematic read): per `I2C-MUX-FABRIC-ARBITRATION.md §4`, with the host ON (QU9 closed) the `I2C8_SW` segment reached via QU5 `Y0` bridges through 0 Ω `QR160/QR161` → nets `I2C13SDA/SCL` → **TPM1 header pins 13/14** (0 Ω `RN13`) **and PCIe slots 1–5 SMBus** (`PCIE<n>_I2C13` via `ER21…ER57`). These are **BMC-masterable I²C SEGMENTS, not fixed on-board devices** — what answers depends on the plugged PCIe cards / TPM module (an empty slot / absent TPM = no target). QE = 🔶 (the QU5 `Y0` mux path itself is modeled at the fabric level, row 17; there is no fixed far-end device to instantiate — a host-on bus-reach test would exercise it). Distinct from the aux-panel end (row 26) on the same channel.
 - **26** reachable via the fabric Y0 (QEMU); no Linux driver/test. D08.
 
 ## GPIO / platform control (§11)

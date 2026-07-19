@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Independent COMPLETE read of the authoritative schematic (all §1-16) — enumeration confirmed, #151/#152 resolved
+
+Read `schematic-wiring/AST2050-BMC-WIRING.md` end-to-end MYSELF (not via a sub-agent):
+all 597 lines, §1 block diagram → §16 per-pin table, plus the deep dives I2C8_SW
+lives in (`I2C-MUX-FABRIC-ARBITRATION.md §4`) and the pinmap (`QU1_pins.md`). Result:
+the DEVICE-MATRIX/FULL-TASK-LIST enumeration matches the schematic device-for-device;
+the two open enumeration gaps are now RESOLVED in the matrix:
+- **#151 (row 26b added):** §10.2 lists I2C8/QU5-`Y0` as "Aux front panel" (row 26); the
+  arbitration doc §4 shows the SAME segment, host-on, also reaches TPM1 pins 13/14 + PCIe
+  slots 1–5 SMBus (`I2C13` via `QR160/161`+`RN13`/`ER21…57`). These are BMC-masterable
+  *segments*, not fixed devices (target = plugged card / TPM). Row 26b added, QE 🔶.
+- **#152 (QQ11 dispositioned):** §4 says `AST_ROMA0–23` are unused spare-GPIO (SPI boot
+  only); AA9 `ROMA0`→`QQ11[3]` is the one connected ROMA pin → board-N/A. QQ11's part-id
+  isn't in the extracted netlist (needs a re-extract) but the disposition holds.
+
+Read also CONFIRMED, first-hand, the faithfulness dispositions I'd relied on 2nd-hand:
+§11 shows the **PECI pins A9/B9 (GPIOC1/PECIO, GPIOC0/PECII) are repurposed as
+ATXPSON#/CLRTC# GPIO**, the **PWM pins D8/C8 (PWM1/2) as CPU1/2DISABLE#**, and the
+**ADC/TACH `VP*` pins as THERMTRIP#/PROCHOT#/DDR_THERM# GPIO** — so #145 (PECI-not-used),
+#146 (ADC absent/unwired), and row-40 (PWM unused) are all schematic-confirmed. §7
+directly shows the RMII2/NC-SI bus to BOTH 82574L NICs (the D07/NC-SI reality). No new
+device omissions found beyond 26b/QQ11.
+
 ## 2026-07-19 — ⚠️ Git-hygiene incident (honest note): bare `git push` published another branch
 
 A bare `git push` from this worktree, with the repo's `push.default=matching`,
