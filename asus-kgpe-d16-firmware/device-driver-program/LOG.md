@@ -1,5 +1,62 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉🎉🎉 ZEPHYR RUNS ON THE REAL AST2050 — GPIO driver + system timer, full boot (ZS)
+
+**First Zephyr application + per-device driver stack running on silicon.** The
+gpio_smoke image (GPIO driver + system-timer + VIC) JTAG-booted on the live
+AST2050 all the way to `main()`, ran the GPIO configure/set/clear test, and the
+system timer ticks steadily — no storm, no reset. Captured on
+`/dev/serial-bmc-console` @115200:
+
+```
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+GPIO set=1 read=0
+GPIO set=0 read=0
+```
+
+Got here by root-causing **four silicon-only bugs**, each of which QEMU hid
+(silicon was the faithful oracle every time — see [[qemu-must-model-real-hardware]]).
+All found with a direct-UART boot-bisect (the console UART works — proven by a
+JTAG THR poke that printed `ZEPHYR-UART-OK`) + JTAG CP15/VIC dumps:
+
+1. **Cache/TLB uninitialised** (commit `918bc7e`). `__start` data-aborted:
+   CP15 DFSR=0x5 (section translation), FAR=0x80000030, from `_isr_wrapper`
+   reading the `_current_cpu` pointer `*(0x40002578)` back as `0x8000001f` while
+   DRAM held the correct `0x4000c21c` — a **stale D-cache line**. The ARM926
+   caches/TLBs power up undefined and no U-Boot runs to clear them, so
+   `z_arm_mmu_init` enabling the D-cache let reads hit garbage. Fix: invalidate
+   I+D cache (c7,c7,0), TLBs (c8,c7,0), drain write buffer in `soc_reset_hook`
+   (runs with caches still off). QEMU models no cache *contents* → never faulted.
+2. **VIC IRQ storm** (commit `b84ef58`). The first timer IRQ re-entered
+   `z_soc_irq_get_active` endlessly, ISR never ran (VIC dump: irqst=0x00010000,
+   raw=0x00010020 — timer edge stays latched). The Zephyr cortex_a_r isr_wrapper
+   re-enables IRQs *before* dispatch (GIC nested model, where the controller
+   priority-masks the active source); the G3 VIC has no such masking, so the
+   latched edge re-fired instantly. Fix: ACK the edge at claim time in
+   `z_soc_irq_get_active` (like Linux `handle_edge_irq`), EOI is now a no-op.
+3. **Spurious enable-glitch tick** (commit `78f5569`). After the storm fix the
+   ISR ran once (`[I][i]`) but the boot then looped: the tick fired the instant
+   the timer IRQ was unmasked (mid-init, before the counter settled at RELOAD —
+   proven: fired immediately even with RELOAD=~50s), and the ISR-exit reschedule
+   jumped through the null/reset vector. Ground truth: Raptor `init_delay_timer`
+   (platform.S) writes RELOAD, **clears the pending VIC edge**, then enables. Fix:
+   `z_soc_irq_enable` clears the source's edge before unmasking; the timer is
+   enabled before its IRQ is unmasked so the enable glitch is cleared too. QEMU
+   loads RELOAD cleanly on enable → never glitched.
+4. (context) The boot/diag scripts hardcoded `__start`; each rebuild that shifts
+   `.text` moved it — always re-derive the entry from `readelf -h zephyr.elf`.
+
+**Validation:** QEMU gpio_smoke still PASS (`Booting Zephyr / GPIO set=1 read=1 /
+set=0 read=0`); silicon boots clean (banner + GPIO test + steady ticks). All debug
+scaffolding removed; the committed drivers are clean. Row 27/28/29… GPIO ZS + the
+timer/VIC ZS advance from ⬜ to ✅ (GPIO/timer/VIC proven on silicon).
+
+**Faithfulness note (open):** on silicon GPIOI0 (unwired IJKL set) reads back **0**
+after output-high (floating input level); the QEMU machine models that set as
+always-readback-1 (`GPIO set=1 read=1`). Driver set/clear is correct (set=0 read=0
+on both). QEMU's IJKL-all-output-readback model is slightly unfaithful for an
+unwired pin — a follow-up for the QEMU GPIO model / a wired test pin.
+
 ## 2026-07-19 — ⚠️ RETRACTION: the "silicon LAN-blocked (#150)" claim was FALSE — the rig IS reachable
 
 - **I must correct a false claim I committed earlier today.** The entry below headed
