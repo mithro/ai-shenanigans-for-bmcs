@@ -1,3 +1,12 @@
+⚠️ THIS IS A QEMU RUN, NOT SILICON — and the filename ("irq-proven") OVERSTATES it.
+(gate-d audit 2026-07-20 / #159 honesty correction.) This file documents the M1 QEMU
+milestone: the AST2050 Zephyr port BOOTS + runs main() in QEMU with the VIC + timer
+WRITTEN but the tickful timer still WIP. It is NOT the silicon VIC/Timer proof. The
+actual SILICON VIC (row 36) + Timer (row 37) validation — steady tickful scheduling on
+the real AST2050 after the cache/TLB-invalidate + VIC edge-ack-at-claim + timer-reorder
+fixes — is recorded in device-driver-program/LOG.md (2026-07-19, commits
+918bc7e/b84ef58/78f5569), and a captured silicon boot transcript is still TODO (#159d).
+
 D14 Zephyr — the port RUNS AN APPLICATION; VIC+timer written; timer WIP
 (2026-07-18). Supersedes an earlier wrong "upstream hang" reading (see CORRECTION).
 
