@@ -1,0 +1,40 @@
+D14 Zephyr — GPIO (gpio_smoke) driver validated on REAL AST2050 silicon (2026-07-20)
+    — RESOLVES #163 (the "gpio_smoke reads back 0 on silicon" phantom-register quirk)
+
+Device: AST2050 GPIO controller @ 0x1E780000 (SoC-internal, works at 4W deep-S5).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/gpio_smoke  (entry 0x400023f0)
+Path: JTAG reset-halt -> DDR2 TRAINED -> load zephyr.bin @0x40000000 -> reg pc -> resume;
+      console on /dev/serial-bmc-console @115200. Board power at capture: 4W (deep S5).
+md5(zephyr.bin) = 7be982196914489d9dcb2e54b3f1659e (staged + verified before boot).
+
+===== CAPTURED CONSOLE =====
+### [3/3] load + resume (entry 0x400023f0)
+=== resumed ===
+### ===== CONSOLE (20 s window) =====
+[03:16:01] *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+GPIO gpio1(EFGH)/pin26 GPIOH2 read=0
+GPIO RESULT: PASS
+### ===== end =====
+
+RESULT: PASS on real silicon.
+
+WHAT THIS FIXES (#163). The previous gpio_smoke drove GPIOI0 = bit 0 of the "IJKL" set,
+devicetree node gpio2 @ 0x1E780070. That register DOES NOT EXIST on the AST2050 — the
+datasheet GPIO map (section 23.3) has only GPIO00 @0x00 (ports A-D) and GPIO20 @0x20
+(extended, ports E-H); it ends at the EFGH control block (~0x58). QEMU idealized the phantom
+0x70 register (readback=1) while silicon has nothing there (readback=0) -> the #163 symptom.
+Fix (commit c305a1b): removed the phantom gpio2..gpio6 nodes from ast2050.dtsi and repointed
+gpio_smoke at gpio1 (EFGH @0x20, a REAL register), reading GPIOH2 (bit 26 = port H bit 2 =
+STA_LINE_POWER, a bonded input) read-only.
+
+CROSS-CHECK — the read value is not just "defined", it is CORRECT:
+  QEMU (this build):        GPIOH2 read=0  -> PASS
+  Silicon @ 4W (this file): GPIOH2 read=0  -> PASS
+STA_LINE_POWER = 0 at deep S5 (~4W, standby/I2C rail off), which is exactly the board state
+at capture. (At ~46W+ with the rail up it reads 1 — see #162 / power_smoke.) So QEMU and
+silicon now AGREE on a real register, where before they disagreed on a phantom one.
+
+SCOPE: this validates the driver's device-ready + configure + real-register READ path on
+silicon. The OUTPUT/drive path is validated separately by power_smoke, which drives the real
+board power-sequencer outputs (GPIOA4/B1/B6/F0). A dedicated safe-to-drive output for a full
+write-readback (a bonded NC pin or a BMC-driven LED) needs the section-11 GPIO map (#136).

@@ -1,5 +1,17 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #163 CLOSED ON SILICON: gpio_smoke (real EFGH register) PASSes on the real AST2050
+
+Booted the fixed gpio_smoke (entry 0x400023f0, md5 7be98219…verified) on the real AST2050 at 4W
+over JTAG. Captured: `GPIO gpio1(EFGH)/pin26 GPIOH2 read=0` -> `GPIO RESULT: PASS`. The driver now
+reads a REAL register (gpio1/EFGH @0x20) and returns a DEFINED, CORRECT value on silicon — vs the
+old phantom gpio2/IJKL @0x70 that read back 0 (nonexistent register). QEMU and silicon now AGREE:
+both read GPIOH2=0, which is the correct STA_LINE_POWER value at deep-S5/4W (rail off; reads 1 at
+~46W+, per #162). #163 is resolved (phantom removed + both-sides real-register PASS). Evidence:
+openbmc/bmc-functionality/evidence/d14-zephyr/15-gpio-silicon-pass.txt. (Full output write-readback
+on a bonded safe-to-drive pin remains deferred to the #136 GPIO map; the drive path is covered by
+power_smoke driving the real A4/B1/B6/F0 power-control outputs.)
+
 ## 2026-07-20 — GATE (b) DTS/Kconfig review: PHANTOM GPIO register blocks removed (real faithfulness bug, resolves #163) + 1 false-positive rejected
 
 Dispatched the last-unreviewed developed config (Zephyr + Linux DTS + Kconfig). 5 CONFIRMED +
