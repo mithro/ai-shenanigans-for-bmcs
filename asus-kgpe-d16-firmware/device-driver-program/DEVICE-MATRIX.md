@@ -53,7 +53,7 @@ tally over the rows, 2026-07-19):
 | Linux @ silicon | 18 | 4 | 2 | 12 | 6 |
 | Linux userspace | 12 | 6 | 0 | 12 | 12 |
 | Zephyr @ QEMU | 0 | 11 | 0 | 24 | 7 |
-| Zephyr @ silicon | 2 | 0 | 0 | 33 | 7 |
+| Zephyr @ silicon | 3 | 0 | 0 | 32 | 7 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
@@ -227,7 +227,7 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ✅ |
-| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | 🔶 | ⬜ |
+| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | 🔶 | ✅ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |

@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Zephyr WDT driver RESETS the real AST2050 (ZS #4) — row 38 ZS ✅
+
+On the now-working silicon base (shared cache+VIC fixes), the wdt_smoke image
+JTAG-booted and drove the AST2050 watchdog: console captured
+`WDT smoke: boot` → `WDT armed for 500 ms, feeding 3x` → `WDT alive 1/2/3` →
+`WDT armed, not feeding, expect reset` → **silence**. JTAG-halt then proved it was
+a real reset, not an idle: **MMU disabled, D/I-cache disabled**, cpsr=SVC,
+pc=0x01b92588 (non-Zephyr — the SoC reset and is running the unconnected boot
+flash). A still-running idle Zephyr would show MMU *on* and pc in the idle loop at
+0x40000000+. So the WDT driver's setup/feed/timeout all work on silicon and the
+timeout fires a true SoC reset. Row 38 WDT ZS ⬜→✅; Zephyr@silicon 2→3. (No
+`-no-reboot` equivalent on silicon — with no flash boot the SoC just halts in
+flash garbage after the reset; re-JTAG-boot to recover.)
+
 ## 2026-07-19 — 🎉🎉🎉 ZEPHYR RUNS ON THE REAL AST2050 — GPIO driver + system timer, full boot (ZS)
 
 **First Zephyr application + per-device driver stack running on silicon.** The
