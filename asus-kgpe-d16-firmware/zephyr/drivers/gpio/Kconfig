@@ -16,4 +16,23 @@ config GPIO_ASPEED_G3
 	  node / Zephyr GPIO port whose reg points at that set's data-value
 	  register (direction register at reg + 0x04).
 
+config GPIO_W83601G
+	bool "Winbond W83601G I2C GPIO expander driver"
+	default y
+	depends on DT_HAS_WINBOND_W83601G_GPIO_ENABLED
+	depends on I2C
+	help
+	  Enable the GPIO-controller driver for the Winbond W83601G I2C GPIO
+	  expander (KGPE-D16 DIMM-LED expanders U27/U28 on the BMC's I2C5 engine).
+	  Exposes each expander as a 16-pin Zephyr GPIO port (Port 1 = 0..7, Port 2
+	  = 8..15) driven over the Zephyr I2C API.
+
+config GPIO_W83601G_INIT_PRIORITY
+	int "W83601G GPIO expander init priority"
+	default 75
+	depends on GPIO_W83601G
+	help
+	  Device init priority. Must be greater than CONFIG_I2C_INIT_PRIORITY so the
+	  parent I2C controller is initialised first.
+
 endif # GPIO

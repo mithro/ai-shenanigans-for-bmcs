@@ -219,6 +219,29 @@
 				timeout = <5>;
 				status = "okay";
 			};
+
+			/*
+			 * W83601G DIMM-LED I2C GPIO expanders U27 (@0x18, DIMM A-F)
+			 * and U28 (@0x19, DIMM G/H). 16-pin gpio-controllers; driver
+			 * drivers/gpio/gpio_w83601g.c.
+			 */
+			w83601g_u27: gpio@18 {
+				compatible = "winbond,w83601g-gpio";
+				reg = <0x18>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <16>;
+				status = "okay";
+			};
+
+			w83601g_u28: gpio@19 {
+				compatible = "winbond,w83601g-gpio";
+				reg = <0x19>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <16>;
+				status = "okay";
+			};
 		};
 
 		/*

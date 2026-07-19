@@ -2,73 +2,62 @@
  * AST2050 (G3) W83601G DIMM-LED expander smoke test.
  * SPDX-License-Identifier: Apache-2.0
  *
- * Drives the Winbond W83601G I2C GPIO expander (U27 @0x18) the way the BMC
- * firmware lights the DIMM error LEDs, over the AST2050 I2C master
- * (drivers/i2c/i2c_aspeed_g3.c) on engine 4 = schematic I2C5 = DT i2c4 (the same
- * engine the FRU EEPROM sits on). The W83601G is a CR-indexed expander (register
- * map from hw/gpio/w83601g.c): CR20 = chip-ID high (0x60), CR03 = Port-1 I/O
- * config (reset 0xFF all-input; clear a bit → that pin is an output), CR01 =
- * Port-1 output data, CR00 = Port-1 input.
+ * Exercises the PROPER Zephyr GPIO driver drivers/gpio/gpio_w83601g.c on the U27
+ * expander (@0x18 on the BMC's I2C5 engine = DT i2c4), through the standard
+ * gpio_* API (not raw I2C):
  *
- * The LED-drive sequence validated here is exactly the silicon one
- * (scripts/w83601g-test.py): verify the chip-ID, make Port-1 outputs (CR03 = 0),
- * write a pattern to CR01, read it back, then restore reset defaults. A PASS
- * proves the expander is reachable + drivable from Zephyr over the I2C driver.
+ *  - INPUT path: gpio_port_get_raw() reads the two input registers (CR00/CR08).
+ *    The kgpe-d16-bmc machine seeds U27's Port-1 input latch to 0x0f and Port-2
+ *    to 0x00 (hw/arm/aspeed.c), so the 16-pin port reads back 0x000f.
+ *  - OUTPUT path: gpio_pin_configure(pin, OUTPUT_HIGH) makes a pin an output and
+ *    drives it high (the driver clears the CR03 direction bit + writes CR01).
+ *    We cross-check the driver's write landed by reading CR01 back over raw I2C
+ *    (the QEMU model keeps CR00 a static input latch, so an output value is not
+ *    reflected there — hence the CR01 cross-check for the output assertion).
+ *
+ * A PASS proves the gpio_w83601g driver binds and both directions work over the
+ * AST2050 I2C master (i2c_aspeed_g3.c) on engine 4.
  */
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#define I2C_NODE   DT_NODELABEL(i2c4)
-#define W83601G_ADDR 0x18U
+#define W601_NODE DT_NODELABEL(w83601g_u27)
+#define I2C_NODE  DT_NODELABEL(i2c4)
+#define W601_ADDR 0x18U
+#define CR_P1_OUT 0x01U
+#define TEST_PIN  3
 
-/* W83601G CR indices (hw/gpio/w83601g.c). */
-#define CR_P1_IN    0x00U
-#define CR_P1_OUT   0x01U
-#define CR_P1_IOCFG 0x03U
-#define CR_ID_HIGH  0x20U
-
-#define W83601G_ID_HIGH 0x60U
-#define LED_PATTERN     0x55U
-
-BUILD_ASSERT(DT_NODE_HAS_STATUS(I2C_NODE, okay), "i2c4 must be enabled");
+BUILD_ASSERT(DT_NODE_HAS_STATUS(W601_NODE, okay),
+	     "w83601g_u27 (winbond,w83601g-gpio) must be enabled");
 
 int main(void)
 {
+	const struct device *gpio = DEVICE_DT_GET(W601_NODE);
 	const struct device *i2c = DEVICE_DT_GET(I2C_NODE);
-	uint8_t id, iocfg_save, out;
-	int ret;
+	gpio_port_value_t inval = 0;
+	uint8_t cr01 = 0;
+	int ret_in, ret_cfg;
 
-	if (!device_is_ready(i2c)) {
-		printk("W83601G smoke: i2c not ready\n");
+	if (!device_is_ready(gpio)) {
+		printk("W83601G smoke: gpio device not ready\n");
 		return 0;
 	}
 
-	/* 1. Identify: CR20 must read the chip-ID high 0x60. */
-	ret = i2c_reg_read_byte(i2c, W83601G_ADDR, CR_ID_HIGH, &id);
-	if (ret != 0) {
-		printk("W83601G smoke: CR20 read failed (%d)\n", ret);
-		return 0;
-	}
+	/* INPUT: read all 16 pins via the driver -> U27 seeds 0x000f. */
+	ret_in = gpio_port_get_raw(gpio, &inval);
 
-	/* 2. Save CR03, make all Port-1 pins outputs (CR03 = 0x00). */
-	ret = i2c_reg_read_byte(i2c, W83601G_ADDR, CR_P1_IOCFG, &iocfg_save);
-	ret |= i2c_reg_write_byte(i2c, W83601G_ADDR, CR_P1_IOCFG, 0x00U);
+	/* OUTPUT: drive Port-1 pin 3 high via the driver, then cross-check CR01. */
+	ret_cfg = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_HIGH);
+	(void)i2c_reg_read_byte(i2c, W601_ADDR, CR_P1_OUT, &cr01);
 
-	/* 3. Drive a pattern to CR01 and read it back. */
-	ret |= i2c_reg_write_byte(i2c, W83601G_ADDR, CR_P1_OUT, LED_PATTERN);
-	ret |= i2c_reg_read_byte(i2c, W83601G_ADDR, CR_P1_OUT, &out);
+	printk("W83601G gpio: port_get=0x%04x (want 0x000f)  set pin%d high -> CR01=0x%02x\n",
+	       (unsigned int)inval, TEST_PIN, cr01);
 
-	/* 4. Restore reset defaults (CR03 back to all-input, CR01 = 0). */
-	(void)i2c_reg_write_byte(i2c, W83601G_ADDR, CR_P1_OUT, 0x00U);
-	(void)i2c_reg_write_byte(i2c, W83601G_ADDR, CR_P1_IOCFG, iocfg_save);
-
-	printk("W83601G id(CR20)=0x%02x  LED CR01 set=0x%02x get=0x%02x\n",
-	       id, LED_PATTERN, out);
-
-	if (ret == 0 && id == W83601G_ID_HIGH && out == LED_PATTERN) {
+	if (ret_in == 0 && inval == 0x000f && ret_cfg == 0 && (cr01 & BIT(TEST_PIN))) {
 		printk("W83601G RESULT: PASS\n");
 	} else {
 		printk("W83601G RESULT: FAIL\n");
