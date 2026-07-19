@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #167 FIXED: modern U-Boot I2C reads real devices on the G3 QEMU (SCU04[2] reset-release)
+
+Confirmed + fixed the device-NAK. The strong lead was right: the G3 I2C block powers up HELD IN
+RESET (SCU04[2]=1), the AST2500-targeted ast_i2c.c stubbed the reset-release, and the kgpe-d16-bmc
+QEMU machine faithfully models the held-reset (aspeed_2050_i2c_rst) — so the engines were inert. FIX
+(uboot-patches/0003-kgpe-d16-i2c-scu-reset-release.patch): in ast_i2c_probe(), unlock the SCU (write
+0x1688A8A8 to SCU00) then clear SCU04[2] — exactly what the vendor AST2050 U-Boot i2c_init() and the
+working Zephyr i2c_aspeed_g3 driver do. Rebuilt + retested:
+  i2c md 0x2f fe -> 00fe: 79      (W83795 CHIP_ID = 0x79, correct)
+  i2c probe bus1 -> 00 2F         (W83795 detected at 0x2f)
+  i2c md 0x54    -> ff ff ff ff   (FRU EEPROM blank, matches Zephyr fru_smoke + silicon i2c-scan)
+So the modern U-Boot now reads real per-device i2c devices on the G3 QEMU: W83795 hwmon (row 16 UQ)
++ HT24LC08 FRU (row 20 UQ), both agreeing with the Zephyr drivers on the same model. This is a clean
+example of the project rule (hardware isn't weird — my driver wasn't releasing the block from reset).
+Evidence d15-uboot/02. #167 resolved. NEXT: the SCU04[2] release is also needed on real silicon; the
+modern-U-Boot silicon boot (#137) will exercise it.
+
 ## 2026-07-20 — U-Boot #137 progress: modern U-Boot I2C buses now BIND on the G3 QEMU; devices NAK (G3-driver sub-problem, characterized)
 
 Continued the U-Boot track with real implementation. Found the i2c -ENODEV cause: CONFIG_DM_I2C +

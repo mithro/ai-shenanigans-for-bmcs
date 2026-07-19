@@ -1,0 +1,47 @@
+D15 modern U-Boot — I2C per-device drivers WORK in QEMU after the G3 SCU reset-release fix
+    (#167 RESOLVED), 2026-07-20.
+
+The modern U-Boot (OpenBMC v2019.04, evb-ast2400) had its i2c buses bind (uboot-patches/0002)
+but every device read NAKed -121. Root cause (#167): drivers/i2c/ast_i2c.c is AST2500-targeted and
+its ast_i2c_probe() STUBBED the SCU reset-release (`//TODO scu reset and get clk`). On the AST2050
+(G3) the whole 7-engine I2C block powers up HELD IN RESET (SCU04[2]=1) — the custom kgpe-d16-bmc
+QEMU machine faithfully models this (aspeed_2050_i2c_rst), which is why the engines were inert.
+
+FIX: uboot-patches/0003-kgpe-d16-i2c-scu-reset-release.patch — in ast_i2c_probe(), before touching
+the bus: unlock the SCU (write 0x1688A8A8 to SCU00) then clear SCU04[2] (I2C reset). This is exactly
+what the vendor AST2050 U-Boot i2c_init() and the (working) Zephyr i2c_aspeed_g3 driver do. SCU base
+0x1E6E2000, SYS_RST_CTRL @0x04.
+
+===== BEFORE (uboot-patches/0002 only) =====
+ast# i2c md 0x2f fe 1
+Error reading the chip: -121
+ast# i2c md 0x54 0 4
+Error reading the chip: -121
+
+===== AFTER (uboot-patches/0002 + 0003) — captured console =====
+ast# i2c dev 1
+Setting bus to 1
+ast# i2c md 0x2f fe 1
+00fe: 79    y                       <- W83795G CHIP_ID reg 0xfe = 0x79 (correct real/modelled id)
+ast# i2c probe
+Valid chip addresses: 00 2F         <- W83795 detected on bus 1 at 0x2f
+ast# i2c dev 4
+Setting bus to 4
+ast# i2c md 0x54 0 4
+0000: ff ff ff ff                   <- HT24LC08 FRU EEPROM reads blank (matches Zephyr fru_smoke +
+0004: ff ff ff ff                      the silicon i2c-scan: FRU is at 0x54-0x57, blank/unprogrammed)
+
+RESULT: the modern U-Boot's DM_I2C aspeed driver now reads real devices on the G3 QEMU machine:
+  * W83795G hardware monitor (row 16) — chip-id 0x79, probe lists 0x2f. UQ validated.
+  * HT24LC08 FRU EEPROM (row 20) — reads blank at 0x54. UQ validated.
+Both agree with the Zephyr drivers on the same QEMU model, confirming the model is faithful and the
+U-Boot driver is now correct for the G3. Build: build-uboot.sh applies uboot-patches/0002+0003.
+
+Reproduce:
+  sh asus-kgpe-d16-firmware/qemu-firmware/uboot/build-uboot.sh
+  uv run tmp/uboot-boot/mkflash.py   # 16 MB flash with u-boot.bin at offset 0
+  uv run tmp/uboot-boot/uboot_probe.py
+
+NEXT: this SCU04[2] release is ALSO required on real silicon (the block is held in reset there too);
+the modern-U-Boot silicon boot (#137) will exercise it. Also: the same reads should now work for
+SB-TSI (bus3) once the host is powered (SB-TSI needs the CPU POSTed, per the Zephyr sbtsi_smoke note).
