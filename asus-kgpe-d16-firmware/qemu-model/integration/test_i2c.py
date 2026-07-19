@@ -53,3 +53,13 @@ def test_eeprom_probe_acks(i2c):
     mask = i2c.kvs.get("ack50.mask")
     assert mask is not None and (mask & 1), f"no EEPROM ACK observed:\n{i2c.raw}"
     assert mask == 1, f"unexpected extra ACK (only bus 0 has 0x50):\n{i2c.raw}"
+
+
+def test_psu_pmbus_probe(i2c):
+    # The kgpe-d16-bmc machine wires a generic pmbus-psu (hw/sensor/pmbus_psu.c)
+    # at 0x58 on bus 0 = DT i2c0 = schematic I2C1 (connector PSUSMB1). A bare
+    # addr+W probe must ACK on bus 0 (the PSU is present + addressable) and NAK
+    # on buses 1-6, so ack58.mask is exactly 0x01 — the schematic-faithful engine.
+    mask = i2c.kvs.get("ack58.mask")
+    assert mask is not None and (mask & 1), f"PSU 0x58 did not ACK on bus 0:\n{i2c.raw}"
+    assert mask == 1, f"PSU 0x58 ACKed on an unexpected bus (want only bus 0):\n{i2c.raw}"

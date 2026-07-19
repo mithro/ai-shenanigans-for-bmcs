@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Closed a QEMU ⬜: PSU PMBus model committed + fwtest-validated (row 24 QE ✅)
+
+Real forward progress on an emulation gap (not just review/doc). The generic PMBus
+PSU model (`hw/sensor/pmbus_psu.c`) had been written + wired in a prior session but
+NEVER committed — leaving row 24 QE ⬜. Finished + closed it:
+- **Reviewed** the model (complete, faithful: PMBus-1.2 base class, page flags for
+  VIN/VOUT/IIN/IOUT/PIN/POUT/TEMP/FAN/MFR, seeded 230V-in/12V-8A-out/30C/4000RPM,
+  0x98=0x22 / 0x19=0x30; cites schematic §10.2 / PSUSMB1 / I2C1 balls A15/B15).
+- **Rebuilt QEMU** (incremental) → `CONFIG_PMBUS_PSU=y`, binary registers
+  `pmbus-psu` ("Generic PMBus power supply (KGPE-D16 PSUSMB1)").
+- **Committed** in the submodule (mithro/qemu `claude/bmc-functionality` 8320c07f3f)
+  + pushed (BEFORE the parent gitlink bump, per the CI-fetch gotcha).
+- **Validated fresh** with the bare-metal fwtest: extended `peripherals/i2c/fwtest.c`
+  to probe 0x58 on all 7 engines + added `test_psu_pmbus_probe` — the PSU ACKs a
+  bare addr+W probe on **bus 0 only** (= DT i2c0 = schematic I2C1), NAKs on 1-6
+  (`ack58.mask == 0x01`). `python -m pytest integration/test_i2c.py` → **4 passed**.
+  (Plus the prior-session register read `i2cget -y 0 0x58 0x98 → 0x22`.)
+Row 24 QE ⬜→✅; the QEMU ⬜ frontier drops 5→4 (DDC/EDID, LPC-mailbox, SOL-mux,
+SMBus-ALERT remain). Linux/Zephyr PSU-hwmon (pmbus driver bind) stays ⬜ (future).
+
 ## 2026-07-19 — Independent COMPLETE read of the authoritative schematic (all §1-16) — enumeration confirmed, #151/#152 resolved
 
 Read `schematic-wiring/AST2050-BMC-WIRING.md` end-to-end MYSELF (not via a sub-agent):

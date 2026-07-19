@@ -129,4 +129,20 @@ void fwtest_run(void)
     }
     fwt_kv("ack50.mask", mask);
     fwt_check("eeprom50.acks", mask & 1u, 1u);   /* bus 0 EEPROM ACKs a probe */
+
+    /* --- Scan all 7 engine blocks for the PSU PMBus device at 0x58. The
+     *     kgpe-d16-bmc machine wires a generic `pmbus-psu` on bus 0 (= DT i2c0 =
+     *     schematic I2C1, connector PSUSMB1; hw/sensor/pmbus_psu.c). So bus 0
+     *     ACKs a bare addr+W probe at 0x58 (the PSU latches TX_ACK), and buses
+     *     1-6 have no device there → NAK. This proves the PSU model is
+     *     instantiated and addressable on the schematic-correct engine. --- */
+    u32 psu_mask = 0;
+    for (e = 0; e < 7u; e++) {
+        if (i2c_addr_acks(BUS(e), 0x58)) {
+            psu_mask |= (1u << e);
+        }
+    }
+    fwt_kv("ack58.mask", psu_mask);
+    fwt_check("psu58.acks", psu_mask & 1u, 1u);  /* bus 0 PSU ACKs a probe    */
+    fwt_check("psu58.busonly", psu_mask, 1u);    /* ONLY bus 0 (no stray dev) */
 }
