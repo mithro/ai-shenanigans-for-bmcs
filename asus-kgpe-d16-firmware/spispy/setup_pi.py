@@ -34,6 +34,9 @@ OSSCAD_URL = (
     f"2026-07-18/oss-cad-suite-linux-arm64-{OSSCAD_DATE}.tgz"
 )
 SPISPY_REPO = "https://github.com/mithro/spispy.git"
+# The modern-toolchain (`default_nettype none) uart.v fix lives on this branch;
+# master would fail to synthesise under yosys 0.67. Both hosts build from it.
+SPISPY_BRANCH = "claude/oss-cad-suite-build"
 HOME = Path.home()
 CLONE_DIR = HOME / "github" / "mithro" / "spispy"
 OSSCAD_DIR = HOME / "oss-cad-suite"
@@ -67,9 +70,10 @@ def clone_spispy():
     if (CLONE_DIR / ".git").exists():
         print(f"{CLONE_DIR} already cloned; fetching latest.")
         run(["git", "-C", str(CLONE_DIR), "fetch", "--all", "--prune"])
-        return
-    CLONE_DIR.parent.mkdir(parents=True, exist_ok=True)
-    run(["git", "clone", SPISPY_REPO, str(CLONE_DIR)])
+    else:
+        CLONE_DIR.parent.mkdir(parents=True, exist_ok=True)
+        run(["git", "clone", SPISPY_REPO, str(CLONE_DIR)])
+    run(["git", "-C", str(CLONE_DIR), "checkout", SPISPY_BRANCH])
 
 
 def install_udev():

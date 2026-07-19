@@ -32,10 +32,12 @@ the canonical path on **both** hosts:
 
 ```sh
 git clone https://github.com/mithro/spispy.git ~/github/mithro/spispy
+cd ~/github/mithro/spispy && git checkout claude/oss-cad-suite-build
 ```
 
 Modifications are developed in dedicated branches/worktrees off that fork. The
-modern-toolchain build fix lives on branch `claude/oss-cad-suite-build`:
+build below needs the **`claude/oss-cad-suite-build`** branch (checked out
+above); `master` won't synthesise under modern yosys. The fix on that branch:
 
 - **`uart: declare tx signals at module scope for \`default_nettype none`** —
   `spispy.v` sets `` `default_nettype none `` and `` `include ``s `uart.v`, whose
