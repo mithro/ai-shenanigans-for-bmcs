@@ -53,6 +53,27 @@
  * first), exactly like the vendor U-Boot i2c_init() does
  * (raptor-uboot/drivers/i2c/aspeed_i2c.c lines 22-24).
  *
+ * IMPORTANT G3 gotcha 4 - I2C channels 5/6/7 need their SCU74 pin-mux bit set.
+ * On the AST2050, only I2C/SMBUS 1-4 have DEDICATED I2C pads; SDA5/SCL5, SDA6/
+ * SCL6 and SDA7/SCL7 are MULTIPLEXED pins (datasheet pin list shows them with a
+ * "/" suffix). The multi-function pin table selects the I2C function only when
+ * the matching SCU74 bit is 1:
+ *   A13 SDA5 / B13 SCL5  <- SCU74[12]=1   (I2C/SMBUS 5)
+ *   C12 SDA6 / D12 SCL6  <- SCU74[13]=1   (I2C/SMBUS 6)
+ *   A12 SDA7 / B12 SCL7  <- SCU74[14]=1   (I2C/SMBUS 7)
+ * (AST2050/AST1100 A3 datasheet V1.05, multi-function pin control table: e.g.
+ * "A13 GPIOC6 MII2DIO SCU74[20]=1  SDA5 SCU74[12]=1  GPIOC6  Others".) Without
+ * this, a byte clocked out on one of these engines never reaches the pads and the
+ * master times out with no ACK - which is exactly what happened on real silicon
+ * to the I2C5 FRU EEPROM (0x54) and W83601G expanders (0x18/0x19) while the
+ * W83795 on I2C2 (dedicated pads) worked. The vendor U-Boot i2c_init() does the
+ * same thing for the AST2050: SCU74 |= 0x5000 (bits 12+14 = channels 5+7)
+ * (raptor-uboot/drivers/i2c/aspeed_i2c.c lines 26-28). We set only the bit for
+ * the engine actually being initialised, derived from its register base. Channels
+ * 1-4 (dedicated pads) need no pin-mux. (Note MII2DIO/MII2DC on A13/B13 are a
+ * HIGHER-priority Function 1 gated by SCU74[20]; it resets to 0 on this board so
+ * SCU74[12] selects SDA5 - the same assumption the vendor blanket-OR relies on.)
+ *
  * IMPORTANT G3 gotcha 3 - the AC-timing register 1 (I2CD04) MUST be programmed.
  * On the AST2050/AST1100 (G3) I2CD04 resets to X (undefined; datasheet §31.4.3
  * "Init = X"), so the bus-free/START/STOP timing (tBUF/tHDSTA/tACST) runs on
@@ -145,8 +166,21 @@
 #define SCU_G3_BASE          0x1E6E2000U
 #define SCU_G3_PROT_KEY      0x00U
 #define SCU_G3_SYS_RST_CTRL  0x04U
+#define SCU_G3_MFP_CTL1      0x74U /* Multi-function Pin Control #1 (I2C5/6/7) */
 #define SCU_G3_UNLOCK_MAGIC  0x1688A8A8U /* aspeed_scu.h ASPEED_SCU_PROT_KEY */
 #define SCU_G3_RST_I2C       BIT(2)
+
+/*
+ * The I2C controller register file starts here; each engine's per-bus block is
+ * at I2C_CTRL_BASE + 0x40 * channel, where channel = the datasheet I2C/SMBUS
+ * number (1..N). We recover it from the node's reg base to pick the SCU74
+ * pin-mux bit (file header, gotcha 4).
+ */
+#define I2C_CTRL_BASE        0x1E78A000U
+#define I2C_ENGINE_STRIDE    0x40U
+#define I2C_MUXED_CHAN_FIRST 5U  /* channels 5..7 have muxed pins (SCU74[12..14]) */
+#define I2C_MUXED_CHAN_LAST  7U
+#define SCU74_SDA5_BIT       12U /* SCU74[12] -> chan5, [13] -> chan6, [14] -> chan7 */
 
 /*
  * Polling bound. In QEMU the status is set synchronously by the CMD store, so
@@ -185,9 +219,33 @@ static void i2c_aspeed_g3_scu_release(void)
 	sys_write32(rst & ~SCU_G3_RST_I2C, SCU_G3_BASE + SCU_G3_SYS_RST_CTRL);
 }
 
+/*
+ * Route the multiplexed I2C pins to their I2C function for channels 5/6/7
+ * (file header, gotcha 4). Idempotent OR of the matching SCU74 bit; channels
+ * 1-4 have dedicated pads and need nothing. `base` is the engine's per-bus
+ * register block, from which we recover the datasheet channel number.
+ */
+static void i2c_aspeed_g3_pinmux(mem_addr_t base)
+{
+	uint32_t channel = (uint32_t)((base - I2C_CTRL_BASE) / I2C_ENGINE_STRIDE);
+	uint32_t bit, mfp;
+
+	if (channel < I2C_MUXED_CHAN_FIRST || channel > I2C_MUXED_CHAN_LAST) {
+		return; /* dedicated I2C pads - no pin-mux required */
+	}
+
+	bit = BIT(SCU74_SDA5_BIT + (channel - I2C_MUXED_CHAN_FIRST));
+
+	/* SCU protected register: unlock first (idempotent), then set the bit. */
+	sys_write32(SCU_G3_UNLOCK_MAGIC, SCU_G3_BASE + SCU_G3_PROT_KEY);
+	mfp = sys_read32(SCU_G3_BASE + SCU_G3_MFP_CTL1);
+	sys_write32(mfp | bit, SCU_G3_BASE + SCU_G3_MFP_CTL1);
+}
+
 static void i2c_aspeed_g3_hw_init(mem_addr_t base)
 {
 	i2c_aspeed_g3_scu_release();
+	i2c_aspeed_g3_pinmux(base);
 
 	/* Mirror the vendor U-Boot i2c_init() ordering. */
 	sys_write32(0, base + I2CD_FUN_CTRL);                     /* controller off */
