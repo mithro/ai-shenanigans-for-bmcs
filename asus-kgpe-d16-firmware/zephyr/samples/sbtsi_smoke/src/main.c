@@ -14,25 +14,26 @@
  * machine wires it there (hw/arm/aspeed.c kgpe_d16_bmc_i2c_init lines 619-638).
  *
  * DETERMINISTIC EXPECTATION (from QEMU hw/arm/aspeed.c + hw/sensor/sbtsi.c):
- *   temp = 45.500 C -- hw/arm/aspeed.c line 628 seeds P0 (0x4C) to 45500 mC and
- *                      sets it via the "temperature" property (line 635), which
- *                      drives sbtsi_update_temp() (sbtsi.c lines 60-72):
- *                        TEMP_INT = 45500/1000        = 45
- *                        TEMP_DEC = ((45500%1000)/125) << 5 = 4 << 5 = 0x80
- *                      The driver rebuilds 45*1000000 + (0x80>>5)*125000 =
- *                      45500000 micro-degrees -> val1 = 45, val2 = 500000.
- * The seed is constant in the model, so the printed value is fully predictable.
- * PASS requires temp == {val1 = 45, val2 = 500000} (45.500 C).
+ * PASS is PLATFORM-AGNOSTIC (a real both-sides test): the read must SUCCEED and
+ * the CPU die temperature must be physically PLAUSIBLE — not an exact match to the
+ * QEMU seed, because on real silicon the AMD SB-TSI returns the live CPU
+ * temperature. In QEMU the model seeds a constant 45.500 C (hw/arm/aspeed.c seeds
+ * P0 @0x4C to 45500 mC → TEMP_INT=45, TEMP_DEC=0x80 → val1=45 val2=500000). On the
+ * real AST2050 the host CPU must be POWERED (SB-TSI is a CPU-integrated sensor on
+ * I2C engine 3); with it on, the driver reads the live die temp (drifting).
  */
 
+#include <stdbool.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#define SBTSI_NODE        DT_NODELABEL(sbtsi)
-#define SBTSI_EXPECT_VAL1 45     /* whole degrees C           */
-#define SBTSI_EXPECT_VAL2 500000 /* micro-degrees (0.500 C)   */
+#define SBTSI_NODE     DT_NODELABEL(sbtsi)
+
+/* Plausible AMD CPU die-temp bounds spanning the QEMU seed and live silicon. */
+#define SBTSI_TEMP_MIN 0
+#define SBTSI_TEMP_MAX 125
 
 BUILD_ASSERT(DT_NODE_HAS_STATUS(SBTSI_NODE, okay),
 	     "sbtsi (amd,sbtsi on i2c3) must be enabled");
@@ -61,10 +62,10 @@ int main(void)
 		return 0;
 	}
 
-	pass = (temp.val1 == SBTSI_EXPECT_VAL1) && (temp.val2 == SBTSI_EXPECT_VAL2);
-	printk("SBTSI temp=%d.%03d C (expect %d) %s\n",
-	       temp.val1, temp.val2 / 1000, SBTSI_EXPECT_VAL1,
-	       pass ? "PASS" : "FAIL");
+	pass = (temp.val1 >= SBTSI_TEMP_MIN && temp.val1 <= SBTSI_TEMP_MAX);
+	printk("SBTSI temp=%d.%03d C (ok=%d)\n",
+	       temp.val1, temp.val2 / 1000, pass);
+	printk("SBTSI RESULT: %s\n", pass ? "PASS" : "FAIL");
 
 	return 0;
 }
