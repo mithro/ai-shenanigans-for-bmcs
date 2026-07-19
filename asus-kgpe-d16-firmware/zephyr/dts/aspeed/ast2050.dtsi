@@ -191,6 +191,37 @@
 		};
 
 		/*
+		 * Third G3 I2C engine node: engine 4 (block 0x1E78A000 + 0x40*(4+1)
+		 * = 0x1E78A140). On the kgpe-d16-bmc QEMU machine this bus carries the
+		 * board FRU EEPROM (U25, Holtek HT24LC08) at 0x54-0x57 (hw/arm/aspeed.c
+		 * kgpe_d16_bmc_i2c_init: aspeed_i2c_get_bus(&soc->i2c, 4); QEMU bus 4 =
+		 * DT i2c4 = schematic "I2C5"). Shipped BLANK (0xff).
+		 */
+		i2c4: i2c@1e78a140 { /* engine 4 (QEMU i2c bus 4) */
+			compatible = "aspeed,ast2050-i2c";
+			reg = <0x1e78a140 0x40>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-frequency = <100000>;
+			status = "okay";
+
+			/*
+			 * Board FRU EEPROM (U25, HT24LC08). @0x54 = the upper-strapped
+			 * device (E2=VCC). Validated via the in-tree Zephyr at2x EEPROM
+			 * driver; blank (0xff) as ASUS shipped it.
+			 */
+			fru_eeprom: eeprom@54 {
+				compatible = "atmel,at24";
+				reg = <0x54>;
+				size = <256>;
+				pagesize = <16>;
+				address-width = <8>;
+				timeout = <5>;
+				status = "okay";
+			};
+		};
+
+		/*
 		 * G3/AST2400-compatible watchdog timer at 0x1E785000. The AST2050
 		 * integrates ONE WDT (the AST2400 grew a second at 0x1E785020; the
 		 * kgpe-d16-bmc QEMU SoC models wdts_num = 1). The 0x20-byte block holds
