@@ -61,6 +61,11 @@
  *   A13 SDA5 / B13 SCL5  <- SCU74[12]=1   (I2C/SMBUS 5)
  *   C12 SDA6 / D12 SCL6  <- SCU74[13]=1   (I2C/SMBUS 6)
  *   A12 SDA7 / B12 SCL7  <- SCU74[14]=1   (I2C/SMBUS 7)
+ * BOARD CAVEAT (KGPE-D16): pad A12 is wired as GPIOH2 = STA_LINE_POWER (the host
+ * power-state feedback the BMC reads), so SCU74[14] MUST stay 0 and I2C/SMBUS 7
+ * (channel 7) is NOT available on this board — enabling it would repurpose A12
+ * away from GPIOH2 and break power-state sensing. This driver only sets the bit
+ * for an instantiated DT node, and there is intentionally no channel-7 node.
  * (AST2050/AST1100 A3 datasheet V1.05, multi-function pin control table: e.g.
  * "A13 GPIOC6 MII2DIO SCU74[20]=1  SDA5 SCU74[12]=1  GPIOC6  Others".) Without
  * this, a byte clocked out on one of these engines never reaches the pads and the
