@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b) DTS/Kconfig review: PHANTOM GPIO register blocks removed (real faithfulness bug, resolves #163) + 1 false-positive rejected
+
+Dispatched the last-unreviewed developed config (Zephyr + Linux DTS + Kconfig). 5 CONFIRMED +
+1 PLAUSIBLE returned; I verified each against the datasheet before acting (project rule):
+
+- **[CRITICAL, CONFIRMED + fixed] ast2050.dtsi phantom GPIO sets gpio2..gpio6.** The Zephyr SoC
+  dtsi modelled five extra 32-bit GPIO "sets" — IJKL@0x70, MNOP@0x78, QRST@0x80, UVWX@0x88,
+  YZAAAB@0x1E0. I confirmed against the AST2050 datasheet §23.3 (Base 0x1E78:0000): the GPIO
+  register map has EXACTLY TWO data-value registers — GPIO00@0x00 (ports A/B/C/D) and GPIO20@0x20
+  ("Extended GPIO Data Value", ports E/F/G/H); the map ends with the EFGH control block (~0x58) and
+  has NO register at 0x70/0x78/0x80/0x88/0x1E0 (those are an AST2400/G4 addition). Datasheet feature
+  table: AST2050 GPIO max = 46 ("8 dedicated + 56 shared" = 64 register bits). Removed gpio2..gpio6
+  + rewrote the node comment with the datasheet facts. This is the SAME phantom-device class as #144.
+  **This ROOT-CAUSES #163**: gpio_smoke drove GPIOI0 = bit 0 of the phantom IJKL set (gpio2 @0x70),
+  which QEMU idealized (readback=1) but silicon has no register there (readback=0). Repointed
+  gpio_smoke at gpio1 (EFGH @0x20, a REAL register), reading GPIOH2 (bit 26, STA_LINE_POWER, a
+  bonded input) read-only — safe on silicon (a read can't perturb the board) and a clean both-sides
+  test. The full OUTPUT write-readback needs a bonded safe-to-drive pin (NC or a BMC LED) which
+  requires the §11 GPIO map (#136); the OUTPUT path meanwhile is covered by power_smoke (drives the
+  real A4/B1/B6/F0 power-control outputs). QEMU: rebuilt + booted → `GPIO gpio1(EFGH)/pin26 GPIOH2
+  read=0` → `GPIO RESULT: PASS`. Only gpio_smoke referenced the removed nodes (gpio3..6 were unused).
+- **[CRITICAL, but FALSE POSITIVE — rejected with evidence] Kconfig.defconfig `configdefault`.** The
+  reviewer flagged `configdefault` (soc/aspeed/Kconfig.defconfig, ast2050/Kconfig.defconfig) as an
+  invalid keyword that would break the build. It does NOT: `configdefault` is a Zephyr kconfiglib
+  EXTENSION (sets a default on an already-defined symbol in a defconfig, without redefining it). PROOF:
+  this session's builds succeed AND the produced .config contains exactly the values those lines set —
+  CONFIG_NUM_IRQS=32, CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=1000000, CONFIG_SOC_EARLY_INIT_HOOK=y. Applying
+  the suggested "fix" (`config`) would INTRODUCE a redefinition bug. Left unchanged. (Lesson: a reviewer
+  that doesn't run the build can't see Zephyr Kconfig extensions — the "verify before acting" rule caught it.)
+- **Still to disposition (this + next cycle):** FRU EEPROM 0x54-vs-0x50 (needs reconciling with the
+  passing FRU silicon read — investigate before changing); ast2050.dtsi board-device layering (move
+  ASUS-specific sensor nodes to the board dts — refactor); realhw-DTS second-WDT status=disabled +
+  gpio-ranges overstatement (doc-mirror file; the compiled source is qemu-firmware/dts/…, check there).
+
 ## 2026-07-20 — RTC (row 39) Zephyr driver VALIDATED ON SILICON — set/get PASS; #158 "reads 0x0" RESOLVED, re-scoped to real-time-rate
 
 Booted `rtc_smoke` (entry 0x4000245c, md5 3bedfc9c…verified staged) on the real AST2050 at
