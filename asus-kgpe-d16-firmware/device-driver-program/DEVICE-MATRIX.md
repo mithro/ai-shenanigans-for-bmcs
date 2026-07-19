@@ -188,7 +188,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
+| 27 | Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD) | GPIO | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ✅ | ⬜ |
 | 28 | Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ |
 | 29 | Platform control (CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCIRST#) | GPIO | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ | ⬜ | 🔶 | ⬜ |
 

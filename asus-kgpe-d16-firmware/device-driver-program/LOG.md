@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Zephyr host power-control (power_smoke): QEMU PASS; silicon force-OFF works, GPIOH2 read FAILs
+
+New `samples/power_smoke` drives the KGPE-D16 host power sequence from bare-metal Zephyr via
+the GPIO driver (kgpe-power.sh ported: reclaim GPIOA4 via SCU74[25] + drive high, pulse
+B1/B6 to power-ON, F0 to force-OFF, read GPIOH2). **DEVICE-MATRIX row 27 Zephyr-QEMU ✅**:
+`H2 start=0 → power-ON=1 → force-OFF=0  POWER RESULT: PASS` (the kgpe-d16-pwrseq latch model).
+Commit 47c7847.
+
+**Silicon: honest FAIL, with a real finding.**
+- `POWER: H2 start=1  after power-ON=1  after force-OFF=1  POWER RESULT: FAIL`.
+- The power-control **OUTPUT works**: the au-plug draw dropped 49 W → 4 W across the run
+  (the force-OFF actually shut the PSU to S5) — so driving F0 low reaches the board.
+- The **GPIOH2 feedback read is wrong**: it read 1 at start, and stayed 1 after force-OFF
+  even though the real power dropped to 4 W. My driver reads the correct register (0x1E780020
+  bit 26, same as kgpe-power.sh `_h2`), so either (a) STA_LINE_POWER's semantics ≠ my "1=host-on"
+  assumption (could be AC-line-present, which is always 1 while the plug is on), or (b) the GPIO
+  input-read is stuck high — the same class as the KNOWN silicon-vs-QEMU GPIO-readback gap
+  (IJKL floating-0 vs QEMU always-1). Needs a run measuring H2 at a KNOWN host-ON (103 W) state
+  + cross-check vs the Linux `_h2` read. **Row 27 ZS stays ⬜** (feedback not validated). Tasked.
+
+**Rig-recovery saga (honest, all resolved):** the FIRST silicon attempt's `scp` of the power
+bin TIMED OUT (Pi transiently sluggish), so the boot ran a STALE staged bin (md5 b90bf3ec ≠
+the power build d0893112) → no console output; then my 200 s outer ssh timeout killed the
+boot, orphaning an openocd that briefly pegged the Pi (ssh unresponsive ~5 min). Recovered by
+waiting (openocd self-exited) + re-staging the correct bin (md5 verified) + running the boot
+DETACHED (nohup, decoupled from the ssh timeout) and polling the capture. LESSONS: (1) always
+md5-verify the staged bin before trusting a silicon result; (2) run silicon boots detached and
+poll, don't hold them under a foreground ssh timeout; (3) the au-plug (Tasmota, IPv6 iot net)
+is only reachable FROM the Pi, so it can't out-of-band-rescue a wedged Pi. Host left OFF (4 W),
+Pi clean (no runaway).
+
 ## 2026-07-19 — RTC silicon: dead(0x0)→running via SCU08[16] clock source; real-time 1Hz still open (#158)
 
 Silicon-validated the Zephyr RTC (row 39). It FAILED first (honest): `get=00:00:00 day=0`
