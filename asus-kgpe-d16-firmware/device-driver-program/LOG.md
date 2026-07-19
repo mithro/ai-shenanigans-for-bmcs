@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATES (a)×2 + (d): 2nd enumeration review CONFIRMS complete; 1st gate-d task-list audit finds real soft-skips (fixed/tasked)
+
+- **GATE (a) — SECOND independent enumeration review**: an independent agent re-walked the schematic
+  → matrix end-to-end and CONFIRMED the first agent's finding: enumeration COMPLETE, 0 gaps (~55
+  devices, all mapped); NO stale non-existence claim contradicts the schematic (ADC/PECI/PWM/TSOD
+  all consistent). Two independent reviews now agree — the 'multiple reviews' bar for enumeration is
+  met. One borderline: QD3/QD4/QD5 VGA RGB-DAC buffers covered by row-12 signal-path + passive
+  category but not named (unlike QU6/row 13) — give them a one-line disposition (#159f).
+- **GATE (d)+(c) — FIRST task-list audit** (never run before): the enumeration is sound but found
+  REAL soft-skips, all acted on:
+  * **OVER-CLAIM FIXED**: row 27 power ZS was 🔶 but the power_smoke silicon RESULT is FAIL (only the
+    OUTPUT actuation works; the H2 feedback fails, #162). 🔶→⬜ (honest floor) + row note. Row 14
+    DDC/EDID Zephyr was Ⓝ (unjustified vs the 'every block needs Zephyr' rule) → ⬜. Tally re-run:
+    Zephyr@silicon now 8✅/1🔶/28⬜ (was 8/2/26).
+  * **UNTRACKED CAPABILITY TASKED (#164)**: I²C target/slave mode + multi-master arbitration (D1b) —
+    a real BMC function, folded into row 15 so uncounted; my Zephyr i2c driver is master-only (target
+    mode is a stated follow-up). Needs its own row + all 4 stacks.
+  * **SOFT BLOCKERS TASKED (#165)**: row 9 USB-vhub silicon [B] is risk-avoidance (didn't try the JTAG
+    path); rows 24/25 [B] assert 'no PMBus PSU' without naming the rig PSU. Substantiate or re-attempt.
+  * **DOC-SYNC**: FULL-TASK-LIST is stale (Zephyr column esp) vs the matrix on rows 11/23/24/25/27/39
+    — the 'must AGREE' contract is in debt; reconciliation items enumerated in #159.
+  * Evidence: VIC/Timer/WDT Zephyr-silicon ✅ rows lack captured transcripts (#159d); the
+    'd14-zephyr/03-irq-proven' file is a QEMU crash run, not silicon (relabel).
+  These are honesty/tracking gaps, not fabrications — the underlying driver work + commits + captured
+  FRU/W83601G/W83795/SB-TSI-Linux evidence all corroborated. Gate-d BOTTOM LINE: task list NOT yet
+  complete/weasel-free — now with a concrete closure list.
+
 ## 2026-07-20 — gpio_smoke @ 4W silicon: BMC boots at deep standby; output-readback hits the known IJKL-unbonded quirk
 
 Booted gpio_smoke on the real AST2050 at 4W (deep S5, host off). Two findings:
