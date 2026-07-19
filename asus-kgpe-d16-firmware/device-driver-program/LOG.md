@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (b): independent review of the session's U-Boot patches — 2 CONFIRMED fixed, 1 PLAUSIBLE dispositioned
+
+Dispatched an independent code review of the 4 developed U-Boot patches (0002 i2c-enable, 0003 SCU
+i2c reset-release, 0004 alignment fix) + build-uboot.sh (the hook flagged "zero independent reviews").
+Result: 2 CONFIRMED + 1 PLAUSIBLE, no legacy-oracle regression. Both CONFIRMED FIXED:
+- **CONFIRMED-1 (i2c pin-mux, high value)**: 0002 enables i2c4 = engine4 = I2C5 (a MUXED channel), but
+  nothing sets SCU74[12] — the G4 pinctrl programs SCU90[18] (a G4 reg), NOT the G3 SCU74[12]. So the
+  FRU@0x54 on I2C5 would NAK on real silicon (QEMU passes only because it doesn't gate on the pinmux) —
+  the SAME root cause as the Zephyr #156 engine-4 timeout. The 0003 comment also overclaimed "exactly
+  like the vendor i2c_init()" (the vendor ALSO does `SCU74 |= 0x5000`). FIX: added the SCU74[12/13/14]
+  pin-mux for muxed channels 5/6/7 in ast_i2c_probe() (derive chan from the bus base, mirror the Zephyr
+  i2c_aspeed_g3_pinmux + vendor), softened the comment; regenerated uboot-patches/0003. QEMU re-validated:
+  i2c md 0x2f fe -> 0x79 + FRU 0x54 read still pass (no regression).
+- **CONFIRMED-2 (build-script fail-loud)**: build-uboot.sh silently skipped ANY patch failing `git apply
+  --check`, conflating already-applied / wrong-tree / genuinely-broken — so an upstream branch drift could
+  ship a u-boot.bin missing 0003 with no error (violates the repo fail-loud rule). FIX: distinguish the
+  three cases — forward-applies -> apply; reverses -> "already applied" skip; else -> if the target file
+  is ABSENT it's for another tree (0001 = Raptor board/aspeed/ast2050) skip with a note, otherwise ABORT.
+  Validated: 0001 -> "not for this tree" skip, 0002/0003/0004 -> "already applied", build succeeds; a real
+  failure now aborts.
+- **PLAUSIBLE (0004 A-bit)**: clearing SCTLR.A on ARMv5 doesn't MAKE unaligned accesses correct — it
+  makes an unaligned LDR return the aligned word ROTATED (silently wrong), the opposite of fail-loud, and
+  a plausible contributor to the still-open pre-console hang. Kept the A-fix (it got silicon past the
+  abort) but recorded the caveat: the DURABLE fix is to root-cause the specific unaligned access (already
+  #168's next step). Noted in #168. Reviewer confirmed the 0003 RMW is clean + no C2/C4/C-UBOOT regression.
+
 ## 2026-07-20 — #168 ROOT CAUSE FOUND + partial fix: modern U-Boot's alignment abort on G3 silicon FIXED (start.S A-bit); now runs past the abort
 
 Root-caused the modern-U-Boot silicon abort with a HW breakpoint at the 0x10 data-abort vector:

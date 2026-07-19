@@ -21,17 +21,31 @@ if [ ! -d "$SRC" ]; then
 fi
 cd "$SRC"
 
-# Apply the KGPE-D16 (AST2050) U-Boot patches idempotently: only ones that still
-# apply cleanly to this tree (a patch already present, or written for a different
-# tree, is skipped with a visible note — NOT silenced to /dev/null).
+# Apply the KGPE-D16 (AST2050) U-Boot patches. FAIL LOUD (repo rule): a patch that
+# is meant for this tree but no longer applies must ABORT the build, never be
+# silently skipped shipping a broken u-boot.bin. We distinguish three cases:
+#   1. applies forward            -> apply it
+#   2. already applied (reverses) -> skip quietly (idempotent re-run)
+#   3. neither                    -> if its target file is ABSENT it is for a
+#      different tree (e.g. 0001 targets the Raptor board/aspeed/ast2050) -> skip
+#      with a note; otherwise it is a GENUINE failure -> abort.
 PATCHDIR="$ROOT/../uboot-patches"
 for p in "$PATCHDIR"/*.patch; do
     [ -e "$p" ] || continue
+    name=$(basename "$p")
     if git apply --check "$p"; then
         git apply "$p"
-        echo "applied $(basename "$p")"
+        echo "applied $name"
+    elif git apply --reverse --check "$p"; then
+        echo "already applied (skip): $name"
     else
-        echo "skip $(basename "$p") (already applied or not for this tree)"
+        tgt=$(sed -n 's|^+++ b/||p' "$p" | head -1)
+        if [ -n "$tgt" ] && [ ! -e "$tgt" ]; then
+            echo "not for this tree (target '$tgt' absent), skip: $name"
+        else
+            echo "ERROR: $name neither applies nor is already applied, and its target '$tgt' exists — aborting (fail loud)" >&2
+            exit 1
+        fi
     fi
 done
 
