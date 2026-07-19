@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉 FIFTH Zephyr driver: AMD SB-TSI CPU-thermal sensor — QEMU-VALIDATED (2nd I2C engine)
+
+- Second I2C-client sensor (after W83795), on the validated i2c_aspeed_g3 bus but on a
+  DIFFERENT engine — **engine 3** (i2c3 @0x1E78A100, a new DT node): SB-TSI @0x4C(P0)/
+  0x4D(P1) per hw/arm/aspeed.c:619-638. Reads TEMP_INT(0x01)+TEMP_DEC(0x10 bits[7:5],
+  0.125C). Correctly treats Tctl as UNSIGNED (unlike W83795's signed diode) + canonical
+  sensor_value (the W83795 gate-b lesson applied from the start). Parent `fce016487`.
+- **VALIDATED IN QEMU (evidence d14-zephyr/10): SBTSI temp=45.500 C (expect 45) → PASS**
+  (P0 seeded 45500 mC). ALSO proves the I2C driver works on a SECOND engine (3, not just
+  1) → the per-block 0x40 stride math is correct across engines. Row 23 ZQ → 🔶.
+- **Zephyr tally: 5 QEMU-validated per-device drivers** (GPIO/I2C/WDT/W83795/SB-TSI), all
+  independently gate-b reviewed (2 bugs fixed). ZS silicon pending (#150, LAN-blocked).
+
 ## 2026-07-19 — Gate-(b) review of the 4 new Zephyr drivers + SPI1/FMC phantom investigation
 
 - **Dispatched gate-(b) code review of ALL 4 newly-written Zephyr drivers** (the hook's

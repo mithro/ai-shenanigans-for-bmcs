@@ -127,7 +127,7 @@ citations are below and in [`FULL-TASK-LIST.md`](FULL-TASK-LIST.md).
 | 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
-| 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 24 | PSU PMBus (PSUSMB1, I2C1) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 25 | SMBus ALERT (SALT1/2, I2C7) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 26 | Aux front panel (AUX_PANEL1, I2C8) | I2C | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
