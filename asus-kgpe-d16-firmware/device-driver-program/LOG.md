@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Created MASTER-TASKLIST.md — every schematic device × 4 stacks × QEMU+silicon, FROM the §1-16 read
+
+Per the goal's opening ("create a task list to: full QEMU emulation of every device;
+U-Boot/Linux/Zephyr drivers each validated in QEMU + on silicon [+ Linux userspace]"),
+authored a NEW comprehensive master task list `device-driver-program/MASTER-TASKLIST.md`
+derived directly from my end-to-end schematic read — NOT a re-hash of the pre-existing
+grid. It walks the schematic section-by-section (§3 DDR2 … §13 straps + SoC-core
+SCU/VIC/timer/WDT/RTC/PWM/ADC/PECI) and, for EVERY device, gives the 4-stack task line
+(QEMU model / U-Boot Q+Si / Linux Q+Si+US / Zephyr Q+Si) with current status + the
+next concrete action, cross-referenced to the DEVICE-MATRIX row and FULL-TASK-LIST box.
+Asserts explicitly that no §1-16 schematic device is un-enumerated (the only
+non-driver-target entries are the §2 power rails, ground/decoupling, and the passive
+series-R/mux glue — modeled as bus behaviour, not addressable devices). Rolls up the
+concrete open frontiers: the 4 QEMU ⬜ (DDC/EDID, LPC-mailbox, SOL-mux, SMBus-ALERT),
+Zephyr breadth, silicon breadth, and the open task IDs. This is the enumeration
+backbone the completion gate ("enumerate every item … show all drivers/emulation")
+requires, in one authoritative-schematic-derived document.
+
 ## 2026-07-19 — Closed a QEMU ⬜: PSU PMBus model committed + fwtest-validated (row 24 QE ✅)
 
 Real forward progress on an emulation gap (not just review/doc). The generic PMBus
