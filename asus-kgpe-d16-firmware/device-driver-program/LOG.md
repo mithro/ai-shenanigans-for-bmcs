@@ -17,7 +17,14 @@ Independent code review of the previously-unreviewed Zephyr WDT driver + 5 sampl
   swallowed (no else branch) — added a fail-loud message, per the repo convention + the sibling
   smokes. (The GPIOI0-unbonded readback quirk is separately tracked #163.)
 Session independent-review bug tally now: 5 real bugs fixed (power_smoke ×2, vic.c, rtc_smoke,
-gpio_smoke) + 1 finding silicon-disproven (soc.c vectors). QEMU machine-wiring review still running.
+gpio_smoke) + 1 finding silicon-disproven (soc.c vectors).
+**QEMU machine-wiring review: CLEAN.** The kgpe_d16 machine wiring (kgpe_d16_i2c_fabric.c mux
+fabric + kgpe_d16_bmc_i2c_init device wiring + the aspeed_gpio pwrseq/named-GPIO wiring) verified
+correct — bus/address mapping (k-1 rule), QU9 sys-pwrgd gate / QU5 channel decode / U23 ownership
+truth table, GPIO direction+data gating, reset-order convergence, version-gated vmstate, and the
+DIMM-A2 SPD table cross-checked byte-for-byte vs the real i2cdump. Only a comment typo (HT24LC08
+'1 Kbit'→'8 Kbit', code correct) — fixed in the submodule (a8ac1ad7) + DTS. This closes gate-b
+coverage of the faithfulness-critical machine model with 0 bugs.
 
 ## 2026-07-20 — GATES (a)×2 + (d): 2nd enumeration review CONFIRMS complete; 1st gate-d task-list audit finds real soft-skips (fixed/tasked)
 
