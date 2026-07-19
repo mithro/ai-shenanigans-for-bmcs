@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-20 — SB-TSI Zephyr silicon (row 23): honest attempt FAILED (-EIO); blocked by unstable host power
+
+sbtsi_smoke is platform-agnostic + QEMU PASS (temp=45.5). Attempted the silicon read (SB-TSI @0x4c
+on I2C engine 3, needs the host CPU on): au-plug AC-cycle to trigger the board's BIOS auto-power-on,
+then immediately JTAG-boot sbtsi to catch the host powered. Result: `SBTSI sample_fetch FAIL (err -5)`
+= -EIO, with the au-plug reading **73 W** at read time (host mid-ramp 66→73 W, NOT the full ~97 W
+host-on) — the CPU's SB-TSI/SMU interface was not up yet when the read fired ~16 s after AC-on. The
+host then sat steady at 73 W (a partial-power / stuck-POST state — the known dead-CMOS F1/F2 issue),
+so a retry at 73 W would just -EIO again.
+HONEST CONFIDENCE it's NOT my driver: engine 3 = schematic I2C4 = SDA4/SCL4 DEDICATED pins (no
+pin-mux needed), same i2c_aspeed_g3 driver that reads the W83795 on engine 1 + FRU/W83601G on
+engine 4; and the LINUX SB-TSI read already succeeded here with a fully-POSTed host (memory
+d09-sbtsi). So the -EIO is the host CPU not being ready, not the Zephyr I2C path.
+RELIABLE PATH (tasked #150): the AC-auto-power-on window (~80 s, and it ramps/stalls) is too
+unstable + too early for the SB-TSI to be alive. Instead: netboot Linux/OpenBMC, run kgpe-power.sh
+'on' (which stably powers + holds the host on across a BMC reset per the F2 work), let it POST, THEN
+JTAG-boot sbtsi_smoke while the host is stably up. Row 23 ZS stays ⬜ (attempted, host-blocked, NOT
+a driver bug). Rig left with the host auto-dropping toward standby.
+
 ## 2026-07-20 — GATE (b): SoC-low-level + QEMU-models code review — 1 real fix (vic.c), 1 finding silicon-DISPROVEN (soc.c)
 
 Ran 2 more independent code-review sub-agents over the remaining unreviewed developed code:
