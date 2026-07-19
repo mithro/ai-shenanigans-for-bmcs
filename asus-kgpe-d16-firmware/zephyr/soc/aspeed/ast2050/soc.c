@@ -75,6 +75,12 @@ static const struct arm_mmu_region mmu_regions[] = {
 	 * needed. One 0x1000 page covers the 0x20-byte WDT block. */
 	MMU_REGION_FLAT_ENTRY("wdt", 0x1e785000, 0x1000,
 			      MT_DEVICE | MPERM_R | MPERM_W),
+
+	/* G3 counter-style RTC (0x1e781000, drivers/rtc/rtc_aspeed_g3.c) — device
+	 * memory, statically mapped like the other SFR blocks so the driver reaches
+	 * its 0x20-byte register block at the physical address with the MMU on. */
+	MMU_REGION_FLAT_ENTRY("rtc", 0x1e781000, 0x1000,
+			      MT_DEVICE | MPERM_R | MPERM_W),
 };
 
 const struct arm_mmu_config mmu_config = {

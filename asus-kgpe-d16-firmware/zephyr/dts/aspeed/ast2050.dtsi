@@ -203,5 +203,16 @@
 			reg = <0x1e785000 0x20>;
 			status = "okay";
 		};
+
+		/*
+		 * G3 counter-style RTC at 0x1E781000 (datasheet §24; QEMU model
+		 * hw/misc/aspeed_rtc_ast2050.c). 0x20-byte register block: COUNTER
+		 * 0x00 / RELOAD 0x08 / CONTROL 0x0C / RESTART 0x10 / RESET 0x14.
+		 */
+		rtc0: rtc@1e781000 {
+			compatible = "aspeed,ast2050-rtc";
+			reg = <0x1e781000 0x20>;
+			status = "okay";
+		};
 	};
 };

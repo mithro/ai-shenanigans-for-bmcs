@@ -1,0 +1,15 @@
+# ASPEED AST2050 (G3) counter-style RTC binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  ASPEED AST2050 (G3) counter-style Real-Time Clock at 0x1E781000 (datasheet
+  §24). Holds a packed binary sec/min/hour/day counter (no month/year) loaded
+  via a 0x5A RESTART magic. See drivers/rtc/rtc_aspeed_g3.c.
+
+compatible: "aspeed,ast2050-rtc"
+
+include: [base.yaml, rtc-device.yaml]
+
+properties:
+  reg:
+    required: true

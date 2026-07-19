@@ -1,0 +1,20 @@
+# ASPEED AST2050 (G3) RTC driver.
+# SPDX-License-Identifier: Apache-2.0
+
+# Only offered once the RTC subsystem itself is enabled (mirrors the in-tree
+# drivers/rtc "if RTC" menu). Auto-enables when a matching devicetree node is
+# present and left okay.
+if RTC
+
+config RTC_ASPEED_G3
+	bool "ASPEED AST2050 (G3) counter-style RTC driver"
+	default y
+	depends on DT_HAS_ASPEED_AST2050_RTC_ENABLED
+	help
+	  Enable the counter-style RTC driver for the ASPEED AST2050 (G3,
+	  ARM926EJ-S) BMC SoC. The RTC at 0x1E781000 holds a packed binary
+	  sec/min/hour/day counter; set_time programs RELOAD and latches it into the
+	  live counter via the 0x5A RESTART magic, get_time reads COUNTER back. No
+	  month/year (a limitation of this counter-style RTC).
+
+endif # RTC

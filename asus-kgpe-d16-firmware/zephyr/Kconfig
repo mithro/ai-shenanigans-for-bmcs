@@ -5,5 +5,6 @@
 rsource "drivers/gpio/Kconfig"
 rsource "drivers/i2c/Kconfig"
 rsource "drivers/watchdog/Kconfig"
+rsource "drivers/rtc/Kconfig"
 rsource "drivers/sensor/w83795/Kconfig"
 rsource "drivers/sensor/sbtsi/Kconfig"
