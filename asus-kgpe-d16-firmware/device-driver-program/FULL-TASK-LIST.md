@@ -209,8 +209,8 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Linux: [x] QEMU · [x] silicon (LED-drive on 0x19, readback+restore) · [x] userspace (raw SMBus)
 - Zephyr: [ ] QEMU · [ ] silicon
 
-### D5. HT24LC08 FRU EEPROM — U25, I2C5 0x50–0x53 (§10.2)  ✅ both-sides this session
-- [x] QEMU: 4× smbus-eeprom at 0x54–0x57 (blank 0xff, matching silicon)
+### D5. HT24LC08 FRU EEPROM — U25, I2C5 0x54–0x57 (§10.2)  ✅ both-sides this session
+- [x] QEMU: 4× smbus-eeprom at 0x54–0x57 (blank 0xff, matching silicon; E2 strapped to VCC → upper block 0x54–0x57 per I2C-MUX-FABRIC-ARBITRATION.md, DEVICE-MATRIX row 20)
 - U-Boot: [N] (FRU is an OS/IPMI function)
 - Linux: [x] QEMU (at24 binds) · [x] silicon (at24 read, blank as shipped) · [x] userspace (`/sys/.../eeprom`, IPMI FRU)
 - Zephyr: [ ] QEMU · [ ] silicon
