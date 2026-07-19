@@ -1,0 +1,27 @@
+D14 Zephyr — W83601G DIMM-LED expanders on REAL SILICON (rows 21/22, ZS ✅), 2026-07-19.
+
+samples/w83601g_smoke exercises the proper Zephyr GPIO driver
+drivers/gpio/gpio_w83601g.c on BOTH expanders (U27 @0x18, U28 @0x19, schematic
+I2C5) through the standard gpio_* API over the AST2050 I2C master
+(drivers/i2c/i2c_aspeed_g3.c), on the real ASUS KGPE-D16 AST2050 BMC over JTAG.
+
+Same run family as the FRU (11-...): the SCU74[12] I2C5 pin-mux fix (#156) is what
+lets the engine-4 I2C5 devices ACK on silicon. The smoke's PASS gate is platform-
+agnostic: the input read must SUCCEED (the value differs QEMU-seed vs live silicon
+pins), and a HIGH->LOW output round-trip in CR01 must hold (proves the chip really
+ACKs+holds writes). The CR01 read return codes are checked (r0) to preclude a
+false-PASS (code-review finding, commit 11aee5d).
+
+Method: build w83601g_smoke, entry 0x40002498 (readelf); scp + JTAG boot as in 11-.
+
+Console (real AST2050):
+
+  [22:58:02] *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+  W83601G U27 @0x18: port_get=0x0807 (ret=0)  pin3 high->CR01=0x08(r0)  low->CR01=0x00(r0)
+  W83601G U28 @0x19: port_get=0x61b5 (ret=0)  pin3 high->CR01=0x08(r0)  low->CR01=0x00(r0)
+  W83601G RESULT: PASS
+
+Note the silicon port_get values (U27 0x0807, U28 0x61b5) differ from the QEMU
+seeds (0x000f / 0x00b5) because they reflect the real chips' live input pins — U28's
+low byte 0xb5 matches the QEMU seed exactly (the captured Port-1 default). The
+output round-trip (0x08 high, 0x00 low) holds on both. Both expanders validated.

@@ -1,0 +1,25 @@
+D14 Zephyr — FRU EEPROM read on REAL SILICON (row 20, ZS ✅), 2026-07-19.
+
+samples/fru_smoke reads the board FRU EEPROM (HT24LC08 @0x54, schematic I2C5) via
+the in-tree at2x driver over the AST2050 I2C master (drivers/i2c/i2c_aspeed_g3.c),
+on the real ASUS KGPE-D16 AST2050 BMC, booted over JTAG (no SPI flash on the BMC).
+
+This was the validation that root-caused + fixed the SCU74[12] I2C5 pin-mux (#156,
+commit 355a9c7): before the fix the FRU read timed out (-ETIMEDOUT/-116) because
+SDA5/SCL5 are multiplexed pins that need SCU74[12]=1; after the fix it ACKs.
+
+Method: build fru_smoke (ZEPHYR_EXTRA_MODULES = asus-kgpe-d16-firmware/zephyr),
+entry from `readelf -h zephyr.elf` = 0x40002378; scp zephyr.bin to the bridge Pi;
+JTAG boot via openocd (reset halt -> ddr2-init.tcl -> boot-zephyr.tcl loads the
+image at 0x40000000, inits UART5, sets PC=entry, resume); console on
+/dev/serial-bmc-console @115200.
+
+Console (real AST2050):
+
+  [22:51:12] *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+  FRU eeprom size=256 read[0..3]=ff ff ff ff
+  FRU RESULT: PASS
+
+The EEPROM reads blank (0xff) — the ASUS FRU ships unprogrammed, matching both the
+QEMU model and the Linux-side at24 read. QEMU validation: see fru_smoke QEMU run
+(FRU RESULT: PASS, blank). Both-sides Zephyr done for row 20.
