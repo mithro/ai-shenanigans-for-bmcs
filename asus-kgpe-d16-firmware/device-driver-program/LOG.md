@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168 narrowed further: the loop is BEFORE console_record_init (pre-console buffer stays garbage); lead = timer_init/early board_init_f panic-hang
+
+Ran the pre-console-buffer experiment. Found U-Boot ALREADY enables it by a Kconfig default at
+CONFIG_PRE_CON_BUF_ADDR=0x1e720000 (SRAM, adjacent to the init-RAM per aspeed-common.h) — but that read
+back 0x04000008-repeating (leftover, not text). Relocated it to DRAM (defconfig override
+CONFIG_PRE_CON_BUF_ADDR=0x42000000), rebuilt (A-fix confirmed: start.S:97 = bic), booted, read 0x42000000
+-> UNINITIALISED-DRAM garbage, still NO text. So U-Boot NEVER wrote pre-console output => the board_init_f
+loop is BEFORE console_record_init (the early half of init_sequence_f). NEW LEAD from u-boot.map symbols:
+board_init_f@0x10970, arch_cpu_init@0x1059c, dm_timer_init@0x1d3d8, timer_init@0x37d10 — and the CPU's
+looping PCs (0x384cc/0x38bdc) are RIGHT AT/just past timer_init@0x37d10, while the timer reads 0x0 (not
+counting). The recurring low fn (~0x140: stm sp,{r0-r12}; bl 0x1038) fits panic()/hang() (saves all regs).
+So the modern U-Boot most likely FAILS an early init around timer_init on the G3 and loops in panic/hang,
+its message lost (pre-console). RULED OUT progressively: alignment abort (0004), baud, SP (banked sp_abt),
+console-record-path (buffer empty = never reached). NEXT (precise): hw-bp timer_init@0x37d10 + get_clocks
++ initf_dm to see which is reached and where the loop is; hw-bp 0x1038 to ID that fn (panic/hang/printf).
+Then fix the failing early init (likely the G3 timer/clock, analog of #167). Reverted the debug defconfig;
+committed uboot-patches/build-uboot.sh unchanged (repo clean). Staged Pi build carries the harmless DRAM
+pre-console buffer.
+
 ## 2026-07-20 — #168 narrowed: modern U-Boot RUNS board_init_f but LOOPS (repeated pre-console printf); timer reads 0x0; next = CONFIG_PRE_CONSOLE_BUFFER
 
 Probed the A-fix modern-U-Boot on G3 silicon (no rebuild — already staged). Halt/resume/halt 3x over 6s:
