@@ -197,6 +197,7 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
 - **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
@@ -216,6 +217,17 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
   on ast2500-evb — no regression; a G3 access to 0x1E6E9000 now reads unassigned like the
   silicon). First increment of the #144 phantom-removal set landed. This supersedes the
   earlier gate-(d) "add an ADC row" call (which was itself the faithfulness error).
+- **42** PECI engine — **ADDED (2026-07-19, closes #145 audit gap):** unlike the ADC, the
+  G3 DOES have a PECI controller. AST2050-MEMORY-MAP.md:68 (datasheet §9 p97 / §32.3 p357):
+  "PECI Controller | 0x1E78_B000 | ... | **Yes** | PECI 1.1/2.0", IRQ 15. The QEMU G3 SoC
+  models it (`TYPE_ASPEED_PECI` @0x1E78B000; aspeed_ast2400.c:246,628-635) → QE=🔶 (present
+  + wired; the generic aspeed_peci model's G3-completeness unverified — verify vs §32 to
+  reach ✅). **All driver stacks = Ⓝ (board disposition, parallel to row 40 PWM):** on the
+  KGPE-D16 the PECI pins A9/B9 are strapped to GPIO (AST_ATXPSON#/AST_CLRTC#, §11) and CPU
+  thermal is done over SB-TSI (I2C4, row 23) — the PECI engine is NOT wired to the CPUs
+  here, so no U-Boot/Linux/Zephyr PECI driver has a target. The SoC block exists + is
+  modeled; its board *function* is repurposed. (The GAP2 WDTRST / GAP3 ROMA0→QQ11 / GAP4
+  NC-UART1-modem under-dispositions from the same audit remain minor doc items under #145.)
 
 ## Roll-up (honest)
 
