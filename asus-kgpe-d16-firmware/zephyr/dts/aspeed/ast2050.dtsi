@@ -148,6 +148,49 @@
 		};
 
 		/*
+		 * Second G3 I2C engine node: engine 3 (block 0x1E78A000 +
+		 * 0x40 * (3 + 1) = 0x1E78A100, same 0x40 stride as engine 1
+		 * above — see drivers/i2c/i2c_aspeed_g3.c file header). On the
+		 * kgpe-d16-bmc QEMU machine this bus carries the two AMD CPU
+		 * SB-TSI thermal sensors (hw/arm/aspeed.c kgpe_d16_bmc_i2c_init
+		 * lines 619-638: aspeed_i2c_get_bus(&soc->i2c, 3), "sbtsi",
+		 * 0x4c/0x4d; QEMU bus index 3 = DT i2c3 = schematic "I2C4").
+		 * Each engine independently de-asserts the shared SCU04[2] reset
+		 * hold in its init, so a second node is safe.
+		 */
+		i2c3: i2c@1e78a100 { /* engine 3 (QEMU i2c bus 3) */
+			compatible = "aspeed,ast2050-i2c";
+			reg = <0x1e78a100 0x40>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-frequency = <100000>;
+			status = "okay";
+
+			/*
+			 * AMD SB-TSI CPU thermal sensor, socket P0, at 7-bit
+			 * address 0x4C. The QEMU machine seeds it to 45.5 degC
+			 * (hw/arm/aspeed.c line 628, temp 45500 mC).
+			 * Driver: drivers/sensor/sbtsi/sbtsi.c.
+			 */
+			sbtsi: temperature-sensor@4c {
+				compatible = "amd,sbtsi";
+				reg = <0x4c>;
+				status = "okay";
+			};
+
+			/*
+			 * AMD SB-TSI CPU thermal sensor, socket P1, at 7-bit
+			 * address 0x4D, seeded to 43.0 degC (hw/arm/aspeed.c
+			 * line 629, temp 43000 mC).
+			 */
+			sbtsi1: temperature-sensor@4d {
+				compatible = "amd,sbtsi";
+				reg = <0x4d>;
+				status = "okay";
+			};
+		};
+
+		/*
 		 * G3/AST2400-compatible watchdog timer at 0x1E785000. The AST2050
 		 * integrates ONE WDT (the AST2400 grew a second at 0x1E785020; the
 		 * kgpe-d16-bmc QEMU SoC models wdts_num = 1). The 0x20-byte block holds

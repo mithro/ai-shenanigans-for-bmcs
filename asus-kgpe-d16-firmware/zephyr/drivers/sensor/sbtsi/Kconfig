@@ -1,0 +1,22 @@
+# AMD SB-TSI processor thermal sensor driver.
+# SPDX-License-Identifier: Apache-2.0
+
+# Only offered once the Sensor subsystem itself is enabled (mirrors the in-tree
+# drivers/sensor menu). Auto-enables when a matching devicetree node is present
+# and left okay.
+if SENSOR
+
+config SBTSI
+	bool "AMD SB-TSI processor thermal sensor"
+	default y
+	depends on DT_HAS_AMD_SBTSI_ENABLED
+	select I2C
+	help
+	  Enable the I2C-client sensor driver for the AMD SB-TSI (Side-Band
+	  Temperature Sensor Interface) CPU thermal sensor on the ASUS KGPE-D16 /
+	  AST2050 BMC. It runs on top of the AST2050 (G3) I2C master driver
+	  (CONFIG_I2C_ASPEED_G3) via the Zephyr I2C API against the devicetree
+	  parent bus; it does no MMIO of its own. Exposes SENSOR_CHAN_DIE_TEMP
+	  (CPU die temperature).
+
+endif # SENSOR

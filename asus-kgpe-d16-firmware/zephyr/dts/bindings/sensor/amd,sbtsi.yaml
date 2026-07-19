@@ -1,0 +1,34 @@
+# AMD SB-TSI (Side-Band Temperature Sensor Interface) I2C binding.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  AMD SB-TSI processor thermal sensor.
+
+  The Side-Band Temperature Sensor Interface exposes an AMD CPU's die
+  temperature as an SMBus/I2C byte-register device. On the ASUS KGPE-D16 BMC the
+  two CPU sockets present one SB-TSI each on AST2050 I2C engine 3 (DT i2c3 =
+  schematic "I2C4"): 0x4C = socket P0, 0x4D = socket P1 (see
+  asus-kgpe-d16-firmware/zephyr/dts/aspeed/ast2050.dtsi, node i2c3, and the QEMU
+  kgpe-d16-bmc machine wiring in hw/arm/aspeed.c kgpe_d16_bmc_i2c_init lines
+  619-638). On real silicon these only answer when the host CPU is powered; the
+  QEMU model always returns the seeded value.
+
+  Register model this driver relies on (QEMU hw/sensor/sbtsi.c, corroborated by
+  Linux drivers/hwmon/sbtsi_temp.c):
+    - integer temperature register 0x01 (TEMP_INT), whole degrees C, sbtsi.c
+      lines 37 / 69;
+    - fractional register 0x10 (TEMP_DEC): bits[7:5] hold the fraction in
+      0.125 C steps, sbtsi.c lines 42 / 47-49 / 70-71;
+    - config register 0x03 bit5 = read-order (int-first vs dec-first), sbtsi.c
+      line 39 (reset value 0x00 = int-first, line 157);
+    - Temperature = TEMP_INT*1000 + (TEMP_DEC>>5)*125 millidegrees C, sbtsi.c
+      lines 18-19 / 69-71.
+
+compatible: "amd,sbtsi"
+
+include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+  reg:
+    required: true
+    description: I2C device address (0x4C = socket P0, 0x4D = P1 on the KGPE-D16 BMC).

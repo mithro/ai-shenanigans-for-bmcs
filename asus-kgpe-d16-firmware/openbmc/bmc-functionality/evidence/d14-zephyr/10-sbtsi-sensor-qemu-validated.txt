@@ -1,0 +1,9 @@
+=== Zephyr AMD SB-TSI CPU-thermal sensor driver — QEMU validation (2026-07-19) ===
+I2C-client on i2c_aspeed_g3 ENGINE 3 (i2c3 @0x1E78A100) — SB-TSI @0x4C (P0)/0x4D (P1).
+Reads TEMP_INT (0x01) + TEMP_DEC (0x10 bits[7:5], 0.125C/step); unsigned Tctl, canonical val2 sign.
+P0 seeded 45500 mC in hw/arm/aspeed.c:628 -> deterministic 45.500 C.
+---8<--- boot log (-d int capture) ---8<---
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+SBTSI temp=45.500 C (expect 45) PASS
+---8<--- end ---8<---
+RESULT: PASS — Zephyr sensor reads SB-TSI on a 2nd I2C engine (validates i2c_aspeed_g3 multi-engine)
