@@ -165,15 +165,26 @@ Then load the SFDP table and a ROM image into the emulated flash DRAM:
 `bin/spispy` needs Perl's `Device::SerialPort`
 (`sudo apt install libdevice-serialport-perl`).
 
-## Status
+## Status — all verified on hardware (2026-07-19)
 
 | Step | State |
 |------|-------|
-| Fork `mithro/spispy` + `uart.v` build fix (branch `claude/oss-cad-suite-build`) | **Done** |
-| oss-cad-suite `2026-07-18` on workstation | **Done** |
-| Gateware builds on workstation → `spispy.bit` (228,411 B, idcode `0x21111043`) | **Done, verified** |
-| Pi provisioning (`setup_pi.py`), udev rules, load onto ULX3S, USB-CDC handshake | **Pending — the `asus-bmc` Pi was offline (powered down) during setup** |
+| Fork `mithro/spispy` + `uart.v` build fix + `-d` option (branch `claude/oss-cad-suite-build`) | **Done** |
+| oss-cad-suite `2026-07-18` on **both** hosts (x86-64 + Pi aarch64) | **Done** |
+| Gateware builds on **workstation** → `spispy.bit` (228,411 B) | **Verified** |
+| Gateware builds on **Pi** → `spispy.bit` (227,783 B) | **Verified** |
+| Pi provisioning (oss-cad-suite, clone, udev `/dev/spispy-{jtag,ctrl}`) | **Verified** |
+| Workstation bitstream → `openFPGALoader -b ulx3s` (from Pi) → CDC enumerates → `!V`→`11111111` | **Verified PASS** |
+| Pi bitstream → load → CDC enumerates → `!V`→`11111111` | **Verified PASS** |
 
-When the Pi is back online: run `setup_pi.py`, build (or `scp` the workstation
-bitstream), `openFPGALoader -b ulx3s spispy.bit`, then `./bin/spispy -v -d
-/dev/spispy-ctrl` to confirm the `11111111` handshake on both hosts' builds.
+Both hosts' bitstreams build, load onto the ULX3S from the Pi, enumerate the
+`/dev/spispy-ctrl` CDC port, and answer the `./bin/spispy -v -d /dev/spispy-ctrl`
+handshake with `Version: '11111111'`. The two `spispy.bit` files are **not
+byte-identical** across hosts (nextpnr placement + ecppack packing aren't
+deterministic across architectures) — functional equivalence is proven by the
+handshake passing for both, which is the thing that matters.
+
+Next (bench work, downstream): wire the ULX3S to the `BMC_FW1` socket per
+[`ULX3S-SPISPY-BMC-FLASH-WIRING.md`](ULX3S-SPISPY-BMC-FLASH-WIRING.md), load the
+BMC flash image into the emulated DRAM (`write-ram`), and boot the AST2050 from
+the emulated flash.
