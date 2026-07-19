@@ -138,7 +138,7 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 | 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | Ⓝ | Ⓝ | ⬜ | Ⓝ |
-| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ⬜ |

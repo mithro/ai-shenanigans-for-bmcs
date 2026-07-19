@@ -1,5 +1,17 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Zephyr FRU EEPROM via the in-tree at2x driver on I2C engine 4 — QEMU-validated (row 20 ZQ ⬜→🔶)
+
+Closed another Zephyr ⬜ safely, reusing a PROPER in-tree driver (not a raw poke).
+Added the DT `i2c4` engine node (block 0x1E78A140 = engine 4 = schematic I2C5 = QEMU
+bus 4) with an `atmel,at24` child @0x54 = the board FRU EEPROM (U25, HT24LC08). No new
+driver code — Zephyr's in-tree at2x EEPROM driver binds and drives the AST2050 I2C
+master (i2c_aspeed_g3.c) on a THIRD engine (after engine 1/W83795, engine 3/SB-TSI),
+confirming the per-engine 0x40 stride math across engines 1/3/4. samples/fru_smoke reads
+it. **VALIDATED IN QEMU:** EEPROM_AT24 auto-binds, `FRU eeprom size=256 read[0..3]=ff ff
+ff ff` → `FRU RESULT: PASS` (blank 0xff, matching the QEMU model + the as-shipped real
+part). Commit 753cb41; row 20 ZQ ⬜→🔶. Isolated (in-tree driver) — no oracle risk.
+
 ## 2026-07-19 — New Zephyr RTC driver (0x1E781000) — QEMU-validated (row 39 ZQ ⬜→🔶)
 
 Closed a Zephyr ⬜ safely (isolated module, no shared-QEMU-model/oracle risk — the

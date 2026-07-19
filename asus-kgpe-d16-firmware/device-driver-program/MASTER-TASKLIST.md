@@ -81,7 +81,7 @@ ZQ·ZS.
 | I²C mux fabric QU9/QU5/U23 | I2C2/7 | [17] | ✅ | 🔶/🔶/🔶 | ⬜ | Zephyr mux driver; complete arbitration silicon |
 | DIMM SPD ×16 (QU5 Y2/Y3) | I2C10/11 | [18] | ✅ | ✅/🔶/🔶 | ⬜ | BMC-autonomous SPD inventory silicon |
 | DIMM TSOD ×16 (jc42) | I2C10/11 | [19] | ✅(not-inst) | ✅/Ⓝ/Ⓝ | ⬜/Ⓝ | This rig's DIMM has no TSOD (faithful absence) |
-| FRU EEPROM (U25, HT24LC08) | I2C5 @0x54 | [20] | ✅ | ✅/✅/✅ | ⬜ | Zephyr at24 client (optional) |
+| FRU EEPROM (U25, HT24LC08) | I2C5 @0x54 | [20] | ✅ | ✅/✅/✅ | **🔶** | Zephyr FRU DONE via in-tree at2x on engine 4 (fru_smoke PASS, blank 0xff); ZS remains |
 | W83601G DIMM-LED exp U27 | I2C5 @0x18 | [21] | ✅ | ✅/✅/✅(us) | ⬜ | Zephyr client (optional) |
 | W83601G DIMM-LED exp U28 | I2C5 @0x19 | [22] | ✅ | ✅/✅/✅(us) | ⬜ | Zephyr client (optional) |
 | SB-TSI CPU thermal (via QU4 FETs) | I2C4 @0x4C/4D | [23] | ✅ | ✅/✅/✅ | 🔶 / ⬜ | **Zephyr SB-TSI silicon** — needs host CPU powered (#150) |
