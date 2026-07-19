@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-20 — GATE (a): independent enumeration verification — schematic→matrix, 0 gaps
+
+Ran an independent sub-agent that read AST2050-BMC-WIRING.md END TO END (§§1–16, not skimmed) and
+walked FROM the schematic TO DEVICE-MATRIX.md (not trusting the matrix's own "every device is a row"
+claim). Result: **enumeration is COMPLETE — 0 genuine gaps.** ~50 distinct devices/chips/blocks/
+connectors across §§2–16 + 8 SoC-internal blocks all map to one of the 43 numbered rows (1–42 + 26b)
+or a justified disposition (passive power/glue/buffers, the JTAG harness Ⓝ, host-side SU1/OU1/NU1 via
+LPC/PCI/I²C rows, and 6 per-pin signals folded into FULL-TASK-LIST). Row numbering 1–42 continuous +
+26b, matching the tally. This is fresh gate-(a)/(d) evidence for the enumeration dimension.
+Status-honesty spot-check (6 recently-changed cells vs LOG): rows 20/21/22 ZS ✅, 39 ZQ ✅/ZS 🔶 all
+CONFIRMED LOG-backed; row 27 ZS 🔶 flagged BORDERLINE — the output side is silicon-proven (defensible
+🔶) but the feedback read isn't cleanly validated, so the honest floor is arguably ⬜. Kept 🔶 (the
+driver genuinely drives host power on silicon = partial), with this caveat recorded.
+
 ## 2026-07-20 — power_smoke H2-trajectory experiment RESOLVES #162: STA_LINE_POWER = standby-rail sense + slow settle
 
 Reworked power_smoke to sample GPIOH2 as a TRAJECTORY (3 reads post-power-ON, 6 post-force-OFF)
