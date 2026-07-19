@@ -82,13 +82,14 @@ static int gpio_aspeed_g3_pin_configure(const struct device *dev,
 {
 	const struct gpio_aspeed_g3_config *cfg = dev->config;
 	struct gpio_aspeed_g3_data *data = dev->data;
-	uint32_t mask = BIT(pin);
 	k_spinlock_key_t key;
+	uint32_t mask;
 	uint32_t dir;
 
 	if (pin >= GPIO_G3_PINS_PER_BANK) {
-		return -EINVAL;
+		return -EINVAL; /* bounds-check BEFORE BIT(pin) (shift-UB if >= 32) */
 	}
+	mask = BIT(pin);
 
 	/* This minimal model exposes no internal pull resistors and no
 	 * open-drain / open-source (single-ended) output stage.

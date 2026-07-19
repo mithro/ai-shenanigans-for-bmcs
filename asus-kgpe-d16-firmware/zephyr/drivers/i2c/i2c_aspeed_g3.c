@@ -161,7 +161,15 @@ struct i2c_aspeed_g3_config {
 };
 
 struct i2c_aspeed_g3_data {
-	struct k_spinlock lock;
+	/*
+	 * A MUTEX (not a spinlock): a transfer busy-polls for completion up to
+	 * I2CD_POLL_COUNT per phase, and k_spin_lock() disables interrupts for its
+	 * whole held duration. Holding it across the poll would freeze the system
+	 * tick / scheduler / watchdog for the length of every transfer. A mutex
+	 * serialises concurrent transfers (thread context only — no ISM path) while
+	 * leaving interrupts enabled during the poll.
+	 */
+	struct k_mutex lock;
 };
 
 /* One-time (idempotent) release of the shared SCU04[2] I2C reset hold. */
@@ -290,14 +298,13 @@ static int i2c_aspeed_g3_transfer(const struct device *dev, struct i2c_msg *msgs
 	const struct i2c_aspeed_g3_config *cfg = dev->config;
 	struct i2c_aspeed_g3_data *data = dev->data;
 	mem_addr_t base = cfg->base;
-	k_spinlock_key_t key;
 	int ret = 0;
 
 	if (num_msgs == 0) {
 		return 0;
 	}
 
-	key = k_spin_lock(&data->lock);
+	k_mutex_lock(&data->lock, K_FOREVER);
 	i2c_aspeed_g3_clear_status(base); /* drop any stale status from before */
 
 	for (uint8_t i = 0; i < num_msgs; i++) {
@@ -334,7 +341,7 @@ static int i2c_aspeed_g3_transfer(const struct device *dev, struct i2c_msg *msgs
 		(void)i2c_aspeed_g3_stop(base);
 	}
 
-	k_spin_unlock(&data->lock, key);
+	k_mutex_unlock(&data->lock);
 	return ret;
 }
 
@@ -369,7 +376,9 @@ static const struct i2c_driver_api i2c_aspeed_g3_api = {
 static int i2c_aspeed_g3_init(const struct device *dev)
 {
 	const struct i2c_aspeed_g3_config *cfg = dev->config;
+	struct i2c_aspeed_g3_data *data = dev->data;
 
+	k_mutex_init(&data->lock);
 	i2c_aspeed_g3_hw_init(cfg->base);
 	return 0;
 }

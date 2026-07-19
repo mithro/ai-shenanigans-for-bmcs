@@ -7,7 +7,31 @@
   independently reviewed): 2 reviewers — (A) gpio_aspeed_g3.c + wdt_aspeed_g3.c; (B)
   i2c_aspeed_g3.c + w83795.c, with (B) specifically tasked to resolve the console-drop
   suspicion (is the I2C init's SCU reset-release clobbering the console UART clock?).
-  Findings will be fixed (as the QEMU-model gate-b round did) or confirm-clean. Pending.
+  **BOTH RETURNED — 2 real bugs found + FIXED, console-drop theory REFUTED:**
+  - **GPIO + WDT: CLEAN** (every register offset cross-checked vs the QEMU models; dir-then-
+    data ordering, shadow-latch, WDT 1MHz reload arithmetic, MMU, API all verified). Plus a
+    trivial GPIO nit fixed: `mask = BIT(pin)` moved AFTER the `pin>=32` bounds check (latent
+    shift-UB on an unused value).
+  - **Console-drop / SCU theory REFUTED (not a bug):** reviewer B traced it — the I2C
+    driver's SCU04 write is a proper RMW (preserves all bits, never touches SCU0C); the G3
+    propagate_gates re-asserts g3-uartclk-stop with the SAME level → memory_region_set_enabled
+    no-ops; SCU00 (PROT_KEY) writes don't propagate at all. So the console-drop is a QEMU
+    stdio CAPTURE artifact, NOT the driver (confirmed: gpio_smoke, which does NO I2C/SCU
+    write, ALSO intermittently drops output on the fast plain boot). My earlier suspicion
+    was wrong; the driver is correct.
+  - **I2C: 1 real bug FIXED (82%)** — the transfer held a `k_spinlock` (which disables IRQs)
+    across the ENTIRE transfer incl. the busy-polls (up to 0x100000/phase), freezing the
+    tick/scheduler/watchdog for every I2C op. Changed to a `k_mutex` (serialises transfers,
+    thread-context only, IRQs stay enabled during the poll). Re-validated: w83795_smoke still
+    reads fan1=2641/temp0=50.500 PASS.
+  - **W83795: 1 real bug FIXED (80%)** — the DIE_TEMP channel emitted `val2` always
+    non-negative, violating the Zephyr sensor_value sign contract (a -0.5degC read gave
+    {val1=-1,val2=+500000} → the smoke printf would show "-1.500"). Now builds the value in
+    signed micro-degrees + splits canonically (val2 matches val1's sign); the positive
+    seeded read is unchanged (50.500 C) so the smoke test still PASSes.
+  - **Net gate-b Zephyr round:** 4 drivers reviewed, 2 real bugs fixed + re-validated, 1
+    trivial nit fixed, console-drop mystery resolved (capture artifact). Drivers gpio/i2c/
+    w83795 rebuilt + boot-PASS after the fixes.
 - **SPI1/FMC phantom (#144) — INVESTIGATED, it is a BIG refactor not a quick removal.** The
   real G3 flash controller is the legacy SMC @0x16000000 (smc-g3, used by C4). BUT the
   modern C2 kernel boots from the G4 FMC @0x1E620000 (created unconditionally + aliased to

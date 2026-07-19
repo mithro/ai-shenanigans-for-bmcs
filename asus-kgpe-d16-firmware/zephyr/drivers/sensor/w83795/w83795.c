@@ -173,11 +173,22 @@ static int w83795_channel_get(const struct device *dev, enum sensor_channel chan
 		val->val2 = 0;
 		return 0;
 	}
-	case SENSOR_CHAN_DIE_TEMP:
-		/* whole degrees + quarter-degrees (0.25 degC = 250000 micro). */
-		val->val1 = data->temp0_whole;
-		val->val2 = (int32_t)data->temp0_quarter * 250000;
+	case SENSOR_CHAN_DIE_TEMP: {
+		/*
+		 * whole degrees + quarter-degrees (0.25 degC = 250000 micro).
+		 * Build the value in signed micro-degrees and split canonically so
+		 * val2 carries the SAME SIGN as val1 (the Zephyr sensor_value
+		 * contract: -0.5 degC is {val1=0, val2=-500000}, not {-1, +500000}).
+		 * temp0_whole is int8, temp0_quarter is 0..3, so the product fits in
+		 * int32 with no overflow.
+		 */
+		int32_t micro = (int32_t)data->temp0_whole * 1000000 +
+				(int32_t)data->temp0_quarter * 250000;
+
+		val->val1 = micro / 1000000;
+		val->val2 = micro % 1000000;
 		return 0;
+	}
 	default:
 		return -ENOTSUP;
 	}
