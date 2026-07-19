@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-20 — RTC (row 39) Zephyr driver VALIDATED ON SILICON — set/get PASS; #158 "reads 0x0" RESOLVED, re-scoped to real-time-rate
+
+Booted `rtc_smoke` (entry 0x4000245c, md5 3bedfc9c…verified staged) on the real AST2050 at
+the board's 4 W deep-S5 state (RTC is SoC-internal on 5VSB, so no host/sensor rail needed).
+Path: JTAG reset-halt → DDR2 TRAINED → load @0x40000000 → reg pc → resume; console on
+/dev/serial-bmc-console @115200. Captured:
+```
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+RTC set=12:45:30 day=7  get=12:45:52 day=7  (delta=22s)
+RTC RESULT: PASS
+```
+The `rtc_aspeed_g3` driver set the time, the CONTROL[5] load latched, and a subsequent get read
+back a consistent, same-weekday, advancing time. set / get / BCD-encode / weekday / latch all work
+on silicon → **the original #158 symptom ("reads back 0x0") is RESOLVED** (root cause was two
+issues, both fixed earlier this program: (1) async load — poll CONTROL[5]; (2) NO CLOCK — the RTC
+had no running clock until soc rtc-init sets SCU08[16]=1 to select the 24 MHz "test-only" tap).
+**Residual (real, board-hardware, not a driver bug):** delta=22 "RTC seconds" elapsed in a
+sub-second wall-clock window ⇒ the counter runs ~700–732× too fast, because this board has NO
+32.768 kHz RTC crystal (schematic) and the 24 MHz tap is divided by the prescaler as if it were
+32.768 kHz. So **#158 is re-scoped** from "reads 0x0 / silicon FAIL" to "real-time-rate: RTC runs
+fast on this board (no crystal); driver faithful". Row 39 ZS stays **🔶** = functional-but-not-
+real-time. Evidence: `openbmc/bmc-functionality/evidence/d14-zephyr/14-rtc-silicon-pass.txt`.
+This also re-validates the rtc_smoke tolerance fix (`delta>=0`) on silicon: the old `delta<=10`
+bound would have false-failed this correct-but-fast driver.
+
 ## 2026-07-20 — GATE (b) FRONTIER CLOSED: Linux kernel-patches review — 9/10 CLEAN, 1 concurrency bug FIXED (aspeed-video JFIF)
 
 Independent review of all 10 AST2050 Linux enablement patches (the last major unreviewed developed

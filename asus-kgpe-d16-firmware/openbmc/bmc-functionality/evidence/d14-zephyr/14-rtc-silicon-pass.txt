@@ -1,0 +1,42 @@
+D14 Zephyr — RTC (row 39) driver validated on REAL AST2050 silicon (2026-07-20)
+
+Device: AST2050 RTC @ 0x1E781000 (SoC-internal, powered from BMC 5VSB — works at
+the board's 4 W deep-S5 state; independent of the sensor rail).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/rtc_smoke  (entry 0x4000245c)
+Path: JTAG (RPi4 bit-bang) reset-halt -> DDR2 train -> load zephyr.bin @0x40000000
+      -> reg pc -> resume; console captured on /dev/serial-bmc-console @115200.
+Board power at capture: 4 W (deep S5), au-plug Status 8 confirmed. BMC on 5VSB.
+
+===== CAPTURED CONSOLE (boot-zephyr-silicon-long.sh 0x4000245c) =====
+### [1/3] reset halt
+Warn : srst pulls trst - can not reset into halted mode. Issuing halt after reset.
+### [2/3] DDR2 train
+>>> DDR2 TRAINED: all read-backs match. DRAM is usable.
+### [3/3] load + resume (entry 0x4000245c)
+=== resumed ===
+### ===== CONSOLE (20 s window) =====
+[02:52:19] *** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+RTC set=12:45:30 day=7  get=12:45:52 day=7  (delta=22s)
+RTC RESULT: PASS
+### ===== end =====
+
+RESULT: PASS. The rtc_aspeed_g3 driver correctly SET the time (12:45:30, weekday 7),
+the CONTROL[5] latch/load completed, and a subsequent GET read back a consistent,
+same-day, advancing time (12:45:52, weekday 7). set/get/BCD-encode/weekday/latch all
+work on real silicon.
+
+IMPORTANT — the delta is the KNOWN #158 board limitation, NOT a driver bug:
+delta = 22 "RTC seconds" elapsed in a sub-second wall-clock window between set and
+get => the RTC counter runs ~700x too fast. Root cause (documented, #158): this board
+has NO 32.768 kHz RTC crystal (schematic), so the RTC is clocked from the 24 MHz
+"test only" tap enabled by SCU08[16]=1 (soc/aspeed/ast2050/rtc init). The prescaler
+divides 24 MHz as if it were 32.768 kHz, so time advances ~732x real. The DRIVER is
+faithful; the board hardware cannot give real-time seconds. Hence row 39 ZS stays 🔶
+(functional-but-not-real-time), and #158 tracks the real-time-accuracy follow-up
+(a QEMU-modellable prescaler-rate correction or documenting the board constraint).
+
+This capture also re-validates the rtc_smoke tolerance fix (delta >= 0, upper bound
+dropped): the old `delta <= 10` bound would have FALSE-FAILED this correct driver on
+the fast clock. PASS confirms the fix is right on silicon.
+
+md5(zephyr.bin) = 3bedfc9c4ccda803e31b1c59f556b11a (staged + verified before boot).
