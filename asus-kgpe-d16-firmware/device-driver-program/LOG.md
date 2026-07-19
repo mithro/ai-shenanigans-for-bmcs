@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-19 — ⚠️ Git-hygiene incident (honest note): bare `git push` published another branch
+
+A bare `git push` from this worktree, with the repo's `push.default=matching`,
+fast-forwarded `origin/claude/mobo-bench-spec` (7ef67cd→68ab62b) — a DIFFERENT
+session's active worktree, not mine — alongside my own branch. It was a
+non-destructive fast-forward (origin merely caught up to that branch's local HEAD;
+no history rewrite, no divergence, no lost work), so harm is minimal, but it
+disturbed another's branch without intent. **NOT force-undone** (force-push is
+forbidden + would be far more disruptive to that branch's owner). **Correction:
+always push MY branch explicitly — `git push origin claude/bmc-functionality` —
+never bare `git push` in this shared multi-worktree repo.** (Did not change the
+shared `push.default` config, since that too would affect other sessions.)
+
 ## 2026-07-19 — Confirming re-review of the 2 code fixes → CLEAN (gate b satisfied for this session's code)
 
 Dispatched an independent second code-review pass on the two fixes from the prior
