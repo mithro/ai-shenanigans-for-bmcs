@@ -71,7 +71,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: RTC model
 - U-Boot: [N] QEMU/silicon (Raptor U-Boot does not use the SoC RTC)
 - Linux: [x] QEMU (rtc-aspeed) · [ ] silicon · [ ] userspace (`hwclock`/`/dev/rtc`)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`rtc_smoke` set/load/read PASS via `rtc_aspeed_g3.c`) · [~] silicon (SCU08[16] clock makes the RTC LOAD+RUN on real AST2050, but the 24 MHz source runs it fast — not real-time 1 Hz; #158)
 
 ### A8. AHB / P2A + LPC-to-AHB back-doors (§implied; datasheet)
 - [x] QEMU: P2A window (SCU7C readback == silicon)
@@ -244,7 +244,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: `hw/sensor/sbtsi.c` datasheet/driver-faithful (P0@0x4c, P1@0x4d on i2c3); `scripts/sbtsi-test.py` 8/8 PASS (evidence d09-sbtsi/00)
 - U-Boot: [N] (CPU thermal is an OS function)
 - Linux: [x] QEMU (in-kernel `sbtsi_temp` hwmon driver binds amd,sbtsi on i2c3 and reads the model: `3-004c/hwmon/.../temp1_input`=45500, `3-004d`=43000; CONFIG_SENSORS_SBTSI; CI `boot-sbtsi`) · [x] **silicon (DID IT — netbooted the i2c3-enabled real-HW kernel with the host powered; the sbtsi_temp driver bound the REAL AMD CPU SB-TSI @0x4c, temp1_input=14375, raw regs 0x0e/0x60 confirm 14.375°C; P1@0x4d NAKs = socket-2 CPU absent. Host stayed on through the BMC reset. Evidence d09-sbtsi/01-silicon-pass.txt)** · [x] userspace (`/sys/class/hwmon` temp1_input)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`sbtsi_smoke` platform-agnostic PASS, temp 45.5 C) · [ ] silicon (attempted 2026-07-20 — sample_fetch -EIO because the host CPU wasn't POSTed; host-power-gated, reliable path via kgpe-power.sh keep-on, #150)
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)
 - [ ] QEMU: PMBus device model on I2C1 (task #135)
@@ -276,7 +276,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: `aspeed_gpio.c` + kgpe_d16_pwrseq (GPIOA4 lockout, B1/B6/F0 pulse, H2 latch)
 - U-Boot: [~] QEMU · [~] silicon (Raptor drives some GPIO)
 - Linux: [x] QEMU (F2 power on/off/reset PASS via kgpe-power.sh) · [x] silicon (plug 3W→103W, host PXE, eth0 survives) · [x] userspace (sysfs gpio, kgpe-power.sh, Redfish)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [x] QEMU (`power_smoke` drives A4/B1/B6/F0 via the GPIO driver, H2 latch 0→1→0 PASS) · [ ] silicon (the OUTPUT actuation drives the real board 4W↔97W, but the `power_smoke` RESULT is FAIL — GPIOH2 feedback is a mis-modeled standby-rail sense; #162)
 
 ### E2. Platform-monitor GPIO INPUTS — THERMTRIP/PROCHOT/DDR_THERM/NMI + POST-complete/sync-flood/NMI-button (§11 + per-pin netlist)
 (full input set from `pinmaps/QU1_pins.md`: `TTL_P1/P2_THERMTRIP#` V4/V3, `TTL_P1/P2_PROCHOT#` V2/V1, `AST_P0/P1_DDR_THERM#` T3/T2, `AST_NMI#` T1; **plus gate-(d)-found inputs: `AST_BIOS_POST_COMPLT#` A10/GPIOB5 (host POST-complete monitor), `AST_SYNCFLOODIN#` B8/GPIOC4 (HyperTransport fatal-error monitor), `FP_NMIBNT#` U1/GPIOH6 (front-panel NMI-button sense)**)
