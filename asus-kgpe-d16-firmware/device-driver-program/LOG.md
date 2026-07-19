@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-19 — ⚠️ FAILED silicon attempt (honest): FRU/W83601G Zephyr reads time out on engine 4 (i2c4)
+
+Tried to silicon-validate the BMC-side Zephyr drivers (FRU EEPROM, W83601G) on the real
+AST2050 over JTAG — no host power needed (I2C5 is on BMC standby). **Both FAILED, honestly
+documented:**
+- Zephyr BOOTS on silicon (banner appears) — the cache/VIC fixes hold.
+- `fru_smoke`: `FRU smoke: eeprom_read failed (-116)` = **-ETIMEDOUT** — the FRU EEPROM
+  (U25 @0x54) did NOT ACK on my Zephyr `i2c4` node (engine 4 = 0x1E78A140).
+- `w83601g_smoke`: `port_get=0x0000` (not the value) + `CR01=0x00` + FAIL — consistent with
+  the same engine-4 i2c timeout (the sample leaves the value 0 on a failed read).
+- **Contrast:** the W83795 on **engine 1** (i2c1 @0x1E78A080) DID read real values on silicon
+  earlier. So the i2c_aspeed_g3 driver + SCU-reset-release WORK — the failure is specific to
+  reaching the I2C5 devices via my engine-4 node.
+- **Honest confidence it's MY issue, not the hardware** (per the project principle): either
+  (a) the schematic-I2C5 → SoC-engine mapping I assumed (I2C5 = engine 4) is wrong — the FRU/
+  W83601G may sit on a different physical engine than 0x1E78A140 (the W83795=I2C2=engine1
+  mapping held, but I2C5 isn't independently confirmed on silicon); or (b) engine 4 needs a
+  per-engine setup (AC-timing I2CD04 / clock) my Zephyr driver applies for engine 1 but not
+  4. Linux read the FRU via its `&i2c4` earlier, so the device IS present + reachable — my
+  Zephyr path is what's wrong. FRU/W83601G **ZS stays ⬜** (NOT claimed — the reads failed).
+- **NEXT (tasked #156):** silicon i2c-scan for 0x54/0x18 across all 7 engines from Zephyr
+  (add DT nodes + a probe like the fwtest 0x50/0x58 scan) to find the real engine, then fix
+  the i2c4 mapping / engine-4 setup. Longer capture needed too (the i2c timeout is slower
+  than the boot-zephyr-silicon.sh 5 s window — used boot-zephyr-silicon-long.sh, 20 s).
+
 ## 2026-07-19 — PROPER Zephyr W83601G gpio_driver_api driver — QEMU-validated (#155; rows 21/22 ZQ 🔶→✅)
 
 Upgraded the W83601G from the i2c-client smoke to a real Zephyr GPIO controller
