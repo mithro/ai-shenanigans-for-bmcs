@@ -11,9 +11,13 @@ faults on silicon" story. FIX (uboot-patches/0004): start.S:97 orr->bic (clear t
 QEMU still boots to ast# (no regression — A ignored in QEMU); SILICON now runs in SUPERVISOR mode at
 PC=0x38480 (~0x38000 deep, A=0) instead of aborting at 0x10 — the alignment abort is GONE. Big step.
 REMAINING (new, honestly-open blocker): still no console at 115200 OR 1200 — the CPU is past the abort
-(Supervisor, PC=0x38480) so it's either hung before console-init at 0x38480 OR the console baud is
-neither tried value (ns16550 divisor vs AST2050 UART clock). Next: halt-twice (hung vs running) + read
-the UART divisor to compute the real baud. A-fix COMMITTED (validated QEMU + silicon-past-abort). This
+(Supervisor, PC=0x38480). REFINED: read the console UART divisor at 0x1e784000 over JTAG — LCR=0x00,
+DLL=0x00, DLM=0x00 = the UART is COMPLETELY UNCONFIGURED. The same UART worked for Zephyr once
+configured, so the modern U-Boot has NOT reached console-init => it's a HANG in early board_init_f
+BEFORE console setup, NOT a baud issue (the 115200/1200 attempts were moot). Confidence HIGH (UART
+unconfigured after a 20s window >> console-init time). Next: disassemble/single-step around PC=0x38480
+(or hw-bp the ns16550 init) to find what early G3-vs-G4 step it's waiting on. A-fix COMMITTED (validated
+QEMU + silicon-past-abort). This
 is the classic project lesson AGAIN: the hardware wasn't weird — U-Boot enabled alignment faults + did
 an unaligned access; QEMU's leniency hid it. Evidence d15-uboot/03 (ROOT CAUSE FOUND section). #168 updated.
 

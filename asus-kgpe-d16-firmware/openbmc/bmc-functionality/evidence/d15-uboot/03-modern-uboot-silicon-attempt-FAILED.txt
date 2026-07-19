@@ -93,9 +93,18 @@ unaligned accesses). RESULTS:
 
 REMAINING (new, separate blocker — honestly open): still NO console output on silicon at 115200 OR
 1200 baud (88-90 bytes = capture header only). The CPU is in Supervisor mode at PC=0x38480 (past the
-abort), so it is either (i) hung in an early loop BEFORE console-init at 0x38480, or (ii) the console
-baud is neither 115200 nor 1200 (the modern U-Boot's ns16550 divisor from its DT clock-frequency may
-not match the AST2050 UART clock). NEXT: halt twice to see if PC advances (hung vs running); read the
-UART DLL/DLM divisor the U-Boot programmed at 0x1e784000 and compute the actual baud; or single-step
-board_init_f to console_init. The A-bit fix is COMMITTED (real, validated: QEMU-clean + silicon-past-
-abort); this console blocker is the next #168 sub-step.
+abort).
+
+--- REFINEMENT: it's a HANG before console-init, NOT a baud issue ---
+Read the console UART divisor latch at 0x1e784000 over JTAG (set LCR DLAB, read DLL/DLM, restore):
+  LCR (0x1e78400c) = 0x00,  DLL (0x1e784000, DLAB) = 0x00,  DLM (0x1e784004) = 0x00.
+The UART is COMPLETELY UNCONFIGURED (LCR=0 = reset state, divisor=0). The SAME UART worked for the
+Zephyr silicon boots once configured, so this is not a JTAG/decode artifact — the modern U-Boot has
+NOT reached console/UART init. Therefore the "no console" is because the U-Boot is HUNG (or blocked) in
+early board_init_f BEFORE console_init — the 115200/1200 baud attempts were moot (the UART was never
+set up). Confidence: HIGH it's a pre-console hang (UART unconfigured after a 20 s window that is far
+more than console-init needs); the EXACT hang site (PC~0x38480) is not yet pinned. Likely a G3-vs-G4
+difference in an early board_init_f step that polls a peripheral that never responds (clock/PLL wait,
+DRAM sizing, or the MAC-EEPROM I2C read). NEXT (#168): disassemble/single-step around PC=0x38480 (or
+set a hw breakpoint at the ns16550 init) to find what it's waiting on. The A-bit fix is COMMITTED
+(real, validated: QEMU-clean + silicon-past-abort); this pre-console hang is the next #168 sub-step.
