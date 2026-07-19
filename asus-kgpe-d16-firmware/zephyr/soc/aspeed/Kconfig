@@ -12,6 +12,14 @@ config SOC_FAMILY_ASPEED
 	select ARM_CUSTOM_INTERRUPT_CONTROLLER
 	select MMU
 	select ATOMIC_OPERATIONS_C
+	select SOC_RESET_HOOK
+	# SOC_RESET_HOOK is REQUIRED, not optional: soc_reset_hook()
+	# (soc/aspeed/ast2050/soc.c) invalidates the ARM926 I/D-cache + TLB before
+	# z_arm_mmu_init turns the MMU/caches on. Without it, on real silicon the
+	# freshly-enabled D-cache serves stale power-on garbage and the image
+	# data-aborts at __start (QEMU cannot catch this — it models no cache
+	# contents). Select it explicitly here; do NOT rely on an upstream SoC-root
+	# family of the same Kconfig symbol name happening to select it.
 	# MMU is required by the ARM9 arch (CONFIG_MMU stays y even if not
 	# selected here). The port RUNS AN APPLICATION under QEMU (evidence
 	# d14-zephyr/03): "*** Booting Zephyr OS ***" + "Hello World!" via a
