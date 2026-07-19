@@ -13,23 +13,29 @@
  * (devicetree node w83795, child of i2c1 @ 0x1E78A080). The kgpe-d16-bmc QEMU
  * machine wires it there (hw/arm/aspeed.c kgpe_d16_bmc_i2c_init).
  *
- * DETERMINISTIC EXPECTATION (all from QEMU hw/sensor/w83795.c seeding):
- *   fan1  = 2641 rpm  -- w83795_load_defaults() line 184 seeds fan reg 0x2E via
- *                        w83795_set_fan(s, 0x2E, 2641): count = 1350000/2641 =
- *                        511, and the driver inverts it as 1350000/511 = 2641.
- *   temp0 = 50.500 C  -- w83795_load_defaults() line 177 seeds temp reg 0x21 via
- *                        w83795_set_temp(s, 0x21, 50500) = 50.5 degC.
- * Both are constant in the model, so the printed values are fully predictable.
- * PASS requires fan1 == 2641 rpm.
+ * PASS is PLATFORM-AGNOSTIC (so this is a real both-sides test): both channel reads
+ * must SUCCEED and return a physically PLAUSIBLE value — not an exact match to the
+ * QEMU seed, because on real silicon the values are live. In QEMU the model seeds a
+ * constant fan1=2641 rpm (w83795_load_defaults() w83795_set_fan(s,0x2E,2641)) and
+ * temp0=50.5 C (w83795_set_temp(s,0x21,50500)); on the real AST2050 the W83795G
+ * returns the live fan RPM / thermal-diode temperature (e.g. ~2600 rpm / ~58 C,
+ * drifting between reads). The old exact-match (fan1==2641) false-FAILed on silicon
+ * despite reading the real chip correctly — a QEMU-specific gate, now removed.
  */
 
+#include <stdbool.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
 #define W83795_NODE   DT_NODELABEL(w83795)
-#define W83795_EXPECT_RPM 2641
+
+/* Plausible physical bounds spanning the QEMU seed and live silicon. */
+#define W83795_RPM_MIN  100
+#define W83795_RPM_MAX  30000
+#define W83795_TEMP_MIN 0
+#define W83795_TEMP_MAX 125
 
 BUILD_ASSERT(DT_NODE_HAS_STATUS(W83795_NODE, okay),
 	     "w83795 (nuvoton,w83795 on i2c1) must be enabled");
@@ -63,9 +69,12 @@ int main(void)
 		return 0;
 	}
 
-	printk("W83795 fan1=%d rpm temp0=%d.%03d C (expect fan1=%d) %s\n",
-	       rpm.val1, temp.val1, temp.val2 / 1000, W83795_EXPECT_RPM,
-	       (rpm.val1 == W83795_EXPECT_RPM) ? "PASS" : "FAIL");
+	bool fan_ok = (rpm.val1 >= W83795_RPM_MIN && rpm.val1 <= W83795_RPM_MAX);
+	bool temp_ok = (temp.val1 >= W83795_TEMP_MIN && temp.val1 <= W83795_TEMP_MAX);
+
+	printk("W83795 fan1=%d rpm (ok=%d) temp0=%d.%03d C (ok=%d)\n",
+	       rpm.val1, fan_ok, temp.val1, temp.val2 / 1000, temp_ok);
+	printk("W83795 RESULT: %s\n", (fan_ok && temp_ok) ? "PASS" : "FAIL");
 
 	return 0;
 }
