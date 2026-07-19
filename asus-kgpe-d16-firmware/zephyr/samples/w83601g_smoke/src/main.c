@@ -50,7 +50,7 @@ static bool test_expander(const struct device *gpio, const struct device *i2c,
 {
 	gpio_port_value_t inval = 0;
 	uint8_t cr01_hi = 0, cr01_lo = 0;
-	int ret_in, ret_hi, ret_lo;
+	int ret_in, ret_hi, ret_lo, ret_rd_hi, ret_rd_lo;
 	bool out_ok;
 
 	if (!device_is_ready(gpio)) {
@@ -61,15 +61,21 @@ static bool test_expander(const struct device *gpio, const struct device *i2c,
 	ret_in = gpio_port_get_raw(gpio, &inval);
 
 	ret_hi = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_HIGH);
-	(void)i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_hi);
+	ret_rd_hi = i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_hi);
 	ret_lo = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_LOW);
-	(void)i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_lo);
+	ret_rd_lo = i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_lo);
 
-	out_ok = (ret_hi == 0) && (cr01_hi & BIT(TEST_PIN)) &&
-		 (ret_lo == 0) && !(cr01_lo & BIT(TEST_PIN));
+	/* Every read/write must succeed. Checking the CR01 read return codes is
+	 * essential: cr01_lo defaults to 0, and a FAILED low read would leave it 0
+	 * — indistinguishable from a genuine "pin low" — so a discarded error could
+	 * fake a PASS (fail loud, never hide an incomplete result).
+	 */
+	out_ok = (ret_hi == 0) && (ret_rd_hi == 0) && (cr01_hi & BIT(TEST_PIN)) &&
+		 (ret_lo == 0) && (ret_rd_lo == 0) && !(cr01_lo & BIT(TEST_PIN));
 
-	printk("W83601G %s @0x%02x: port_get=0x%04x (ret=%d)  pin%d high->CR01=0x%02x  low->CR01=0x%02x\n",
-	       tag, addr, (unsigned int)inval, ret_in, TEST_PIN, cr01_hi, cr01_lo);
+	printk("W83601G %s @0x%02x: port_get=0x%04x (ret=%d)  pin%d high->CR01=0x%02x(r%d)  low->CR01=0x%02x(r%d)\n",
+	       tag, addr, (unsigned int)inval, ret_in, TEST_PIN, cr01_hi, ret_rd_hi,
+	       cr01_lo, ret_rd_lo);
 
 	return (ret_in == 0) && out_ok;
 }
