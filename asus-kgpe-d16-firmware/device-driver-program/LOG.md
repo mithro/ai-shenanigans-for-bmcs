@@ -13,11 +13,16 @@ NEXT SUB-PROBLEM (characterized, not yet fixed): device reads NAK — `i2c md 0x
 `i2c md 0x54 0 4` (FRU) both return -121 (-EREMOTEIO/no-ACK). NOT the SCU74 pinmux (bus1=engine1=I2C2
 has dedicated pads + still NAKs). The SAME QEMU devices read fine under the Zephyr i2c_aspeed_g3
 driver (w83795_smoke/fru_smoke QEMU PASS) => the QEMU model is faithful to a correct driver; the
-U-Boot ast_i2c.c (G4/G5-era) drives the G3 controller wrong. HYPOTHESIS (MODERATE confidence, per the
-"be honest about whether you just did something wrong" rule): same class as Linux #93 (G3 vendor
-I2C AC-timing / I2CD04). NOT yet confirmed to the exact register — next step is diffing U-Boot
-ast_i2c bus-init vs the working Zephyr/vendor G3 init. Evidence updated: d15-uboot/01. Added a #137
-sub-task. The buses-bind milestone is solid; the NAK is the honestly-open next piece.
+U-Boot ast_i2c.c (G4/G5-era) drives the G3 controller wrong. HYPOTHESIS ITERATION (honest about a
+wrong first guess): my first guess (Linux #93-class AC-timing / I2CD04) is REFUTED for the QEMU NAK
+— the Zephyr i2c_aspeed_g3.c header line 93 says the AC timing "does not gate the bus in QEMU"
+(real-SILICON requirement, not a QEMU one). Reading ast_i2c.c gave a STRONGER lead: it is AST2500-
+targeted (`#include <asm/arch/scu_ast2500.h>`) and its probe STUBS the SCU engine clock/reset enable
+(`//TODO scu reset and get clk`) — never takes the i2c engine out of SCU reset / enables its clock,
+which on the G3 likely leaves the engine not brought up -> -121 on every device. NEXT STEP: implement
+the G3 SCU i2c clock/reset enable in the U-Boot driver + retest. Evidence d15-uboot/01. Added a #137
+sub-task. Buses-bind is CONFIRMED; the device-NAK cause is a STRONG LEAD (AST2500-SCU-stub), NOT yet
+proven — stated as such, not overclaimed.
 
 ## 2026-07-20 — U-Boot track (#137): established the modern-U-Boot baseline — it BOOTS to console on the G3 QEMU
 

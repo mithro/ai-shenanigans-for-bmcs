@@ -87,11 +87,18 @@ i2c bus, i2c dev/probe, sf probe). Results:
     devices are read fine by the Zephyr i2c_aspeed_g3 driver (w83795_smoke / fru_smoke QEMU PASS),
     so the QEMU model is faithful to a correct driver -> the U-Boot aspeed i2c driver (ast_i2c.c,
     written for G4/G5) drives the G3 controller in a way the model (and real HW) reject.
-    HYPOTHESIS (MODERATE confidence, NOT yet root-caused): the same class as the Linux #93 fix
-    (the G3 needs vendor I2C AC-timing / I2CD04 programming that mainline gets wrong for G3). NEXT
-    STEP: diff U-Boot ast_i2c.c bus-init against the working Zephyr i2c_aspeed_g3 / vendor G3 init
-    to find the exact register the U-Boot driver mis-programs for G3, then patch it. Tracked as a
-    #137 sub-item. HONEST: I have not yet confirmed the AC-timing specifically — only that buses
-    bind and all devices NAK, and that a known-correct driver (Zephyr) works on the same model.
+    HYPOTHESIS ITERATION (being honest about a wrong first guess):
+      - FIRST guess = Linux #93-class AC-timing (I2CD04). REFUTED for the QEMU NAK: the Zephyr
+        i2c_aspeed_g3.c header (line 93) states the AC timing "does not gate [the bus] in QEMU"
+        (it is a REAL-SILICON requirement, not a QEMU one). So AC-timing is NOT the QEMU cause.
+      - STRONGER lead (found by reading drivers/i2c/ast_i2c.c): the U-Boot driver is AST2500-
+        targeted (`#include <asm/arch/scu_ast2500.h>`) and its ast_i2c_probe() has the SCU engine
+        clock/reset enable STUBBED OUT: `//TODO scu reset and get clk` (it never takes the i2c
+        engine out of SCU reset / enables its clock). On the G3 model that clock/reset path is not
+        the AST2500's, so the engine likely is not properly brought up for the addressed bus,
+        producing the -121 on every device. NEXT STEP: implement the G3 SCU i2c clock/reset enable
+        in the U-Boot driver (analog of the Zephyr driver's SCU handling) + retest. Tracked as a
+        #137 sub-item. HONEST CONFIDENCE: buses-bind is CONFIRMED; the exact device-NAK cause is
+        NOT yet confirmed — the AST2500-SCU-stub is a strong lead, not a proven fix.
   * The console is fully interactively drivable (commands echo + execute), so per-device probes
     are a viable validation method going forward.
