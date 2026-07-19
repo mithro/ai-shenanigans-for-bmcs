@@ -108,3 +108,18 @@ difference in an early board_init_f step that polls a peripheral that never resp
 DRAM sizing, or the MAC-EEPROM I2C read). NEXT (#168): disassemble/single-step around PC=0x38480 (or
 set a hw breakpoint at the ns16550 init) to find what it's waiting on. The A-bit fix is COMMITTED
 (real, validated: QEMU-clean + silicon-past-abort); this pre-console hang is the next #168 sub-step.
+
+--- FURTHER REFINEMENT (disassembly around the halted PC) ---
+Halted PC = 0x00038d78; the code there is string/format processing — `ldrb r3,[r4]; cmp r3,#0; bne`,
+and notably `cmp r3, #0x25` (0x25 = '%'), the characteristic format-specifier scan of printf/vsprintf.
+So it looks like the U-Boot actually REACHED a print call (NOT hung in a peripheral poll before the
+console) — yet the UART at 0x1e784000 is still unconfigured (LCR=0/div=0). That re-points the diagnosis
+at serial_init: on the G3 the ns16550 console init did not configure the UART (the divisor from the DT
+clock-frequency may compute to 0, or an SCU UART clock/reset the init needs isn't done), so print output
+goes into an un-set-up UART and is never transmitted at a readable baud. (Alternatively the CPU is
+looping inside the format code on a bad string.) HONESTY: PC=0x38d78 here vs 0x38480 earlier were read
+across DIFFERENT boots, so that does NOT by itself prove forward progress; and I did not single-step to
+confirm reached-print vs looping. NEXT (#168): hw-breakpoint ns16550 serial_setbrg/init to see why the
+LCR/divisor stay 0 on the G3 (compare to the Zephyr UART init, which DOES set the divisor at
+0x1e784000), then fix serial_init. Net for the cycle: the alignment abort is FIXED + committed; the
+UART-not-configured-on-G3 issue is the precise next sub-step.
