@@ -92,4 +92,35 @@ void soc_early_init_hook(void)
 /* Called from reset.S before prep_c. MMU/caches are still off here. */
 void soc_reset_hook(void)
 {
+	/*
+	 * Invalidate the I-cache, D-cache, and TLBs before z_arm_mmu_init turns
+	 * the MMU + caches on (this hook runs with them still off, and no U-Boot
+	 * runs here to have done it).
+	 *
+	 * On silicon the ARM926EJ-S caches/TLBs power up with UNDEFINED contents
+	 * — a hardware reset does not clear them. Without this invalidate, when
+	 * z_arm_mmu_init enables the D-cache, data reads can hit stale garbage
+	 * cache lines instead of DRAM. Observed on the real AST2050 (JTAG boot):
+	 * _isr_wrapper loaded the _current_cpu pointer *(0x40002578) — which is
+	 * 0x4000c21c in the JTAG-loaded DRAM, verified byte-for-byte — back as
+	 * 0x8000001f, then took a section-translation data abort on 0x80000030
+	 * (CP15 FAR) and spun in z_arm_data_abort at __start. QEMU boots the same
+	 * image because it does not model cache *contents* (reads always hit
+	 * memory); this invalidate is a harmless no-op there and makes the boot
+	 * correct on real hardware too.
+	 *
+	 * ARM926EJ-S CP15 (ARMv5TE), Rd ignored (SBZ):
+	 *   c7,c7,0   invalidate I-cache + D-cache
+	 *   c8,c7,0   invalidate I-TLB + D-TLB
+	 *   c7,c10,4  drain write buffer
+	 */
+	uint32_t sbz = 0U;
+
+	__asm__ volatile(
+		"mcr p15, 0, %0, c7, c7, 0\n\t"  /* invalidate I+D cache */
+		"mcr p15, 0, %0, c8, c7, 0\n\t"  /* invalidate I+D TLB   */
+		"mcr p15, 0, %0, c7, c10, 4\n\t" /* drain write buffer   */
+		:
+		: "r"(sbz)
+		: "memory");
 }
