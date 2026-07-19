@@ -275,7 +275,7 @@
 };
 
 /*
- * Board FRU EEPROM: Holtek HT24LC08 (1 Kbit, U25) on the BMC's direct I2C5
+ * Board FRU EEPROM: Holtek HT24LC08 (8 Kbit, U25) on the BMC's direct I2C5
  * engine (schematic §10.2, balls A13/B13 -> Linux i2c-4). The E2 strap is tied
  * high (netlist trace), so it answers at 0x54-0x57, NOT 0x50-0x53 as §10.2's
  * table states. WC# is grounded (write-enabled). This bus is direct (not
