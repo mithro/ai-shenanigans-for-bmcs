@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — DTS/Kconfig review: remaining findings 3/5/6 dispositioned (none dropped)
+
+Closing out the 6 review findings. Done/resolved earlier today: F1 phantom GPIO gpio2..gpio6
+REMOVED + gpio_smoke fixed + silicon PASS (#163 closed); F2 FRU 0x54 CONFIRMED correct on silicon
+(schematic annotated); F4 `configdefault` REJECTED as a false positive (valid Zephyr kconfiglib
+extension; builds + .config prove it). Remaining three:
+- **F3 [layering, Zephyr] — TRACKED as a refactor.** ast2050.dtsi (the reusable SoC dtsi) hardcodes
+  ASUS-KGPE-D16-specific devices (w83795, sbtsi/sbtsi1, fru_eeprom, w83601g_u27/u28). These belong in
+  the board dts (kgpe_d16_bmc.dts) via `&i2cN { … }` overlays so a future AST2050 board doesn't inherit
+  them. Real architecture violation (per CLAUDE.md) but NOT a correctness/faithfulness bug — the devices
+  work; it's a reusability cleanup. Deferred to a dedicated refactor (needs re-validating every smoke
+  sample still binds its device). Added as a task.
+- **F5 [phantom 2nd WDT] + F6 [gpio-ranges overstates 46→220] — FOLDED INTO #144.** Both are on the
+  Linux dts, which is DELIBERATELY based on aspeed-g4.dtsi (CLAUDE.md: "AST2050 is register-compatible
+  enough; no upstream G3 binding yet"), so it inherits G4 nodes (WDT2 @0x1e785020, the wide gpio-ranges)
+  BY DESIGN. Removing them is exactly the #144 phantom-device-count work — which is risk-managed
+  (the C2/C4/C-UBOOT legacy oracles boot on this dts; a broken legacy boot would be a bug in my model,
+  per [[qemu-must-model-real-hardware]]). NOTE the reviewer's caveat: aspeed-bmc-asus-kgpe-d16-realhw.dts
+  is a doc-MIRROR; the compiled source is qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts — #144 must fix
+  the compiled one (and re-run the legacy oracles), not the mirror. Recorded under #144.
+
 ## 2026-07-20 — DTS/Kconfig review Finding 2 RESOLVED on silicon: FRU EEPROM is at 0x54-0x57 (dts correct, schematic was base-range)
 
 The review flagged Zephyr `fru_eeprom@0x54` as wrong vs the schematic's 0x50-0x53. Rather than
