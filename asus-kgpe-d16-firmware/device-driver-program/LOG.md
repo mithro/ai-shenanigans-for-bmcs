@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-20 — U-Boot #137 progress: modern U-Boot I2C buses now BIND on the G3 QEMU; devices NAK (G3-driver sub-problem, characterized)
+
+Continued the U-Boot track with real implementation. Found the i2c -ENODEV cause: CONFIG_DM_I2C +
+CONFIG_SYS_I2C_ASPEED are already =y, but the aspeed SoC dtsi leaves every i2c bus disabled and the
+evb board dts enables none. FIX: uboot-patches/0002-kgpe-d16-enable-i2c-buses.patch enables
+i2c0/1/3/4 (the engines the kgpe-d16-bmc QEMU machine populates); wired build-uboot.sh to apply the
+uboot-patches/*.patch idempotently (git apply --check gate; skips are echoed, NOT silenced). After
+rebuild the DM_I2C aspeed driver BINDS all four buses (`i2c bus` lists them, `i2c dev N` works — was
+-ENODEV). Concrete #137 step done.
+NEXT SUB-PROBLEM (characterized, not yet fixed): device reads NAK — `i2c md 0x2f fe 1` (W83795) and
+`i2c md 0x54 0 4` (FRU) both return -121 (-EREMOTEIO/no-ACK). NOT the SCU74 pinmux (bus1=engine1=I2C2
+has dedicated pads + still NAKs). The SAME QEMU devices read fine under the Zephyr i2c_aspeed_g3
+driver (w83795_smoke/fru_smoke QEMU PASS) => the QEMU model is faithful to a correct driver; the
+U-Boot ast_i2c.c (G4/G5-era) drives the G3 controller wrong. HYPOTHESIS (MODERATE confidence, per the
+"be honest about whether you just did something wrong" rule): same class as Linux #93 (G3 vendor
+I2C AC-timing / I2CD04). NOT yet confirmed to the exact register — next step is diffing U-Boot
+ast_i2c bus-init vs the working Zephyr/vendor G3 init. Evidence updated: d15-uboot/01. Added a #137
+sub-task. The buses-bind milestone is solid; the NAK is the honestly-open next piece.
+
 ## 2026-07-20 — U-Boot track (#137): established the modern-U-Boot baseline — it BOOTS to console on the G3 QEMU
 
 Turned attention to the biggest structural gap (U-Boot). Investigated the actual state (vs the

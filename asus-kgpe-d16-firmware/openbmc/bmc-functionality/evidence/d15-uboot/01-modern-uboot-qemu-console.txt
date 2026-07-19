@@ -74,10 +74,24 @@ i2c bus, i2c dev/probe, sf probe). Results:
     16 MiB". The SPI-flash (SMC) U-Boot driver WORKS in QEMU on the G3 machine -> row 2 (BMC_FW1
     SPI flash) modern-U-Boot driver validated in QEMU. (Boot-critical; also read the env above.)
   * `i2c dev 0|1|4` -> "Failure changing bus number (-19)" (-ENODEV) / "No I2C bus selected";
-    `i2c bus` lists nothing. The evb-ast2400 defconfig does NOT register any I2C bus (no
-    CONFIG_DM_I2C aspeed bus / no i2c DT nodes for this board). => concrete #137 deliverable:
-    enable the aspeed I2C driver + add the G3 i2c engine nodes to the board DT so `i2c probe`
-    can exercise the sensor/FRU buses (the QEMU machine already wires W83795@0x2f, FRU@0x54-57,
-    etc.). This is the U-Boot analog of the Zephyr i2c_aspeed_g3 driver.
+    `i2c bus` lists nothing. ROOT CAUSE: CONFIG_DM_I2C + CONFIG_SYS_I2C_ASPEED are already =y in
+    evb-ast2400_defconfig, but the aspeed SoC dtsi leaves every i2c bus status="disabled" and the
+    evb board dts enables none. FIX (uboot-patches/0002-kgpe-d16-enable-i2c-buses.patch): enable
+    i2c0/i2c1/i2c3/i2c4 (the engines the kgpe-d16-bmc QEMU machine populates). After rebuild:
+      ast# i2c bus
+      Bus 0: i2c-bus@40   Bus 1: i2c-bus@80   Bus 3: i2c-bus@100   Bus 4: i2c-bus@140
+    => the DM_I2C aspeed driver now BINDS all four buses on the G3 machine (`i2c dev N` works).
+  * BUT device reads NAK: `i2c md 0x2f fe 1` (W83795, bus1) and `i2c md 0x54 0 4` (FRU, bus4) both
+    return "-121" (-EREMOTEIO / no-ACK); `i2c probe` lists no chips. This is NOT the SCU74 pin-mux
+    (bus 1 = engine1 = I2C2 has dedicated pads, needs no pinmux, and still NAKs). The SAME QEMU
+    devices are read fine by the Zephyr i2c_aspeed_g3 driver (w83795_smoke / fru_smoke QEMU PASS),
+    so the QEMU model is faithful to a correct driver -> the U-Boot aspeed i2c driver (ast_i2c.c,
+    written for G4/G5) drives the G3 controller in a way the model (and real HW) reject.
+    HYPOTHESIS (MODERATE confidence, NOT yet root-caused): the same class as the Linux #93 fix
+    (the G3 needs vendor I2C AC-timing / I2CD04 programming that mainline gets wrong for G3). NEXT
+    STEP: diff U-Boot ast_i2c.c bus-init against the working Zephyr i2c_aspeed_g3 / vendor G3 init
+    to find the exact register the U-Boot driver mis-programs for G3, then patch it. Tracked as a
+    #137 sub-item. HONEST: I have not yet confirmed the AC-timing specifically — only that buses
+    bind and all devices NAK, and that a known-correct driver (Zephyr) works on the same model.
   * The console is fully interactively drivable (commands echo + execute), so per-device probes
     are a viable validation method going forward.

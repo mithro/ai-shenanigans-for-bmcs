@@ -1,0 +1,34 @@
+diff --git a/arch/arm/dts/ast2400-evb.dts b/arch/arm/dts/ast2400-evb.dts
+index cd6903c8..940bdc1c 100644
+--- a/arch/arm/dts/ast2400-evb.dts
++++ b/arch/arm/dts/ast2400-evb.dts
+@@ -94,3 +94,29 @@
+ 	};
+ };
+ 
++/*
++ * KGPE-D16 (AST2050) I2C bus enablement (device-driver-program #137). The aspeed
++ * SoC dtsi leaves every i2c bus status="disabled"; enable the engines the board
++ * populates so the U-Boot DM_I2C aspeed driver binds them and `i2c probe` can
++ * exercise the sensor/inventory devices the kgpe-d16-bmc QEMU machine wires:
++ *   i2c0 (engine0) -> BMC MAC EEPROM @0x50 + PSU PMBus
++ *   i2c1 (engine1) -> W83795G hwmon @0x2f
++ *   i2c3 (engine3) -> SB-TSI CPU thermal @0x4c/0x4d
++ *   i2c4 (engine4) -> HT24LC08 FRU EEPROM @0x54-0x57 + W83601G DIMM-LED exp
++ */
++&i2c0 {
++	status = "okay";
++};
++
++&i2c1 {
++	status = "okay";
++};
++
++&i2c3 {
++	status = "okay";
++};
++
++&i2c4 {
++	status = "okay";
++};
++

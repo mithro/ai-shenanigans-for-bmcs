@@ -20,6 +20,21 @@ if [ ! -d "$SRC" ]; then
         https://github.com/openbmc/u-boot.git "$SRC"
 fi
 cd "$SRC"
+
+# Apply the KGPE-D16 (AST2050) U-Boot patches idempotently: only ones that still
+# apply cleanly to this tree (a patch already present, or written for a different
+# tree, is skipped with a visible note — NOT silenced to /dev/null).
+PATCHDIR="$ROOT/../uboot-patches"
+for p in "$PATCHDIR"/*.patch; do
+    [ -e "$p" ] || continue
+    if git apply --check "$p"; then
+        git apply "$p"
+        echo "applied $(basename "$p")"
+    else
+        echo "skip $(basename "$p") (already applied or not for this tree)"
+    fi
+done
+
 make evb-ast2400_defconfig
 make -j"$(nproc)"
 
