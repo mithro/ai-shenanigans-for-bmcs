@@ -75,11 +75,29 @@ static void reclaim_a4(void)
 	sys_write32(v & ~SCU74_A4_PHYLINK, SCU_BASE + SCU_MFP_CTL1);
 }
 
+/* Sample GPIOH2 n times at ~1 s spacing, printing each, and return the OR of all
+ * samples (1 if it was ever high). Lets us watch STA_LINE_POWER settle after a
+ * transition instead of reading it once too early. */
+static int h2_trajectory(const struct device *efgh, const char *phase, int n)
+{
+	int seen = 0;
+
+	for (int i = 0; i < n; i++) {
+		int v;
+
+		busy_delay();
+		v = gpio_pin_get_raw(efgh, PIN_H2);
+		seen |= (v == 1);
+		printk("  H2 %s t+%ds = %d\n", phase, i + 1, v);
+	}
+	return seen;
+}
+
 int main(void)
 {
 	const struct device *abcd = DEVICE_DT_GET(GPIO_ABCD);
 	const struct device *efgh = DEVICE_DT_GET(GPIO_EFGH);
-	int h2_start, h2_on, h2_off;
+	int h2_start, on_seen, off_seen;
 
 	if (!device_is_ready(abcd) || !device_is_ready(efgh)) {
 		printk("POWER smoke: gpio device(s) not ready\n");
@@ -89,6 +107,7 @@ int main(void)
 	/* Feedback line: STA_LINE_POWER as input. */
 	(void)gpio_pin_configure(efgh, PIN_H2, GPIO_INPUT);
 	h2_start = gpio_pin_get_raw(efgh, PIN_H2);
+	printk("POWER: H2 start=%d\n", h2_start);
 
 	/* Reclaim A4 and drive it high = BMC in control. */
 	reclaim_a4();
@@ -105,25 +124,26 @@ int main(void)
 	busy_delay();
 	(void)gpio_pin_set_raw(abcd, PIN_B6, 1);
 	(void)gpio_pin_set_raw(abcd, PIN_B1, 1);
-	busy_delay(); /* let the PSU reach power-good */
-	h2_on = gpio_pin_get_raw(efgh, PIN_H2);
+	on_seen = h2_trajectory(efgh, "post-ON ", 3);
 
 	/* Force-OFF: pulse power-down low, release (kgpe-power.sh off). Restores the
-	 * host to the OFF state and validates the force-off path.
-	 */
+	 * host to OFF and lets us watch whether STA_LINE_POWER falls. */
 	(void)gpio_pin_set_raw(efgh, PIN_F0, 0);
 	busy_delay();
 	(void)gpio_pin_set_raw(efgh, PIN_F0, 1);
-	busy_delay();
-	h2_off = gpio_pin_get_raw(efgh, PIN_H2);
+	off_seen = h2_trajectory(efgh, "post-OFF", 6);
 
-	printk("POWER: H2 start=%d  after power-ON=%d (want 1)  after force-OFF=%d (want 0)\n",
-	       h2_start, h2_on, h2_off);
-
-	if (h2_on == 1 && h2_off == 0) {
-		printk("POWER RESULT: PASS\n");
+	/* Two things to learn: does force-OFF drive the real PSU off (checked out of
+	 * band via the au-plug W draw), and does GPIOH2 TRACK the power state. If H2
+	 * is high after ON and falls low after OFF, it tracks (row 27 ZS). If it
+	 * stays high across a real power-down, it senses a standby rail, not host-on.
+	 */
+	printk("POWER: H2 ever-high post-ON=%d  post-OFF=%d\n", on_seen, off_seen);
+	if (on_seen && !off_seen) {
+		printk("POWER RESULT: PASS (GPIOH2 tracks host power)\n");
 	} else {
-		printk("POWER RESULT: FAIL\n");
+		printk("POWER RESULT: FAIL (GPIOH2 did not track: on=%d off=%d)\n",
+		       on_seen, off_seen);
 	}
 
 	return 0;
