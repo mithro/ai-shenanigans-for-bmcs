@@ -85,26 +85,15 @@
 		 * The block is 0x40 bytes; the driver de-asserts the SCU04[2] reset
 		 * hold that keeps all engines inert at power-on.
 		 */
-		i2c1: i2c@1e78a080 { /* engine 1 (QEMU i2c bus 1) */
+		i2c1: i2c@1e78a080 { /* engine 1 = schematic I2C2 (QEMU bus 1) */
 			compatible = "aspeed,ast2050-i2c";
 			reg = <0x1e78a080 0x40>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clock-frequency = <100000>;
 			status = "okay";
-
-			/*
-			 * Nuvoton/Winbond W83795G hardware monitor at 7-bit
-			 * address 0x2F. The kgpe-d16-bmc QEMU machine wires it
-			 * here (hw/arm/aspeed.c kgpe_d16_bmc_i2c_init:
-			 * i2c_slave_create_simple(get_bus(&soc->i2c, 1),
-			 * "w83795", 0x2f)); driver drivers/sensor/w83795/w83795.c.
-			 */
-			w83795: hwmon@2f {
-				compatible = "nuvoton,w83795";
-				reg = <0x2f>;
-				status = "okay";
-			};
+			/* Board-specific slave devices attach in the board dts
+			 * (kgpe_d16_bmc: W83795G hwmon @0x2f). */
 		};
 
 		/*
@@ -118,36 +107,15 @@
 		 * Each engine independently de-asserts the shared SCU04[2] reset
 		 * hold in its init, so a second node is safe.
 		 */
-		i2c3: i2c@1e78a100 { /* engine 3 (QEMU i2c bus 3) */
+		i2c3: i2c@1e78a100 { /* engine 3 = schematic I2C4 (QEMU bus 3) */
 			compatible = "aspeed,ast2050-i2c";
 			reg = <0x1e78a100 0x40>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clock-frequency = <100000>;
 			status = "okay";
-
-			/*
-			 * AMD SB-TSI CPU thermal sensor, socket P0, at 7-bit
-			 * address 0x4C. The QEMU machine seeds it to 45.5 degC
-			 * (hw/arm/aspeed.c line 628, temp 45500 mC).
-			 * Driver: drivers/sensor/sbtsi/sbtsi.c.
-			 */
-			sbtsi: temperature-sensor@4c {
-				compatible = "amd,sbtsi";
-				reg = <0x4c>;
-				status = "okay";
-			};
-
-			/*
-			 * AMD SB-TSI CPU thermal sensor, socket P1, at 7-bit
-			 * address 0x4D, seeded to 43.0 degC (hw/arm/aspeed.c
-			 * line 629, temp 43000 mC).
-			 */
-			sbtsi1: temperature-sensor@4d {
-				compatible = "amd,sbtsi";
-				reg = <0x4d>;
-				status = "okay";
-			};
+			/* Board-specific slave devices attach in the board dts
+			 * (kgpe_d16_bmc: AMD SB-TSI thermal @0x4c/0x4d). */
 		};
 
 		/*
@@ -157,51 +125,15 @@
 		 * kgpe_d16_bmc_i2c_init: aspeed_i2c_get_bus(&soc->i2c, 4); QEMU bus 4 =
 		 * DT i2c4 = schematic "I2C5"). Shipped BLANK (0xff).
 		 */
-		i2c4: i2c@1e78a140 { /* engine 4 (QEMU i2c bus 4) */
+		i2c4: i2c@1e78a140 { /* engine 4 = schematic I2C5 (QEMU bus 4) */
 			compatible = "aspeed,ast2050-i2c";
 			reg = <0x1e78a140 0x40>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clock-frequency = <100000>;
 			status = "okay";
-
-			/*
-			 * Board FRU EEPROM (U25, HT24LC08). @0x54 = the upper-strapped
-			 * device (E2=VCC). Validated via the in-tree Zephyr at2x EEPROM
-			 * driver; blank (0xff) as ASUS shipped it.
-			 */
-			fru_eeprom: eeprom@54 {
-				compatible = "atmel,at24";
-				reg = <0x54>;
-				size = <256>;
-				pagesize = <16>;
-				address-width = <8>;
-				timeout = <5>;
-				status = "okay";
-			};
-
-			/*
-			 * W83601G DIMM-LED I2C GPIO expanders U27 (@0x18, DIMM A-F)
-			 * and U28 (@0x19, DIMM G/H). 16-pin gpio-controllers; driver
-			 * drivers/gpio/gpio_w83601g.c.
-			 */
-			w83601g_u27: gpio@18 {
-				compatible = "winbond,w83601g-gpio";
-				reg = <0x18>;
-				gpio-controller;
-				#gpio-cells = <2>;
-				ngpios = <16>;
-				status = "okay";
-			};
-
-			w83601g_u28: gpio@19 {
-				compatible = "winbond,w83601g-gpio";
-				reg = <0x19>;
-				gpio-controller;
-				#gpio-cells = <2>;
-				ngpios = <16>;
-				status = "okay";
-			};
+			/* Board-specific slave devices attach in the board dts
+			 * (kgpe_d16_bmc: FRU EEPROM @0x54, W83601G DIMM-LED exp @0x18/0x19). */
 		};
 
 		/*

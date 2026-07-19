@@ -1,5 +1,17 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #166 DONE: moved ASUS-specific I2C device nodes out of the reusable ast2050.dtsi into the board dts (DTS-review Finding 3)
+
+Fixed the layering violation the DTS/Kconfig review flagged (Finding 3): the reusable SoC include
+dts/aspeed/ast2050.dtsi hardcoded ASUS-KGPE-D16-specific I2C slave devices. Moved all of them
+(w83795@0x2f on i2c1; sbtsi@0x4c + sbtsi1@0x4d on i2c3; fru_eeprom@0x54 + w83601g_u27@0x18 +
+w83601g_u28@0x19 on i2c4) into the board dts (boards/aspeed/kgpe_d16_bmc/kgpe_d16_bmc.dts) via
+`&i2cN { … }` overlays. ast2050.dtsi now has only the board-agnostic SoC i2c engine controllers (a
+different AST2050 board reusing the include no longer inherits this board's sensors/EEPROM/expanders).
+QEMU-VALIDATED all 4 affected smoke samples still bind + read their devices after the move:
+w83795_smoke PASS, fru_smoke PASS, sbtsi_smoke PASS, w83601g_smoke PASS. Safe change (Zephyr has no
+legacy-boot oracle). #166 complete.
+
 ## 2026-07-20 — #157 root-caused: QEMU can't gate i2c on the pinmux because SCU74 is modelled as the G4 RNG_CTRL, not the G3 pinmux
 
 Investigating #157 (make QEMU gate I2C5/6/7 on SCU74) explained the gate-b review's CONFIRMED-1

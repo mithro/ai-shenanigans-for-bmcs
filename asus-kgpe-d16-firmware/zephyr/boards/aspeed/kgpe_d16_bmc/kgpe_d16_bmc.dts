@@ -21,3 +21,71 @@
 	current-speed = <115200>;
 	status = "okay";
 };
+
+/*
+ * ASUS KGPE-D16 board-specific I2C slave devices. These were moved OUT of the
+ * reusable SoC include (dts/aspeed/ast2050.dtsi) so a different AST2050 board
+ * reusing that include does not inherit this board's sensors/EEPROM/expanders
+ * (device-driver-program #166 / DTS-review Finding 3). The kgpe-d16-bmc QEMU
+ * machine (hw/arm/aspeed.c kgpe_d16_bmc_i2c_init) wires these at the same
+ * engines/addresses.
+ */
+&i2c1 { /* engine 1 = schematic I2C2 */
+	/* Nuvoton/Winbond W83795G hardware monitor @0x2f. */
+	w83795: hwmon@2f {
+		compatible = "nuvoton,w83795";
+		reg = <0x2f>;
+		status = "okay";
+	};
+};
+
+&i2c3 { /* engine 3 = schematic I2C4 */
+	/* AMD SB-TSI CPU thermal sensors, sockets P0/P1. */
+	sbtsi: temperature-sensor@4c {
+		compatible = "amd,sbtsi";
+		reg = <0x4c>;
+		status = "okay";
+	};
+
+	sbtsi1: temperature-sensor@4d {
+		compatible = "amd,sbtsi";
+		reg = <0x4d>;
+		status = "okay";
+	};
+};
+
+&i2c4 { /* engine 4 = schematic I2C5 */
+	/*
+	 * Board FRU EEPROM (U25, Holtek HT24LC08) @0x54 — the upper-strapped device
+	 * (E2=VCC; silicon i2c-scan confirmed it ACKs 0x54-0x57). Blank (0xff) as
+	 * ASUS shipped it.
+	 */
+	fru_eeprom: eeprom@54 {
+		compatible = "atmel,at24";
+		reg = <0x54>;
+		size = <256>;
+		pagesize = <16>;
+		address-width = <8>;
+		timeout = <5>;
+		status = "okay";
+	};
+
+	/* W83601G DIMM-LED I2C GPIO expanders U27 (@0x18, DIMM A-F) + U28 (@0x19, G/H). */
+	w83601g_u27: gpio@18 {
+		compatible = "winbond,w83601g-gpio";
+		reg = <0x18>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <16>;
+		status = "okay";
+	};
+
+	w83601g_u28: gpio@19 {
+		compatible = "winbond,w83601g-gpio";
+		reg = <0x19>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		ngpios = <16>;
+		status = "okay";
+	};
+};
