@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-19 — 🎉 FOURTH Zephyr driver: W83795G hwmon sensor — QEMU-VALIDATED (full I2C→sensor stack)
+
+- Built on the validated I2C bus driver: an I2C-CLIENT sensor driver `drivers/sensor/
+  w83795/w83795.c` (sample_fetch + channel_get for SENSOR_CHAN_RPM fan1 + SENSOR_CHAN_DIE_
+  TEMP temp0). Handles the W83795 bank-select (reg 0x00→bank0) + shared VRLSB latch (0x3C)
+  2-read sequence; fan rpm=1350000/count (w83795.c:113), temp whole+quarter. Parent `8f90e6d80`.
+- **VALIDATED IN QEMU (evidence d14-zephyr/09):** reads **fan1=2641 rpm + temp0=50.500 C**,
+  both matching the model seeding (w83795.c:184,177) → PASS. Demonstrates the FULL Zephyr
+  stack — aspeed I2C master driver → sensor client driver → hwmon read. Advances row 16
+  (W83795) Zephyr coverage beyond the raw read.
+- **HONEST harness note (debugged):** on the plain `-nographic` fast-boot path the M0
+  console output is DROPPED for samples whose I2C init does the SCU reset-release (the
+  i2c_smoke false-negative had the same root). It is NOT a hang or a driver bug — under
+  `-d int` (slower emulation) the full banner + PASS + 2288 sustained timer IRQs appear,
+  i.e. the boot completes and ticks. A capture/timing artifact (QEMU stdio flush on the
+  fast idle-then-killed path); flagged for a follow-up. I confirmed the driver works, did
+  NOT declare a hang. (First `build-w83795.sh` FAIL + the "no output at 25s" were this
+  same artifact — the -d int run is the truth.)
+- **Zephyr tally this session: 4 QEMU-validated per-device drivers** (GPIO/I2C/WDT/W83795)
+  on the validated #141 tick. ZS silicon pending (#150, LAN-blocked from this env).
+
 ## 2026-07-19 — Silicon (ZS/US/LS) is BLOCKED from THIS environment: hardware LAN unreachable
 
 - Attempted the goal's next gate — SILICON validation of the 3 QEMU-validated Zephyr drivers
