@@ -7,16 +7,21 @@
  * gpio_* API (not raw I2C):
  *
  *  - INPUT path: gpio_port_get_raw() reads the two input registers (CR00/CR08).
- *    The kgpe-d16-bmc machine seeds U27's Port-1 input latch to 0x0f and Port-2
- *    to 0x00 (hw/arm/aspeed.c), so the 16-pin port reads back 0x000f.
- *  - OUTPUT path: gpio_pin_configure(pin, OUTPUT_HIGH) makes a pin an output and
- *    drives it high (the driver clears the CR03 direction bit + writes CR01).
- *    We cross-check the driver's write landed by reading CR01 back over raw I2C
- *    (the QEMU model keeps CR00 a static input latch, so an output value is not
- *    reflected there — hence the CR01 cross-check for the output assertion).
+ *    We only require the read to SUCCEED (the chip ACKs) — the value differs by
+ *    platform: the kgpe-d16-bmc QEMU machine seeds U27's Port-1 input latch to
+ *    0x0f (hw/arm/aspeed.c) so it reads 0x000f, whereas the real chip reflects
+ *    live pin states, so a specific value is NOT part of the pass gate.
+ *  - OUTPUT path (the portable, platform-agnostic proof): drive Port-1 pin 3
+ *    HIGH then LOW via gpio_pin_configure() and confirm CR01 bit 3 follows both
+ *    ways (read back over raw I2C). A register that tracks both a 1 and a 0
+ *    write proves the chip really ACKs+holds writes over the bus — this holds
+ *    identically on QEMU and on silicon (the QEMU model keeps CR00 a static
+ *    input latch that does not reflect outputs, so we check CR01 directly).
  *
- * A PASS proves the gpio_w83601g driver binds and both directions work over the
- * AST2050 I2C master (i2c_aspeed_g3.c) on engine 4.
+ * A PASS proves the gpio_w83601g driver binds and read+write both work over the
+ * AST2050 I2C master (i2c_aspeed_g3.c) on engine 4 — on QEMU AND real hardware.
+ * (This is also the regression test for the SCU74[12] I2C5 pin-mux fix: without
+ * it the real chip never ACKs and every access times out.)
  */
 
 #include <zephyr/device.h>
@@ -25,39 +30,59 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 
-#define W601_NODE DT_NODELABEL(w83601g_u27)
 #define I2C_NODE  DT_NODELABEL(i2c4)
-#define W601_ADDR 0x18U
 #define CR_P1_OUT 0x01U
 #define TEST_PIN  3
 
-BUILD_ASSERT(DT_NODE_HAS_STATUS(W601_NODE, okay),
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(w83601g_u27), okay),
 	     "w83601g_u27 (winbond,w83601g-gpio) must be enabled");
+BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(w83601g_u28), okay),
+	     "w83601g_u28 (winbond,w83601g-gpio) must be enabled");
+
+/*
+ * Validate one W83601G expander: the input read must ACK (value is platform-
+ * specific), and driving pin 3 HIGH then LOW must be reflected in CR01 bit 3
+ * both ways. Returns true on a full pass. `i2c`/`addr` are used for the raw CR01
+ * cross-check (QEMU keeps CR00 a static input latch that ignores outputs).
+ */
+static bool test_expander(const struct device *gpio, const struct device *i2c,
+			  uint8_t addr, const char *tag)
+{
+	gpio_port_value_t inval = 0;
+	uint8_t cr01_hi = 0, cr01_lo = 0;
+	int ret_in, ret_hi, ret_lo;
+	bool out_ok;
+
+	if (!device_is_ready(gpio)) {
+		printk("W83601G %s: gpio device not ready\n", tag);
+		return false;
+	}
+
+	ret_in = gpio_port_get_raw(gpio, &inval);
+
+	ret_hi = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_HIGH);
+	(void)i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_hi);
+	ret_lo = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_LOW);
+	(void)i2c_reg_read_byte(i2c, addr, CR_P1_OUT, &cr01_lo);
+
+	out_ok = (ret_hi == 0) && (cr01_hi & BIT(TEST_PIN)) &&
+		 (ret_lo == 0) && !(cr01_lo & BIT(TEST_PIN));
+
+	printk("W83601G %s @0x%02x: port_get=0x%04x (ret=%d)  pin%d high->CR01=0x%02x  low->CR01=0x%02x\n",
+	       tag, addr, (unsigned int)inval, ret_in, TEST_PIN, cr01_hi, cr01_lo);
+
+	return (ret_in == 0) && out_ok;
+}
 
 int main(void)
 {
-	const struct device *gpio = DEVICE_DT_GET(W601_NODE);
 	const struct device *i2c = DEVICE_DT_GET(I2C_NODE);
-	gpio_port_value_t inval = 0;
-	uint8_t cr01 = 0;
-	int ret_in, ret_cfg;
+	bool u27_ok = test_expander(DEVICE_DT_GET(DT_NODELABEL(w83601g_u27)), i2c,
+				    0x18U, "U27");
+	bool u28_ok = test_expander(DEVICE_DT_GET(DT_NODELABEL(w83601g_u28)), i2c,
+				    0x19U, "U28");
 
-	if (!device_is_ready(gpio)) {
-		printk("W83601G smoke: gpio device not ready\n");
-		return 0;
-	}
-
-	/* INPUT: read all 16 pins via the driver -> U27 seeds 0x000f. */
-	ret_in = gpio_port_get_raw(gpio, &inval);
-
-	/* OUTPUT: drive Port-1 pin 3 high via the driver, then cross-check CR01. */
-	ret_cfg = gpio_pin_configure(gpio, TEST_PIN, GPIO_OUTPUT_HIGH);
-	(void)i2c_reg_read_byte(i2c, W601_ADDR, CR_P1_OUT, &cr01);
-
-	printk("W83601G gpio: port_get=0x%04x (want 0x000f)  set pin%d high -> CR01=0x%02x\n",
-	       (unsigned int)inval, TEST_PIN, cr01);
-
-	if (ret_in == 0 && inval == 0x000f && ret_cfg == 0 && (cr01 & BIT(TEST_PIN))) {
+	if (u27_ok && u28_ok) {
 		printk("W83601G RESULT: PASS\n");
 	} else {
 		printk("W83601G RESULT: FAIL\n");

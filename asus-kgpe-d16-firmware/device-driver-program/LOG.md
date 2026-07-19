@@ -1,6 +1,44 @@
 # Device-driver program — running log
 
+## 2026-07-19 — ✅ RESOLVED: SCU74[12] I2C5 pin-mux — FRU + W83601G now PASS on real silicon (#156)
+
+Root-caused and FIXED the engine-4 silicon timeout documented below. It was **my driver, not
+the hardware** — exactly as the project principle predicts.
+
+**Root cause (datasheet + vendor oracle):** the AST2050 gives DEDICATED I2C pads only to
+I2C/SMBUS 1-4. SDA5/SCL5 (I2C5 = my engine 4 = the FRU 0x54 + W83601G 0x18/0x19 bus), SDA6/
+SCL6 and SDA7/SCL7 are **multiplexed** pins that carry I2C only when a SCU74 bit is set:
+`A13 SDA5 / B13 SCL5 <- SCU74[12]=1`, `[13]->I2C6`, `[14]->I2C7` (AST2050/AST1100 A3 datasheet
+V1.05 multi-function pin control table, e.g. "A13 GPIOC6 MII2DIO SCU74[20]=1  SDA5 SCU74[12]=1
+GPIOC6  Others"). The vendor Raptor U-Boot `i2c_init()` does exactly this for the AST2050:
+`SCU74 |= 0x5000` (bits 12+14 = channels 5+7) — `raptor-uboot/drivers/i2c/aspeed_i2c.c:26-28`.
+My Zephyr driver programmed SCU04 reset-release + AC-timing but **never the pin-mux**, so
+bytes clocked on engine 4 never reached the pads → no ACK → -ETIMEDOUT. The W83795 on I2C2
+(dedicated pads) worked precisely because it needs no pin-mux — which is why only the engine-4
+devices failed. (This also confirms the schematic-I2C5 = engine-4 mapping was RIGHT all along.)
+
+**Fix (commit 355a9c7):** `i2c_aspeed_g3.c` now sets the SCU74 bit for the muxed channel,
+derived from the engine's reg base (channel = (base-0x1E78A000)/0x40; channels 5-7 →
+SCU74[12..14]; 1-4 need nothing). Idempotent OR under the SCU unlock key. Harmless in QEMU
+(the SCU model stores it; the I2C model does not gate on it), required on silicon.
+
+**Silicon proof (real AST2050 over JTAG, this session):**
+- FRU (entry 0x40002378): `FRU eeprom size=256 read[0..3]=ff ff ff ff` → `FRU RESULT: PASS`
+  (was -116/-ETIMEDOUT before the fix).
+- W83601G (entry 0x4000241c): `port_get=0x080f (ret=0)  pin3 high->CR01=0x08  low->CR01=0x00`
+  → `W83601G RESULT: PASS`. Note `0x080f` on silicon vs QEMU's `0x000f`: the extra bit 11 is a
+  LIVE Port-2 input pin on the real board (QEMU's static seed lacks it) — proof of genuine
+  hardware reads. Made the smoke's PASS gate platform-agnostic: require the input read to
+  SUCCEED (value differs QEMU↔silicon) + a full HIGH→LOW output round-trip in CR01 (holds on
+  both). QEMU re-validated PASS after the change.
+
+**Matrix:** FRU **ZS ⬜→✅**, W83601G **ZS ⬜→✅** (both engine-4 devices now silicon-validated).
+**Follow-up faithfulness task (opened):** make the QEMU aspeed_i2c model gate engine 5/6/7
+external activity on SCU74[12..14] so a driver that FORGETS the pin-mux fails in QEMU too, not
+only on silicon — the QEMU model should have caught this. Recorded so the gap isn't lost.
+
 ## 2026-07-19 — ⚠️ FAILED silicon attempt (honest): FRU/W83601G Zephyr reads time out on engine 4 (i2c4)
+### → RESOLVED, see the entry above (SCU74[12] pin-mux was missing). Kept as an honest record.
 
 Tried to silicon-validate the BMC-side Zephyr drivers (FRU EEPROM, W83601G) on the real
 AST2050 over JTAG — no host power needed (I2C5 is on BMC standby). **Both FAILED, honestly

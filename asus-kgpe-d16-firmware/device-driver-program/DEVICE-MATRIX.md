@@ -138,9 +138,9 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 | 17 | QU9/QU5/U23 mux fabric | I2C+GPIO | ✅ | Ⓝ | Ⓝ | ✅ | 🔶 | 🔶 | ⬜ | ⬜ |
 | 18 | DIMM SPD ×16 (I2C10/11 via mux) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | 19 | DIMM TSOD ×16 (jc42) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | Ⓝ | Ⓝ | ⬜ | Ⓝ |
-| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | 🔶 | ⬜ |
-| 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ✅ | ⬜ |
+| 20 | HT24LC08 FRU EEPROM (U25, I2C5 @0x54) | I2C | ✅ | 🔶 | 🔶 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 21 | W83601G DIMM-LED exp U27 (I2C5 @0x18) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 22 | W83601G DIMM-LED exp U28 (I2C5 @0x19) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 23 | SB-TSI CPU thermal (I2C4, 0x4C/4D) | I2C | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
 | 24 | PSU PMBus (PSUSMB1, I2C1) | I2C | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 25 | SMBus ALERT (SALT1/2, I2C7) | I2C | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -168,8 +168,8 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
   (LS/LU 🔶, data-path only, channel-select host-assisted). Row 18 SPD read is genuine
   but carries the same U23 caveat (BMC-autonomous SPD inventory not silicon-demonstrated). D08.
 - **19** the rig's A2 UDIMM has SPD byte32=0 (no TS) → 0x19 NAKs on QEMU+silicon; the `jc42` model is kept available for TS-equipped DIMMs. Ⓝ for this rig. D08.
-- **20** FRU EEPROM DONE both sides (2026-07-18): I2C5/i2c-4 enabled, at24 24c08 binds 0x54-0x57 on silicon (present but BLANK 0xff — ASUS unprogrammed) and in QEMU (blank model); `evidence/d08-fru/`. Corrects §10.2 (0x54, not 0x50).
-- **21–22** W83601G U27/U28: **BOTH-SIDES DONE** (datasheet-faithful `hw/gpio/w83601g.c`, `scripts/w83601g-test.py` 19/19 PASS incl. LED-drive; CI `boot-w83601g`; **silicon LED-drive proven on BOTH 0x18 and 0x19 — CR03/CR01 write + readback + restore**, evidence d08-w83601g/03; CR21 silicon-resolved to 0x13). No in-kernel driver by nature (raw userspace SMBus) → LQ/LS/LU all via userspace. **23** SB-TSI (D9): **QEMU DONE** (`hw/sensor/sbtsi.c`, `scripts/sbtsi-test.py` 8/8, CI `boot-sbtsi`); silicon needs host-CPU-on. **24** PSU PMBus (I2C1): **QEMU DONE 2026-07-19** — `hw/sensor/pmbus_psu.c` (generic PMBus-1.2
+- **20** FRU EEPROM DONE both sides (2026-07-18): I2C5/i2c-4 enabled, at24 24c08 binds 0x54-0x57 on silicon (present but BLANK 0xff — ASUS unprogrammed) and in QEMU (blank model); `evidence/d08-fru/`. Corrects §10.2 (0x54, not 0x50). **Zephyr ZQ+ZS ✅ (2026-07-19):** `samples/fru_smoke` reads the FRU via the at2x driver over `i2c_aspeed_g3` on engine 4 — QEMU `ff ff ff ff` PASS and REAL SILICON `FRU RESULT: PASS` after the SCU74[12] I2C5 pin-mux fix (commit 355a9c7; see LOG 2026-07-19).
+- **21–22** W83601G U27/U28: **BOTH-SIDES DONE** (datasheet-faithful `hw/gpio/w83601g.c`, `scripts/w83601g-test.py` 19/19 PASS incl. LED-drive; CI `boot-w83601g`; **silicon LED-drive proven on BOTH 0x18 and 0x19 — CR03/CR01 write + readback + restore**, evidence d08-w83601g/03; CR21 silicon-resolved to 0x13). No in-kernel driver by nature (raw userspace SMBus) → LQ/LS/LU all via userspace. **Zephyr ZS ✅ (2026-07-19):** the proper `drivers/gpio/gpio_w83601g.c` + `samples/w83601g_smoke` validated on REAL SILICON for BOTH U27 (0x18, port_get=0x0807) and U28 (0x19, port_get=0x61b5) — input read ACKs + pin-3 HIGH→LOW output round-trips in CR01, after the SCU74[12] I2C5 pin-mux fix (commit 355a9c7). Smoke PASS gate made platform-agnostic (input-value differs QEMU↔silicon). **23** SB-TSI (D9): **QEMU DONE** (`hw/sensor/sbtsi.c`, `scripts/sbtsi-test.py` 8/8, CI `boot-sbtsi`); silicon needs host-CPU-on. **24** PSU PMBus (I2C1): **QEMU DONE 2026-07-19** — `hw/sensor/pmbus_psu.c` (generic PMBus-1.2
 supply @0x58 on bus 0 = schematic I2C1/PSUSMB1, seeded 230V-in/12V-8A-out/30C/4000RPM,
 PMBUS_REVISION 0x98=0x22), wired in `kgpe_d16_bmc_i2c_init`; validated by the bare-metal
 fwtest (`test_psu_pmbus_probe`: 0x58 ACKs on bus 0 only, `4 passed`) + the prior
