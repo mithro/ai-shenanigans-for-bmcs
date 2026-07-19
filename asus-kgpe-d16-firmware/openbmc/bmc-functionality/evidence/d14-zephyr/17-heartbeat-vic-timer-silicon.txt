@@ -1,0 +1,44 @@
+D14 Zephyr — VIC (row 36) + system Timer (row 37) SUSTAINED-TICKING captured on REAL AST2050
+    silicon (2026-07-20). Closes the gate-d "VIC/Timer ZS ✅ has no captured silicon transcript" gap.
+
+Device: AST2050 VIC @0x1E6C0000 (single-bank G3 VIC) + system Timer1 @0x1E782000 (VIC source 16).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/heartbeat_smoke  (entry 0x400023e4)
+Build: tickful (-DCONFIG_SYS_CLOCK_EXISTS=y). SoC-internal — runs at the board's 4 W deep-S5 state.
+Path: JTAG reset-halt -> DDR2 TRAINED -> load @0x40000000 -> reg pc -> resume; console
+      /dev/serial-bmc-console @115200. md5(zephyr.bin)=20139a09a58b0f3527cbbc30175f7fe7 (verified).
+
+Why this is a VIC+Timer proof: k_msleep() sleeps the thread and only returns when a system-timer
+tick IRQ (Timer1, VIC source 16) fires and the kernel tick handler wakes it; k_uptime_get() is
+derived from the same tick count. So N successful k_msleep()+uptime iterations = N proofs the timer
+FIRES, the VIC ROUTES + ACKS its IRQ, and the ISR path works. A dead timer/VIC hangs the 1st sleep.
+
+===== CAPTURED CONSOLE (real silicon) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+Heartbeat: 10 x k_msleep(100ms) - each needs a timer+VIC tick IRQ
+tick 1/10 uptime=130 ms
+tick 2/10 uptime=240 ms
+tick 3/10 uptime=350 ms
+tick 4/10 uptime=460 ms
+tick 5/10 uptime=570 ms
+tick 6/10 uptime=680 ms
+tick 7/10 uptime=790 ms
+tick 8/10 uptime=900 ms
+tick 9/10 uptime=1010 ms
+tick 10/10 uptime=1120 ms
+Heartbeat done: 10 ticks, elapsed=1100 ms (expected ~1000)
+HEARTBEAT RESULT: PASS
+
+RESULT: PASS on real silicon. All 10 k_msleep()s returned + uptime advanced MONOTONICALLY
+(130->1120 ms, ~110 ms/iter = 100 ms sleep + ~10 ms overhead). So:
+  * VIC (row 36): routed + acked the Timer1 IRQ 10 times, no wedge -> sustained IRQ delivery. ZS ✅
+    now EVIDENCE-BACKED (was LOG-prose only per the gate-d audit).
+  * Timer (row 37): fired periodically AND counts REAL TIME accurately (1100 ms for 10x100 ms). ZS ✅
+    evidence-backed.
+
+NOTABLE CONTRAST with the RTC (row 39, evidence 14): the RTC runs ~732x fast on this board (no
+32.768 kHz crystal -> clocked from the 24 MHz test tap). The SYSTEM timer here runs at TRUE real-time
+rate because it is clocked from the APB/PCLK (24 MHz / prescaler), not the missing crystal. Same board,
+two different clock sources, both now silicon-characterised.
+
+Both-sides: QEMU heartbeat also PASS (10 ticks, no arm_mmu crash for the short <2264-tick run; the
+QEMU-only arm_mmu sustained-ticking corruption at ~2264 ticks / task #141 is well above this).

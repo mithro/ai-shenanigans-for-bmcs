@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-20 — VIC(36)+Timer(37) SUSTAINED-TICKING captured on silicon (heartbeat_smoke) — closes a gate-d evidence gap
+
+The gate-d audit flagged that VIC(row 36)/Timer(row 37) are ZS ✅ but rest on LOG prose with no
+captured silicon transcript. Wrote samples/heartbeat_smoke (10 x k_msleep(100ms) + k_uptime_get,
+tickful) — each sleep only returns when a Timer1 (VIC source 16) tick IRQ fires + the kernel wakes it,
+so completing N iterations = N proofs the timer fires, the VIC routes+acks, and the ISR path works.
+QEMU: PASS (10 ticks, no arm_mmu crash for the short <2264-tick run). REAL SILICON: PASS —
+`tick 1/10 uptime=130ms ... tick 10/10 uptime=1120ms, elapsed=1100ms, HEARTBEAT RESULT: PASS`. uptime
+advanced monotonically at ~110 ms/iter, so the VIC delivered 10 sustained IRQs (no wedge) and the timer
+counts REAL time accurately. Notable contrast with the RTC (row 39, ~732x fast, no crystal): the SYSTEM
+timer runs at true real-time rate (clocked from APB/PCLK, not the missing 32 kHz crystal). Evidence:
+openbmc/bmc-functionality/evidence/d14-zephyr/17-heartbeat-vic-timer-silicon.txt. Rows 36/37 ZS ✅ now
+evidence-backed both-sides (was prose-only).
+
 ## 2026-07-20 — #168: SP hypothesis tested + REFUTED — the 0x0badc0de is the Abort-mode BANKED sp_abt (double-fault), not the cause; 0004 (A-fix) is the correct fix
 
 New lead this cycle: the JTAG-load sets PC+CPSR but not SP, so U-Boot's early code might fault on an
