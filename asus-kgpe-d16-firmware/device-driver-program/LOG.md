@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-20 — power_smoke H2-trajectory experiment RESOLVES #162: STA_LINE_POWER = standby-rail sense + slow settle
+
+Reworked power_smoke to sample GPIOH2 as a TRAJECTORY (3 reads post-power-ON, 6 post-force-OFF)
+and ran it on silicon, correlating with the au-plug W draw. This DEFINITIVELY characterises the
+GPIOH2 feedback that failed as "stuck 1" before:
+- Run started from the prior run's 4 W deep-off (H2 start=**0**); ended at 46 W standby (H2=**1**,
+  final au-plug read 46 W). So **GPIOH2 DOES track power — but it senses the STANDBY / line-power
+  rail** (0 at ~4 W deep-S5, 1 at ~46-50 W standby), NOT host-CPU-on (~103 W). Matches the schematic
+  note "STA_LINE_POWER ... (I2C bus power)" (HW-WIRING-power-sensors.md:87). The earlier "H2 stuck 1"
+  run is explained: the board was at 49 W standby throughout → H2 correctly 1.
+- **~5-6 s power-sequencing LAG**: H2 flipped 0→1 only at post-OFF t+2s, i.e. ~5-6 s after the
+  power-ON pulse — the power-up manifested slowly, well after my 3 post-ON reads. So a rapid
+  on→off toggle scrambles the trajectory relative to fixed read timing, and the force-OFF here did
+  not settle the board back to 4 W within the window (ended 46 W).
+- **QEMU faithfulness gap (real):** hw/gpio/aspeed_gpio.c aspeed_gpio_kgpe_d16_pwrseq models H2 as a
+  SYNCHRONOUS host-on latch (flips on the B1/F0 write); silicon H2 is a slow-settling standby-rail
+  sense. Tracked (#162): to be faithful the model should reflect a settle delay + standby-rail
+  semantics, and a clean row-27 ZS validation needs long (~10-30 s) settles per transition + reading
+  H2 against the deep-off/standby threshold, not a fast toggle.
+
+Net: power-control OUTPUT works on silicon (the B1/F0 drives move the real board between 4 W and
+46 W); the H2 feedback is understood (standby-rail, lagged). Row 27 ZS remains 🔶/⬜ pending a
+long-settle validation + the QEMU-model reconciliation. Board left at 46 W (standby, host off — safe,
+≈ the as-found state). Rig method held: detached boot + md5-verified staged bin (cbb087f5).
+
 ## 2026-07-20 — Zephyr host power-control (power_smoke): QEMU PASS; silicon force-OFF works, GPIOH2 read FAILs
 
 New `samples/power_smoke` drives the KGPE-D16 host power sequence from bare-metal Zephyr via
