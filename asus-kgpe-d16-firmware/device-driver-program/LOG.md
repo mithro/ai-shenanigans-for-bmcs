@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Scoped the remaining 4 QEMU ⬜ (which are non-trivial new models, sequenced carefully)
+
+Investigated the 4 remaining QEMU ⬜ to pick the next safe closure. Finding: each is a
+genuine non-trivial new model, so I scoped them precisely rather than rush one at deep
+context (the faithfulness directive: a shared-model change that breaks a legacy oracle
+is a bug in MY model — must not be rushed):
+- **SMBus-ALERT [25]:** `aspeed_i2c.h:101` DEFINES `SMBUS_ALERT` (intr bit 12, "Bus
+  [0-3] only") but `aspeed_i2c.c` never DRIVES it; no device asserts SMBALERT#, no ARA
+  (0x0C) path. Subtlety: schematic routes SALT1 to I2C7/B12 (bus 6) yet the intr bit is
+  buses 0-3 — likely a standalone SMBALERT# monitored input, not the per-engine intr.
+  Closing edits the SHARED aspeed_i2c.c (C2/C4 oracles depend on it) → datasheet-first,
+  careful, with an oracle re-boot. Scoped in matrix row-25 note. #135.
+- **DDC/EDID [14]:** the AST2050 video DDC (AST_DDCCLK B1 / AST_DDCDAT B2, §8) is NOT
+  modeled at all — `hw/misc/aspeed_video_ast2050.c` + the SoC wiring have no DDC/EDID.
+  Needs a video-controller DDC I²C interface (per the video-ctrl DDC register spec) +
+  an EDID EEPROM device + wiring. Isolated from the shared I2C engine (no oracle risk),
+  but a new model. #140/D12.
+- **LPC-mailbox [B]** (#134) + **SOL-mux [31]** (#133) similarly need new sub-blocks.
+Best-judgement: scope now, implement each in a focused datasheet-first pass; do NOT
+rush a heavy shared-model change at extreme context depth. (PSU-PMBus [24] was the one
+already-written model, closed this session.)
+
 ## 2026-07-19 — Created MASTER-TASKLIST.md — every schematic device × 4 stacks × QEMU+silicon, FROM the §1-16 read
 
 Per the goal's opening ("create a task list to: full QEMU emulation of every device;

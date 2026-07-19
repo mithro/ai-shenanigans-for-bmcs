@@ -173,7 +173,15 @@ per-row detail + evidence citations are below and in [`FULL-TASK-LIST.md`](FULL-
 supply @0x58 on bus 0 = schematic I2C1/PSUSMB1, seeded 230V-in/12V-8A-out/30C/4000RPM,
 PMBUS_REVISION 0x98=0x22), wired in `kgpe_d16_bmc_i2c_init`; validated by the bare-metal
 fwtest (`test_psu_pmbus_probe`: 0x58 ACKs on bus 0 only, `4 passed`) + the prior
-`i2cget 0x58 0x98 → 0x22`. QE ✅ (submodule 8320c07f3f). **25** SMBus-ALERT (I2C7): still to model (task #135). See FULL-TASK-LIST.md D3/D4/D9. **26b** (#151, added 2026-07-19 from my independent schematic read): per `I2C-MUX-FABRIC-ARBITRATION.md §4`, with the host ON (QU9 closed) the `I2C8_SW` segment reached via QU5 `Y0` bridges through 0 Ω `QR160/QR161` → nets `I2C13SDA/SCL` → **TPM1 header pins 13/14** (0 Ω `RN13`) **and PCIe slots 1–5 SMBus** (`PCIE<n>_I2C13` via `ER21…ER57`). These are **BMC-masterable I²C SEGMENTS, not fixed on-board devices** — what answers depends on the plugged PCIe cards / TPM module (an empty slot / absent TPM = no target). QE = 🔶 (the QU5 `Y0` mux path itself is modeled at the fabric level, row 17; there is no fixed far-end device to instantiate — a host-on bus-reach test would exercise it). Distinct from the aux-panel end (row 26) on the same channel.
+`i2cget 0x58 0x98 → 0x22`. QE ✅ (submodule 8320c07f3f). **25** SMBus-ALERT (SALT1/2): **scoped 2026-07-19** — the aspeed I2C register header
+(`include/hw/i2c/aspeed_i2c.h:101`) DEFINES `SMBUS_ALERT` (intr-status bit 12, "Bus
+[0-3] only") but `hw/i2c/aspeed_i2c.c` never DRIVES it; no bus device asserts SMBALERT#
+and there is no ARA (0x0C) response path. Faithfulness subtlety to settle from the
+datasheet first: the schematic routes SALT1 to **I2C7/B12** (§10.2/§10.4, "alert on
+SCL7/SALT1 B12") yet the intr bit is buses 0-3 only — so SALT may be a standalone
+SMBALERT# monitored input, not the per-engine intr. Closing it edits the SHARED
+`aspeed_i2c.c` (all C2/C4 I2C oracles depend on it) → do it carefully in a fresh pass,
+datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LIST.md D3/D4/D9. **26b** (#151, added 2026-07-19 from my independent schematic read): per `I2C-MUX-FABRIC-ARBITRATION.md §4`, with the host ON (QU9 closed) the `I2C8_SW` segment reached via QU5 `Y0` bridges through 0 Ω `QR160/QR161` → nets `I2C13SDA/SCL` → **TPM1 header pins 13/14** (0 Ω `RN13`) **and PCIe slots 1–5 SMBus** (`PCIE<n>_I2C13` via `ER21…ER57`). These are **BMC-masterable I²C SEGMENTS, not fixed on-board devices** — what answers depends on the plugged PCIe cards / TPM module (an empty slot / absent TPM = no target). QE = 🔶 (the QU5 `Y0` mux path itself is modeled at the fabric level, row 17; there is no fixed far-end device to instantiate — a host-on bus-reach test would exercise it). Distinct from the aux-panel end (row 26) on the same channel.
 - **26** reachable via the fabric Y0 (QEMU); no Linux driver/test. D08.
 
 ## GPIO / platform control (§11)
