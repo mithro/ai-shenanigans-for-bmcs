@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-19 — PROPER Zephyr W83601G gpio_driver_api driver — QEMU-validated (#155; rows 21/22 ZQ 🔶→✅)
+
+Upgraded the W83601G from the i2c-client smoke to a real Zephyr GPIO controller
+(closing #155 I'd just opened — not just tasked, done). `drivers/gpio/gpio_w83601g.c`
+implements the full gpio_driver_api over I2C: each expander (U27@0x18, U28@0x19) is a
+16-pin port (Port1=0..7 CR00/CR01/CR03, Port2=8..15 CR08/CR09/CR0B). pin_configure
+sets direction (I/O-config bit 0=output) + pushes the value before enabling; set/
+clear/toggle via a 16-bit output shadow; get reads the two input registers. Access
+via i2c_reg_*_byte_dt (rides i2c_aspeed_g3). New winbond,w83601g-gpio binding +
+&w83601g_u27/u28 nodes on i2c4 + GPIO_W83601G Kconfig (init after I2C) + k_mutex.
+**VALIDATED IN QEMU through the STANDARD gpio API** (samples/w83601g_smoke): gpio_
+port_get_raw=0x000f (U27 seeded input via the driver) + gpio_pin_configure(pin3,
+OUTPUT_HIGH) → CR01=0x08 (cross-checked over i2c) → `W83601G RESULT: PASS`. Commit
+d9771ab; rows 21/22 ZQ 🔶→✅. Model note: the QEMU model keeps CR00 a static input
+latch (doesn't reflect the output), so an output pin's driven value is verified via
+CR01 not gpio_pin_get — a QEMU-model faithfulness nicety, not a driver issue. ZS
+(silicon) pending like the other Zephyr drivers.
+
 ## 2026-07-19 — Zephyr W83601G DIMM-LED expander LED-drive validated (rows 21/22 ZQ ⬜→🔶)
 
 Third I2C device validated from Zephyr on engine 4 this run (after FRU@0x54): the two
