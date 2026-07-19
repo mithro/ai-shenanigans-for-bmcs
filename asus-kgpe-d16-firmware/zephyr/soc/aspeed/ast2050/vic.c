@@ -100,19 +100,39 @@ void z_soc_irq_priority_set(unsigned int irq, unsigned int prio,
 unsigned int z_soc_irq_get_active(void)
 {
 	uint32_t status = vic_rd(G3VIC_IRQ_STATUS);
+	unsigned int irq;
 
 	if (status == 0) {
 		return CONFIG_NUM_IRQS;		/* spurious */
 	}
-	return (unsigned int)__builtin_ctz(status);
+	irq = (unsigned int)__builtin_ctz(status);
+
+	/*
+	 * ACK the edge NOW, at claim time — before the arch isr_wrapper re-enables
+	 * IRQs and calls the ISR. The Zephyr cortex_a_r isr_wrapper re-enables IRQs
+	 * *before* dispatching (the GIC-style nested model, where the controller
+	 * masks the active source by priority). The G3 VIC has no priority masking,
+	 * so on real silicon the timer's latched edge (RAW_STATUS bit stays set
+	 * until EDGE_CLR) would re-assert the instant IRQs re-enable and storm the
+	 * CPU — the ISR (and a late EOI) would never run. Clearing the edge here,
+	 * like Linux handle_edge_irq()'s ack-at-entry, deasserts the source so the
+	 * ISR runs once; an edge that re-triggers *during* the ISR re-latches and is
+	 * handled by the next delivery (so no ticks are lost). Harmless for level
+	 * sources (their bit is not latched by EDGE_CLR).
+	 *
+	 * QEMU did not expose this: its timer edge does not persist across the
+	 * re-enable window, so it never stormed. Silicon is the faithful oracle.
+	 */
+	vic_wr(G3VIC_EDGE_CLR, BIT(irq));
+	return irq;
 }
 
 void z_soc_irq_eoi(unsigned int irq)
 {
-	/* Clear the latched edge for edge-triggered sources (e.g. the timer).
-	 * Harmless for level sources (the bit is not latched in EDGE_CLR).
+	/*
+	 * No-op: the edge is ACKed at claim time in z_soc_irq_get_active() (see
+	 * there). Clearing again here would discard an edge that re-triggered while
+	 * the ISR ran, losing that interrupt — so EOI deliberately does nothing.
 	 */
-	if (irq < 32) {
-		vic_wr(G3VIC_EDGE_CLR, BIT(irq));
-	}
+	ARG_UNUSED(irq);
 }
