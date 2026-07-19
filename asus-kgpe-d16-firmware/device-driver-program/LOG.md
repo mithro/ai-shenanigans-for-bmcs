@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — modern U-Boot FIRST silicon attempt FAILED (early data abort) — documented honestly
+
+Attempted the modern U-Boot (#137) silicon boot over JTAG, same recipe as the Raptor U-Boot
+(reset halt -> DDR2 train + SCU40[6] -> load @0x40000000 -> DRAM->0x0 remap -> PC=0 -> resume;
+tmp/boot-modern-uboot-silicon.sh). Boot mechanics OK (DDR2 TRAINED, image in place, remap 0->1,
+resumed) but ZERO console output @115200 (not garbage -> not a baud issue). JTAG post-mortem:
+mode=ABORT, pc=0x00000010 (DATA-ABORT vector), sp=0x0badc0de (poison). So the modern U-Boot took a
+DATA ABORT very early in its low-level init — before stack/console — and does NOT boot on G3 silicon
+yet (it boots fine in QEMU). CONFIDENCE: HIGH it's an early data-abort in the modern U-Boot's own
+lowlevel_init (the load recipe is proven — Raptor reaches its prompt with the identical flow);
+MODERATE (hypothesis, not root-caused) that it's the SDRAM re-init — the evb-ast2400 U-Boot doesn't
+check SCU40[6] so it re-programs the SDMC while running FROM DRAM -> the DRAM access faults. Could
+instead be a G4-only register access. Checked my setup: same flow that boots Raptor + SCU40[6] IS set,
+so the blocker is the modern U-Boot's G4 low-level init, not my recipe. FIX PATH (new task): single-
+step from 0x0 to find the faulting instruction / read mach-aspeed lowlevel_init, then patch the modern
+U-Boot to SKIP low-level SDRAM init on the JTAG-boot (honor SCU40[6] or detect DRAM-up). Only then can
+#167's SCU04[2] i2c fix be silicon-validated. Evidence: d15-uboot/03-modern-uboot-silicon-attempt-FAILED.
+
 ## 2026-07-20 — #167 FIXED: modern U-Boot I2C reads real devices on the G3 QEMU (SCU04[2] reset-release)
 
 Confirmed + fixed the device-NAK. The strong lead was right: the G3 I2C block powers up HELD IN
