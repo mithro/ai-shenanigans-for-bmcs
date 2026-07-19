@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Gate-(b) review of the 4 new Zephyr drivers + SPI1/FMC phantom investigation
+
+- **Dispatched gate-(b) code review of ALL 4 newly-written Zephyr drivers** (the hook's
+  "full code review of all developed code" — they were built + QEMU-validated but not yet
+  independently reviewed): 2 reviewers — (A) gpio_aspeed_g3.c + wdt_aspeed_g3.c; (B)
+  i2c_aspeed_g3.c + w83795.c, with (B) specifically tasked to resolve the console-drop
+  suspicion (is the I2C init's SCU reset-release clobbering the console UART clock?).
+  Findings will be fixed (as the QEMU-model gate-b round did) or confirm-clean. Pending.
+- **SPI1/FMC phantom (#144) — INVESTIGATED, it is a BIG refactor not a quick removal.** The
+  real G3 flash controller is the legacy SMC @0x16000000 (smc-g3, used by C4). BUT the
+  modern C2 kernel boots from the G4 FMC @0x1E620000 (created unconditionally + aliased to
+  the boot region) because its DTS is aspeed-g4-based — so the FMC is a G4 phantom that is
+  LOAD-BEARING for C2, and SPI1 @0x1E630000 is a separate g4-DTS phantom. Removing them
+  needs FIRST a G3-faithful flash DTS booting C2 from the SMC, THEN dropping FMC+SPI1 + C2
+  re-validation. Recorded on #144; deliberately sequenced (unlike the trivial ADC/WDT2
+  count-tweaks). Not rushed — a C2-breaking flash change is exactly the faithfulness trap.
+
 ## 2026-07-19 — 🎉 FOURTH Zephyr driver: W83795G hwmon sensor — QEMU-VALIDATED (full I2C→sensor stack)
 
 - Built on the validated I2C bus driver: an I2C-CLIENT sensor driver `drivers/sensor/
