@@ -1,5 +1,20 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #145 DONE: PECI enumeration verified + closed (row 42 confirmed; QE=🔶 justified; sub-gaps dispositioned)
+
+Closed the #145 PECI-engine enumeration task (the matrix row was added 2026-07-19 but the task was
+stale + had open sub-items). Verified everything: (1) datasheet — the AST2050 HAS a PECI controller
+@0x1E78B000, IRQ15 (§32.3); (2) QEMU — the G3 SoC wires TYPE_ASPEED_PECI @0x1E78B000/IRQ15
+(aspeed_ast2400.c:52/128/246/628-635), and hw/misc/aspeed_peci.c is a FUNCTIONAL register/interrupt
+model (PECI_CMD FIRE → CC_RSP_SUCCESS + CMD_DONE IRQ) but NOT the full PECI 1.1/2.0 protocol — so
+QE=🔶 is the honest state (canned-response stub), and it's MOOT because (3) schematic — the PECI pins
+A9/B9 (PECIO/PECII) are strapped to GPIO on the KGPE-D16 (AST_ATXPSON#/AST_CLRTC#, §11), so PECI is
+NOT wired to the CPUs (thermal is via SB-TSI, row 23) → all driver stacks Ⓝ. Also dispositioned the
+3 leftover audit sub-gaps: GAP2 WDTRST = pin D9 repurposed as GPIOB6/SYS_PWRGD (WDT external reset not
+routed; WDT resets the SoC internally, row 38); GAP3 = closed via #152; GAP4 UART1-modem = UART1 wires
+TXD/RXD/NRTS1(V21)/NCTS1(W22) → QU8 SOL mux (row 33), the extra modem lines DTR/DSR/DCD/RI are NC.
+DEVICE-MATRIX row 42 note updated. #145 complete.
+
 ## 2026-07-20 — #166 DONE: moved ASUS-specific I2C device nodes out of the reusable ast2050.dtsi into the board dts (DTS-review Finding 3)
 
 Fixed the layering violation the DTS/Kconfig review flagged (Finding 3): the reusable SoC include

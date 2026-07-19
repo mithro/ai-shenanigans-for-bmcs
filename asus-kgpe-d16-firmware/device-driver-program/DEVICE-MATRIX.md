@@ -296,14 +296,25 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 - **42** PECI engine — **ADDED (2026-07-19, closes #145 audit gap):** unlike the ADC, the
   G3 DOES have a PECI controller. AST2050-MEMORY-MAP.md:68 (datasheet §9 p97 / §32.3 p357):
   "PECI Controller | 0x1E78_B000 | ... | **Yes** | PECI 1.1/2.0", IRQ 15. The QEMU G3 SoC
-  models it (`TYPE_ASPEED_PECI` @0x1E78B000; aspeed_ast2400.c:246,628-635) → QE=🔶 (present
-  + wired; the generic aspeed_peci model's G3-completeness unverified — verify vs §32 to
-  reach ✅). **All driver stacks = Ⓝ (board disposition, parallel to row 40 PWM):** on the
+  models it (`TYPE_ASPEED_PECI` @0x1E78B000, IRQ 15; aspeed_ast2400.c:52/128/246/628-635) → QE=🔶.
+  **QE stays 🔶 (verified 2026-07-20, #145):** hw/misc/aspeed_peci.c is a FUNCTIONAL register/
+  interrupt model (PECI_CMD FIRE → returns CC_RSP_SUCCESS 0x40 in RD/WR_DATA0 + raises the
+  CMD_DONE IRQ) but NOT the full PECI 1.1/2.0 wire protocol (no CPU-temperature transactions) —
+  a canned-response stub, adequate for register/IRQ exercise, not "complete functionality". Since
+  PECI is UNWIRED on this board (below), that partiality is moot for the KGPE-D16; a full-protocol
+  model would be pure upstream-aspeed work with no board consumer. **All driver stacks = Ⓝ (board
+  disposition, parallel to row 40 PWM):** on the
   KGPE-D16 the PECI pins A9/B9 are strapped to GPIO (AST_ATXPSON#/AST_CLRTC#, §11) and CPU
   thermal is done over SB-TSI (I2C4, row 23) — the PECI engine is NOT wired to the CPUs
   here, so no U-Boot/Linux/Zephyr PECI driver has a target. The SoC block exists + is
-  modeled; its board *function* is repurposed. (The GAP2 WDTRST / GAP3 ROMA0→QQ11 / GAP4
-  NC-UART1-modem under-dispositions from the same audit remain minor doc items under #145.)
+  modeled; its board *function* is repurposed. **The remaining #145-audit sub-gaps are now
+  DISPOSITIONED (2026-07-20):** GAP2 (WDTRST) — the WDT external reset-output pin (ball D9 =
+  `GPIOB6/VBDO/WDTRST`, §11) is repurposed as **GPIOB6/SYS_PWRGD**, so the WDT's external reset is
+  NOT routed out on this board; the WDT still resets the SoC internally (row 38, silicon-proven).
+  GAP3 (AST_ROMA0→QQ11) — closed via #152 (QQ11 identified + given row/disposition). GAP4
+  (UART1 modem lines) — UART1 = the SOL console; it wires TXD1/RXD1/**`NRTS1`(V21)/`NCTS1`(W22) → QU8
+  2:1 mux → SOL** (row 33 / D10 / #133), i.e. 4-wire with RTS/CTS flow control; the remaining
+  full-modem lines (DTR/DSR/DCD/RI) are NC (SOL does not use them). #145 enumeration complete.
 
 ## Roll-up (honest)
 
