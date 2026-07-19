@@ -54,7 +54,7 @@ grid is 43 × 8 = 344 explicit per-device-per-stack tasks. Machine-counted statu
 | Linux @ QEMU | 25 | 7 | 0 | 6 | 5 |
 | Linux @ silicon | 18 | 4 | 2 | 13 | 6 |
 | Linux userspace | 12 | 6 | 0 | 13 | 12 |
-| Zephyr @ QEMU | 5 | 11 | 0 | 21 | 6 |
+| Zephyr @ QEMU | 8 | 8 | 0 | 21 | 6 |
 | Zephyr @ silicon | 8 | 2 | 0 | 26 | 7 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
@@ -257,9 +257,9 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | # | Device | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
-| 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ✅ |
-| 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | ✅ |
-| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | 🔶 | ✅ |
+| 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
+| 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
+| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | ✅ | ✅ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ✅ | 🔶 |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
