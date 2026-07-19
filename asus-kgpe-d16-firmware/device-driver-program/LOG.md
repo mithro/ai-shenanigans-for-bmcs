@@ -1,5 +1,43 @@
 # Device-driver program — running log
 
+## 2026-07-19 — RTC silicon: dead(0x0)→running via SCU08[16] clock source; real-time 1Hz still open (#158)
+
+Silicon-validated the Zephyr RTC (row 39). It FAILED first (honest): `get=00:00:00 day=0`
+— the counter read 0x0. Two false leads ruled out on real hardware, one root cause found:
+- Added the datasheet §24.4 CONTROL[5] restart-busy poll (the load is async, "0~3 s") +
+  a forward-tolerance in rtc_smoke (the counter runs once enabled). Correct + committed
+  (ffd9dbe), but did NOT fix it — still 0x0.
+- ROOT CAUSE (datasheet §24 + SCU08 bit table): the RTC had **no clock**. SCU08[16] selects
+  0 = 32.768 kHz (Init default) / 1 = internal 24 MHz. This board has no external 32 kHz
+  crystal. bit16=0 → counter dead at 0; **bit16=1 → the RTC LOADS the set value AND RUNS**
+  (commit 4ce158d). No SCU04 RTC-reset bit exists (unlike I2C), so this is a clock-source
+  issue, not a reset-hold one.
+- **STILL OPEN, honest:** the prescaler targets 32.768 kHz, so the 24 MHz source runs the
+  second counter FAST (datasheet labels bit16 "for test only") — silicon read `12:45:68`
+  (sec>59, delta=38 s). Real-time 1 Hz needs bit16=0, but the internal 32.768 kHz isn't
+  running on this board (datasheet says no external crystal needed → something else gates
+  it; check the vendor Linux RTC/clk init). Kept bit16=1 so the block is FUNCTIONAL
+  (set/load/read/run verified on silicon). **RTC ZS = 🔶 partial (NOT real-time), ZQ ✅.**
+
+## 2026-07-19 — Completion-gate sub-agents (code review + schematic completeness audit)
+
+Ran two independent background sub-agents (gates b/c and a/d):
+- **Code review** of this session's new code: `i2c_aspeed_g3.c` (SCU74 pin-mux) **CLEAN**
+  (channel→bit arithmetic verified for i2c1/3/4; no underflow; OR-only can't disturb MII2).
+  Found **[Major]** in `w83601g_smoke`: the low-side CR01 `i2c_reg_read_byte` return was
+  `(void)`-discarded and `cr01_lo` defaults 0 → a failed low read could FAKE a PASS. FIXED
+  (check ret_rd_hi/ret_rd_lo, print `(r%d)`); QEMU + silicon re-PASS (U27 0x0807 / U28 0x61b5,
+  all reads r0). Commit 3-way with the review.
+- **Completeness audit** vs the authoritative schematic: **enumeration COMPLETE** — every
+  §2-16 device maps to a matrix row or a justified disposition; **no active non-existence
+  claim contradicts the schematic** (the 3 historically-wrong ones — NC-SI, SPD, SOL — are
+  already retracted; ADC/host-BIOS/USB-host/fan-PWM/debug-UART non-existence are all TRUE).
+  Action items surfaced (tasked): reconcile FULL-TASK-LIST D3/D4/D5 Zephyr cells vs matrix
+  rows 20/21/22; regenerate the stale snapshot tally (27/24/0-11/5 → 29/25/3-13/8, 42→43
+  rows); capture Zephyr-silicon JTAG transcripts into evidence/d14-zephyr/; excise the stale
+  "not wired" prose still in F7-NCSI.md's body; two open RE items (0x69 sensor-mux responder,
+  GPIOE6/E7↔SP5100 handshake).
+
 ## 2026-07-19 — ✅ RESOLVED: SCU74[12] I2C5 pin-mux — FRU + W83601G now PASS on real silicon (#156)
 
 Root-caused and FIXED the engine-4 silicon timeout documented below. It was **my driver, not
