@@ -17,18 +17,27 @@ over a sideband channel instead of having its own PHY.
 > QEMU-modeled ✅, silicon hard-but-not-blocked. Do not cite this doc's "absent"
 > language.
 
-**Bottom line (faithfulness first — MAC1-scoped, see correction):**
+**Bottom line (CORRECTED — the original "not wired" verdict was WRONG; see the 2026-07-18 correction + D07):**
 
-> **The KGPE-D16 BMC does NOT use NC-SI.** It has its **own dedicated Ethernet PHY
-> (RTL8201CP) on an RMII link**, with its own MAC address and its own IP
-> (`192.168.66.2` on real HW), sitting on the **same physical Ethernet segment** as
-> the host's NICs. NC-SI sideband is **not wired on this board.**
+> The KGPE-D16 BMC has **TWO** Ethernet channels, and NC-SI **IS wired**:
+> - **MAC1 = a dedicated management PHY** (RTL8201-family at `U5`, its own MAC + IP
+>   `192.168.66.2` on real HW, same physical Ethernet as the host). This is the
+>   default, silicon-proven BMC network path.
+> - **MAC2 = an RMII2 NC-SI sideband that IS wired** to *both* Intel 82574L host NICs
+>   (`LU1`/`LU2`) — schematic §7, balls A5/B5/B6/C4/D4/D5, 50 MHz ref from `CU2`,
+>   NICs on `+3V3_AUX` (alive with the host off). So "piggybacking on the host's NIC"
+>   via NC-SI is a **real board capability here, not absent.**
 >
-> NC-SI *is* a capability of the AST2050 **SoC**, but only as a **software protocol
-> running over the RMII link** (Aspeed's `ncsi_protocol.ko` / vendor `aspeednic`),
-> gated by a **software scratch-register hint** — it is **not a MAC hardware feature**
-> and there is **no NC-SI register block** in the G3 MAC. A *different* board that uses
-> the same SoC — the **Dell C410X** — is where the vendor stack takes an NC-SI path.
+> NC-SI on this SoC is a **software protocol over the ordinary RMII link** (mainline
+> `CONFIG_NET_NCSI` / vendor `aspeednic`) — the G3 MAC has **no NC-SI hardware register
+> block** (that part of §1-§3 below is still true; it changes *which board wiring
+> exists* for the software to run over, not the SoC facts). Its live status is tracked
+> in **D07** (`DEVICE-MATRIX.md` row 11 / #132): **QEMU-modeled ✅, BMC-side silicon
+> discovery not yet run.**
+>
+> ⚠️ The historical body below (§1-§8) predates the 2026-07-18 correction and is
+> annotated `[MAC1-scoped]` where superseded. Read it for the MAC1 / register-level
+> detail, **NOT** for a board-wide "NC-SI absent" verdict — that verdict is retracted.
 
 This document establishes that ground truth with datasheet + Raptor + firmware
 citations, states the honest engineering path taken, and records the QEMU

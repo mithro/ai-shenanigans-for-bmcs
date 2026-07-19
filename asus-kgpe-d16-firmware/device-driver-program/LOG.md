@@ -1,5 +1,20 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #159: excised the stale "NC-SI not wired" claim from F7-NCSI.md (the exact incorrect-claim the goal targets)
+
+F7-NCSI.md had a retraction banner at the top but its prominent "Bottom line" (right below the banner)
+still asserted the WRONG board verdict — "The KGPE-D16 BMC does NOT use NC-SI … NC-SI sideband is not
+wired on this board." That is precisely the "incorrect claim about a feature being unconnected" the
+program goal flags: the authoritative schematic §7 shows MAC2's RMII2 (A5/B5/B6/C4/D4/D5) IS wired as
+a multi-drop NC-SI sideband to BOTH Intel 82574L host NICs (LU1/LU2), aux-powered. Replaced that
+bottom-line with the CORRECTED truth: the board has MAC1 (dedicated mgmt PHY, the default silicon-proven
+path) AND MAC2 (a wired NC-SI sideband) — NC-SI is a real board capability here, tracked as D07/#132
+(QEMU-modeled ✅, BMC-side silicon discovery not yet run). Kept the genuinely-true SoC facts (the G3 MAC
+has no NC-SI HW register block; NC-SI is software over RMII) and the annotated historical body (§1-§8,
+marked MAC1-scoped). Other #159 sub-items: the tally is current (tally.py output == committed snapshot),
+Zephyr-silicon evidence captured this session (d14-zephyr/14 RTC, 15 GPIO, 16 i2c-scan). SILICON-STATUS.md
+#9 was already corrected. Residual FULL-TASK-LIST↔MATRIX row-11/24/25 reconciliation stays under #159.
+
 ## 2026-07-20 — #145 DONE: PECI enumeration verified + closed (row 42 confirmed; QE=🔶 justified; sub-gaps dispositioned)
 
 Closed the #145 PECI-engine enumeration task (the matrix row was added 2026-07-19 but the task was
