@@ -1,0 +1,68 @@
+D15 modern U-Boot — boots to its console on the faithful kgpe-d16-bmc (AST2050) QEMU
+    (2026-07-20). Baseline for the #137 modern-U-Boot G3 port.
+
+Establishes that the MODERN OpenBMC U-Boot DOES exist and DOES run on the AST2050
+QEMU machine (refuting any "no U-Boot drivers exist" claim). This is the C2 boot
+stack's bootloader.
+
+Binary: asus-kgpe-d16-firmware/qemu-firmware/uboot/out/u-boot.bin
+  = OpenBMC U-Boot v2019.04-aspeed-openbmc (commit dbd95a10), evb-ast2400_defconfig,
+    built with arm-linux-gnueabi- (build-uboot.sh). 382693 bytes.
+Boot method: placed at offset 0 of a 16 MB flash image (mx25l12805d = the machine's
+  fmc_model) and booted via -drive if=mtd (the faithful SPI-flash reset-vector path;
+  -kernel does NOT work — U-Boot must run from the flash boot vector). QEMU =
+  qemu-firmware/qemu/build/qemu-system-arm (the custom kgpe-d16-bmc machine).
+
+  $ qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -no-reboot \
+        -drive file=flash16m.img,format=raw,if=mtd
+
+===== CAPTURED CONSOLE =====
+U-Boot 2019.04-gdbd95a10 (Jul 18 2026 - 17:41:18 +0930)
+
+SOC : AST1100/AST2050-A2,3/AST2150-A0,1
+RST : Power On
+Eth : MAC0: RMII/NCSI, , MAC1: RGMII,
+Model: AST2400 EVB
+DRAM:  56 MiB
+MMC:
+Loading Environment from SPI Flash... SF: Detected mx25l12805d with page size 256 Bytes, erase size 64 KiB, total 16 MiB
+*** Warning - bad CRC, using default environment
+In:    serial@1e784000
+Out:   serial@1e784000
+Err:   serial@1e784000
+Net:
+Warning: ethernet@1e660000 (eth0) using random MAC address - fe:5d:7b:aa:c7:4c
+eth0: ethernet@1e660000
+Warning: ethernet@1e680000 (eth1) using random MAC address - 8e:a9:c2:83:21:01
+, eth1: ethernet@1e680000
+Hit any key to stop autoboot:  2  1  0
+Wrong Image Format for bootm command      <- expected: the flash has only U-Boot, no kernel image
+ERROR: can't get kernel image!
+ast#                                       <- reaches the U-Boot prompt
+
+WHAT WORKS (modern U-Boot, in QEMU on the G3 machine):
+  * Runs from the SPI-flash reset vector; relocates; reaches the interactive `ast#` prompt.
+  * SoC auto-ID: "AST1100/AST2050-A2,3/AST2150-A0,1" — U-Boot's SCU silicon-revision path
+    correctly recognises this as an AST2050 (G3), NOT a mis-ID as AST2400.
+  * DRAM controller brought up (reports 56 MiB usable of the 64 MiB — the ~8 MB delta is the
+    aspeed VGA framebuffer carve-out at top of DRAM; to be confirmed for the G3 port).
+  * Console on serial@1e784000 (UART5/UART2) — the board's dedicated BMC console UART.
+  * SPI flash driver: detects mx25l12805d (page/erase/size correct); reads the U-Boot env.
+  * Both Ethernet MACs probed: eth0 @0x1e660000 + eth1 @0x1e680000 (matches schematic §7).
+
+REMAINING #137 WORK (this is the "proper G3 port", now scoped by real evidence):
+  1. Board identity: it reports "Model: AST2400 EVB" — it is running the AST2400 EVB board
+     config on the register-compatible G3 model. A proper port adds a kgpe-d16-bmc / ast2050
+     board + defconfig + device tree (analogous to the Zephyr G3 board), not G4-borrowed.
+  2. DRAM sizing: reconcile 56 MiB reported vs 64 MiB physical (VGA reserve) so U-Boot sees the
+     faithful size.
+  3. Per-device U-Boot drivers to exercise from the prompt (i2c probe of the sensor bus, mac,
+     sf) and confirm each works on the G3 model.
+  4. SILICON validation: boot this modern U-Boot on the real AST2050 over JTAG (the Raptor
+     legacy U-Boot already boots on silicon to boot#; the modern one has been proven in QEMU
+     here and needs the on-silicon capture).
+
+NOTE the UQ/US matrix columns track the RAPTOR legacy U-Boot (the faithfulness oracle, boots to
+boot# on silicon, drives the boot-path SoC blocks). This modern U-Boot is the separate D15/#137
+deliverable. Most non-boot devices are justified Ⓝ for U-Boot (a bootloader has no runtime need
+to drive the hwmon/FRU/DIMM-LEDs/PSU).

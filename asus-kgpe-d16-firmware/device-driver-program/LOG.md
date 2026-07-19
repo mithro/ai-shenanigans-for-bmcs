@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-20 — U-Boot track (#137): established the modern-U-Boot baseline — it BOOTS to console on the G3 QEMU
+
+Turned attention to the biggest structural gap (U-Boot). Investigated the actual state (vs the
+"no U-Boot drivers exist" claim) and found TWO U-Boot code paths already present:
+- **Raptor legacy AST2050 U-Boot** = the faithfulness ORACLE (boots to `boot#`, hardware-proven on
+  silicon; drives the boot-path SoC blocks SCU/PLL/SDMC/DDR2/SMC/UART/MAC/timer/WDT/I2C). This is
+  what the matrix UQ/US columns track. Most non-boot devices are justified Ⓝ for U-Boot (a
+  bootloader has no runtime need to drive hwmon/FRU/DIMM-LEDs/PSU).
+- **Modern OpenBMC U-Boot** (v2019.04-aspeed-openbmc, evb-ast2400_defconfig, arm-linux-gnueabi-,
+  prebuilt out/u-boot.bin) = the D15/#137 deliverable. **VERIFIED it boots to its console on the
+  faithful kgpe-d16-bmc (AST2050) QEMU** (16 MB mx25l12805d flash via -drive if=mtd; -kernel does
+  NOT work — U-Boot must run from the flash reset vector). It reaches the `ast#` prompt, and:
+  SoC auto-ID = "AST1100/AST2050-A2,3/AST2150" (correctly recognises G3!), DRAM up (56 MiB of 64 —
+  VGA reserve), console serial@1e784000, SPI mx25l12805d detected + env read, both MACs probed
+  (eth0@0x1e660000 + eth1@0x1e680000). Evidence: openbmc/bmc-functionality/evidence/d15-uboot/
+  01-modern-uboot-qemu-console.txt.
+So "NO U-Boot drivers exist" is FALSE — the modern U-Boot runs in QEMU today. The REAL remaining
+#137 work (now scoped by evidence, not guessed): (1) proper KGPE-D16/ast2050 board + defconfig + DT
+(it currently reports "Model: AST2400 EVB" — a G4 board config on the register-compatible G3 model);
+(2) reconcile the 56-vs-64 MiB DRAM sizing; (3) exercise per-device U-Boot drivers from the prompt
+(i2c probe / mac / sf); (4) SILICON boot of the modern U-Boot on the real AST2050 over JTAG (the
+Raptor one already boots on silicon; the modern one is QEMU-proven here). Captured as the #137 roadmap.
+
 ## 2026-07-20 — DTS/Kconfig review: remaining findings 3/5/6 dispositioned (none dropped)
 
 Closing out the 6 review findings. Done/resolved earlier today: F1 phantom GPIO gpio2..gpio6
