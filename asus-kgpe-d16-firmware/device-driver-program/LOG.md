@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-19 — Zephyr W83601G DIMM-LED expander LED-drive validated (rows 21/22 ZQ ⬜→🔶)
+
+Third I2C device validated from Zephyr on engine 4 this run (after FRU@0x54): the two
+W83601G DIMM-LED expanders (U27@0x18, U28@0x19). `samples/w83601g_smoke` runs the exact
+BMC LED-drive sequence over the i2c_aspeed_g3 driver (register map from
+hw/gpio/w83601g.c): verify chip-ID CR20=0x60, clear CR03 Port-1 direction bits →
+outputs, write CR01=0x55, read it back, restore. **VALIDATED IN QEMU:** `W83601G
+id(CR20)=0x60  LED CR01 set=0x55 get=0x55` → `W83601G RESULT: PASS`. Commit b05a4e4;
+rows 21/22 ZQ ⬜→🔶. **Honest scope:** this is an i2c-client LED-drive validation (same
+kind as the W83795/SB-TSI sensor clients), NOT yet a full gpio_driver_api expander
+driver — that is a tracked follow-up (#155). Confirms the i2c driver reaching 0x18/0x19
++ 0x54 all on engine 4 (multi-device on one engine).
+
 ## 2026-07-19 — Zephyr FRU EEPROM via the in-tree at2x driver on I2C engine 4 — QEMU-validated (row 20 ZQ ⬜→🔶)
 
 Closed another Zephyr ⬜ safely, reusing a PROPER in-tree driver (not a raw poke).

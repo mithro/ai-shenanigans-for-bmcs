@@ -82,8 +82,8 @@ ZQ·ZS.
 | DIMM SPD ×16 (QU5 Y2/Y3) | I2C10/11 | [18] | ✅ | ✅/🔶/🔶 | ⬜ | BMC-autonomous SPD inventory silicon |
 | DIMM TSOD ×16 (jc42) | I2C10/11 | [19] | ✅(not-inst) | ✅/Ⓝ/Ⓝ | ⬜/Ⓝ | This rig's DIMM has no TSOD (faithful absence) |
 | FRU EEPROM (U25, HT24LC08) | I2C5 @0x54 | [20] | ✅ | ✅/✅/✅ | **🔶** | Zephyr FRU DONE via in-tree at2x on engine 4 (fru_smoke PASS, blank 0xff); ZS remains |
-| W83601G DIMM-LED exp U27 | I2C5 @0x18 | [21] | ✅ | ✅/✅/✅(us) | ⬜ | Zephyr client (optional) |
-| W83601G DIMM-LED exp U28 | I2C5 @0x19 | [22] | ✅ | ✅/✅/✅(us) | ⬜ | Zephyr client (optional) |
+| W83601G DIMM-LED exp U27 | I2C5 @0x18 | [21] | ✅ | ✅/✅/✅(us) | **🔶** | Zephyr LED-drive validated via i2c (w83601g_smoke PASS: CR20=0x60, CR01 roundtrip); full gpio_driver_api driver = follow-up |
+| W83601G DIMM-LED exp U28 | I2C5 @0x19 | [22] | ✅ | ✅/✅/✅(us) | **🔶** | Same expander model @0x19 (reachable on engine 4); full gpio driver = follow-up |
 | SB-TSI CPU thermal (via QU4 FETs) | I2C4 @0x4C/4D | [23] | ✅ | ✅/✅/✅ | 🔶 / ⬜ | **Zephyr SB-TSI silicon** — needs host CPU powered (#150) |
 | Aux front panel (AUX_PANEL1) | I2C8/Y0 | [26] | 🔶 | ⬜ | ⬜ | Model/validate the aux-panel end |
 | PCIe-slot 1–5 SMBus + TPM-hdr I²C | I2C8_SW | [26b] | 🔶 | ⬜ | ⬜ | Host-on segment (#151-resolved as segments, not fixed devices) |
