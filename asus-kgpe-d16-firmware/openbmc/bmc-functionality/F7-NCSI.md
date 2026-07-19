@@ -5,10 +5,17 @@
 **NC-SI** (Network Controller Sideband Interface): the BMC shares the *host's* NIC
 over a sideband channel instead of having its own PHY.
 
-> ⚠️ **2026-07-18: the bottom line below is SUPERSEDED IN PART.** It is correct
-> for **MAC channel 1** (the dedicated-PHY management port) but its board-wide
-> "NC-SI is not wired" claim is **wrong for MAC channel 2** — see the
-> **2026-07-18 correction** section immediately below it.
+> 🛑 **RETRACTED / SUPERSEDED (2026-07-18, reaffirmed 2026-07-19). NC-SI IS WIRED
+> ON THIS BOARD.** The authoritative schematic (`AST2050-BMC-WIRING.md` §7 +
+> `pinmaps/QU1_pins.md`) shows the AST2050 **MAC2 RMII2 sideband** (A5/B5/B6/C4/D4/
+> D5) bussed to *both* Intel 82574L host NICs (LU1/LU2) — the classic NC-SI
+> topology. Every statement in the body below that says NC-SI is "not wired",
+> "absent", or "does not exist on this board" is **WRONG** and applies at most to
+> **MAC channel 1** (the dedicated management PHY). The body is kept for its
+> MAC1/register detail but is **not** the board verdict. The correct, authoritative
+> status lives in **D07** (DEVICE-MATRIX.md row 11 / FULL-TASK-LIST.md C2): NC-SI
+> QEMU-modeled ✅, silicon hard-but-not-blocked. Do not cite this doc's "absent"
+> language.
 
 **Bottom line (faithfulness first — MAC1-scoped, see correction):**
 

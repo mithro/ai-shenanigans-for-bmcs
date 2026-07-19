@@ -693,11 +693,23 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   wrong CI comment, verifier comment-coverage).
 
 **HONEST STATE (7x independently reviewed):** 4/9 features demonstrated BOTH in QEMU AND on
-real silicon — #1 power on/off/reset, #4 sensors, #7 IPMI (KCS+LAN), #3a VGA capture. The
-other 5 are board/SoC-impossible (#8 host-BIOS flash, #9 true NC-SI, #2 USB-host side, #5
-DIMM/memory inventory), rig-blocked (#2 USB silicon retest), or need host cooperation /
-deeper QEMU-only work (#3b keyboard-to-host, #6 SOL host-serial). This is the hardware
-ceiling of the AST2050/KGPE-D16, not unimplemented work. See SILICON-STATUS.md.
+real silicon — #1 power on/off/reset, #4 sensors, #7 IPMI (KCS+LAN), #3a VGA capture.
+
+**CORRECTION (2026-07-19, schematic-coverage audit):** an earlier version of this line
+listed **#9 true NC-SI** and **#5 DIMM/memory inventory** as "board/SoC-impossible". That was
+WRONG — the authoritative schematic contradicts it, and the project already reversed both
+verdicts (see SILICON-STATUS.md strikethroughs + the device-driver program):
+- **#9 NC-SI IS wired** — `AST2050-BMC-WIRING.md` §7 + `pinmaps/QU1_pins.md` show the AST2050
+  RMII2 sideband (A5/B5/B6/C4/D4/D5) bussed to *both* Intel 82574L NICs (LU1/LU2), the
+  classic NC-SI topology. Reopened + implemented as **D07** (QEMU RMII2/NC-SI model + Linux
+  ncsi); silicon is hard-but-not-blocked, not impossible.
+- **#5 DIMM/memory inventory IS reachable** — §10 + `I2C-SMBUS-TOPOLOGY.md` show all 16 DIMM
+  SPD/TSOD reachable from BMC I2C2 via the QU9/QU5/U23 mux fabric. Implemented as **D08**.
+
+Genuinely board/SoC-limited (not "impossible" hand-waving, but real topology): **#8**
+host-BIOS flash (no BMC↔BIOS-SPI net in the pinmap) and **#2** USB-host side (the BMC is the
+USB *device*, the SP5100 is the host — schematic §9). The rest need host cooperation / deeper
+work (#3b keyboard-to-host, #6 SOL host-serial). See SILICON-STATUS.md + DEVICE-MATRIX.md.
 
 ---
 
