@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-21 — INTEGRITY: caught + corrected an RTC Linux-stack OVER-CLAIM (row 39 LQ ✅ → ⬜)
+
+While scoping the #187 Linux stack I found — and empirically confirmed — a real OVER-CLAIM in the trackers
+(the goal cares about incorrect claims; this is the over-claim direction). Row 39 LQ was ✅ and
+FULL-TASK-LIST A7 said "Linux [x] QEMU (rtc-aspeed)", but:
+- the board Linux dts is based on `aspeed-g4.dtsi`, whose `rtc@1e781000` is `aspeed,ast2400-rtc` — the
+  BCD-style RTC (TIME@0x00, YEAR@0x04, CTRL@0x10). The REAL G3 RTC is COUNTER-style (COUNTER@0x00,
+  RELOAD@0x08, CONTROL@0x0C, RESTART@0x10) — register-INCOMPATIBLE (rtc-aspeed would read "year" from the
+  G3's alarm reg and "ctrl" from the G3's RESTART reg);
+- EMPIRICAL PROOF (new `rtclinux` init gate): booting the C2 kernel, `ls /dev/rtc*` = "No such file", no
+  `/sys/class/rtc/rtc0`, hwclock can't open /dev/rtc. So rtc-aspeed produces NO working RTC device on the
+  G3 at all — the "LQ ✅ (rtc-aspeed)" was a bind/assumption over-claim, NOT a validated Linux RTC.
+
+Corrected honestly: row 39 LQ ✅ → ⬜; FULL-TASK-LIST A7 Linux `[x] → [ ]` with the full reason. Recorded the
+accurate #187-Linux scope: the G3 needs a NEW `aspeed,ast2050-rtc` COUNTER-style Linux driver + a G3 dts
+rtc node (mirroring the silicon-validated Zephyr `rtc_aspeed_g3.c`), THEN the RTC04/IRQ26 wakealarm on top.
+This is the same verify-first discipline that caught the #190/#191 mis-flags — applied here it caught an
+over-claim instead. Note: gate-c's earlier weasel-audit spot-check did not hit this specific RTC-LQ cell;
+worth a targeted re-audit of *-QEMU ✅ cells that rest on "driver binds" rather than a functional check.
+
 ## 2026-07-21 — #191 verified + dispositioned: SCU1C already modeled; freq-counter/IRQ firmware-unexercised
 
 Investigated the last un-examined gate-d sub-block, #191 (SCU freq-counter / IRQ-ctrl / 32.768kHz

@@ -401,7 +401,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ✅ | ✅ | ✅ |
-| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ✅ | 🔶 |
+| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ✅ | 🔶 |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -459,7 +459,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   frozen on disable. INERT AT RESET (CONTROL[0]=0 → frozen, bit-identical to before), so no
   legacy-oracle boot changes (C2 boots to BMC-READY; the enabled behaviour matches silicon).
   Register-validated (`rtcrate` /dev/mem gate): load 00:00:00, enable, sleep 1 s → +768 RTC-seconds
-  (fast, not ~1). **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
+  (fast, not ~1). **LQ ✅→⬜ — OVER-CLAIM CORRECTED (2026-07-21):** the board Linux dts is based on
+  `aspeed-g4.dtsi` (`rtc@1e781000` = `aspeed,ast2400-rtc`, BCD layout), but the real G3 RTC is
+  counter-style — register-incompatible. Empirically (rtclinux gate) the C2 kernel creates NO `/dev/rtc0`
+  / `/sys/class/rtc/rtc0`, so there is NO working Linux RTC on the G3; the prior "LQ ✅ (rtc-aspeed)" was a
+  bind/assumption over-claim. Proper Linux support needs a NEW `aspeed,ast2050-rtc` counter-style driver
+  (like the silicon-validated Zephyr `rtc_aspeed_g3.c`) + a G3 dts rtc node — the #187 Linux stack.
+  **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
   board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
   silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked
   as **#186** (needs a silicon minute-wrap test). D11.

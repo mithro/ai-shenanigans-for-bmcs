@@ -70,7 +70,13 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 ### A7. RTC (§implied)
 - [x] QEMU: RTC model
 - U-Boot: [N] QEMU/silicon (Raptor U-Boot does not use the SoC RTC)
-- Linux: [x] QEMU (rtc-aspeed) · [ ] silicon · [ ] userspace (`hwclock`/`/dev/rtc`)
+- Linux: [ ] QEMU · [ ] silicon · [ ] userspace — **OVER-CLAIM CORRECTED (2026-07-21): the earlier "[x]
+  QEMU (rtc-aspeed)" was WRONG.** The board dts is based on `aspeed-g4.dtsi` whose `rtc@1e781000` is
+  `aspeed,ast2400-rtc` (BCD layout: TIME@0x00/YEAR@0x04/CTRL@0x10), but the real G3 RTC is COUNTER-style
+  (COUNTER@0x00/RELOAD@0x08/CONTROL@0x0C/RESTART@0x10). Empirically (rtclinux init gate): booting the C2
+  kernel creates NO `/dev/rtc0` and NO `/sys/class/rtc/rtc0` — rtc-aspeed does not produce a working RTC
+  device on the G3. Proper Linux support needs a NEW `aspeed,ast2050-rtc` counter-style driver (matching
+  the silicon-validated Zephyr `rtc_aspeed_g3.c`) + a G3 dts rtc node; tracked as the #187 Linux stack.
 - Zephyr: [x] QEMU (`rtc_smoke` set/load/read PASS via `rtc_aspeed_g3.c`) · [~] silicon (SCU08[16] clock makes the RTC LOAD+RUN on real AST2050, but the 24 MHz source runs it fast — not real-time 1 Hz; #158)
 
 ### A8. AHB / P2A + LPC-to-AHB back-doors (§implied; datasheet)

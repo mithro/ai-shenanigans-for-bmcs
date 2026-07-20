@@ -713,5 +713,23 @@ if grep -q wdtintr /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- Linux RTC read check ('rtclinux'): is rtc-aspeed correct on the G3 counter-RTC? ---
+# The board dts is based on aspeed-g4.dtsi -> rtc@1e781000 = aspeed,ast2400-rtc (BCD
+# layout), but the REAL G3 RTC is counter-style. Read the Linux RTC and see if it is
+# a sane time or garbage — resolves whether row-39 LQ "rtc-aspeed" is real or a bind-only
+# over-claim.
+if grep -q rtclinux /proc/cmdline; then
+	echo "=== RTC-LINUX-BEGIN ==="
+	ls -la /dev/rtc* /sys/class/rtc/ 2>&1
+	for f in name date time since_epoch; do
+		if [ -e "/sys/class/rtc/rtc0/$f" ]; then
+			echo "rtc0/$f = $(cat /sys/class/rtc/rtc0/$f 2>&1)"
+		fi
+	done
+	echo "hwclock -r: $(hwclock -r 2>&1 || busybox hwclock -r 2>&1 || echo '(hwclock failed)')"
+	echo "=== RTC-LINUX-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh
