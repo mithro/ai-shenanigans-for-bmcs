@@ -188,6 +188,20 @@
 #define SCU74_SDA5_BIT       12U /* SCU74[12] -> chan5, [13] -> chan6, [14] -> chan7 */
 
 /*
+ * Module-level lock for the SCU registers (SCU04 SYS_RST_CTRL, SCU74 MFP_CTL1)
+ * that are SHARED across every I2C engine instance. Each engine's per-device
+ * k_mutex only serialises that engine's own transfers, so it cannot protect a
+ * read-modify-write of these shared SCU registers against a concurrent
+ * configure() of a different engine (#180). A file-scope spinlock is the right
+ * primitive here (unlike the per-device transfer lock, which must be a k_mutex
+ * because a transfer busy-polls with interrupts-enabled): the SCU RMW is a short,
+ * non-sleeping 3-write sequence (unlock key + read + write), so disabling
+ * interrupts for its duration is harmless, and a spinlock also works from any
+ * context. Guards i2c_aspeed_g3_scu_release() and i2c_aspeed_g3_pinmux().
+ */
+static struct k_spinlock scu_lock;
+
+/*
  * Polling bound. In QEMU the status is set synchronously by the CMD store, so
  * the first read already sees it; on real silicon a 100 kHz byte is ~90 us, so
  * this generous count (matching the vendor LOOP_COUNT 0x100000) always covers a
@@ -214,26 +228,27 @@ struct i2c_aspeed_g3_data {
 /*
  * One-time (idempotent) release of the shared SCU04[2] I2C reset hold.
  *
- * NOTE (latent concern, safe under current usage — code-review 2026-07-20, #180):
- * this and i2c_aspeed_g3_pinmux() do a read-modify-write on SCU registers SHARED
- * across all I2C engine instances, but each engine only holds its OWN per-device
- * k_mutex — so a lost update is possible IN THEORY if two engines' i2c_configure()
- * run concurrently from different threads. It cannot happen today: driver init is
- * single-threaded (POST_KERNEL), and only channel 5 is a muxed channel on this
- * board (6/7 have no DT node, header gotcha 4), so there is no second
- * muxed-channel configure() to race against. If a second runtime-muxed channel is
- * ever added, guard these two RMWs with a module-level lock.
+ * This and i2c_aspeed_g3_pinmux() read-modify-write SCU registers SHARED across
+ * every I2C engine instance, so the RMW is serialised by the module-level
+ * scu_lock (NOT the per-device transfer mutex, which is per-engine and so cannot
+ * protect a shared register against a concurrent configure() of a different
+ * engine — #180). Today the race cannot actually happen (init is single-threaded
+ * POST_KERNEL and only channel 5 is muxed on this board), but the lock makes the
+ * RMW correct-by-construction if a second runtime-muxed channel is ever added.
  */
 static void i2c_aspeed_g3_scu_release(void)
 {
 	uint32_t rst;
+	k_spinlock_key_t key;
 
 	/* Unlock the SCU (harmless if already unlocked, e.g. the QEMU -kernel
 	 * boot path), then clear the I2C reset-hold bit, preserving the rest.
 	 */
+	key = k_spin_lock(&scu_lock);
 	sys_write32(SCU_G3_UNLOCK_MAGIC, SCU_G3_BASE + SCU_G3_PROT_KEY);
 	rst = sys_read32(SCU_G3_BASE + SCU_G3_SYS_RST_CTRL);
 	sys_write32(rst & ~SCU_G3_RST_I2C, SCU_G3_BASE + SCU_G3_SYS_RST_CTRL);
+	k_spin_unlock(&scu_lock, key);
 }
 
 /*
@@ -253,10 +268,16 @@ static void i2c_aspeed_g3_pinmux(mem_addr_t base)
 
 	bit = BIT(SCU74_SDA5_BIT + (channel - I2C_MUXED_CHAN_FIRST));
 
-	/* SCU protected register: unlock first (idempotent), then set the bit. */
+	/* SCU protected register: unlock first (idempotent), then set the bit.
+	 * scu_lock serialises this shared-SCU74 RMW against a concurrent
+	 * scu_release()/pinmux() on another engine (#180).
+	 */
+	k_spinlock_key_t key = k_spin_lock(&scu_lock);
+
 	sys_write32(SCU_G3_UNLOCK_MAGIC, SCU_G3_BASE + SCU_G3_PROT_KEY);
 	mfp = sys_read32(SCU_G3_BASE + SCU_G3_MFP_CTL1);
 	sys_write32(mfp | bit, SCU_G3_BASE + SCU_G3_MFP_CTL1);
+	k_spin_unlock(&scu_lock, key);
 }
 
 static void i2c_aspeed_g3_hw_init(mem_addr_t base)

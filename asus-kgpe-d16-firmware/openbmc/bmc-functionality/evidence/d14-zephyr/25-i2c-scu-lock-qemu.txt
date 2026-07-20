@@ -1,0 +1,64 @@
+#180 — Zephyr i2c_aspeed_g3: module-level lock on the SHARED SCU RMW (2026-07-21)
+================================================================================
+
+FINDING (code-review 2026-07-20, tracked as #180): the Zephyr I2C driver
+zephyr/drivers/i2c/i2c_aspeed_g3.c read-modify-writes two SoC-level SCU
+registers that are SHARED across every I2C engine instance —
+  - SCU04 (SYS_RST_CTRL): i2c_aspeed_g3_scu_release() clears the I2C reset-hold
+    bit [2] (unlock key -> read -> write);
+  - SCU74 (MFP_CTL1): i2c_aspeed_g3_pinmux() ORs the SDA5/6/7 pin-mux bit for
+    muxed channels 5/6/7 (unlock key -> read -> write).
+Each I2C engine only holds its OWN per-device k_mutex (which serialises that
+engine's transfers), so that mutex canNOT protect these shared SCU registers
+against a concurrent i2c_configure() of a DIFFERENT engine -> a lost update is
+possible in theory (a mid-RMW preempt drops the other engine's bit).
+
+This is the SAME class of bug just fixed in the Linux counter-RTC driver
+(unlocked RMW of a register touched from concurrent contexts, gate-(b)); this
+applies the same locking discipline to the analogous Zephyr site.
+
+FIX (zephyr/drivers/i2c/i2c_aspeed_g3.c):
+  - added a file-scope `static struct k_spinlock scu_lock;`
+  - wrapped BOTH shared-SCU RMWs (scu_release SCU04, pinmux SCU74) in
+    k_spin_lock(&scu_lock)/k_spin_unlock(&scu_lock, key).
+  - chose a spinlock (not a mutex): unlike the per-device TRANSFER lock — which
+    must be a k_mutex because a transfer busy-polls with interrupts enabled — the
+    SCU RMW is a short, non-sleeping 3-write sequence, so briefly disabling
+    interrupts is harmless and a spinlock also works from any context.
+  - updated the stale "latent concern, guard with a module-level lock if..."
+    comment to describe the now-present lock.
+
+WHY it's correct-by-construction and behavior-neutral: the lock serialises the
+RMW; it changes no register value or ordering on a single-threaded path. Today
+the race cannot even occur (init is single-threaded POST_KERNEL and only channel
+5 is muxed on this board — 6/7 have no DT node), so this is hardening for a
+future second-muxed-channel; the point of the fix is that the RMW is now safe if
+that ever happens.
+
+===== BUILD (Zephyr, board kgpe_d16_bmc/ast2050, SDK 0.17.0) =====
+west build -p always -b kgpe_d16_bmc samples/i2c_smoke -- -DZEPHYR_EXTRA_MODULES=<module>
+[133/133] Linking C executable zephyr/zephyr.elf   <- driver compiles clean w/ the lock
+RAM: 136 KB / 64 MB
+
+===== VALIDATION (QEMU, kgpe-d16-bmc, run-qemu.py boot) =====
+boot: qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -serial stdio -kernel zephyr.elf
+I2C read dev=0x2f reg=0xfe val=0x79 (expect 0x79) PASS
+boot: OK — saw 'PASS'
+
+DECODE: i2c_smoke reads the W83795 chip-ID register (0xFE -> 0x79) over I2C
+engine 1. The read path runs i2c_aspeed_g3_hw_init() -> scu_release() (the SCU04
+RMW, NOW under scu_lock) -> pinmux() (early-returns for channel 1 < 5) ->
+transfer. The CID reads back 0x79 = PASS, so the scu_lock around the shared SCU04
+reset-release RMW is behavior-neutral: I2C still works.
+
+SCOPE of this run: engine 1 exercises the scu_release (SCU04) lock directly. The
+pinmux (SCU74) lock covers channels 5/6/7 only; it is the IDENTICAL
+k_spin_lock/k_spin_unlock idiom around a 3-write sequence and is compile-
+validated. The pinmux path is only reached for a muxed channel — i.e. exactly
+the future second-muxed-channel scenario this lock exists to protect, which does
+not exist on this board today.
+
+RESULT: #180 CLOSED (module-level scu_lock added; I2C functional in QEMU,
+behavior-neutral). The standing code-review "latent concern" comment is replaced
+by the implemented lock. This removes a documented review finding (gate-b/(b)
+cleanliness for the Zephyr I2C driver).

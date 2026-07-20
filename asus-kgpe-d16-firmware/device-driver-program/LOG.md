@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #180 CLOSED: module-level scu_lock on the shared-SCU RMW in the Zephyr I2C driver
+
+Applied the same locking discipline as the RTC gate-(b) fix (above) to the analogous Zephyr site.
+`zephyr/drivers/i2c/i2c_aspeed_g3.c` read-modify-writes two SoC-shared SCU registers — SCU04
+(SYS_RST_CTRL, i2c reset-hold release) and SCU74 (MFP_CTL1, SDA5/6/7 pin-mux) — but each engine
+only holds its OWN per-device k_mutex, which cannot protect a register shared across engines
+against a concurrent configure() of a DIFFERENT engine (a documented 2026-07-20 review finding).
+
+Fix: added a file-scope `static struct k_spinlock scu_lock;` and wrapped BOTH shared-SCU RMWs
+(scu_release SCU04, pinmux SCU74) in k_spin_lock/k_spin_unlock. Chose a SPINLOCK (not a mutex):
+unlike the per-device TRANSFER lock — a k_mutex precisely because a transfer busy-polls with
+interrupts enabled — the SCU RMW is a short non-sleeping 3-write sequence, so a spinlock is the
+right minimal primitive and works from any context. Replaced the stale "guard with a module-level
+lock if a second muxed channel is added" comment with the now-present lock.
+
+Behavior-neutral + validated: rebuilt i2c_smoke (west, board kgpe_d16_bmc/ast2050, SDK 0.17.0 —
+driver compiles clean with the lock) and booted on the faithful `-M kgpe-d16-bmc`:
+`I2C read dev=0x2f reg=0xfe val=0x79 (expect 0x79) PASS` — the W83795 CID read over engine 1
+still works. Engine 1 exercises the scu_release (SCU04) lock directly; the pinmux (SCU74) lock is
+the identical idiom for channels 5-7 (compile-validated; only reachable in the future
+second-muxed-channel scenario the lock guards). The race cannot occur on this board today (init is
+single-threaded POST_KERNEL, only channel 5 muxed) — this is correct-by-construction hardening.
+Evidence: openbmc/.../d14-zephyr/25-i2c-scu-lock-qemu.txt. Removes a standing review finding.
+
 ## 2026-07-21 — Gate-(b) RESOLVED: RTC-driver CONTROL-register concurrency fix + robust wakealarm gate
 
 The gate-(b) code review (below) returned one real finding (confidence 80): the counter-style
