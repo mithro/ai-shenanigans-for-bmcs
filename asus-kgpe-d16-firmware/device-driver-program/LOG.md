@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #172 DONE: gated the phantom XDMA + SDHCI off the G3 machine (completes the #144 phantom sweep)
+
+Fixed the HIGH gate-d finding immediately (didn't just track it). hw/arm/aspeed_ast2400.c realized
+aspeed.xdma (0x1E6E7000/IRQ6) + aspeed.sdhci (0x1E740000/IRQ26) UNGATED on the G3 machine — two G4
+phantoms squatting on the real MDMA address + MDMA/RTC-alarm IRQs. Gated create+realize+map+irq of both
+on silicon_rev != AST2050_A1_SILICON_REV (identical pattern to the ADC/#146 gate); verified xdma/sdhci
+have no other references so gating create+realize is complete + safe (embedded child never touched on
+G3, like the gated ADC). VALIDATED: QEMU rebuilds clean; `info qtree` on kgpe-d16-bmc shows **0
+xdma/sdhci** (i2c/gpio/mac intact); w83795_smoke + spd_smoke both still PASS (the G3 SoC fully realizes
+without the phantoms). Faithfulness IMPROVEMENT — frees 0x1E740000 + INT#6/#26 for the real MDMA/RTC-alarm
+the silicon uses (now read unassigned instead of a wrong SDHCI). Submodule commit 8c92878b81. G4 machines
+unchanged (the guards only skip on the G3 silicon-rev). Low-risk to the oracles (they don't use these G4
+blocks); full C2/C4/C-UBOOT re-run recommended as due diligence. #144's phantom set (UART3-5/WDT2/SRAM/
+SPI1/ADC) now extended with xdma/sdhci — the SoC-internal device-count is closer to G3-faithful. Remaining
+SoC-internal completeness (HACE/MIC/MDMA/2D/PUART/PCI-arbiter rows) tracked as #173.
+
 ## 2026-07-20 — Gate-(d) adversarial pass FOUND REAL GAPS (did NOT rubber-stamp) → 3 new tasks + 2 doc fixes; key = a STRUCTURAL blind spot (SoC-internal engines)
 
 Ran a gate-(d) adversarial "find new tasks / anything missed" independent pass. It did NOT come up empty
