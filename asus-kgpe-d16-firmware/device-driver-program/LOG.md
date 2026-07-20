@@ -1,5 +1,45 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b) parallel code-review sweep: 4 more code bodies reviewed (3 sub-agents + 1 self) — all CLEAN; + gate-(a) schematic cross-check
+
+Extended completion-gate (b) coverage. Dispatched THREE focused code-reviewer sub-agents IN PARALLEL (within
+the 5-agent cap) on the highest-value developed code not yet independently reviewed, each with the hardware/
+faithfulness context, and self-reviewed a 4th small model. VERIFIED each result myself. All four came back
+CLEAN (0 substantive issues ≥80 confidence):
+- **Zephyr `i2c_aspeed_g3.c`** (I2C master, 471 lines): state machine bounded by I2CD_POLL_COUNT (no infinite
+  spin), NAK→-ENXIO/-EIO/-ETIMEDOUT (fail-loud), multi-msg RESTART/STOP + last-byte-NAK correct, mutex
+  discipline single-unlock on every path, SCU/AC-timing/INTR init order matches vendor U-Boot. One
+  SUB-THRESHOLD (~50) note: scu_release()/pinmux() RMW the SHARED SCU04/SCU74 across engine instances under
+  only the per-engine mutex — a lost-update race IN THEORY, but unexercised (single-threaded POST_KERNEL
+  init; only ch5 muxed on this board). Documented in-code + tracked as #180 (conditional fix if a 2nd
+  runtime-muxed channel is added). Not a live bug.
+- **QEMU `w83795.c`** (hwmon model + my #174 fan-control + reset): banked dispatch consistent, BANKSEL always
+  reachable, no OOB into regs[4][256], fan-control confined to bank-2 0x10-0x17 per-byte via live ptr and
+  overflow-safe (cnt<=0xfff → cnt>>4<=0xff), reset_hold correct phase + full re-init (no stale fields),
+  I2C-slave START/pointer framing correct.
+- **QEMU `kgpe_d16_i2c_fabric.c`** (mux fabric + sys_pwrgd fix): GPIO-select decode matches the 74HC4052
+  truth table + cross-file wiring (no off-by-one/inversion), the SYS_PWRGD edge-guard fix present + correct
+  verbatim, host-off NAKs everything / host-on routes only the selected channel (faithful isolation), reset
+  state consistent, nothing positioned to diverge C2/C4.
+- **QEMU `pmbus_psu.c`** (self-reviewed, 162 lines): LINEAR11/ULINEAR16 encodings verified against the
+  documented hex (0x00E6 VIN, 0x13E8 4000RPM, 0x1800/VOUT_MODE=0x17 → 12.0V), all mantissas fit 11 bits,
+  reset defaults seeded in exit_reset (re-applied every reset); fixed/non-host-gated values documented as an
+  intentional simplification.
+
+So gate-(b) coverage now spans (this session): GPIO-irq driver (prior cycle, 2 bugs FIXED) + these 4 CLEAN,
+plus the earlier-session review of the 4 original code bodies (4 bugs fixed, confirm-clean). Honest status:
+gate (b) is NOT sealed — U-Boot ast_i2c patch, the Linux kernel patches (g3-clk/i2c-timing/ftgmac100), the
+Zephyr SoC support (vic/timer/console/soc), gpio_w83601g.c, sbtsi.c, and the aspeed_ast2400.c phantom-gating
+remain to be swept — but the reviewed surface is materially larger and every reviewed body is clean or fixed.
+
+**Gate-(a) cross-check (same cycle):** enumerated the authoritative schematic's device sections directly
+(`AST2050-BMC-WIRING.md` §§1-16 headers) and confirmed each device section §2-15 maps onto the matrix's 51
+rows (§2 power→24/27, §3 DDR2→1, §4 SPI→2, §5 LPC→3-7, §6 PCI/iKVM→8, §7 eth→10-11, §8 VGA→12-14, §9 USB→9,
+§10 I2C→15-26b, §11 GPIO→27-29, §12 serial/SOL→30-31, §13 JTAG/LED/clk/straps→32-34, §14 neighbour-chips
+cross-ref, §15 connectors covered, §16 = the per-pin source). No schematic device section is unmapped — the
+matrix's completeness claim holds at the section level. (Deeper per-device gate-a passes already added rows
+43-50 for SoC-internal engines; this confirms the external-schematic dimension.)
+
 ## 2026-07-20 — gate-(b) code review of the Zephyr GPIO-interrupt driver: 2 REAL latent bugs found + fixed
 
 Advanced completion-gate (b) ("full code reviews of all developed code, no issues") on the most substantial

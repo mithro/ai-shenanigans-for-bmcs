@@ -211,7 +211,19 @@ struct i2c_aspeed_g3_data {
 	struct k_mutex lock;
 };
 
-/* One-time (idempotent) release of the shared SCU04[2] I2C reset hold. */
+/*
+ * One-time (idempotent) release of the shared SCU04[2] I2C reset hold.
+ *
+ * NOTE (latent concern, safe under current usage — code-review 2026-07-20, #180):
+ * this and i2c_aspeed_g3_pinmux() do a read-modify-write on SCU registers SHARED
+ * across all I2C engine instances, but each engine only holds its OWN per-device
+ * k_mutex — so a lost update is possible IN THEORY if two engines' i2c_configure()
+ * run concurrently from different threads. It cannot happen today: driver init is
+ * single-threaded (POST_KERNEL), and only channel 5 is a muxed channel on this
+ * board (6/7 have no DT node, header gotcha 4), so there is no second
+ * muxed-channel configure() to race against. If a second runtime-muxed channel is
+ * ever added, guard these two RMWs with a module-level lock.
+ */
 static void i2c_aspeed_g3_scu_release(void)
 {
 	uint32_t rst;
