@@ -1164,9 +1164,21 @@
 			};
 
 			rtc@1e781000 {
-				compatible = "aspeed,ast2400-rtc";
-				reg = <0x1e781000 0x18>;
-				status = "disabled";
+				/*
+				 * The AST2050 (G3) RTC is COUNTER-style (datasheet §24), NOT the
+				 * BCD ast2400-rtc — it needs the counter-style variant added in
+				 * kernel patch 0009 (rtc-aspeed.c). RTC04 is field-packed and the
+				 * alarm fires on the RTC's single IRQ = VIC source 22
+				 * (silicon-proven, #192). Kept in sync with the QEMU board dts.
+				 * NOTE: build-realhw-kernel.py actually ships the QEMU dts
+				 * (aspeed-bmc-asus-kgpe-d16.dts) AS the realhw.dtb, so THIS file is
+				 * a reference variant, not the built one; corrected here anyway so
+				 * it does not mislead (it carried the wrong ast2400-rtc compatible).
+				 */
+				compatible = "aspeed,ast2050-rtc";
+				reg = <0x1e781000 0x20>;
+				interrupts = <22>;
+				status = "okay";
 			};
 
 			serial@1e783000 {
