@@ -1,5 +1,50 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b) sweep round 2: 6 more code bodies reviewed (4 sub-agents + 2 self) — ALL CLEAN incl. the oracle-critical phantom-gating
+
+Continued the gate-(b) full-code-review sweep. Dispatched FOUR focused code-reviewer sub-agents IN PARALLEL
+(within the 5-agent cap) + self-reviewed 2 small SoC files; VERIFIED each result. All six CLEAN (0 substantive
+issues ≥80 confidence):
+- **QEMU `hw/arm/aspeed_ast2400.c` phantom-gating (ORACLE-CRITICAL):** the agent traced ALL FOUR phantoms
+  (XDMA/SDHCI/SRAM/ADC) across all FOUR lifecycle phases (init/realize/map/irq) — each consistently gated on
+  `AST2050_A1_SILICON_REV`, NO dangling `s->xdma/sdhci/sram/adc` references, NO IRQ double-assign, and the
+  freed MMIO addresses (0x1E6E7000/0x1E6E9000/0x1E720000/0x1E740000) all fall through to the LOW-priority
+  (-1000) unimplemented catch-all — verified they don't collide with any real or new G3 device (smc/udc/
+  video/pwm/lpc/rtc/p2a). New G3-only devices are init+realize+map+irq all-together (no half-creation). This
+  is the file most able to break C2/C4/C-UBOOT — clean here is a strong faithfulness confirmation. (Harmless:
+  `sram_size`/`ehcis_num` set-but-unused on G3 — dead values, not bugs.)
+- **Zephyr `vic.c` + `aspeed_timer.c` (boot-critical, had the silicon-only fixes):** VIC claims+quiesces each
+  source (mask level / ack edge) BEFORE the ISR wrapper re-enables IRQs (no re-storm/double-fire); spurious
+  `status==0` returns CONFIG_NUM_IRQS cleanly; the set/clear enable-register pair avoids the ISR-vs-thread
+  RMW race; edge/level branches mirror-consistent. Timer init disable→program→connect→enable→irq_enable
+  (clears the enable-glitch edge); the glitch window is ≪ 1 tick (catches only the glitch, never a real
+  tick); ISR = standard tickful pattern; IRQ 16 matches the VIC Timer1 source.
+- **QEMU `hw/sensor/sbtsi.c`:** temp encoding verified vs the Linux sbtsi_temp decode (round-trips at 45.5 /
+  100.125 / boundary 255.875 C); register-pointer access bounds-checked (no OOB at uint8_t wrap); reset seeds
+  regs before guest access; no-negative-temp clamp faithful; NR_REGS matches array + vmstate.
+- **QEMU `hw/gpio/w83601g.c`:** indexed-CR bounds safe (index wraps mod 256; writable() only over constants
+  < NR_REGS; reserved() range-checks); register map internally consistent (34 = NR_REGS); each write touches
+  only its target CR; the two instances (0x18/0x19) have no static state so cannot alias; reset seeds
+  CR_ID_LOW=0x13. Below-threshold note: CR_OUT writes aren't propagated to modeled physical pins — matches
+  what silicon validated (a register round-trip, not a pin loopback) + no QEMU consumer of those pins, so a
+  documented simplification, not a bug.
+- **Zephyr `console.c` (self):** byte-wide accesses at reg-shift=2 (THR +0x00, LSR +0x14) match ns16550 +
+  the comment; \n→\r\n correct; hooks at PRE_KERNEL_1 prio 0 catch the banner; lock-free polling spin is
+  inherent to an M0 console (upper layers serialize) and only hangs if the UART is dead (expected mode).
+- **Zephyr `soc.c` (self):** MMU regions all separate non-overlapping 4 KB device pages (uart5/wdt/gpio/rtc/
+  timer/i2c/scu/vic — no collisions); the one intentional vectors(VA0x40000000→PA0, strongly-ordered) vs
+  dram VA-overlap is silicon-required + already resolved by a prior review+silicon test; soc_reset_hook CP15
+  ops are correct ARM926 encodings (c7,c7,0 inval I+D cache; c8,c7,0 inval I+D TLB; c7,c10,4 drain WB).
+
+**Gate-(b) coverage now (this session):** GPIO-irq driver (2 bugs FIXED) + i2c_aspeed_g3 + w83795 + fabric +
+pmbus_psu (round 1, clean) + phantom-gating + vic + timer + sbtsi + w83601g + console + soc (round 2, clean)
+= 12 code bodies, plus the earlier-session review of the 4 original bodies (4 bugs fixed). Honest status:
+gate (b) STILL NOT sealed — remaining un-reviewed: the U-Boot ast_i2c patch, the Linux kernel patches
+(g3-clk/i2c-timing/ftgmac100), the other Zephyr drivers (gpio_w83601g DRIVER / wdt_aspeed_g3 / rtc_aspeed_g3),
+QEMU aspeed_peci + the LPC/vuart/ftgmac100/SMC/SDMC changes, and the DTS files. But every reviewed body is
+now clean or fixed, and the highest-RISK code (oracle-critical phantom-gating + boot-critical VIC/timer) is
+confirmed sound. Next cycles: continue the sweep over the remaining bodies (natural parallel-agent batches).
+
 ## 2026-07-20 — gate-(b) parallel code-review sweep: 4 more code bodies reviewed (3 sub-agents + 1 self) — all CLEAN; + gate-(a) schematic cross-check
 
 Extended completion-gate (b) coverage. Dispatched THREE focused code-reviewer sub-agents IN PARALLEL (within
