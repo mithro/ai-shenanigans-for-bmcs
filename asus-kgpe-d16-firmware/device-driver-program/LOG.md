@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 39 LS: netboot ATTEMPTED on silicon — U-Boot came up, DHCP blocked (honest failure)
+
+Followed through on the row-39-LS silicon validation (not just staged): worked around the TFTP
+permission block (scp'd under new names /srv/tftp-bmc/{uImage,dtb,initrd}-rtc39, owned by tim),
+JTAG-booted U-Boot (boot-silicon-uboot.sh) — **U-Boot 2013.07 came up cleanly on silicon: DRAM 64
+MiB, Net aspeednic#0 PHY 0x20, boot# prompt** — and drove it over /dev/serial-bmc-console @115200
+with a pyserial script (the prompt echoes commands, so serial write+read works).
+
+BLOCKED: `dhcp` gets NO response — `BOOTP broadcast 1..5 / Retry count exceeded / starting again`,
+looping. The mgmt NIC TX's broadcasts but RX's no reply, so no IP/serverip → tftp+bootm never run →
+Linux never boots → the RTC driver never executes. **CONFIDENCE this is NOT an RTC bug: HIGH** — the
+RTC code never runs; the failure is entirely in the netboot TRANSPORT (U-Boot DHCP), and the
+identical VIC-22/field-packed RTC path is already silicon-proven for the Zephyr alarm (#192) +
+QEMU-validated for Linux. Two likely netboot causes (evidence /29): (1) no DHCP server on the BMC
+mgmt segment right now, or (2) U-Boot aspeednic RX broken — plausibly the SAME MACCR bit19 FAST_MODE
+speed issue the Linux ftgmac100 RX fix addressed. Row 39 LS stays ⬜ with the SPECIFIC blocker
+identified; next = static-IP ping test to isolate RX-vs-no-server, then fix accordingly. The Zephyr
+bare-metal JTAG load avoids the netboot entirely (why Zephyr-silicon succeeded, Linux-silicon needs
+this transport). Evidence d14-zephyr/29.
+
 ## 2026-07-21 — Row 39 LS (Linux RTC on silicon): silicon-ready kernel BUILT; netboot blocked (honest)
 
 Worked the audit's Tier-2 #7 (Linux RTC on silicon). Prepared everything for it:

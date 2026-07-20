@@ -1,0 +1,55 @@
+Row 39 LS (Linux RTC on real AST2050) — netboot ATTEMPTED, blocked on U-Boot DHCP (2026-07-21)
+================================================================================
+HONEST failed-attempt record (per the program rule to document failures + state
+confidence it is not just my mistake). Row 39 LS stays ⬜ — NOT claimed done.
+
+GOAL: validate the field-packed + VIC-22 counter-style Linux RTC driver (patch
+0009) on real silicon, closing row 39 LS (the Zephyr RTC alarm is already
+silicon-proven on VIC 22, #192; the Linux driver + dtb are QEMU-validated).
+
+WHAT WORKED:
+- Built the silicon-ready realhw Linux kernel (build-realhw-kernel.py): patch 0009
+  field-packed RTC is in the kernel tree, and the shipped dtb is the QEMU board dts
+  (rtc = aspeed,ast2050-rtc, interrupts=<22>). tmp/uImage-kgpe-d16-realhw + dtb.
+- Worked around the TFTP-dir permission issue (existing artifacts owned by another
+  user) by scp'ing under new filenames: /srv/tftp-bmc/{uImage-rtc39,dtb-rtc39,
+  initrd-rtc39} (owned by tim).
+- JTAG-booted U-Boot on silicon (boot-silicon-uboot.sh): reset -> DDR2 TRAINED ->
+  load U-Boot -> resume. U-Boot 2013.07 came up cleanly:
+    DRAM: 64 MiB;  Net: aspeednic#0: PHY at 0x20;  boot# prompt reached.
+- Drove U-Boot over /dev/serial-bmc-console @115200 with a pyserial script
+  (tmp/uboot_netboot_rtc39.py): the boot# prompt echoes commands correctly, so the
+  serial write+read path works.
+
+THE BLOCKER (specific): `dhcp` in U-Boot gets NO response:
+    aspeednic#0: PHY at 0x20
+    BOOTP broadcast 1 .. BOOTP broadcast 5
+    Retry count exceeded; starting again      <- loops forever
+The board's mgmt NIC (ftgmac100, PHY 0x20) TRANSMITS BOOTP broadcasts but RECEIVES
+no reply, so it never gets an IP/serverip and the TFTP + bootm never run. Linux is
+never booted, so the RTC driver never executes.
+
+CONFIDENCE THIS IS NOT AN RTC BUG: HIGH.
+- The RTC code never runs — the failure is entirely in the netboot TRANSPORT
+  (U-Boot DHCP), upstream of Linux.
+- The identical RTC path (VIC 22 + field-packed RTC04) is ALREADY silicon-proven
+  for the Zephyr alarm (evidence /28), and the Linux driver+dtb are QEMU-validated
+  on VIC 22 (RTC-LINUX + wakealarm PASS).
+
+LIKELY ROOT CAUSE (for the NETBOOT, not the RTC), two candidates:
+1. No DHCP server on the BMC mgmt network right now (the Pi's dnsmasq PXE setup is
+   documented for the HOST network; the BMC mgmt port may be on a different / not-
+   currently-served segment or uncabled).
+2. U-Boot aspeednic RX not working — plausibly the SAME MACCR bit19 FAST_MODE
+   speed issue that the Linux ftgmac100 RX fix addressed (10M-on-100M -> rx=0);
+   the Raptor U-Boot 2013.07 aspeednic driver may not clear/re-derive it, so BOOTP
+   replies are transmitted by the server but not received by the BMC.
+
+NEXT STEPS (row 39 LS, focused effort): distinguish the two causes — try a STATIC
+ip (setenv ipaddr/serverip + ping the Pi) to test RX independent of DHCP; if RX is
+the issue, check the U-Boot aspeednic MACCR speed like the Linux fix; else stand up
+/ point a DHCP+TFTP server on the BMC mgmt segment. (The Zephyr bare-metal JTAG load
+avoids the netboot entirely, which is why Zephyr-silicon succeeded and Linux-silicon
+needs this transport working.) Board left in the U-Boot dhcp-retry loop; the next
+boot-silicon-uboot.sh resets it (harmless). Rig: asus-bmc, JTAG free, no others
+disturbed (checked).
