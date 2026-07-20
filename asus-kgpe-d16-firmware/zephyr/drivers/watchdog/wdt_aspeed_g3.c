@@ -79,6 +79,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/kernel.h>
+#include <zephyr/irq.h>
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
@@ -91,18 +92,39 @@
 /* WDT_CTRL bits (wdt_aspeed.c lines 27-33; DOC.md section 1). */
 #define WDT_G3_CTRL_ENABLE               BIT(0)      /* line 33 */
 #define WDT_G3_CTRL_RESET_SYSTEM         BIT(1)      /* line 32 */
+#define WDT_G3_CTRL_WDT_INTR             BIT(2)      /* line 31: IRQ instead of reset */
 #define WDT_G3_CTRL_1MHZ_CLK             BIT(4)      /* line 29: 1 = 1 MHz ref */
 #define WDT_G3_CTRL_RESET_MODE_FULL_CHIP (0x1U << 5) /* line 28 */
 
 /*
- * Run value: enable + reset-on-timeout + full-chip reset mode + 1 MHz clock.
- * = 0x33 = Raptor U-Boot's 0x23 (ENABLE|RESET_SYSTEM|full-chip on PCLK) plus the
- * 1MHZ_CLK bit (see file header, CLOCK SOURCE).
+ * Run value (reset mode): enable + reset-on-timeout + full-chip reset mode + 1
+ * MHz clock. = 0x33 = Raptor U-Boot's 0x23 (ENABLE|RESET_SYSTEM|full-chip on
+ * PCLK) plus the 1MHZ_CLK bit (see file header, CLOCK SOURCE).
  */
 #define WDT_G3_CTRL_RUN                                                         \
 	(WDT_G3_CTRL_ENABLE | WDT_G3_CTRL_RESET_SYSTEM |                        \
 	 WDT_G3_CTRL_1MHZ_CLK | WDT_G3_CTRL_RESET_MODE_FULL_CHIP)
 BUILD_ASSERT(WDT_G3_CTRL_RUN == 0x33U, "G3 WDT run control must be 0x33");
+
+/*
+ * Run value (interrupt mode, WDT_CTRL[2]): enable + WDT_INTR + 1 MHz clock, NO
+ * reset bits. Per the QEMU model (hw/watchdog/wdt_aspeed.c) and datasheet §27,
+ * on expiry with WDT_INTR set the WDT raises its interrupt (G3 VIC source 27)
+ * INSTEAD of resetting — a one-shot warning. = 0x15.
+ */
+#define WDT_G3_CTRL_RUN_INTR                                                    \
+	(WDT_G3_CTRL_ENABLE | WDT_G3_CTRL_WDT_INTR | WDT_G3_CTRL_1MHZ_CLK)
+BUILD_ASSERT(WDT_G3_CTRL_RUN_INTR == 0x15U, "G3 WDT intr-mode control must be 0x15");
+
+/*
+ * WDT timeout interrupt = G3 VIC source 27 (memory map §10; edge/rising in the
+ * RE'd G3 VIC map, soc/aspeed_g3/ast2050/vic.c — like the timer source 16).
+ * Hardcoded like the GPIO (20) / RTC-alarm (26) sources: the G3 VIC is not a DT
+ * interrupt-controller, so IRQs are connected by number. The framework
+ * z_soc_irq_eoi() clears the latched edge.
+ */
+#define WDT_G3_IRQ       27
+#define WDT_G3_IRQ_PRIO  0
 
 /* Restart/kick magic (wdt_aspeed.c line 53; hwreg.h; fwtest.c). */
 #define WDT_G3_RESTART_MAGIC 0x4755U
@@ -123,7 +145,13 @@ struct wdt_aspeed_g3_data {
 	uint32_t reload_ticks; /* programmed into WDT_RELOAD_VALUE by setup() */
 	bool installed;
 	bool enabled;
+	bool interrupt_mode;   /* true: fire VIC-27 IRQ (WDT_INTR) instead of reset */
+	wdt_callback_t callback; /* pre-timeout callback, interrupt mode only */
 };
+
+/* Single WDT instance; the ISR recovers the device from this file-static (set in
+ * init before irq_enable), mirroring the GPIO/RTC drivers. */
+static const struct device *wdt_g3_isr_dev;
 
 static int wdt_aspeed_g3_install_timeout(const struct device *dev,
 					 const struct wdt_timeout_cfg *cfg)
@@ -139,17 +167,28 @@ static int wdt_aspeed_g3_install_timeout(const struct device *dev,
 	if (cfg->window.min != 0U) {
 		return -ENOTSUP;
 	}
-	/* Pre-timeout interrupt (WDT_CTRL[2]) is not wired to the VIC yet. */
-	if (cfg->callback != NULL) {
-		return -ENOTSUP;
-	}
 	/*
-	 * We always drive a full reset on timeout; RESET_NONE (interrupt-only)
-	 * would need the callback path above, so it is unsupported. RESET_SOC and
-	 * RESET_CPU_CORE both map onto the single "reset the SoC" behaviour.
+	 * The G3 WDT is one-stage: on timeout it EITHER resets the SoC (WDT_CTRL
+	 * reset bits) OR raises its interrupt (WDT_CTRL[2] = WDT_INTR) — never both
+	 * (it is not a 2-stage pre-timeout-then-reset watchdog). So map:
+	 *   WDT_FLAG_RESET_NONE + callback  -> interrupt mode (VIC-27 fires the cb);
+	 *   WDT_FLAG_RESET_SOC/CPU_CORE     -> reset mode (callback must be NULL,
+	 *                                      since no IRQ fires to call it).
+	 * A callback with a reset flag would silently never run on this hardware, so
+	 * reject it (fail loud) rather than pretend to support 2-stage.
 	 */
-	if (cfg->flags != WDT_FLAG_RESET_SOC &&
-	    cfg->flags != WDT_FLAG_RESET_CPU_CORE) {
+	if (cfg->flags == WDT_FLAG_RESET_NONE) {
+		if (cfg->callback == NULL) {
+			return -ENOTSUP; /* interrupt mode is pointless with no callback */
+		}
+		data->interrupt_mode = true;
+	} else if (cfg->flags == WDT_FLAG_RESET_SOC ||
+		   cfg->flags == WDT_FLAG_RESET_CPU_CORE) {
+		if (cfg->callback != NULL) {
+			return -ENOTSUP; /* no 2-stage: reset mode fires no IRQ */
+		}
+		data->interrupt_mode = false;
+	} else {
 		return -ENOTSUP;
 	}
 	if (cfg->window.max == 0U) {
@@ -162,6 +201,7 @@ static int wdt_aspeed_g3_install_timeout(const struct device *dev,
 	}
 
 	data->reload_ticks = (uint32_t)ticks;
+	data->callback = cfg->callback;
 	data->installed = true;
 	return 0; /* channel 0 */
 }
@@ -185,10 +225,12 @@ static int wdt_aspeed_g3_setup(const struct device *dev, uint8_t options)
 	}
 
 	key = k_spin_lock(&data->lock);
-	/* Reload value first, kick to load the counter, then enable + arm. */
+	/* Reload value first, kick to load the counter, then enable + arm in the
+	 * selected mode (interrupt -> VIC-27 on timeout; reset -> reset the SoC). */
 	sys_write32(data->reload_ticks, cfg->base + WDT_G3_RELOAD_VALUE);
 	sys_write32(WDT_G3_RESTART_MAGIC, cfg->base + WDT_G3_RESTART);
-	sys_write32(WDT_G3_CTRL_RUN, cfg->base + WDT_G3_CTRL);
+	sys_write32(data->interrupt_mode ? WDT_G3_CTRL_RUN_INTR : WDT_G3_CTRL_RUN,
+		    cfg->base + WDT_G3_CTRL);
 	data->enabled = true;
 	k_spin_unlock(&data->lock, key);
 	return 0;
@@ -222,8 +264,32 @@ static int wdt_aspeed_g3_disable(const struct device *dev)
 	sys_write32(0U, cfg->base + WDT_G3_CTRL);
 	data->enabled = false;
 	data->installed = false;
+	data->interrupt_mode = false;
+	data->callback = NULL;
 	k_spin_unlock(&data->lock, key);
 	return 0;
+}
+
+/*
+ * WDT timeout-interrupt ISR (VIC source 27), interrupt mode only. On expiry with
+ * WDT_INTR set the hardware raises the IRQ INSTEAD of resetting (one-shot: the
+ * QEMU model timer_del's, and datasheet §27 fires once). We invoke the installed
+ * pre-timeout callback; the framework z_soc_irq_eoi() clears the latched edge.
+ */
+static void wdt_aspeed_g3_isr(const void *unused)
+{
+	const struct device *dev = wdt_g3_isr_dev;
+	struct wdt_aspeed_g3_data *data = dev->data;
+	wdt_callback_t cb;
+
+	ARG_UNUSED(unused);
+
+	cb = data->callback;
+	data->enabled = false; /* one-shot: WDT_INTR fired instead of resetting */
+
+	if (cb != NULL) {
+		cb(dev, 0);
+	}
 }
 
 static const struct wdt_driver_api wdt_aspeed_g3_api = {
@@ -243,6 +309,16 @@ static int wdt_aspeed_g3_init(const struct device *dev)
 	 * and calls wdt_setup(). Harmless in QEMU where CTRL resets to 0.
 	 */
 	sys_write32(0U, cfg->base + WDT_G3_CTRL);
+
+	/*
+	 * Connect + unmask the VIC-27 timeout-interrupt line. The WDT only asserts
+	 * it in interrupt mode (WDT_INTR set by setup()), so enabling it here is
+	 * inert until an interrupt-mode timeout is armed. z_soc_irq_enable() clears
+	 * any stale latched edge for this source before unmasking.
+	 */
+	wdt_g3_isr_dev = dev;
+	IRQ_CONNECT(WDT_G3_IRQ, WDT_G3_IRQ_PRIO, wdt_aspeed_g3_isr, NULL, 0);
+	irq_enable(WDT_G3_IRQ);
 	return 0;
 }
 

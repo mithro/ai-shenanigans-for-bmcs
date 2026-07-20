@@ -1,0 +1,58 @@
+#189 — Zephyr WDT timeout-INTERRUPT mode (WDT_CTRL[2] + VIC-27) on AST2050 G3 (2026-07-21)
+================================================================================
+DEVICE-MATRIX row 38 (AST2050 G3 WDT) — Zephyr interrupt/callback mode: implemented
++ QEMU-validated. The Zephyr WDT driver previously did RESET mode only and
+REJECTED any callback (install_timeout returned -ENOTSUP); this adds the
+one-shot timeout-interrupt path, consuming the #189 QE model (submodule
+46cee5fe6a: on expiry with WDT_CTRL[2]=WDT_INTR set the model pulses the WDT IRQ
+-> G3 VIC source 27 INSTEAD of resetting).
+
+DRIVER (zephyr/drivers/watchdog/wdt_aspeed_g3.c):
+  - the G3 WDT is ONE-STAGE (interrupt OR reset, never both — not a 2-stage
+    pre-timeout+reset watchdog), so the Zephyr flags map as:
+      WDT_FLAG_RESET_NONE + callback -> interrupt mode (WDT_CTRL = 0x15 =
+        ENABLE|WDT_INTR|1MHZ_CLK; VIC-27 fires the callback, no reset);
+      WDT_FLAG_RESET_SOC/CPU_CORE    -> reset mode (WDT_CTRL = 0x33, callback
+        must be NULL — reset mode raises no IRQ, so a callback would never run;
+        rejected with -ENOTSUP rather than silently dropped).
+  - install_timeout stores the callback + interrupt_mode; setup() selects the
+    control word; a VIC-27 ISR invokes the callback (one-shot: WDT_INTR fires
+    once instead of resetting, so it marks the WDT disabled). init() does
+    IRQ_CONNECT(27)+irq_enable(27) with a file-static device pointer (mirrors the
+    GPIO/RTC drivers); source 27 is already edge/rising in the RE'd G3 VIC map
+    (like the timer source 16), so no VIC change and the framework eoi clears it.
+
+SAMPLE (samples/wdt_intr_smoke): install RESET_NONE + callback, arm 200 ms, do
+NOT feed, and wait for the callback by HALTING the CPU (k_cpu_atomic_idle/WFI) —
+NOT k_msleep/k_busy_wait, which depend on the unreliable guest tick/cycle-counter
+on this ARM926 port. On CPU halt QEMU warps virtual time to the WDT deadline,
+fires it, and wakes on VIC-27 — deterministic. (The reset-mode wdt_smoke observes
+the reset across a reboot and needs no wait; this interrupt-mode smoke must not
+reset, so it waits for the IRQ.)
+
+===== VALIDATION (QEMU, -M kgpe-d16-bmc; interrupt mode, deterministic 3/3) =====
+WDT armed 200 ms in interrupt mode, NOT feeding
+wdt intr fires=1
+WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)
+boot: OK
+
+DECODE: install(RESET_NONE+cb) -> setup writes WDT_CTRL=0x15 (WDT_INTR) -> the
+200 ms timer expires -> the QEMU model (WDT_INTR set) pulses the WDT IRQ to VIC
+source 27 (NOT a reset) -> the SoC isr_wrapper dispatches the driver ISR -> the
+installed callback runs once (fires=1). No reboot occurred (the console kept
+running past the timeout and printed PASS), proving interrupt-INSTEAD-of-reset.
+Full path: wdt_install_timeout/wdt_setup -> WDT_CTRL[2] -> QEMU WDT expiry ->
+VIC 27 -> ISR -> wdt_callback_t.
+
+===== REGRESSION: reset mode unaffected =====
+The mode-selection change did not break the existing reset path: rebuilt +
+booted samples/wdt_smoke (WDT_FLAG_RESET_SOC, no callback) -> 8 "WDT smoke: boot"
+lines in an 8 s window = the WDT still RESETS the SoC and QEMU reboots (>=2 boots
+= pass). So reset mode (0x33) and interrupt mode (0x15) both work.
+
+RESULT: row 38 ZEPHYR now covers BOTH reset AND timeout-interrupt modes. ZQ was
+already ✅ for reset; it now also includes the interrupt/callback capability. ZS
+(silicon) stays as-is for the interrupt mode (reset mode already silicon-proven;
+the interrupt-mode JTAG run is not yet done). This is the Zephyr half of #189
+(the QE model was already done at 46cee5fe6a); Linux #189 remains scoped separately
+(mainline aspeed_wdt is 2-stage pretimeout, a different semantic — see LOG).

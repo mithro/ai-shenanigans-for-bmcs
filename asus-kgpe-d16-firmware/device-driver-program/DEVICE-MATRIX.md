@@ -446,7 +446,15 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   transcript (the WDT itself already resets on silicon via ZS ✅ + the g3-clk 120 s reset). Honest findings:
   aspeed_wdt doesn't expose `/sys/.../timeleft` (first API run FAILed on my over-strict criteria that
   required it — a test bug, fixed, not a driver issue); busybox watchdog here doesn't magic-close on
-  SIGTERM; board exposes TWO WDTs (watchdog0+watchdog1 = AST2050 WDT1/WDT2). D11.
+  SIGTERM; board exposes TWO WDTs (watchdog0+watchdog1 = AST2050 WDT1/WDT2).
+  **Zephyr TIMEOUT-INTERRUPT mode added (2026-07-21, #189, `d14-zephyr/27`):** the Zephyr driver did
+  RESET mode only and rejected callbacks; it now also does the one-stage interrupt mode
+  (WDT_FLAG_RESET_NONE + callback → WDT_CTRL[2]=WDT_INTR → VIC-27 → callback, NO reset), consuming
+  the QE WDT-interrupt model (submodule 46cee5fe6a). Validated in QEMU deterministically (3/3
+  `WDT-INTR RESULT: PASS`, console ran past the timeout = no reset), reset-mode wdt_smoke unregressed
+  (8 boots). So Zephyr ZQ covers reset AND interrupt; the interrupt-mode silicon (ZS) run is not yet
+  done. Linux #189 stays scoped separately (mainline aspeed_wdt is a 2-stage pretimeout, a different
+  semantic than the G3 one-stage interrupt-instead-of-reset). D11.
 - **39** RTC (0x1E781000, counter-style, datasheet §24). **QE counter-ADVANCE now modeled
   (2026-07-21, #158, submodule f93addb7e0, `evidence/d14-zephyr/15-qemu-rtc-rate.txt`):** the model
   latched RELOAD→COUNTER but the counter never ticked (a frozen RTC, while silicon's counts). The

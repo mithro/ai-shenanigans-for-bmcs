@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #189 Zephyr WDT timeout-INTERRUPT mode (WDT_CTRL[2] + VIC-27) implemented + validated
+
+Added the timeout-interrupt/callback path to the Zephyr WDT driver
+(`zephyr/drivers/watchdog/wdt_aspeed_g3.c`), consuming the #189 QE model (submodule
+46cee5fe6a: WDT_INTR set → pulse VIC-27 instead of resetting). The driver previously did RESET
+mode only and rejected any callback. The G3 WDT is ONE-STAGE (interrupt OR reset, never both — not
+a 2-stage pre-timeout+reset), so the mapping is: WDT_FLAG_RESET_NONE + callback → interrupt mode
+(WDT_CTRL=0x15 = ENABLE|WDT_INTR|1MHZ_CLK, VIC-27 fires the cb, no reset); RESET_SOC/CPU_CORE →
+reset mode (0x33, callback must be NULL since reset raises no IRQ — rejected loud rather than
+silently never-called, the honest choice given no 2-stage hardware). A VIC-27 ISR invokes the
+callback (one-shot); init does IRQ_CONNECT(27)+irq_enable(27) with a file-static device pointer
+(mirrors GPIO/RTC). Source 27 is already edge/rising in the RE'd G3 VIC map (like the timer), so no
+VIC change. New sample `samples/wdt_intr_smoke` waits for the callback via WFI (k_cpu_atomic_idle),
+not k_msleep — the tick-independent pattern established with the RTC alarm.
+
+Validated QEMU (-M kgpe-d16-bmc), deterministic 3/3: `WDT armed 200 ms in interrupt mode, NOT
+feeding` → `wdt intr fires=1` → `WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)`;
+the console ran PAST the timeout (no reboot) proving interrupt-INSTEAD-of-reset. Regression: rebuilt
++ booted the reset-mode wdt_smoke → 8 boots/8 s (reset still fires). So both modes work.
+
+Row 38 Zephyr now covers reset AND timeout-interrupt. This is the Zephyr half of #189 (QE model
+already done); Linux #189 stays scoped separately (mainline aspeed_wdt is a 2-stage pretimeout, a
+different semantic). Evidence d14-zephyr/27. Reuses the RTC-alarm VIC-callback + WFI-wait patterns.
+
 ## 2026-07-21 — #187 Zephyr RTC alarm: review-finding fix + QEMU-model faithfulness + deterministic validation
 
 Follow-up to the Zephyr RTC alarm below. An independent code review found ONE real defect
