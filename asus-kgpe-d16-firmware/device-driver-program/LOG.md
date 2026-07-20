@@ -1,5 +1,47 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b) sweep round 3: the Linux/U-Boot/kernel-driver bodies — 5 reviewed, all CLEAN; 1 small RTC hardening applied
+
+Extended the gate-(b) sweep to the Linux kernel patches + U-Boot + the remaining boot-critical Zephyr drivers
+(the feedback's named "un-reviewed" set). 4 focused sub-agents in parallel + 1 self-review; each VERIFIED. All
+CLEAN (0 substantive issues ≥80), with one below-threshold RTC note I chose to fix on fail-loud grounds:
+- **Linux `0001-clk-aspeed-add-ast2050-support.patch` (503 lines, the #94 console-death fix, FAITHFULNESS-
+  CRITICAL):** agent resolved EVERY `ast2050_gates[]` DT-id→SCU0C-bit mapping against aspeed-clock.h (no
+  off-by-one/collision; holes at idx 7/10 correctly skipped by the `!gd->name` guard); confirmed the
+  **UART2CLK/UART5CLK→UART1CLK bit-15 gate aliasing** gives the console a real refcount (the #94 fix, correct);
+  PLL math (mult=(2-od)(n+2), div=(d+1)·postdiv), strap decode, branch structure (no dangling-else),
+  ASPEED_NUM_CLKS bounds, G4/G5 non-regression, and the SCU04 reset-bit map all verified. Cross-checked vs
+  G3-CLK-PROGRESS.md (silicon-proven).
+- **Linux `0003-irqchip-add-aspeed-ast2050-vic-g3.patch` (the KEYSTONE, HW-verified):** mask/unmask via
+  dedicated set-only/clear-only registers (no RMW race), ack only edge sources, single-bank 32-source chained
+  handler re-reads status each iter (no lost/double), trigger types from the actual programmed INT_SENSE
+  readback; sensitivity bit patterns recomputed bit-for-bit vs the source list. Matches the in-tree
+  hardware-verified sibling copy.
+- **Zephyr `wdt_aspeed_g3.c` (silicon-reset-proven):** timeout→reload 64-bit before the 32-bit-fit check (no
+  overflow), window.max==0 rejected (no instant reset), CTRL=0x33 pinned by BUILD_ASSERT + matched to the
+  model, feed=magic-restart, disable=timer_del (no spurious reset), 2nd install rejected -ENOMEM. The
+  RESET_SOC/RESET_CPU_CORE→full-chip mapping is a documented intentional tradeoff, not a bug.
+- **Zephyr `rtc_aspeed_g3.c`:** set↔get COUNTER pack/unpack byte-symmetric, binary (not BCD), single 32-bit
+  read (no tear), enable seq RELOAD→RESTART(0x5A)→CONTROL→poll[5] with fail-loud -ETIMEDOUT. Clean — BUT the
+  reviewer flagged (sub-threshold) that set_time checked only UPPER bounds on sec/min/hour; a NEGATIVE field
+  (signed struct rtc_time) cast to uint32_t would sign-extend into the mday byte and silently corrupt the day.
+  **FIXED** (added lower-bound `< 0` checks) — this project's fail-loud principle makes a silent-wrong-write on
+  bad input a real defect, not merely defensive. Compile-safe by inspection (same pattern) + only makes
+  set_time stricter, so no regression to the silicon-validated set/get path (which uses valid inputs).
+- **U-Boot `0002-enable-i2c-buses` + `0003-i2c-scu-reset-release` (self, the #167 fix):** SCU unlock
+  (0x1688a8a8→SCU00) + SCU04[2] I2C-reset RMW correct; the muxed-channel arithmetic
+  `chan=(regs-0x1e78a000)/0x40` maps engines 4/5/6→chan 5/6/7→SCU74[12/13/14] via `1<<(12+(chan-5))` — right
+  SDA5/6/7 bits, OR (no clobber), underflow-safe guard. DTS bus-enable mapping faithful.
+
+**Gate-(b) cumulative (this session):** rounds 1-3 = i2c/w83795/fabric/pmbus + phantom-gating/vic/timer/
+sbtsi-qemu/w83601g-qemu/console/soc + clk/irqchip/wdt/rtc/uboot-i2c = ~17 code bodies reviewed (16 clean, GPIO-
+irq driver 2 bugs fixed, rtc 1 hardening), plus the earlier-session 4 original bodies (4 bugs fixed). Honest
+status: gate (b) STILL NOT sealed — remaining: the Zephyr SENSOR drivers (sbtsi/w83795/gpio_w83601g DRIVERS),
+the smaller Linux patches (ftgmac/hwmon/ipmi-kcs/i2c-timing/media-video/usb-vhub/pinctrl), U-Boot
+0001-p2a-dram, QEMU aspeed_peci + lpc/ftgmac/smc/sdmc/video, and the DTS files. But the HIGHEST-risk code —
+oracle-critical phantom-gating, the boot-critical VIC (both Linux irqchip + Zephyr) + timer + WDT + the #94
+clk fix — is now all independently confirmed sound. A methodical sweep, not a spot-check.
+
 ## 2026-07-20 — gate-(b) sweep round 2: 6 more code bodies reviewed (4 sub-agents + 2 self) — ALL CLEAN incl. the oracle-critical phantom-gating
 
 Continued the gate-(b) full-code-review sweep. Dispatched FOUR focused code-reviewer sub-agents IN PARALLEL

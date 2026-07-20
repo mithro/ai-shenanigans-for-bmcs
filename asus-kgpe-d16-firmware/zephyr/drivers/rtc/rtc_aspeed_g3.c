@@ -115,9 +115,17 @@ static int rtc_aspeed_g3_set_time(const struct device *dev,
 	if (timeptr == NULL) {
 		return -EINVAL;
 	}
-	/* Range-check the fields the counter can hold (binary, one byte each). */
-	if (timeptr->tm_sec > 59 || timeptr->tm_min > 59 ||
-	    timeptr->tm_hour > 23 || timeptr->tm_mday < 1 || timeptr->tm_mday > 31) {
+	/*
+	 * Range-check the fields the counter can hold (binary, one byte each).
+	 * struct rtc_time fields are signed (struct tm convention), so check the
+	 * LOWER bounds too: a negative field cast to uint32_t below would sign-
+	 * extend 1-bits up into the adjacent byte and silently corrupt the day
+	 * (fail-loud: reject bad input rather than write a wrong time).
+	 */
+	if (timeptr->tm_sec < 0 || timeptr->tm_sec > 59 ||
+	    timeptr->tm_min < 0 || timeptr->tm_min > 59 ||
+	    timeptr->tm_hour < 0 || timeptr->tm_hour > 23 ||
+	    timeptr->tm_mday < 1 || timeptr->tm_mday > 31) {
 		return -EINVAL;
 	}
 
