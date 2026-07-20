@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #191 verified + dispositioned: SCU1C already modeled; freq-counter/IRQ firmware-unexercised
+
+Investigated the last un-examined gate-d sub-block, #191 (SCU freq-counter / IRQ-ctrl / 32.768kHz
+error-correction). Verify-first caught another PARTIAL mis-flag (like #190's buffer-pool):
+- **SCU1C (32.768kHz err-correct): ALREADY MODELED.** The gate-d agent flagged it from the header define
+  name `D2PLL_PARAM` (the AST2400 meaning), but the G3 SCU reset table `ast2050_a3_resets`
+  (hw/misc/aspeed_scu.c:228) ALREADY seeds SCU1C = 0x1B with the datasheet citation "SCU1C = 32.768kHz
+  err-correct p211" — the faithful G3 value + meaning. Not a gap.
+- **Freq-counter (SCU10/14/28) + IRQ_CTRL (SCU18): register-level backing store, firmware-unexercised.**
+  The read handler returns the backing store (FREQ_CNTR_EVAL is read-only, returns the reset seed); the
+  functional behaviour (a live clock-measurement count; SCU interrupt generation) is unmodeled. But NO
+  board firmware exercises them — the freq counter is a PLL-lock diagnostic and SCU interrupts are unused
+  at boot by U-Boot/Linux/Zephyr. Dispositioned like the accepted PECI/HACE "modeled-but-unused → reasoned"
+  precedent (gate-c confirmed that standard): row 35 QE/ZS ✅ stands because the boot-exercised SCU
+  functionality (clock/reset/pinmux/PLL/silicon-rev/strap) is complete + validated; functional
+  freq-counter/SCU-IRQ modelling is an OPTIONAL low-value "all-functionality" follow-on, not a boot gap.
+
+Gate-d sub-block set now FULLY characterized (none weaseled): #187 QE done, #188 real gap scoped
+(shared-code error-path), #189 QE done, #190 buffer-pool done + DMA scoped (firmware-unexercised), #191
+SCU1C done + freq-counter/IRQ firmware-unexercised. The two verify-first mis-flag catches (#190 buffer-pool,
+#191 SCU1C) show the value of checking the actual code before dispositioning — and neither was closed as a
+false "absent".
+
 ## 2026-07-21 — #188 verified + scoped: I²C SDA bus-lock recovery is a real (shared-code, error-path) gap
 
 Investigated gate-d #188 (I²C SDA bus-lock recovery, §31.5.11). Confirmed it's a GENUINE gap (unlike #190's

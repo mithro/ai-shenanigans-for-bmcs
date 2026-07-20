@@ -693,6 +693,15 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   stays OPEN, narrowed to: RE the AST2050 I²C-DMA register mechanism (the modeled AST2500 has_dma path, or
   an older one?), model it, validate with a synthetic DMA test. LOW priority (unexercised) but NOT Ⓝ.
 - **#191 — SCU freq-counter (SCU10/14/28) + int ctrl/status (SCU18) + 32.768 kHz error-correction (SCU1C)**
-  (row 35): un-enumerated SCU functions; SCU1C ties to the #158/#186 RTC-accuracy story.
+  (row 35): **verified + dispositioned 2026-07-21.** SCU1C is ALREADY MODELED (the gate-d flag was a
+  header-name mis-read): the G3 SCU reset table `ast2050_a3_resets` (hw/misc/aspeed_scu.c:228) seeds it
+  0x1B with the datasheet citation "SCU1C = 32.768kHz err-correct p211" — the faithful G3 value + meaning,
+  distinct from the header's AST2400 `D2PLL_PARAM` name. The freq-counter (SCU10/14/28) + IRQ_CTRL (SCU18)
+  are register-level BACKING STORE (read-only EVAL returns the reset seed); their FUNCTIONAL behaviour
+  (a live clock-measurement count; SCU interrupt generation) is unmodeled but FIRMWARE-UNEXERCISED — the
+  freq counter is a PLL-lock diagnostic and SCU interrupts are unused at boot by U-Boot/Linux/Zephyr on
+  this board. Dispositioned like PECI/HACE (present, modeled-but-unused-fn → reasoned): the boot-exercised
+  SCU functionality (clock/reset/pinmux/PLL/silicon-rev/strap, row 35 QE/ZS ✅) is complete; functional
+  freq-counter/SCU-IRQ modelling is an OPTIONAL low-value "all-functionality" follow-on, not a boot gap.
 These are register-level completeness items, not device-enumeration gaps; the schematic→device coverage
 above is unaffected.
