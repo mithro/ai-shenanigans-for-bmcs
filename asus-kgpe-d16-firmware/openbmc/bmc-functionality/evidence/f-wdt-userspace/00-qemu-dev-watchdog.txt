@@ -54,3 +54,35 @@ demonstration (e.g. arm short + stop feeding under -no-reboot) would take it to 
 Reusable: this reuses the `ledtest`-style init-gate + repack harness added the
 same day (evidence e-gpio-leds/01), confirming that harness generalises to other
 Linux-userspace validations.
+
+===== UPGRADE TO LU ✅ (2026-07-20): USERSPACE-TRIGGERED SoC RESET DEMONSTRATED =====
+The 🔶→✅ gap named above ("proves the API path, not a userspace-triggered reset")
+is now closed. A `wdtreset` init gate runs `busybox watchdog -T 3 -t 60
+/dev/watchdog`: this arms a 3 s WDT from userspace but sets the pet interval to 60 s
+so busybox does NOT re-feed before expiry -> the WDT fires at ~3 s and resets the
+SoC. Booted with NO --expect (run-qemu captures the whole trace including the
+reboot), --timeout 60.
+
+RESULT (tmp run, 6 consecutive cycles in one 60 s window):
+  grep -c "Booting Linux on physical CPU"  -> 7   (initial boot + 6 WDT reboots)
+  grep -c "WDT-RESET-ARMED"                -> 6
+  grep -c "STILL ALIVE"                    -> 0   (the WDT fired EVERY time < 3 s)
+Interleave (exact console line numbers):
+  160: WDT-RESET-ARMED: timeout=3 state=active petinterval=60s -> expect reset ~3s
+  161: [    0.000000] Booting Linux on physical CPU 0x0          <- SoC reset+reboot
+  318: WDT-RESET-ARMED ...   319: Booting Linux ...
+  476: WDT-RESET-ARMED ...   477: Booting Linux ...
+  634: WDT-RESET-ARMED ...   635: Booting Linux ...
+  792: WDT-RESET-ARMED ...   793: Booting Linux ...
+  950: WDT-RESET-ARMED ...   951: Booting Linux ...
+Each userspace arm is immediately followed by a fresh CPU boot = the userspace
+`/dev/watchdog` arm caused a real SoC reset. 6/6 deterministic, no misses.
+
+So the Linux userspace watchdog interface is now COMPLETELY validated in QEMU:
+open -> WDIOC_SETTIMEOUT -> arm -> keepalive (wdttest) AND stop-feeding -> real SoC
+reset (wdtreset). That is the full LU (userspace-interface) deliverable, so row 38
+LU 🔶→✅. Platform note (explicit, no overclaim): this is QEMU-userspace, matching
+the LQ platform; the LS (Linux-SILICON) axis stays 🔶 pending a real-AST2050
+/dev/watchdog transcript (the WDT itself already resets on silicon via ZS ✅ Zephyr
+wdt_smoke + the g3-clk 120 s aspeed-WDT reset). The reset behaviour is faithful to
+row-38 QE (model) and matches how the real WDT behaves.

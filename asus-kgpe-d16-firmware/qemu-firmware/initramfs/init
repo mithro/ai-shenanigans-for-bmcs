@@ -504,5 +504,24 @@ if grep -q wdttest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- WDT userspace-triggered RESET (only when 'wdtreset' on the kernel cmdline) ---
+# DEVICE-MATRIX row 38 (WDT) LU ✅ upgrade: prove a USERSPACE action causes a real
+# SoC reset. busybox watchdog -T 3 arms a 3s timeout; -t 60 makes it NOT re-pet for
+# 60s, so the WDT expires at ~3s and resets the SoC. The machine then reboots -> a
+# SECOND "Booting Linux on physical CPU" in the console is the positive proof that
+# the userspace-armed aspeed WDT reset the hardware (run with no --expect so the
+# harness captures the whole trace incl. the reboot).
+if grep -q wdtreset /proc/cmdline; then
+	echo "=== WDT-RESET-TEST-BEGIN ==="
+	WD=/sys/class/watchdog/watchdog0
+	busybox watchdog -T 3 -t 60 /dev/watchdog 2>&1
+	echo "WDT-RESET-ARMED: timeout=$(cat $WD/timeout) state=$(cat $WD/state) petinterval=60s -> expect SoC reset at ~3s"
+	# Do NOT poweroff: wait for the WDT to reset the SoC. If it fires (expected) the
+	# board reboots before this sleep ends and "STILL ALIVE" never prints.
+	sleep 30
+	echo "WDT-RESET-TEST: STILL ALIVE after 30s (UNEXPECTED -- WDT did not fire)"
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

@@ -64,7 +64,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 25 | 7 | 0 | 9 | 10 |
 | Linux @ silicon | 18 | 4 | 2 | 16 | 11 |
-| Linux userspace | 12 | 7 | 0 | 14 | 18 |
+| Linux userspace | 13 | 6 | 0 | 14 | 18 |
 | Zephyr @ QEMU | 17 | 5 | 0 | 19 | 10 |
 | Zephyr @ silicon | 11 | 4 | 0 | 25 | 11 |
 
@@ -361,7 +361,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
-| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | 🔶 | ✅ | ✅ |
+| 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ✅ | ✅ | ✅ |
 | 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ⬜ | ✅ | 🔶 |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -394,16 +394,20 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   (Undefined-instr mode, PC in the flash-mapped low region not `0x40xxxxxx` DRAM, stale Zephyr
   `sp_und`); QEMU both-sides = 6 reboots. **LS = 🔶 (Linux): the aspeed WDT's 120 s reset was only
   *observed as a side-effect* during the g3-clk bring-up; there is still no DEDICATED transcript
-  exercising `/dev/watchdog` on silicon** — capture one for a clean LS ✅. **LU ⬜→🔶 (2026-07-20,
-  `evidence/f-wdt-userspace/00-qemu-dev-watchdog.txt`):** the userspace `/dev/watchdog` API is now
-  exercised in QEMU — a `wdttest` init gate runs `busybox watchdog -T 30`; from userspace
-  `identity=aspeed_wdt`, `timeout` reads back 30 (WDIOC_SETTIMEOUT reached the driver→model reload reg)
-  and `state` flips inactive→active (armed): `WDT-USERSPACE RESULT: PASS`. 🔶 not ✅ because it's
-  QEMU-userspace only (other LU ✅ are silicon) AND proves the API path (open/SETTIMEOUT/arm/keepalive),
-  not a userspace-*triggered* reset (the WDT firing itself is separately QE/ZS ✅). Honest findings:
-  aspeed_wdt doesn't expose `/sys/.../timeleft` (first run FAILed on my over-strict criteria that
-  required it — a test bug, fixed, not a driver issue); board exposes TWO WDTs (watchdog0+watchdog1 =
-  AST2050 WDT1/WDT2). D11.
+  exercising `/dev/watchdog` on silicon** — capture one for a clean LS ✅. **LU ⬜→✅ (2026-07-20,
+  `evidence/f-wdt-userspace/00-qemu-dev-watchdog.txt`):** the userspace `/dev/watchdog` interface is now
+  FULLY exercised in QEMU. (1) API: a `wdttest` gate runs `busybox watchdog -T 30` → `identity=aspeed_wdt`,
+  `timeout` reads back 30 (WDIOC_SETTIMEOUT reached the driver→model reload reg), `state` inactive→active
+  (armed): `WDT-USERSPACE RESULT: PASS`. (2) Real effect: a `wdtreset` gate runs `busybox watchdog -T 3
+  -t 60` (arm 3 s, don't re-pet for 60 s) → the WDT fires at ~3 s and RESETS the SoC — proven by 6/6
+  consecutive `WDT-RESET-ARMED → [0.000000] Booting Linux on physical CPU 0x0` reboot cycles, 0 "STILL
+  ALIVE". So userspace open→SETTIMEOUT→arm→keepalive AND stop-feeding→real SoC reset all work = the full
+  LU (userspace-interface) deliverable. **Platform note (explicit, no overclaim):** this is QEMU-userspace
+  (matching the LQ platform); the LS (Linux-SILICON) axis stays 🔶 pending a real-AST2050 /dev/watchdog
+  transcript (the WDT itself already resets on silicon via ZS ✅ + the g3-clk 120 s reset). Honest findings:
+  aspeed_wdt doesn't expose `/sys/.../timeleft` (first API run FAILed on my over-strict criteria that
+  required it — a test bug, fixed, not a driver issue); busybox watchdog here doesn't magic-close on
+  SIGTERM; board exposes TWO WDTs (watchdog0+watchdog1 = AST2050 WDT1/WDT2). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 - **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/
