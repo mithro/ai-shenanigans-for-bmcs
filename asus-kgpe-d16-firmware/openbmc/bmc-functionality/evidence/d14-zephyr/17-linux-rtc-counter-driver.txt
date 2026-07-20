@@ -1,6 +1,12 @@
 DEVICE-MATRIX row 39 (AST2050 G3 RTC) — Linux counter-style RTC driver: implemented +
 QEMU + userspace validated (2026-07-21, #187, converts the LQ over-claim to real).
 
+*** SUPERSEDED IN PART — see evidence/d14-zephyr/28 for the SILICON-corrected facts: ***
+*** this file's "IRQ 26" is STALE. Silicon (#192) proved the RTC alarm fires on VIC ***
+*** source 22 (not 26) and RTC04 is FIELD-packed (not byte-packed); the drivers/dts/  ***
+*** model were fixed and the Linux wakealarm re-validated in QEMU on VIC 22. The RTC  ***
+*** set/get + wakealarm capability here is real; only the IRQ number below is stale.  ***
+
 Last turn's integrity sweep caught that row-39 LQ ✅ "rtc-aspeed" was an OVER-CLAIM:
 the board dts is based on aspeed-g4.dtsi whose rtc@1e781000 = "aspeed,ast2400-rtc"
 (BCD layout, disabled), register-incompatible with the G3 COUNTER-style RTC — and

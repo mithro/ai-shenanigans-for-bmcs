@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Completeness audit (gate a/d) + 2 honesty fixes; program state quantified
+
+Ran an independent completeness/enumeration audit (sub-agent) against the authoritative schematic
+§1–§16 + DEVICE-MATRIX + FULL-TASK-LIST. Findings actioned:
+- **ENUMERATION COMPLETE (independently re-confirmed section-by-section):** every schematic §2–15
+  device and every §14 neighbour chip maps to a matrix row or a stated/defensible disposition; the
+  SoC-internal engines are covered by the datasheet-§9 rows 43–50. No schematic device lacks a row.
+- **No standing non-existence claim contradicts the schematic** — the historically-wrong ones
+  (NC-SI "not wired", SPD "impossible", SOL "board-limit") are all retracted/corrected.
+- **Resource-cgroup hygiene: PASS** (docs mandate it; build/bisect tooling uses systemd-run scopes).
+- **Two honesty fixes applied (gate-c, no over-claims):** (1) **row 8 (PCI/video) QE ✅→🔶** — the
+  video-CAPTURE+P2A path IS modeled but the full PCI-33 bus + PCI-target is NOT, so QE must be the
+  aggregate 🔶 (matching the already-🔶 LS), completed by modeling the A2P bridge (row 50 QE) + a
+  PCI-target aperture; tally re-synced (QEMU 29→28 ✅ / 10→11 🔶). (2) **evidence d14-zephyr/17**
+  carried a STALE "IRQ 26" for the RTC alarm — added a superseded-by-/28 banner (the silicon-correct
+  facts are VIC 22 + field-packed RTC04; the RTC set/get+wakealarm capability itself is real).
+- **Quantified program state (regenerated tally, matches snapshot): of 408 stack-cells — 129 ✅
+  (~32%), 131 Ⓝ justified-n/a (~32%), 47 🔶, 3 🔷, 98 ⬜.** So ~148 genuinely-actionable cells remain,
+  concentrated in Zephyr (ZQ 19 ⬜ / ZS 25 ⬜) and Linux-silicon (LS 16 ⬜). The audit's prioritized
+  top-15 next-actions: Tier-1 QEMU authoring (A2P bridge row50→unblocks DDC row14+PCI row8; LPC
+  mailbox row4; SMBus-ALERT row25; DDC/EDID row14); Tier-2 cheap silicon validation of built
+  QE/Zephyr (row39 LS Linux-RTC, row38 LS /dev/watchdog, row27 ZS power-feedback #162); Tier-3 Zephyr
+  breadth (row10 ftgmac100, row3 KCS-BMC). These are the concrete targets for the next cycles.
+  HONEST BOTTOM LINE: enumeration complete, but the program is NOT complete — ~148 cells + the
+  gate-(b) full-code-review and gate-(d) no-new-tasks bars remain.
+
 ## 2026-07-21 — #189 WDT timeout-INTERRUPT mode SILICON-VALIDATED (VIC 27 confirmed correct)
 
 Booted wdt_intr_smoke over JTAG on the real AST2050 (row 38 ZS). Proactively added the same VIC
