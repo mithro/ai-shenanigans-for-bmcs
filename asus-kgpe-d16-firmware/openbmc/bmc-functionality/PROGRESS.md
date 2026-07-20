@@ -381,6 +381,14 @@ a010d69). Full write-up + datasheet ground truth: **`F8-KVM.md`**.
   datapath) and **no real server host** (the keypress is shown over `dummy_hcd`; the
   host-facing vhub path needs a dedicated G3 UDC driver + a functional QEMU vhub
   datapath — the F6/F8 gap). **All QEMU-only; nothing run on the shared AST2050 rig.**
+- ⚠️ **SUPERSEDED / RETRACTED (2026-07-21): the "does NOT use NC-SI" conclusion below is WRONG.**
+  The authoritative schematic `../../schematic-wiring/AST2050-BMC-WIRING.md` §7 shows MAC channel 2's
+  **RMII2 IS wired as a multi-drop NC-SI sideband to BOTH Intel 82574L NICs (LU1/LU2)** (balls
+  A5/B5/B6/C4/D4/D5). NC-SI is real, connected hardware on this board. Current status: DEVICE-MATRIX
+  row 11 (NC-SI QEMU-modeled ✅), SILICON-STATUS #9 (REOPENED/D07: Linux `net/ncsi` discovers a channel,
+  `NCSI RESULT: PASS`), and the retraction banner in `F7-NCSI.md`. The entry below is kept for history
+  only; it was an append-only log line never inline-corrected until now (the earlier retraction targeted
+  a different PROGRESS.md location). Do not treat it as a live verdict.
 - 2026-07-12: **F7 (host network "piggyback" / NC-SI) DONE — honest finding: the
   KGPE-D16 does NOT use NC-SI** (branch `claude/bmc-f7-ncsi`, off `bmc-functionality`).
   Faithfulness-first ground truth from datasheet + Raptor + DTS: the BMC has its own
