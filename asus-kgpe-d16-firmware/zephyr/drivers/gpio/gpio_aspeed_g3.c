@@ -368,6 +368,24 @@ static int gpio_aspeed_g3_init(const struct device *dev)
 	struct gpio_aspeed_g3_data *data = dev->data;
 
 	/*
+	 * The fixed base+0x08/0x0C/0x10/0x14/0x18 interrupt-register offsets used
+	 * throughout this driver are ONLY correct for the ABCD (0x1E780000) and
+	 * EFGH (0x1E780020) GPIO sets — the only two the AST2050 (G3) has. On the
+	 * larger ASPEED parts (G4+) the IJKL/MNOP/... sets place their interrupt
+	 * registers at NON-uniform offsets, so base+0x08 there would alias a
+	 * neighbouring set's DATA/DIRECTION register and silently corrupt unrelated
+	 * output pins. Refuse to bind to any other base so a mis-added DT node (or a
+	 * copy-paste onto a G4 SoC) fails at init instead of corrupting hardware.
+	 */
+	if (cfg->base != (mem_addr_t)0x1E780000U &&
+	    cfg->base != (mem_addr_t)0x1E780020U) {
+		__ASSERT(false, "gpio_aspeed_g3: base %#lx unsupported — only the ABCD"
+			 " (0x1E780000)/EFGH(0x1E780020) sets have the assumed int-reg"
+			 " layout", (unsigned long)cfg->base);
+		return -ENOTSUP;
+	}
+
+	/*
 	 * Seed the output shadow from the current data-value register so a later
 	 * read-modify-write set/clear preserves any output bits the loader
 	 * (U-Boot / the QEMU machine) already configured.

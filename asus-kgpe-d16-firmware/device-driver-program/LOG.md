@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-b code-review SWEEP across Zephyr + QEMU subsystems — 5 more real bugs found; Zephyr 4 FIXED
+
+Dispatched 3 independent code-reviewer sub-agents (max-5 rule respected) over the custom developed
+code beyond RTC: (A) Zephyr core SoC drivers i2c/gpio/wdt, (B) Zephyr device drivers w83795/w83601g/
+sbtsi, (C) QEMU G3 device models. They found 5 real bugs (i2c + wdt cleared CLEAN):
+FIXED THIS PASS (Zephyr, all compile-clean — 3 sample builds link OK; behaviour-neutral for the
+single-threaded smoke tests so no functional regression):
+1. (conf 88) gpio_w83601g.c exposed a NONEXISTENT 16th pin — the W83601G is 15 pins (Port2 bit7
+   reserved). W601_PINS 16->15 + DT ngpios 16->15 (binding + board dts x2).
+2. (conf 82) w83795.c had NO lock around the measurement-reg -> VRLSB(0x3C) shared-latch read pair;
+   interleaved threads silently corrupt fan/temp. Added k_mutex (sample_fetch full-hold + channel_get
+   snapshot).
+3. (conf 65) sbtsi.c same class (INT/DEC latched pair). Added k_mutex likewise.
+4. (conf 65, dormant) gpio_aspeed_g3.c fixed base+0x08.. interrupt-reg offsets are only valid for the
+   ABCD/EFGH sets (the only two AST2050 has); added an init guard rejecting any other base (fail
+   __ASSERT + -ENOTSUP) so a mis-added DT node / G4 reuse fails loud instead of corrupting a
+   neighbouring bank's DATA/DIR register.
+DEFERRED (QEMU, tracked #196): (conf 80) hw/arm/aspeed_ast2400.c wires VUART and the G3 LPC to the
+SAME VIC source 8 with no OR-gate — last qemu_set_irq wins, so concurrent KCS(IPMI)+SOL can clobber an
+IRQ. Fix = route both through a TYPE_OR_IRQ; needs a QEMU rebuild + IPMI re-test.
+The gate-b sweep is proving its worth: 7 real bugs found+fixed this cycle across RTC(2)+Zephyr(4)+the
+RTC re-anchor, plus 1 QEMU bug queued — none of which the smoke tests would have caught.
+
 ## 2026-07-21 — Sub-agent code review of the RTC changes (gate b) — 2 real bugs found + fixed
 
 Ran an independent code-reviewer sub-agent over this session's RTC code (Linux driver + QEMU model),

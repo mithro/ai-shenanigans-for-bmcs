@@ -76,7 +76,7 @@
 		reg = <0x18>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <16>;
+		ngpios = <15>;   /* W83601G: Port1 8 + Port2 7 = 15 (Port2 bit7 reserved) */
 		status = "okay";
 	};
 
@@ -85,7 +85,7 @@
 		reg = <0x19>;
 		gpio-controller;
 		#gpio-cells = <2>;
-		ngpios = <16>;
+		ngpios = <15>;   /* W83601G: Port1 8 + Port2 7 = 15 (Port2 bit7 reserved) */
 		status = "okay";
 	};
 };

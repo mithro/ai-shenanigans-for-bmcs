@@ -64,6 +64,13 @@ struct sbtsi_config {
 };
 
 struct sbtsi_data {
+	/*
+	 * Serialises the CONFIG-ordered TEMP_INT/TEMP_DEC latched-pair read (and
+	 * the temp cache) against a concurrent fetch/get: on real silicon reading
+	 * the leading register latches the trailing one, so an interleaved fetch
+	 * from another thread would re-latch it and yield a torn reading.
+	 */
+	struct k_mutex lock;
 	uint8_t temp_int; /* whole degrees, unsigned 0..255 (AMD Tctl offset) */
 	uint8_t temp_dec; /* raw TEMP_DEC; fraction is bits[7:5]              */
 };
@@ -85,46 +92,60 @@ static int sbtsi_sample_fetch(const struct device *dev, enum sensor_channel chan
 	 * the two bytes must be read in the order the chip dictates. (The QEMU
 	 * model does not latch, so either order returns the seeded value there.)
 	 */
+	/* Hold the lock across the latched CONFIG->TEMP pair (and the temp cache
+	 * update) so a concurrent fetch/get cannot re-latch the trailing register
+	 * mid-sequence. */
+	k_mutex_lock(&data->lock, K_FOREVER);
+
 	ret = i2c_reg_read_byte_dt(&cfg->i2c, SBTSI_REG_CONFIG, &config);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
 
 	if (config & SBTSI_CONFIG_READ_ORDER) {
 		ret = i2c_reg_read_byte_dt(&cfg->i2c, SBTSI_REG_TEMP_DEC,
 					   &data->temp_dec);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 		ret = i2c_reg_read_byte_dt(&cfg->i2c, SBTSI_REG_TEMP_INT,
 					   &data->temp_int);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 	} else {
 		ret = i2c_reg_read_byte_dt(&cfg->i2c, SBTSI_REG_TEMP_INT,
 					   &data->temp_int);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 		ret = i2c_reg_read_byte_dt(&cfg->i2c, SBTSI_REG_TEMP_DEC,
 					   &data->temp_dec);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 	}
-
-	return 0;
+out:
+	k_mutex_unlock(&data->lock);
+	return ret;
 }
 
 static int sbtsi_channel_get(const struct device *dev, enum sensor_channel chan,
 			     struct sensor_value *val)
 {
 	struct sbtsi_data *data = dev->data;
+	uint8_t temp_int, temp_dec;
 
 	if (chan != SENSOR_CHAN_DIE_TEMP) {
 		return -ENOTSUP;
 	}
+
+	/* Snapshot the cache under the lock so a concurrent sample_fetch cannot
+	 * tear the int/dec pair between our two reads of it. */
+	k_mutex_lock(&data->lock, K_FOREVER);
+	temp_int = data->temp_int;
+	temp_dec = data->temp_dec;
+	k_mutex_unlock(&data->lock);
 
 	/*
 	 * whole degrees + TEMP_DEC[7:5] eighth-degrees (0.125 degC = 125000
@@ -136,8 +157,8 @@ static int sbtsi_channel_get(const struct device *dev, enum sensor_channel chan,
 	 * fraction <= 7, so the product fits in int32 with no overflow
 	 * (max 255875000).
 	 */
-	int32_t micro = (int32_t)data->temp_int * 1000000 +
-			(int32_t)(data->temp_dec >> SBTSI_TEMP_DEC_SHIFT) * 125000;
+	int32_t micro = (int32_t)temp_int * 1000000 +
+			(int32_t)(temp_dec >> SBTSI_TEMP_DEC_SHIFT) * 125000;
 
 	val->val1 = micro / 1000000;
 	val->val2 = micro % 1000000;
@@ -152,10 +173,12 @@ static const struct sensor_driver_api sbtsi_api = {
 static int sbtsi_init(const struct device *dev)
 {
 	const struct sbtsi_config *cfg = dev->config;
+	struct sbtsi_data *data = dev->data;
 
 	if (!i2c_is_ready_dt(&cfg->i2c)) {
 		return -ENODEV; /* parent I2C bus not ready */
 	}
+	k_mutex_init(&data->lock);
 	return 0;
 }
 

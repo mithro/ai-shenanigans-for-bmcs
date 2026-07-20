@@ -87,6 +87,14 @@ struct w83795_config {
 };
 
 struct w83795_data {
+	/*
+	 * Serialises sample_fetch's multi-transaction measurement-reg -> VRLSB(0x3C)
+	 * shared-latch read PAIRS (and the fan1/temp0 cache) against a concurrent
+	 * fetch/get from another thread: any interleaved measurement read re-latches
+	 * VRLSB, so an unlocked interleave silently pairs one field's high byte with
+	 * another field's LSB.
+	 */
+	struct k_mutex lock;
 	uint16_t fan1_count;   /* 12-bit tach count for fan1 (0 == invalid)  */
 	int8_t temp0_whole;    /* temp0 whole degrees (signed)               */
 	uint8_t temp0_quarter; /* temp0 quarter-degrees, 0..3 (VRLSB[7:6])   */
@@ -122,24 +130,29 @@ static int w83795_sample_fetch(const struct device *dev, enum sensor_channel cha
 		return -ENOTSUP;
 	}
 
+	/* Hold the lock across the WHOLE fetch so the measurement-reg -> VRLSB
+	 * latched pairs (and the fan1/temp0 cache updates) cannot interleave with
+	 * another thread's fetch/get and pick up a re-latched VRLSB. */
+	k_mutex_lock(&data->lock, K_FOREVER);
+
 	/* All measurement registers live in bank 0; select it explicitly so a
 	 * prior bank switch cannot leave us reading the wrong window.
 	 */
 	ret = i2c_reg_write_byte_dt(&cfg->i2c, W83795_REG_BANKSEL, W83795_BANK0);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
 
 	/* Chip ID is bank-independent; cheap sanity value for the smoke test. */
 	ret = i2c_reg_read_byte_dt(&cfg->i2c, W83795_REG_CHIPID, &data->chipid);
 	if (ret != 0) {
-		return ret;
+		goto out;
 	}
 
 	if (chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_RPM) {
 		ret = w83795_read_meas(&cfg->i2c, W83795_REG_FAN1, &high, &vrlsb);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 		/* 12-bit tach count: high[7:0] << 4 | VRLSB[7:4]. */
 		data->fan1_count = ((uint16_t)high << 4) | (vrlsb >> 4);
@@ -148,23 +161,34 @@ static int w83795_sample_fetch(const struct device *dev, enum sensor_channel cha
 	if (chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_DIE_TEMP) {
 		ret = w83795_read_meas(&cfg->i2c, W83795_REG_TEMP0, &high, &vrlsb);
 		if (ret != 0) {
-			return ret;
+			goto out;
 		}
 		data->temp0_whole = (int8_t)high;
 		data->temp0_quarter = vrlsb >> 6; /* VRLSB[7:6] = quarter degrees */
 	}
-
-	return 0;
+out:
+	k_mutex_unlock(&data->lock);
+	return ret;
 }
 
 static int w83795_channel_get(const struct device *dev, enum sensor_channel chan,
 			      struct sensor_value *val)
 {
 	struct w83795_data *data = dev->data;
+	uint16_t cnt;
+	int8_t temp0_whole;
+	uint8_t temp0_quarter;
+
+	/* Snapshot the cache under the lock so a concurrent sample_fetch cannot
+	 * tear a fan1/temp0 field between our reads of it. */
+	k_mutex_lock(&data->lock, K_FOREVER);
+	cnt = data->fan1_count;
+	temp0_whole = data->temp0_whole;
+	temp0_quarter = data->temp0_quarter;
+	k_mutex_unlock(&data->lock);
 
 	switch (chan) {
 	case SENSOR_CHAN_RPM: {
-		uint16_t cnt = data->fan1_count;
 		uint32_t rpm = (cnt == 0U || cnt >= W83795_FAN_COUNT_MAX)
 				       ? 0U
 				       : W83795_FAN_DIVIDEND / cnt;
@@ -182,8 +206,8 @@ static int w83795_channel_get(const struct device *dev, enum sensor_channel chan
 		 * temp0_whole is int8, temp0_quarter is 0..3, so the product fits in
 		 * int32 with no overflow.
 		 */
-		int32_t micro = (int32_t)data->temp0_whole * 1000000 +
-				(int32_t)data->temp0_quarter * 250000;
+		int32_t micro = (int32_t)temp0_whole * 1000000 +
+				(int32_t)temp0_quarter * 250000;
 
 		val->val1 = micro / 1000000;
 		val->val2 = micro % 1000000;
@@ -202,10 +226,12 @@ static const struct sensor_driver_api w83795_api = {
 static int w83795_init(const struct device *dev)
 {
 	const struct w83795_config *cfg = dev->config;
+	struct w83795_data *data = dev->data;
 
 	if (!i2c_is_ready_dt(&cfg->i2c)) {
 		return -ENODEV; /* parent I2C bus not ready */
 	}
+	k_mutex_init(&data->lock);
 	return 0;
 }
 

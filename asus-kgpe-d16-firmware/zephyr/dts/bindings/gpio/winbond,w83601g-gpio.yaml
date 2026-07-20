@@ -3,8 +3,9 @@
 
 description: |
   Winbond W83601G I2C GPIO expander (KGPE-D16 DIMM-LED expanders U27/U28). Exposed
-  as a 16-pin Zephyr GPIO controller: Port 1 = pins 0..7, Port 2 = pins 8..15. Set
-  ngpios = <16>. See drivers/gpio/gpio_w83601g.c.
+  as a 15-pin Zephyr GPIO controller: Port 1 = pins 0..7 (GP10-GP17), Port 2 =
+  pins 8..14 (GP20-GP26, only 7 pins; the Port-2 register bit 7 is reserved). Set
+  ngpios = <15>. See drivers/gpio/gpio_w83601g.c.
 
 compatible: "winbond,w83601g-gpio"
 

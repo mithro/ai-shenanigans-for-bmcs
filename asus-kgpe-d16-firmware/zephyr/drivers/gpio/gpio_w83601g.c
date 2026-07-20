@@ -40,7 +40,14 @@
 #define W601_CR_P2_OUT   0x09U
 #define W601_CR_P2_IOCFG 0x0BU
 
-#define W601_PINS 16U   /* Port 1 (0..7) + Port 2 (8..15) */
+/*
+ * The W83601G provides 15 GPI/O pins: Port 1 = GP10-GP17 (8, pins 0..7) and
+ * Port 2 = GP20-GP26 (only 7, pins 8..14). Bit 7 of the Port-2 CR08/CR09/CR0B
+ * registers is RESERVED (reset default CR0B=0x7F confirms the 7-bit width), so
+ * there is NO pin 15 — exposing one would silently poke a reserved bit with no
+ * real LED/signal behind it. (evidence/d08-w83601g/01-datasheet-register-map.md)
+ */
+#define W601_PINS 15U   /* Port 1 (0..7) + Port 2 (8..14); Port-2 bit7 is reserved */
 
 struct gpio_w83601g_config {
 	struct gpio_driver_config common;
