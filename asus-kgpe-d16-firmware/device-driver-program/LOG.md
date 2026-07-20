@@ -26,8 +26,14 @@ rtclinux: set 12:45:30 -> read 12:45:30 EXACT (was 12:45:41 under old always-732
 ```
 Validated in QEMU (all 3 gates). The QEMU model stays faithful: no gate uses bit16=1 under U-Boot;
 the model's bit16=1->732x path is still exercised by the Zephyr tests (whose config supports the tap).
-Follow-up in #194: RESTART async-load + CONTROL[5] busy (part 1); silicon re-run of the corrected
-gates (in progress).
+Follow-up in #194: RESTART async-load + CONTROL[5] busy (part 1).
+**SILICON RE-VALIDATION DONE:** the corrected rtclinux gate on real AST2050 — `SCU08=0x61800070`
+(bit16=0), `set 12:45:30 -> read 12:45:31` (+1 s = REAL TIME, vs the old +11 s under the wrong
+config), `RTC-LINUX PASS`; wakealarm `+3` real-time -> `VIC22 fired (0->66276) -> cleared` ->
+`RTC-WAKEALARM PASS`. And the silicon rtcrate bit16=0 leg = delta 3/3s (real time). So the faithful
+real-time RTC is confirmed on QEMU AND silicon end-to-end. (rtcalarm devmem silicon inferred from the
+same VIC22 path that rtclinux-wakealarm exercised + its QEMU PASS.) The 66276 alarm re-fire count is
+the known level-triggered storm (tracked; test passes = fired+cleared).
 
 ## 2026-07-21 — CORRECTION: the AST2050 RTC keeps EXACT real time on silicon (bit16=0); the "732x" claim was a bit16=1 driving artifact
 
