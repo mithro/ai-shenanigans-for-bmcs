@@ -9,19 +9,25 @@ the model reads SCU08[16] from the SCU (0x1E6E2008, via the address space) and p
 forces a frozen RTC. So the modelled rate TRACKS the guest's clock-source choice, exactly like
 silicon — a fixed-732x model can no longer hide a rate bug. Submodule commit 0253877b15 (pushed).
 
-Updated the init gates to match (they had assumed the 732x fast counter): `rtcrate` now validates
-BOTH legs (bit16=0 → real time, bit16=1 → 732x — a stronger test that the model tracks SCU08[16]);
-`rtcalarm` + the `rtclinux` wakealarm set bit16=1 for the alarm CROSSING (rate-independent path, kept
-quick). VALIDATED IN QEMU (rebuilt qemu-system-arm + initramfs):
+Updated the init gates to match (they had assumed the 732x fast counter). FIRST attempt tested both
+bit16 legs — it PASSED in QEMU (bit16=1 delta=769) but the SILICON run revealed a NEW behaviour:
+**bit16=1 (24MHz test tap) is BROKEN under the U-Boot/Linux clock config** — the counter FROZE
+(silicon rtcrate bit16=1 delta=0), matching the earlier U-Boot md/mw [D] garbage. So the 24MHz tap
+only works under the BARE-METAL Zephyr clock config (evidence 14 = 732x); under U-Boot the ONLY
+working RTC config is bit16=0 = real time. (Opposite working configs per environment — which is why
+the Linux driver clears bit16 and the Zephyr driver sets it.) So all Linux-initramfs gates now use
+bit16=0/real-time with small alarm deltas + adequate sleeps (my bit16=1-for-crossing flips were
+silicon-broken — "it's your code"):
 ```
-rtcrate : bit16=0 delta=3/3s (real time) + bit16=1 delta=769/1s (732x) -> RTC-RATE PASS
-rtclinux: set 12:45:30 -> read 12:45:30 EXACT (was 12:45:41 under the old always-732x model) -> PASS
-          wakealarm VIC22 0->1 -> PASS
-rtcalarm: VIC22 0->1 -> PASS
+rtcrate : bit16=0 delta=3/3s = REAL TIME -> PASS (24MHz tap N/A under U-Boot cfg, noted)
+rtcalarm: bit16=0, alarm sec 1->3, sleep 4 -> VIC22 0->1 -> PASS
+rtclinux: set 12:45:30 -> read 12:45:30 EXACT (was 12:45:41 under old always-732x model) -> PASS
+          wakealarm bit16=0 +3s sleep 6 -> VIC22 0->1 -> PASS
 ```
-So QEMU now faithfully models a real-time RTC at bit16=0 and the 732x test tap at bit16=1. Follow-up
-still open in #194: the RESTART async-load + CONTROL[5] busy modelling (part 1); + re-run these
-updated gates on real silicon (behaviour already understood from evidence 30/31; expected to pass).
+Validated in QEMU (all 3 gates). The QEMU model stays faithful: no gate uses bit16=1 under U-Boot;
+the model's bit16=1->732x path is still exercised by the Zephyr tests (whose config supports the tap).
+Follow-up in #194: RESTART async-load + CONTROL[5] busy (part 1); silicon re-run of the corrected
+gates (in progress).
 
 ## 2026-07-21 — CORRECTION: the AST2050 RTC keeps EXACT real time on silicon (bit16=0); the "732x" claim was a bit16=1 driving artifact
 

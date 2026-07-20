@@ -649,16 +649,18 @@ if grep -q rtcrate /proc/cmdline; then
 		echo $(( D1 - D0 ))
 	}
 	devmem 0x1e6e2000 32 0x1688a8a8               # unlock SCU
-	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 & 0xfffeffff )))  # bit16=0
+	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 & 0xfffeffff )))  # bit16=0 (production)
 	DR=$(measure_rate 3)
 	echo "bit16=0 (32.768kHz source): delta=$DR over 3s  (expect ~3 = real time)"
-	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 | 0x10000 )))     # bit16=1
-	DF=$(measure_rate 1)
-	echo "bit16=1 (24MHz test tap): delta=$DF over 1s  (expect ~732 = 24e6/32768)"
-	if [ "$DR" -ge 1 ] && [ "$DR" -le 9 ] && [ "$DF" -ge 500 ] && [ "$DF" -le 1000 ]; then
-		echo "RTC-RATE RESULT: PASS (bit16=0 real-time ~${DR}/3s AND bit16=1 fast ~${DF}/1s — model tracks SCU08[16])"
+	# IMPORTANT: bit16=1 (24MHz "test only" tap) is NOT usable under THIS (U-Boot/Linux)
+	# clock config — on real AST2050 silicon it FREEZES/garbages the counter (U-Boot md/mw
+	# [D] gave garbage; a runtime bit16 0->1 switch gave delta=0). The 24MHz tap only works
+	# under the bare-metal Zephyr clock config (evidence d14-zephyr/14 = 732x). So we do NOT
+	# test bit16=1 here: the PRODUCTION Linux RTC uses bit16=0 = REAL TIME, validated below.
+	if [ "$DR" -ge 1 ] && [ "$DR" -le 9 ]; then
+		echo "RTC-RATE RESULT: PASS (bit16=0 real-time ~${DR}/3s = 1x, silicon-confirmed; 24MHz tap N/A under U-Boot cfg)"
 	else
-		echo "RTC-RATE RESULT: FAIL (bit16=0 delta=$DR/3s [want 1-9], bit16=1 delta=$DF/1s [want 500-1000])"
+		echo "RTC-RATE RESULT: FAIL (bit16=0 delta=$DR/3s, want 1-9 for real time)"
 	fi
 	echo "=== RTC-RATE-END ==="
 	poweroff -f 2>&1 || true
@@ -684,18 +686,18 @@ if grep -q rtcalarm /proc/cmdline; then
 	# own set_alarm). Count is field 2 of the 1e781000.rtc /proc/interrupts line.
 	C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 	[ -z "$C0" ] && C0=0
-	# Use the 24MHz FAST tap (SCU08[16]=1) for the alarm crossing so 00:00:05->10 is
-	# reached in ~7 ms (with bit16=0/real-time it would take 5 real s > our sleep).
-	# The alarm PATH (RTC04 match -> VIC22) is rate-independent; the fast tap just
-	# keeps the test quick + deterministic. (evidence d14-zephyr/31: bit16 sets rate.)
+	# Use bit16=0 (32.768kHz REAL TIME). The 24MHz "fast" tap is BROKEN under this
+	# U-Boot/Linux clock config on silicon (freezes the counter — see the rtcrate note),
+	# so it cannot be used here. The alarm PATH (RTC04 match -> VIC22) is what we validate;
+	# at real time a 2-second gap (sec 1 -> 3) is crossed within our sleep.
 	devmem 0x1e6e2000 32 0x1688a8a8    # unlock SCU
-	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 | 0x10000 )))
+	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 & 0xfffeffff )))  # bit16=0 real-time
 	devmem 0x1e781014 32 0x99          # RESET
-	devmem 0x1e781008 32 0x00000005    # RELOAD = 00:00:05 (byte-packed sec=5)
+	devmem 0x1e781008 32 0x00000001    # RELOAD = 00:00:01 (byte-packed sec=1)
 	devmem 0x1e781010 32 0x5a          # RESTART latch
-	devmem 0x1e781004 32 0x0000000a    # RTC04 alarm = 00:00:10 (sec=10, field-packed)
+	devmem 0x1e781004 32 0x00000003    # RTC04 alarm = 00:00:03 (sec=3, field-packed)
 	devmem 0x1e78100c 32 0xf           # CONTROL: RTC-enable + sec+min+hour alarm
-	sleep 1                            # fast counter passes 00:00:10 in ~7 ms
+	sleep 4                            # real-time counter passes 00:00:03 within 4s
 	C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 	[ -z "$C1" ] && C1=0
 	echo "rtc alarm VIC22 count: $C0 -> $C1 (/dev/mem-armed)"
@@ -771,17 +773,14 @@ if grep -q rtclinux /proc/cmdline; then
 		# /proc/interrupts; field 2 = CPU0 count). Default 0 if not yet present.
 		C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C0" ] && C0=0
-		# The set/get above already validated REAL TIME (bit16=0). For the alarm
-		# CROSSING, switch to the 24MHz fast tap (SCU08[16]=1) so the +5 alarm is
-		# reached in ~7 ms rather than 5 real s (evidence d14-zephyr/31: bit16 sets
-		# the rate; the alarm PATH is rate-independent). Keeps the test quick.
-		devmem 0x1e6e2000 32 0x1688a8a8    # unlock SCU
-		S8W=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8W | 0x10000 )))
+		# The RTC runs at REAL TIME (the driver clears SCU08[16]; the 24MHz fast tap is
+		# broken under this U-Boot config on silicon). Arm a small +3 s alarm and wait
+		# long enough for the real-time counter to reach it.
 		echo 0 > "$WAKE" 2>&1              # clear any pending
-		echo "+5" > "$WAKE" 2>&1           # alarm 5 RTC-seconds ahead
+		echo "+3" > "$WAKE" 2>&1           # alarm 3 seconds ahead (real time)
 		SET=$(cat "$WAKE" 2>&1)
 		echo "wakealarm set to (epoch)=$SET"
-		sleep 1                            # fast tap (bit16=1) passes +5 in ~7ms
+		sleep 6                            # real-time counter passes +3 within 6s
 		AFTER=$(cat "$WAKE" 2>&1)
 		C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C1" ] && C1=0

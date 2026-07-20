@@ -38,6 +38,17 @@ for time-of-day within/after a set, but cannot track a full Gregorian calendar (
 reports a fixed Jan-2000 base + the day counter). This is a register-map limitation of the
 G3 counter RTC, independent of the clock-rate finding above.
 
+FOLLOW-UP FINDING — bit16=1 is BROKEN under the U-Boot/Linux clock config (2026-07-21):
+a follow-on silicon rtcrate run that set bit16=1 (after a bit16=0 leg) measured delta=0 over
+1 s — the counter FROZE, NOT 732x. This matches the U-Boot md/mw [D] probe (bit16=1 gave
+garbage 0x08c0e421...). So the 24 MHz "test tap" only produces a clean 732x under the BARE-METAL
+Zephyr clock config (evidence 14); under U-Boot's fuller clock init it does not work. Net: the two
+environments have OPPOSITE working RTC configs — Linux/U-Boot needs bit16=0 (real time), bare-metal
+Zephyr needs bit16=1 (732x, since its minimal init leaves the 32.768 kHz path unset). This is why
+the Linux driver CLEARS bit16 and the Zephyr driver SETS it; each is correct for its environment.
+Consequence: all Linux-initramfs RTC gates use bit16=0 (real time) with small alarm deltas + longer
+sleeps; the QEMU model's bit16=1->732x path is exercised only by the Zephyr tests (its config).
+
 FOLLOW-UPS: (1) QEMU faithfulness — make hw/misc/aspeed_rtc_ast2050.c tick-rate track
 SCU08[16] (clk_hz=32768 → real-time when bit16=0; clk_hz=24e6 → 732x when bit16=1); the
 model's ns_per_tick=32768*1e9/clk_hz already parameterizes on clk_hz. (2) Zephyr: its driver
