@@ -400,6 +400,35 @@ GPIOB0 (B11) interrupt output, **E6** the unidentified `GPIOE6/E7↔SP5100` hand
 model must propagate). The audit judged the enumeration otherwise ~95% complete and
 rigorously self-audited; these are missing rows, not missing stack-columns.
 
+**Gate-(a/d) round-3 (two independent sub-agents, 2026-07-21):** a third completeness
+sweep re-confirmed **no structural device is missed** (every schematic ref-des/net maps
+to a row or justified `[N]`), corrected 4 ✅ over-claims (row 19 jc42 QE/ZQ → `[N]`, row 9
+vhub QE/LQ → partial, row 5 snoop QE → partial — see DEVICE-MATRIX), and IDENTIFIED these
+concrete NEW tasks (now tracked here so a future audit finds none new; tracker #197):
+  - **[ ] silicon power-RESET transcript** (row 27 US/LS) — run kgpe-power.sh reset on
+    silicon + capture; today RESET is QEMU-proven only.
+  - **[ ] Linux `pmbus` bind against the modeled PSU @0x58 in QEMU** (row 24 LQ) — the
+    QEMU model + Zephyr read already exist; only the Linux-QEMU hwmon bind is missing.
+  - **[ ] model the AST2050 CRTC display-controller register block (VGACRB7)** — the true
+    prerequisite for BOTH row-12 full DAC/mode-set/framebuffer AND row-14 DDC/EDID (#178);
+    also settle the row-14↔row-50 conflict (is CRB7 behind A2P 0x1E720000 or a distinct
+    CRTC MMIO base?).
+  - **[ ] verify the generic G4 `aspeed.hace` model matches the AST2050 11-register HACE**
+    (row 43 QE 🔶 fidelity).
+  - **[ ] model QE for the 5 unmodeled real SoC engines**: MIC (row 44, 0x1E640000),
+    MDMA (row 45, 0x1E740000), 2D BitBLT (row 46, §35), PUART LPC pass-through (row 47,
+    0x1E788000), PCI arbiter (row 48, 0x1E78C000).
+  - **[ ] A2P: add the SCU70[4] auto-enable gate + a P-Bus target** to take row 50 🔶→✅.
+  - **[ ] SMBus-ALERT / SALT1 + ARA(0x0C) path in `aspeed_i2c.c`** (row 25; also gates the
+    W83795 SMBALERT#, #183).
+  - **[ ] MTD `/dev/mtd*` WRITE path** for the SPI flash (row 2 LU).
+  - **[ ] NC-SI decompose** (row 11 LS): (a) RE + write the AST2050 RMII2/GPIOE G3 pinctrl
+    group; (b) a faithful Intel-OEM 0x157 82574L NC-SI responder.
+  - **[ ] LPC iBT/mailbox model** (`aspeed-lpc-mbox`, row 4 — the one LPC sub-block with
+    zero modeling).
+  - **[ ] identify + model/dispose the 0x69 silicon responder** (#160) and the GPIOE6/E7↔
+    SP5100 handshake (#161); trace `AUX_CHASSIS#` → W83795 CASEOPEN input (#183).
+
 **Nothing in the schematic is skipped.** Items marked `[N]` state why they are
 not-applicable for that stack; `[B]` items state the precise blocker and my
 confidence that it is rig/host/upstream-scoped, not a hardware fault or a
