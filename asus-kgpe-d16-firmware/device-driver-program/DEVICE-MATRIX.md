@@ -230,7 +230,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 - **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the
   AST2050 port boots and runs application code — `*** Booting Zephyr OS ***` +
   `Hello World! kgpe_d16_bmc/ast2050` — via a static-mapped polling SoC console
-  (`soc/aspeed/ast2050/console.c`, printk+stdout hooks). The M1 VIC (`vic.c`) + aspeed
+  (`soc/aspeed_g3/ast2050/console.c`, printk+stdout hooks). The M1 VIC (`vic.c`) + aspeed
   timer (`aspeed_timer.c`) deliver interrupts and now run **SUSTAINED tickful scheduling**.
   **HONESTY CORRECTION (2026-07-18 audit): the earlier "sustained tick data-aborts at the
   upstream ARM9 arm_mmu L1 table" attribution was WRONG** — per the newer evidence
@@ -275,8 +275,20 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
-- **36** VIC: the keystone G3 fix (`irq-aspeed-g3-vic`, HW-verified). The Zephyr port's Milestone-1 VIC driver targets this block. D11.
-- **38** WDT-silicon = 🔶: the aspeed WDT's 120 s reset was *observed as a side-effect* during the g3-clk bring-up (the unfixed console-death path reset the SoC at the WDT point), but there is no DEDICATED transcript exercising `/dev/watchdog` on silicon — capture one for a clean ✅. LU=⬜ (`/dev/watchdog` userspace not exercised). D11.
+- **36–37** VIC (keystone G3 fix `irq-aspeed-g3-vic`, HW-verified) + Timers: the Zephyr port's
+  Milestone-1 `vic.c`/`aspeed_timer.c` drive these blocks. **ZS ✅ now EVIDENCE-BACKED
+  (2026-07-20, `evidence/d14-zephyr/17-heartbeat-vic-timer-silicon.txt`):** the `heartbeat_smoke`
+  sample did 10×`k_msleep(100 ms)` on real silicon with uptime advancing monotonically
+  130→1120 ms — each returned sleep = one proof the Timer1 tick IRQ fired AND the VIC routed+acked
+  it (a dead timer/VIC hangs the first sleep). Was LOG-prose only per the gate-d audit. D11.
+- **38** WDT: **Zephyr ZS ✅ now EVIDENCE-BACKED (2026-07-20, `evidence/d14-zephyr/18-wdt-silicon.txt`):**
+  `wdt_smoke` on real silicon armed a 500 ms RESET_SOC watchdog, fed 3×, then stopped — the console
+  showed one cycle then went silent at the timeout and a JTAG halt confirmed the SoC reset
+  (Undefined-instr mode, PC in the flash-mapped low region not `0x40xxxxxx` DRAM, stale Zephyr
+  `sp_und`); QEMU both-sides = 6 reboots. **LS = 🔶 (Linux): the aspeed WDT's 120 s reset was only
+  *observed as a side-effect* during the g3-clk bring-up; there is still no DEDICATED transcript
+  exercising `/dev/watchdog` on silicon** — capture one for a clean LS ✅. LU=⬜ (`/dev/watchdog`
+  userspace not exercised). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 - **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/

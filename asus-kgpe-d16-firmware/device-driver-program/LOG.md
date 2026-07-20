@@ -1,5 +1,19 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #159 partial: MATRIX rows 36/37/38 ZS now cite the captured silicon evidence + fix stale rename path + tally re-verified
+
+Followed through on #159 for the rows I just silicon-validated. DEVICE-MATRIX.md: rows 36 (VIC) +
+37 (Timer) ZS ✅ now cite `evidence/d14-zephyr/17-heartbeat-vic-timer-silicon.txt` (was LOG-prose
+only per the gate-d audit); row 38 (WDT) ZS ✅ now cites `evidence/d14-zephyr/18-wdt-silicon.txt`,
+and I reconciled the stale row-38 note (it said "WDT-silicon = 🔶 … capture one for a clean ✅" —
+that 🔶 is the LINUX `/dev/watchdog` path (LS), which is STILL open; the Zephyr ZS transcript is now
+captured, so I re-scoped the note to LS and kept ZS ✅). Fixed the one living-doc stale path from the
+#154 rename (`soc/aspeed/ast2050/console.c` → `soc/aspeed_g3/…` at MATRIX:233); left the append-only
+LOG history + dated evidence transcripts unchanged (they record the path as it was when written).
+Re-ran `tally.py`: 43 rows, Zephyr@silicon 8✅/1🔶/28⬜ — the embedded tally block (MATRIX:51-58)
+already matches (no cell status changed; only evidence pointers added). REMAINING #159:
+FULL-TASK-LIST↔MATRIX Zephyr-cell reconcile (kept in_progress).
+
 ## 2026-07-20 — #154 DONE: rename Zephyr module SoC family aspeed → aspeed_g3 (de-collide with upstream SOC_FAMILY_ASPEED)
 
 Closed the re-review finding #154. CONFIRMED the collision is real (not hypothetical): upstream
