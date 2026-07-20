@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #183 (partial): W83795 ALARM(0..4) status seeded to silicon — both sides (QE model + LU userspace)
+
+Continued #183 with a bounded, faithful piece: the model's ALARM(0..4) status registers (bank 0,
+0x41..0x45) fell through `w83795_do_read` to the zeroed scratch store, so it reported **NO voltage/fan
+alarms** — directly contradicting the very silicon capture it seeds its measurements from
+(`evidence/real-hw-hwpass/host-w83795-sensors.txt`, w83795g-i2c-14-2f). A faithful model must report the
+alarm state the real chip reports.
+
+**Verified before seeding (not inferred).** Read the actual silicon capture + the actual mainline driver.
+The pre-compaction inference (0x2A, in1/3/5) was **WRONG** — silicon ALSO alarms in7 (its max limit reads a
+corrupt +0.05V, so 1.82V > max). Re-deriving the bit map from `show_alarm_beep` (`alarms[idx>>3]` bit
+`idx&7`; in<n>→idx n+(n>14?1:0); fan<n>→idx n+31) against the capture gives:
+in1/3/5/7→ALARM(0)=**0xAA**, in10→ALARM(1)=0x04, in15/16→ALARM(2)=0x03, (no temp)→ALARM(3)=0x00,
+fan2..8→ALARM(4)=**0xFE**. Every bit is self-consistent with the measurement+limit already modelled — the
+deterministic comparator result the chip produces, not an arbitrary constant. Catching the 0x2A→0xAA error
+is exactly why "verify against the capture, don't infer" matters.
+
+**QE (model, submodule 3d5df467ca):** seeded ALARM(0..4) in `w83795_load_defaults`; register-validated over
+raw i2c in a new `W83795-ALARM` gate block — `ALARM(0)=0xaa ALARM(1)=0x04 ALARM(2)=0x03 ALARM(4)=0xfe` PASS
+(evidence `d08-w83795-caseopen/01`). Static snapshot only; live limit-vs-measurement recompute + SMBALERT#
+stay deferred. No legacy oracle (C-UBOOT/C2/C4) reprograms these limits, so the static seed matches every
+real boot (faithfulness preserved).
+
+**LU (driver + userspace):** the modern-hwmon patch exposed only inN_input/fanN_input, so userspace still
+couldn't read the alarm bits. Extended patch 0003 — HWMON_I_ALARM on all 21 `in` channels + HWMON_F_ALARM
+on all 14 `fan` channels, and branched `w83795_hwmon_read` on `attr` to return the alarm bit with the SAME
+index map the legacy attrs use (in: channel+(channel>14?1:0); fan: channel+32). Rebuilt the C2 kernel,
+added a `W83795-INALARM` gate reading `/sys/class/hwmon`: **`in0=0 in1=1 in7=1 fan1=0 fan2=1` → PASS**
+(evidence `02`) — full userspace→driver→i2c→fabric→model path. The `w83795test` boot IS the C2 kernel to
+full userspace with the driver bound, so no legacy-boot regression.
+
+**#183 rescoped:** the static alarm STATUS is now DONE (both sides); what remains for row 16 QE ✅ is
+SmartFan auto thermal→fan-curve control + LIVE alarm/limit recompute + SMBALERT# assertion.
+
 ## 2026-07-20 — #184 DONE (rotated to implementation): W83795 CASEOPEN now userspace-visible + LU validated end-to-end
 
 Rotated from the review sweep to concrete device work — closed #184 (the Linux-driver gap found while
