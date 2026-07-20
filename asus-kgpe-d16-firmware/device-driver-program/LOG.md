@@ -1,5 +1,41 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(a) RESULTS: coverage complete; 2 incorrect-absence claims fixed + 5 doc-accuracy nits
+
+All 4 independent audit sub-agents returned. **Result strongly satisfies the hook's concern:**
+- **Coverage COMPLETE.** Agents 1 (§1–9), 2 (§10 I²C), 3 (§11–16) each independently found ZERO coverage
+  gaps — every device/signal/chip/connector in the authoritative schematic maps to a matrix row or a
+  justified disposition. All 8 I²C engines, both DIMM banks, the mux fabric + multi-master arbitration,
+  all 16 §11 GPIOs, JTAG/LEDs/clock/straps, all neighbour chips + connectors verified.
+- **Primary tracking files CLEAN.** Agent 4 (skeptical false-claims hunter) confirmed every
+  not-exists/unconnected/impossible claim in DEVICE-MATRIX/FULL-TASK-LIST/LOG is either datasheet-justified
+  (ADC-absent, PECI-strapped-to-GPIO, PWM-not-driving-fans, USB-device-only, host-BIOS-flash-on-SB) or
+  explicitly rig/strap/host-power-scoped (DIMM host-off, SPI-flash empty-socket) — and the historically
+  wrong NC-SI/DIMM claims are already retracted + correctly re-stated.
+
+**Two genuine incorrect-absence claims (the exact class the goal warns about) — both in SUB-docs — FIXED:**
+1. `SILICON-STATUS.md #6` SOL "host COM console not wired to the AST2050 VUART (a board-wiring limit)" —
+   CONTRADICTED by schematic §12 (host serial IS wired: UART1→QU8→Super-I/O). Corrected all 3 spots: the
+   real constraints are the UART1+QU8 path (not the LPC VUART the image models) and the empty-socket
+   `BMC_PRESENT#`-high strap handing QU8 to the host RS-232 side — a rig/strap condition, not a wiring absence.
+2. `PROGRESS.md` 2026-07-12 F7 "the KGPE-D16 does NOT use NC-SI / no NC-SI hardware" — stale append-only
+   line, contradicted by schematic §7 + DEVICE-MATRIX row 11 + SILICON-STATUS #9 + F7-NCSI.md. Added a
+   SUPERSEDED/RETRACTED banner (history preserved). (commit 8803eb5)
+
+**Five doc-accuracy nits FIXED (this commit):**
+3. DEVICE-MATRIX §14 row: SR5690 (NU1) is NOT on the shared I2C3/I2C6 bus — its only I²C is the separate
+   SR5690-mastered PCIe-hot-plug SMBus to NB_DEBUG_HEADER1 (conclusion "not BMC-driven" was right; the
+   stated path was wrong). 4. `I2C-SMBUS-TOPOLOGY.md §3.5` FRU U25 address 0x50→0x54 (stale vs its own
+   table + silicon scan). 5. NC-SI-silicon roll-up glyph 🔷→⬜ (matches row 11 LS ⬜ "not externally
+   blocked"). 6. Row 32 title now notes the chassis-locator button INPUT (AST_IDBNT#/Y3), not just LEDs.
+   7. Added an explicit "out-of-BMC-scope" disposition for the 3 non-BMC superset buses (CPU/NB VR PMBus,
+   SP5100 SMBus3, FireWire EEPROM).
+
+Gate-(a) is satisfied by independent review: no coverage gaps, and the only surviving incorrect-absence
+claims (2) are now corrected. Net: the comprehensive schematic→driver/emulation task list is verified
+complete against the authoritative wiring, and the "functionality doesn't exist / unconnected" errors the
+lead flagged are eliminated from the live docs.
+
 ## 2026-07-21 — Completion-gate (a): fresh authoritative-schematic re-read + independent coverage audit
 
 Re-grounded against the AUTHORITATIVE source per the standing goal (and a Stop-hook prompt to prove

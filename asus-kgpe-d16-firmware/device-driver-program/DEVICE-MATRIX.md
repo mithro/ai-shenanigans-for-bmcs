@@ -368,7 +368,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | ✅ | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | 🔶 | ⬜ |
+| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) + chassis-locator button in (AST_IDBNT#/Y3) | GPIO/LED | ✅ | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | 🔶 | ⬜ |
 | 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | 🔶 |
 
 - **27-29/32-33 ZQ = 🔶 (2026-07-18):** the enabling **Zephyr GPIO driver
@@ -570,7 +570,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   because the driver's PRESENCE ≠ device-specific boot-time validation (mark ✅ only with
   a transcript exercising that device under Raptor U-Boot).
 - **Linux**: ✅ both sides for the boot/power/sensors/IPMI/eth0/SPD set; the
-  open items are NC-SI-silicon (🔷 G3 pinmux), USB-vhub-silicon (🔶),
+  open items are NC-SI-silicon (⬜ undone authoring work, NOT externally blocked — matches row 11 LS ⬜), USB-vhub-silicon (🔶),
   SOL (⬜), the 6 I2C far-ends (⬜), DDC/EDID (⬜), MTD-write (⬜), and
   several §11 signals + LED silicon observation.
 - **Zephyr**: the D14 port RUNS in QEMU (banner, evidence `d14-zephyr/02`) on the ARM926
@@ -609,7 +609,7 @@ connector maps to a row above — nothing in the spec is unrepresented:
 | §11 GPIO power/reset/platform (17) | ATXPSON#/SYS_PWRGD/PWRBTN#/SYSRESET#/PCI_RST#/BIOSREVRY#/CLRTC#/CPU1-2DISABLE#/THERMTRIP#/PROCHOT#/DDR_THERM#/NMI# | 27, 28, 29 |
 | §12 Serial/SOL (11) | UART console; UART1→QU8 mux→Super-I/O | 30, 31 |
 | §13 JTAG/LEDs/clock/straps (11+6+1+2) | JTAG harness; BMCRDY/MLED/CPUERR/chassis-ID LEDs; 24 MHz clock; IKVMEN#/SOLEN#/IPMI_SEL straps | AST_JTAG1 (harness Ⓝ), 32, 33, 34 |
-| §14 Neighbour chips | QU2/BMC_FW1/U5/LU1-2/QU4/U27-28/U25/QU9/QU5/QU8/QU6/U23/AZ75232/glue U6-8/LDOs/SU1/OU1/NU1 | all active chips have rows; passive glue (U6/U7/U8/U23) modeled in the fabric+power-seq; LDOs = passive power; **SU1/OU1 = host chips reached via LPC/PCI/I2C (rows 3/8/15); NU1 SR5690 = host northbridge, reached only via the shared I2C3/I2C6 multi-master bus (row 15 note), not a distinct BMC-driven device** |
+| §14 Neighbour chips | QU2/BMC_FW1/U5/LU1-2/QU4/U27-28/U25/QU9/QU5/QU8/QU6/U23/AZ75232/glue U6-8/LDOs/SU1/OU1/NU1 | all active chips have rows; passive glue (U6/U7/U8/U23) modeled in the fabric+power-seq; LDOs = passive power; **SU1/OU1 = host chips reached via LPC/PCI/I2C (rows 3/8/15); NU1 SR5690 = host northbridge — NOT a distinct BMC-driven device and NOT on any BMC I²C bus: its only I²C is a separate SR5690-mastered PCIe-hot-plug SMBus (`DBG_GPIO1/2` → `NB_DEBUG_HEADER1`), which the BMC does not touch (I2C-SMBUS-TOPOLOGY.md §3.8). The BMC's shared I2C3/I2C6 sensor bus reaches only SP5100 + W83795G + the DIMM mux, not the SR5690** |
 | §15 Connectors | VGA1/AST_UART1/AST_JTAG1/BMC_FW1/PANEL1/AUX_PANEL1/PSUSMB1/TPM1/VGA_SW1/IPMI_SEL1/RECOVERY1 | VGA1→12, UART1→30, JTAG1→harness, FW1→2, PANEL1→27/32, AUX_PANEL1→26/32, PSUSMB1→24, TPM1→7, jumpers→29/33 |
 
 **Verdict:** the matrix is comprehensive against the authoritative schematic. The
@@ -646,3 +646,13 @@ FULL-TASK-LIST **B1g** `[N]`; **`AST_SRST#`/R20** + **`AST_BRST#`/P21** = reset-
 **E6**; `ZU1`/FW322, `VGA_HDR1`, glue `U3/U4/NU2` = signals/peers folded into rows 8/12/E6. So every part
 the schematic (and the finer pinmap) names now has an explicit home — device rows for devices, FULL-TASK-LIST
 per-pin entries for nets/peers, and this note for the one passive clock-gen.
+
+**Non-BMC I²C buses in the board-wide superset (explicitly OUT of this matrix's scope, 2026-07-21
+gate-a audit).** `I2C-SMBUS-TOPOLOGY.md` documents three I²C/SMBus/PMBus buses the AST2050 BMC does NOT
+electrically touch — they have no `AST_SDA*/SCL*` net and live on other masters, so they are correctly
+absent from this BMC device matrix (which scopes to "every device wired to the AST2050", per
+`AST2050-BMC-WIRING.md §14`): (a) the **CPU/NB VR PMBus** (`PU2`/`PU7`) on the SP5100's SMBus0 (SVI); (b)
+the SP5100 **SMBus3** (unpopulated); and (c) the **FireWire config EEPROM** `ZU2`/HT24LC02 on the FW322
+private bus. Recorded here so a reader cross-referencing the topology superset sees them dispositioned,
+not silently missing. (The SR5690 PCIe-hot-plug SMBus to `NB_DEBUG_HEADER1` is likewise non-BMC — see the
+§14 row.)

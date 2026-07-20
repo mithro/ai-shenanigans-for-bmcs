@@ -151,7 +151,7 @@ expanders that drive the 16 per-DIMM error LEDs.
 
 | Device | Ref | Address | Drives |
 |---|---|---|---|
-| HT24LC08 EEPROM | `U25` | `0x50`–`0x53` | board FRU (serial/part) |
+| HT24LC08 EEPROM | `U25` | `0x54`–`0x57` (A2=VCC strap; base `0x50`–`0x53`) | board FRU (serial/part) |
 | W83601G | `U27` | strap `A0/A1/A2` | DIMM A–F error LEDs |
 | W83601G | `U28` | strap `A0/A1/A2` | DIMM G/H error LEDs + spare GPIO |
 
