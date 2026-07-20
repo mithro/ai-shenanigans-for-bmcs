@@ -41,7 +41,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: SDMC/DDR2 model (64 MB, MCR04=0x585, DLL)
 - U-Boot: [x] QEMU (Raptor DDR2 init) · [x] silicon (JTAG DDR2 re-train MCR04=0x585 boots)
 - Linux: [x] QEMU (RAM usable) · [x] silicon (kernel runs from 64 MB DDR2) · [N] userspace (RAM, not a device ABI)
-- Zephyr: [x] QEMU (runs from DDR2 — Hello World) · [ ] silicon
+- Zephyr: [x] QEMU (runs from DDR2 — Hello World) · [x] silicon (every Zephyr silicon smoke — evidence `d14-zephyr/14`-`20` — is JTAG-loaded to 0x40000000 after DDR2 train and runs; same "RAM usable" basis as Linux [x] silicon; matrix row 1 ZS = ✅)
 
 ### A3. SMC — SPI / ROM flash controller → BMC_FW1 (§4)
 - [x] QEMU: SMC model (SPI CS0/CS2, m25p80)
