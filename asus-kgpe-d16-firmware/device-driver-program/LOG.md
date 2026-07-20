@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168 MECHANISM CRACKED: early PREFETCH ABORT (do_prefetch_abort @0x1038) cascading on an uninitialised abort stack — the A-fix (0004) MASKS an unaligned access that then makes a bad code pointer
+
+Identified the mystery loop functions from u-boot.map: the recurring low PC (~0x140) is the ARM
+exception-stub region and 0x1038 = **do_prefetch_abort** (0x1064=do_data_abort, 0xfe0=do_undefined,
+etc. — all in arch/arm/lib/interrupts.c). Set a HW breakpoint at 0x1038, booted the A-fix U-Boot on
+silicon: **the breakpoint HIT** — so U-Boot takes a PREFETCH ABORT (an attempt to FETCH an instruction
+from an invalid address, i.e. a branch/return to a bad code pointer) very early in board_init_f. Post-
+mortem: pc=0x1094 (do_not_used), **sp=0xffffffcb (INVALID)** — the abort handler is running on an
+uninitialised Abort-mode banked stack (same class as the sp_abt double-fault found earlier), so it
+faults again and CASCADES through the exception vectors forever -> the board_init_f "loop" -> no console
+(all pre-console, output lost).
+CONFIRMED: it's a prefetch abort, not a hang; the exception handling cascades on an uninit abort stack.
+LEADING HYPOTHESIS (validates the gate-b reviewer's concern about 0004, not yet pinned to the exact
+instruction): with A=0 (0004) an early UNALIGNED access returns ROTATED garbage on ARMv5 (the reviewer's
+exact point); that garbage is used as a code pointer -> the CPU branches to nonsense -> prefetch abort.
+So 0004 MASKS the original alignment fault but the underlying unaligned access is still WRONG, and now
+manifests one step later as a prefetch abort. DURABLE FIX (next): (1) revert 0004; (2) break the cascade
+by giving the abort handler a valid stack — write a valid addr to the abort-stack literal [0x40] (the
+handler does `ldr sp,[pc,#-0x148]`=[0x40]) OR set the banked sp_abt — so do_prefetch_abort/do_data_abort
+runs cleanly and I can read its pt_regs (uregs[15]=faulting fetch addr, uregs[14]=branch-from) to pin
+the bad code pointer; (3) trace that back to the specific early unaligned access + fix IT (get_unaligned
+/ align the field) instead of masking with A=0. Rig: boot-mu-pabt.tcl (bp @0x1038) staged on the Pi.
+
 ## 2026-07-20 — #168 narrowed further: the loop is BEFORE console_record_init (pre-console buffer stays garbage); lead = timer_init/early board_init_f panic-hang
 
 Ran the pre-console-buffer experiment. Found U-Boot ALREADY enables it by a Kconfig default at
