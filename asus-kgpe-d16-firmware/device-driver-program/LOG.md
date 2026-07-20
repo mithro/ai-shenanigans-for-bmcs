@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #171 DONE: Zephyr DIMM SPD via the QU9/QU5 mux fabric (rows 17+18) — QEMU PASS (gate-c driver work)
+
+Second Tier-A roadmap item + first MULTI-subsystem Zephyr driver: `samples/spd_smoke` reads a DIMM SPD
+behind the board's I2C mux fabric, exercising the gpio + i2c drivers together. Covers TWO matrix rows.
+FAITHFULNESS FINDING (the "hardware weirdness = my code" rule in action): first attempt NAKed on BOTH
+the pre- and post-select reads. Instead of blaming the model I read hw/i2c/kgpe_d16_i2c_fabric.c — the
+fabric match() returns unreachable while SYS_PWRGD is LOW ("QU9 open: electrically disconnected"), and
+SYS_PWRGD←kgpe-host-on is OFF at boot. So the DIMM SPD bus is genuinely unreachable with the host off
+(the DIMM rails aren't powered) — a REAL constraint, not a bug. Proper fix: power the host ON first
+(closing QU9 + handing the BMC the QU5 select ownership), THEN route the mux. The sample now: reclaims
+GPIOA4 (SCU74[25]) → powers host on (GPIOB6/B1 pulse) → STA_LINE_POWER(H2)=1 → drives QU5 to Y2 (GPIOF4
+p12 low = S0, GPIOF5 p13 high = S1) → reads SPD @0x51 on i2c1 → **byte2=0x0B (DDR3), byte3=0x02 (UDIMM),
+SPD RESULT: PASS** → restores host OFF. Read the SPD array + fabric model FIRST to get the channel map
+(Y2=chan 2) + address (0x51) right.
+Rows 17 (QU9/QU5/U23 mux fabric) + 18 (DIMM SPD): **ZQ ⬜→✅** (the Zephyr port now drives the whole
+fabric — QU9 gate via power-seq + QU5 channel select — and reads a live device behind it). ZS stays ⬜
+for both (needs the real host powered so the DIMM rails/SP5100-side are live + a populated DIMM on the
+bench — #150/#165 host/rig gates, NOT code gaps; the gpio+i2c paths are already silicon-proven for the
+power seq + on-bus sensors). Evidence d14-zephyr/22-spd-mux-qemu.txt. Tally: Zephyr@QEMU 15✅→17✅
+(18⬜→16); embedded block updated. Tier-A remaining: rows 19 (TSOD, same fabric), 25 (SALT), 26 (aux).
+
 ## 2026-07-20 — Gate-(b) CODE REVIEW (Zephyr drivers): 1 real concurrency bug found + FIXED + re-validated; rest confirmed clean
 
 Executed a gate-(b) independent code review over the primary developed code body — the Zephyr AST2050

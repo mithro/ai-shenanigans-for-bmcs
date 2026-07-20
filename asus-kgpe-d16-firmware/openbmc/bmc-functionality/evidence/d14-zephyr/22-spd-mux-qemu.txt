@@ -1,0 +1,49 @@
+D14 Zephyr — DIMM SPD via QU9/QU5 mux fabric (rows 17 + 18) QEMU validation (2026-07-20).
+    Tier-A breadth win covering TWO matrix rows: ZQ ⬜→✅ for row 17 (mux fabric) AND row 18 (DIMM SPD).
+
+Device: DIMM A2 SPD EEPROM (0x51) behind the QU9/QU5/U23 I2C mux fabric on the BMC's I2C2 engine.
+Sample: asus-kgpe-d16-firmware/zephyr/samples/spd_smoke  (new)
+Drivers exercised TOGETHER: gpio_aspeed_g3 (host-power sequence + QU5 mux selects) + i2c_aspeed_g3
+        (SPD read over engine 1 / i2c1). Fabric model: hw/i2c/kgpe_d16_i2c_fabric.c.
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n
+Run:    qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-spd/zephyr/zephyr.elf
+
+===== THE KEY FAITHFULNESS FINDING (hardware "weirdness" was MY code) =====
+First attempt FAILED: both the pre-select AND post-select SPD reads NAKed (err -6). Rather than blame
+the model, I read hw/i2c/kgpe_d16_i2c_fabric.c: the fabric's match() returns "not reachable" whenever
+SYS_PWRGD is LOW — "QU9 open: the whole fabric is electrically disconnected". SYS_PWRGD ← the GPIO
+"kgpe-host-on" latch, which is OFF at boot. So the DIMM SPD/TSOD bus is UNREACHABLE while the host is
+off — a REAL hardware constraint (the DIMM rails, and thus the SPD, are only powered with the host on),
+not a bug. FIX (proper, not a workaround): power the host ON first, then the fabric (QU9) closes and
+U23 hands the BMC ownership of the QU5 selects (sb_post_complt_n low). This is exactly how a real BMC
+would reach the SPD outside the host's POST window.
+
+Sequence the Zephyr port performs:
+  1. reclaim GPIOA4 from its PHYLINK alt-fn (SCU unlock + clear SCU74[25]); A4 high = BMC in control.
+  2. power the host ON (pulse reset#/power-up# low→high on GPIOB6/B1) → STA_LINE_POWER (GPIOH2) = 1.
+  3. drive the QU5 selects to Y2 (DIMM A-D): S0=0 (GPIOF4/gpio1-p12 low), S1=1 (GPIOF5/gpio1-p13 high).
+  4. read the SPD at 0x51 on i2c1 (SMBus write-offset + read-byte).
+  5. restore: force the host back OFF (GPIOF0 pulse), leaving the board as found.
+
+===== CAPTURED CONSOLE (QEMU) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+SPD smoke: boot
+SPD: host power-on -> STA_LINE_POWER(H2)=1 (need 1 to reach the SPD bus)
+SPD (Y2) byte2(devtype)=0x0b byte3(modtype)=0x02 (err 0/0)
+SPD RESULT: PASS (DDR3 UDIMM SPD read via QU5-Y2, host-gated QU9)
+
+Decode: H2=1 (host powered → QU9 closed → SPD bus reachable). SPD offset 2 (JEDEC DRAM device type) =
+0x0B = DDR3; offset 3 (module type) = 0x02 = UDIMM. Both match the modeled slot-A2 SPD (a 4 GB DDR3
+UDIMM, part "RMR5030EF68F9W1600", hw/arm/aspeed.c kgpe_d16_dimm_a2_spd[]). err 0/0 = both reads ACKed.
+
+RESULT: PASS in QEMU.
+  * Row 17 (QU9/QU5/U23 mux fabric): ZQ ⬜→✅ — the Zephyr port drives BOTH the QU9 gate (via the host
+    power sequence) AND the QU5 channel selects (GPIOF4/F5), routing a live device into reach.
+  * Row 18 (DIMM SPD): ZQ ⬜→✅ — reads and correctly identifies the DIMM SPD behind the mux.
+
+Both-sides honesty: ZS (silicon) stays ⬜ for both rows — needs the real host powered (so the DIMM rails
++ SP5100-side of the fabric are live) AND a populated DIMM on the bench (#150/#165, host/rig gates, NOT
+code gaps). The gpio + i2c driver paths used here are the same ones already silicon-proven for the
+power sequence (evidence real-hw-f2sta) and the on-bus sensors (evidence 07/09/12); only the host-on +
+DIMM rig conditions are missing. No step skipped or faked; the initial NAK is documented above as a
+real host-gating constraint I diagnosed and drove correctly.
