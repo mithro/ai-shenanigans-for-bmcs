@@ -1,0 +1,78 @@
+DEVICE-MATRIX row 16 (W83795G hwmon) — QEMU ALARM-status registers seeded to the
+exact silicon state (2026-07-20, #183).
+
+Before this change the model's ALARM(0..4) status registers (bank 0, regs
+0x41..0x45) fell through w83795_do_read to `return s->regs[bank][reg]` == 0 — i.e.
+the model reported NO voltage/fan alarms. That directly CONTRADICTS this board's
+silicon: the host-side lm-sensors capture of the very same W83795G chip
+(evidence/real-hw-hwpass/host-w83795-sensors.txt, w83795g-i2c-14-2f) shows in1,
+in3, in5, in7, in10, in15, in16 and fan2..8 all ALARMing, plus the chassis
+intrusion (already modelled as the CASEOPEN latch, file 00). A faithful model must
+report the alarm state the real chip reports.
+
+BIT MAPPING (from the mainline driver drivers/hwmon/w83795.c, verified against the
+actual built source, NOT inferred): show_alarm_beep reads
+  bit = (data->alarms[index >> 3] >> (index & 7)) & 1
+where alarms[i] = W83795_REG_ALARM(i) = 0x41 + i, and the per-attribute linear
+index is:
+  in<n>_alarm  -> index = n + (n > 14 ? 1 : 0)     (SENSOR_ATTR_IN, line 1618)
+  fan<n>_alarm -> index = n + 31                    (SENSOR_ATTR_FAN, line 1633)
+  intrusion0   -> index = 46                        (sda_single_files, line 1832)
+
+SILICON (host-w83795-sensors.txt) -> register decode:
+  in1,in3,in5,in7  -> idx 1,3,5,7  -> ALARM(0)=0x41 bits 1,3,5,7 = 0xAA
+  in10             -> idx 10       -> ALARM(1)=0x42 bit 2        = 0x04
+  in15,in16        -> idx 16,17    -> ALARM(2)=0x43 bits 0,1     = 0x03
+  (temp1..8 all in range)          -> ALARM(3)=0x44             = 0x00
+  fan2..fan8       -> idx 33..39   -> ALARM(4)=0x45 bits 1..7   = 0xFE
+  intrusion0       -> idx 46       -> ALARM(5)=0x46 bit 6        (CASEOPEN latch)
+
+Note the pre-compaction inference (0x2A, in1/3/5 only) was WRONG — the silicon
+ALSO alarms in7 (limit max=+0.05V is corrupt on this board, value 1.82V > 0.05V).
+Verifying the seed against the actual capture (not re-deriving from memory) caught
+it: ALARM(0) is 0xAA, not 0x2A.
+
+SELF-CONSISTENCY: every seeded alarm bit agrees with the measurement this model
+ALREADY seeds (from the same capture) AND that measurement's limit:
+  in1=0.00V<min0.65V, in3=18mV<min1.20V, in5=0.00V<min0.70V, in7=1.82V>max0.05V,
+  in10=1.59V>max1.40V, in15=1.01V>max0.91V, in16=1.59V>max1.40V,
+  fan2..8=0 RPM<min400 (fan1=2636 RPM in range -> ALARM(4) bit0 clear).
+So the seed is not an arbitrary constant; it is the deterministic result the real
+chip's comparator produces for the readings we model.
+
+MODEL (hw/sensor/w83795.c, w83795_load_defaults):
+  s->regs[0][0x41] = 0xAA;   /* ALARM(0): in1,in3,in5,in7 */
+  s->regs[0][0x42] = 0x04;   /* ALARM(1): in10            */
+  s->regs[0][0x43] = 0x03;   /* ALARM(2): in15,in16       */
+  /* 0x44 ALARM(3) stays 0: no temp/DTS alarm on this silicon */
+  s->regs[0][0x45] = 0xFE;   /* ALARM(4): fan2..8         */
+These are STATIC (a faithful snapshot of the captured silicon state). Live
+limit-vs-measurement re-computation + SMBALERT# assertion remain the deferred
+remainder of #183; no legacy-oracle firmware path (C-UBOOT / C2 / C4) reprograms
+these limits, so the static seed matches every real boot.
+
+VALIDATION: modern-hwmon driver exposes only inN_input/fanN_input (no *_alarm
+attr), so the alarm STATUS registers are validated directly over raw i2c
+(force-access; single-threaded busybox init => no concurrent bank switch). New
+`w83795test` gate block reads ALARM(0/1/2/4) after the CASEOPEN check.
+
+Path: C2 kernel (uImage-kgpe-d16) + BusyBox+i2c-tools initramfs, machine
+kgpe-d16-bmc, freshly-built QEMU with the model change, under a systemd-run scope.
+
+===== CAPTURED CONSOLE (QEMU) =====
+=== W83795-CASEOPEN-BEGIN ===
+hwmon=/sys/class/hwmon/hwmon0 intrusion0_alarm exposed (#184)
+intrusion0_alarm: before=1 after 'echo 0'=0
+W83795-CASEOPEN RESULT: PASS (LU: hwmon intrusion0_alarm 1->0 via CLR_CHASSIS)
+=== W83795-CASEOPEN-END ===
+=== W83795-ALARM-BEGIN ===
+ALARM(0)=0xaa ALARM(1)=0x04 ALARM(2)=0x03 ALARM(4)=0xfe (expect 0xaa 0x04 0x03 0xfe)
+W83795-ALARM RESULT: PASS (voltage+fan alarm status match silicon)
+=== W83795-ALARM-END ===
+
+RESULT: the W83795G ALARM(0..4) status registers are now MODELLED to the exact
+silicon-captured state (0xAA/0x04/0x03/0xFE) and register-validated in QEMU. Row 16
+QE stays 🔶 (not ✅): the remaining #183 pieces — live alarm/limit comparison +
+SMBALERT# assertion, and SmartFan automatic thermal->fan-curve control — are still
+unmodelled. The userspace inN_alarm/fanN_alarm hwmon attributes are a separate
+Linux-driver (LU) follow-on (the modern-hwmon patch exposes only *_input today).

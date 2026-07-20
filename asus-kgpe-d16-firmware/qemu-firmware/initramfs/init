@@ -569,6 +569,31 @@ if grep -q w83795test /proc/cmdline; then
 		fi
 	fi
 	echo "=== W83795-CASEOPEN-END ==="
+	# --- Alarm-status registers (#183) ---
+	# The model now seeds ALARM(0..4) to the exact silicon state (host-side
+	# lm-sensors of w83795g-i2c-14-2f, evidence/real-hw-hwpass/host-w83795-sensors.txt):
+	#   in1/in3/in5/in7 out-of-range -> ALARM(0)=0x41 = 0xaa
+	#   in10            out-of-range -> ALARM(1)=0x42 = 0x04
+	#   in15/in16       out-of-range -> ALARM(2)=0x43 = 0x03
+	#   fan2..8 = 0 RPM < min        -> ALARM(4)=0x45 = 0xfe
+	# The modern-hwmon driver exposes only inN_input/fanN_input (no *_alarm attr),
+	# so validate the alarm STATUS registers directly over raw i2c (force-access,
+	# single-threaded init => no concurrent bank switch). Register-level proof of
+	# the QEMU model seed; the userspace inN_alarm/fanN_alarm path is separate.
+	echo "=== W83795-ALARM-BEGIN ==="
+	B=1; A=0x2f
+	i2cset -f -y $B $A 0x00 0x00 2>&1                 # select bank 0
+	R41=$(i2cget -f -y $B $A 0x41 2>&1)              # ALARM(0): expect 0xaa
+	R42=$(i2cget -f -y $B $A 0x42 2>&1)              # ALARM(1): expect 0x04
+	R43=$(i2cget -f -y $B $A 0x43 2>&1)              # ALARM(2): expect 0x03
+	R45=$(i2cget -f -y $B $A 0x45 2>&1)              # ALARM(4): expect 0xfe
+	echo "ALARM(0)=$R41 ALARM(1)=$R42 ALARM(2)=$R43 ALARM(4)=$R45 (expect 0xaa 0x04 0x03 0xfe)"
+	if [ "$R41" = "0xaa" ] && [ "$R42" = "0x04" ] && [ "$R43" = "0x03" ] && [ "$R45" = "0xfe" ]; then
+		echo "W83795-ALARM RESULT: PASS (voltage+fan alarm status match silicon)"
+	else
+		echo "W83795-ALARM RESULT: FAIL (R41=$R41 R42=$R42 R43=$R43 R45=$R45)"
+	fi
+	echo "=== W83795-ALARM-END ==="
 	poweroff -f 2>&1 || true
 fi
 
