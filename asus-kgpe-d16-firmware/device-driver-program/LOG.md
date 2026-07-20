@@ -29,6 +29,24 @@ is genuine board function), and added task #178. This cycle's honest increment: 
 unfaithful EDID-on-I2C shortcut a careless pass would have committed. No code claimed done; the model
 itself is #178, next.
 
+**UPDATE (same day, deeper) — the DDC decode + its dependency are now EXACT, so #178 is fully specified
+(and correctly blocked on #176), not just "scoped":**
+- **VGACRB7 = a software BIT-BANG I²C master** (datasheet §34.5 l.29699, Init=00h): bit0 en-SCL-out-buf,
+  bit1 SCL-out, bit4 SCL-**in**, bit2 en-SDA-out-buf, bit3 SDA-out, bit5 SDA-**in** (bits7/6 = unrelated
+  CRC-signature ctrl). This is the classic bit-bang GPIO-I²C shape → maps 1:1 onto QEMU's in-tree
+  `hw/i2c/bitbang_i2c.c` driving `hw/display/i2c-ddc.c` (EDID slave @0x50). So the model reuses existing
+  pieces; no protocol invention.
+- **Decisive dependency (datasheet §36 l.19634):** CRB7 is a CRTC register the BMC ARM can reach ONLY via
+  the **A2P AHB→P-bus bridge @0x1E720000 = row 50 / #176** — "AHB to P-bus bridge control registers
+  address = 0x1E720000+OFFSET", OFFSET 0x00000-0x0007F = relocated legacy VGA I/O (index/data
+  3B4/3D4→3B5/3D5), 0x10000-0x1FFFF = P-bus MMIO (CRTC `MMIOBASE+B7`); auto-enabled by SCU70[4]
+  (PCI-master mode). The G3 QEMU models neither A2P nor the PCI "internal VGA", so **#178 genuinely
+  blocks on #176** — the CRTC aperture must exist before DDC can be reached. Set the tracker dependency
+  (#178 blockedBy #176) and cross-linked the row-50 note (modeling A2P unlocks BOTH the P2A-backdoor
+  completeness AND the DDC path). This is real architecture (datasheet-cited), not a dodge: the EDID read
+  physically cannot happen without the A2P forward path. Oracle-sensitive (C4 vendor firmware drives this
+  VGA path for its web/KVM console). Row-14 note carries all citations.
+
 ## 2026-07-20 — #177 Linux side (LQ) VALIDATED: mainline aspeed-gpio + gpio-keys work on the C2 boot
 
 Confirmed the LINUX half of the GPIO-interrupt capability (#177) — via mainline, no new code. The C2
