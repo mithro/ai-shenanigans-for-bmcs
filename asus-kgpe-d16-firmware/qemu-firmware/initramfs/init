@@ -569,6 +569,30 @@ if grep -q w83795test /proc/cmdline; then
 		fi
 	fi
 	echo "=== W83795-CASEOPEN-END ==="
+	# --- Voltage/fan alarms via userspace hwmon (LU, #183) ---
+	# The modern-hwmon driver now exposes inN_alarm/fanN_alarm (HWMON_I_ALARM/
+	# HWMON_F_ALARM). Read a representative set through /sys/class/hwmon and assert
+	# vs this board's silicon (host-w83795-sensors.txt): in0 OK=0, in1 ALARM=1,
+	# in7 ALARM=1 ; fan1 OK=0, fan2 ALARM=1. hwmon names 'in' 0-based (inN=chanN)
+	# and 'fan' 1-based (fanN=chan N-1). Done before the raw-i2c poke below so the
+	# driver's bank state is untouched.
+	echo "=== W83795-INALARM-BEGIN ==="
+	if [ -n "$HW" ] && [ -f "$HW/in1_alarm" ]; then
+		I0=$(cat "$HW/in0_alarm" 2>&1); I1=$(cat "$HW/in1_alarm" 2>&1)
+		I7=$(cat "$HW/in7_alarm" 2>&1)
+		F1=$(cat "$HW/fan1_alarm" 2>&1); F2=$(cat "$HW/fan2_alarm" 2>&1)
+		echo "in0_alarm=$I0 in1_alarm=$I1 in7_alarm=$I7 fan1_alarm=$F1 fan2_alarm=$F2"
+		echo "(expect in0=0 in1=1 in7=1 fan1=0 fan2=1)"
+		if [ "$I0" = 0 ] && [ "$I1" = 1 ] && [ "$I7" = 1 ] && \
+		   [ "$F1" = 0 ] && [ "$F2" = 1 ]; then
+			echo "W83795-INALARM RESULT: PASS (LU: hwmon inN_alarm/fanN_alarm match silicon)"
+		else
+			echo "W83795-INALARM RESULT: FAIL (I0=$I0 I1=$I1 I7=$I7 F1=$F1 F2=$F2)"
+		fi
+	else
+		echo "W83795-INALARM RESULT: SKIP (inN_alarm attr not exposed; HW=$HW)"
+	fi
+	echo "=== W83795-INALARM-END ==="
 	# --- Alarm-status registers (#183) ---
 	# The model now seeds ALARM(0..4) to the exact silicon state (host-side
 	# lm-sensors of w83795g-i2c-14-2f, evidence/real-hw-hwpass/host-w83795-sensors.txt):

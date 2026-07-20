@@ -1,0 +1,48 @@
+DEVICE-MATRIX row 16 (W83795G hwmon) — LU: voltage/fan alarms exposed through the
+modern-hwmon driver as inN_alarm / fanN_alarm (2026-07-20, #183).
+
+Companion to 01 (the QEMU model alarm-status seed). The modern-hwmon w83795 driver
+(kernel patch 0003) previously exposed only inN_input / fanN_input — so although
+the model now reports the correct ALARM(0..4) registers, userspace could not read
+the voltage/fan alarm bits via the standard hwmon ABI (only intrusion0_alarm, added
+in #184). This closes that Linux-driver gap: the "validate proper user space
+interfacing with the hardware" deliverable for the W83795G alarm capability.
+
+DRIVER CHANGE (drivers/hwmon/w83795.c, patch 0003):
+  - HWMON_CHANNEL_INFO(in,  ...): each of the 21 channels now HWMON_I_INPUT |
+    HWMON_I_ALARM;
+  - HWMON_CHANNEL_INFO(fan, ...): each of the 14 channels now HWMON_F_INPUT |
+    HWMON_F_ALARM;
+  - w83795_hwmon_read(): branch on attr — for hwmon_in_alarm compute
+    index = channel + (channel>14?1:0); for hwmon_fan_alarm compute
+    index = channel + 32; then bit = (alarms[index>>3] >> (index&7)) & 1. This is
+    the SAME bit mapping the driver's legacy in<n>_alarm / fan<n>_alarm attributes
+    use (SENSOR_ATTR_IN index n+(n>14?1:0); SENSOR_ATTR_FAN index n+31, n 1-based).
+  - is_visible already returns 0444 for any attr on a present in/fan channel, so
+    the new alarm attrs become read-only-visible with no is_visible change.
+data->alarms[0..5] are populated by w83795_update_device (reads ALARM(0..5)); the
+array is u8 alarms[6], so every index (max fan14 -> 45 -> alarms[5]) is in bounds.
+
+hwmon naming: 'in' is 0-based (inN == channel N); 'fan' is 1-based (fanN ==
+channel N-1), per the hwmon core's hwmon_attr_base(). So:
+  in0_alarm=chan0, in1_alarm=chan1, in7_alarm=chan7; fan1_alarm=chan0, fan2_alarm=chan1.
+
+VALIDATION (userspace, /sys/class/hwmon, C2 kernel rebuilt with patch 0003):
+===== CAPTURED CONSOLE (QEMU) =====
+=== W83795-INALARM-BEGIN ===
+in0_alarm=0 in1_alarm=1 in7_alarm=1 fan1_alarm=0 fan2_alarm=1
+(expect in0=0 in1=1 in7=1 fan1=0 fan2=1)
+W83795-INALARM RESULT: PASS (LU: hwmon inN_alarm/fanN_alarm match silicon)
+=== W83795-INALARM-END ===
+
+DECODE vs silicon (host-w83795-sensors.txt): in0 in range -> 0; in1=0.00V<min and
+in7=1.82V>max(0.05V corrupt) -> 1; fan1=2636 RPM in range -> 0; fan2=0 RPM<min400
+-> 1. The full path is userspace (/sys/class/hwmon/hwmonN/inN_alarm) -> w83795
+hwmon driver (alarms[] from ALARM(0..4)) -> i2c-dev -> aspeed I2C engine 1 ->
+QU9/QU5 fabric -> W83795 model's seeded ALARM registers. Register-level QE proof
+(ALARM(0..4)=0xaa/0x04/0x03/0xfe over raw i2c) is in the same boot (file 01).
+
+RESULT: W83795G voltage/fan alarm status is now reachable from userspace via the
+standard hwmon inN_alarm/fanN_alarm ABI (LU), backed by the silicon-faithful model
+seed (QE). Row 16 QE stays 🔶: live alarm/limit re-computation + SMBALERT# and
+SmartFan auto-mode remain the deferred remainder of #183.

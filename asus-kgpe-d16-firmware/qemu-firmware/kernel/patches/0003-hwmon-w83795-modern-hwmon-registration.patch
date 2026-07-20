@@ -1,5 +1,5 @@
 diff --git a/drivers/hwmon/w83795.c b/drivers/hwmon/w83795.c
-index c446e00db..0e50ed515 100644
+index c446e00db..e573aa491 100644
 --- a/drivers/hwmon/w83795.c
 +++ b/drivers/hwmon/w83795.c
 @@ -319,6 +319,7 @@ enum chip_types {w83795g, w83795adg};
@@ -21,7 +21,7 @@ index c446e00db..0e50ed515 100644
  	u16 tmp;
  	u8 intrusion;
  	int i;
-@@ -2134,6 +2135,133 @@ static void w83795_apply_temp_config(struct w83795_data *data, u8 config,
+@@ -2134,6 +2135,155 @@ static void w83795_apply_temp_config(struct w83795_data *data, u8 config,
  	}
  }
  
@@ -74,9 +74,23 @@ index c446e00db..0e50ed515 100644
 +
 +	switch (type) {
 +	case hwmon_in:
++		if (attr == hwmon_in_alarm) {
++			/* Same bit mapping the legacy in<n>_alarm attr uses:
++			 * index = n + (n > 14 ? 1 : 0); alarms[index>>3] bit index&7. */
++			int index = channel + (channel > 14 ? 1 : 0);
++			*val = (data->alarms[index >> 3] >> (index & 7)) & 1;
++			return 0;
++		}
 +		*val = in_from_reg(channel, data->in[channel][IN_READ]);
 +		return 0;
 +	case hwmon_fan:
++		if (attr == hwmon_fan_alarm) {
++			/* Legacy fan<n>_alarm: index = n + 31 (n 1-based); the hwmon
++			 * fan channel is 0-based, so index = (channel+1)+31. */
++			int index = channel + 32;
++			*val = (data->alarms[index >> 3] >> (index & 7)) & 1;
++			return 0;
++		}
 +		*val = fan_from_reg(data->fan[channel]);
 +		return 0;
 +	case hwmon_temp:
@@ -120,17 +134,25 @@ index c446e00db..0e50ed515 100644
 +
 +static const struct hwmon_channel_info * const w83795_hwmon_info[] = {
 +	HWMON_CHANNEL_INFO(in,
-+		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
-+		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
-+		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
-+		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
-+		HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT, HWMON_I_INPUT,
-+		HWMON_I_INPUT),
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM, HWMON_I_INPUT | HWMON_I_ALARM,
++		HWMON_I_INPUT | HWMON_I_ALARM),
 +	HWMON_CHANNEL_INFO(fan,
-+		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
-+		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
-+		HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT, HWMON_F_INPUT,
-+		HWMON_F_INPUT, HWMON_F_INPUT),
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM,
++		HWMON_F_INPUT | HWMON_F_ALARM, HWMON_F_INPUT | HWMON_F_ALARM),
 +	HWMON_CHANNEL_INFO(temp,
 +		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
 +		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
@@ -155,7 +177,7 @@ index c446e00db..0e50ed515 100644
  static const struct i2c_device_id w83795_id[];
  
  static int w83795_probe(struct i2c_client *client)
-@@ -2149,6 +2277,7 @@ static int w83795_probe(struct i2c_client *client)
+@@ -2149,6 +2299,7 @@ static int w83795_probe(struct i2c_client *client)
  		return -ENOMEM;
  
  	i2c_set_clientdata(client, data);
@@ -163,7 +185,7 @@ index c446e00db..0e50ed515 100644
  	data->chip_type = i2c_match_id(w83795_id, client)->driver_data;
  	data->bank = i2c_smbus_read_byte_data(client, W83795_REG_BANKSEL);
  	mutex_init(&data->update_lock);
-@@ -2222,7 +2351,8 @@ static int w83795_probe(struct i2c_client *client)
+@@ -2222,7 +2373,8 @@ static int w83795_probe(struct i2c_client *client)
  	if (data->chip_type == w83795g)
  		w83795_check_dynamic_in_limits(client);
  
