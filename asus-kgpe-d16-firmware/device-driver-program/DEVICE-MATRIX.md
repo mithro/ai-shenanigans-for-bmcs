@@ -54,13 +54,13 @@ grid is 43 × 8 = 344 explicit per-device-per-stack tasks. Machine-counted statu
 | Linux @ QEMU | 25 | 7 | 0 | 6 | 5 |
 | Linux @ silicon | 18 | 4 | 2 | 13 | 6 |
 | Linux userspace | 12 | 6 | 0 | 13 | 12 |
-| Zephyr @ QEMU | 8 | 8 | 0 | 22 | 5 |
-| Zephyr @ silicon | 8 | 1 | 0 | 28 | 6 |
+| Zephyr @ QEMU | 9 | 8 | 0 | 21 | 5 |
+| Zephyr @ silicon | 9 | 1 | 0 | 27 | 6 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
 justified board-dispositions (no boot-time need). **Zephyr now RUNS ON SILICON** — 8 rows
-ZS ✅: GPIO + system timer (37) + VIC (36) + WDT (38) + I2C master (15) + W83795 hwmon (16)
+ZS ✅: SCU (35) + GPIO + system timer (37) + VIC (36) + WDT (38) + I2C master (15) + W83795 hwmon (16)
 + FRU EEPROM (20) + both W83601G expanders (21/22) all boot/read on the real AST2050 over
 JTAG. Getting there fixed silicon-only bugs QEMU had hidden (cache/TLB invalidate, VIC
 ack-at-entry, enable-glitch tick, entry staleness — commits 918bc7e/b84ef58/78f5569; and the
@@ -266,7 +266,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 
 | # | Device | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ⬜ | ⬜ |
+| 35 | SCU (system control / clocks / pinmux) | SCU | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ⬜ | ✅ | ✅ |
@@ -275,6 +275,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
+- **35** SCU: exercised by every stack's init (QE/UQ/US/LQ/LS ✅). **Zephyr ZQ+ZS ✅ now
+  (2026-07-20, `evidence/d14-zephyr/19-scu-silicon.txt`):** `samples/scu_smoke` reads the SCU
+  silicon-revision register `SCU7C` via the flat-mapped SCU page — `0x00000202` on BOTH QEMU and
+  real silicon, matching the value independently confirmed via culvert-P2A and JTAG-AHB (four access
+  paths agree). `SCU70` hw-strap also matches bit-for-bit (`0x00819582`), confirming the QEMU
+  machine's strapping was modeled from the board. Read-only cross-check; the SCU clock-rate program
+  (H-PLL/CLKIN) validation is tracked separately as #142. D11.
 - **36–37** VIC (keystone G3 fix `irq-aspeed-g3-vic`, HW-verified) + Timers: the Zephyr port's
   Milestone-1 `vic.c`/`aspeed_timer.c` drive these blocks. **ZS ✅ now EVIDENCE-BACKED
   (2026-07-20, `evidence/d14-zephyr/17-heartbeat-vic-timer-silicon.txt`):** the `heartbeat_smoke`

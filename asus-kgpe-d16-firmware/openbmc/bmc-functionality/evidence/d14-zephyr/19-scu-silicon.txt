@@ -1,0 +1,57 @@
+D14 Zephyr — SCU / System Control Unit (row 35) read-validated on REAL AST2050 silicon
+    (2026-07-20). Upgrades row 35 Zephyr cells ZQ ⬜→✅ and ZS ⬜→✅.
+
+Device: AST2050 (G3) SCU @0x1E6E2000 (system control / clocks / reset / pinmux).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/scu_smoke  (entry 0x400023ac)
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n. SoC-internal — runs at the
+        board's 4 W deep-S5 state (no host/sensor rails needed).
+Path:   JTAG reset-halt -> DDR2 TRAINED -> load @0x40000000 -> reg pc -> resume; console
+        /dev/serial-bmc-console @115200. md5(zephyr.bin)=394d2f49b6d041ceadef02a6f98665e9 (verified
+        end-to-end: local build == staged copy on the bridge Pi).
+
+Method: the SCU page is flat-mapped as device memory in soc/aspeed_g3/ast2050/soc.c ("scu" MMU
+region), so the sample reads SCU registers directly at their physical addresses with sys_read32().
+Read-ONLY (no writes) — safe to run at any boot point / on live silicon.
+
+Keystone check — SCU7C (Silicon Revision ID @0x1E6E207C):
+  On this AST2050 it reads 0x00000202, INDEPENDENTLY confirmed on the real board via THREE distinct
+  silicon-access paths, plus the faithful QEMU model:
+    - culvert over P2A            -> SCU7C=0x202   (LOG culvert-g3-port-status)
+    - JTAG AHB mdw over OpenOCD   -> SCU7C=0x202   (LOG jtag-bringup-status)
+    - faithful QEMU P2A back-door -> SCU7C=0x0202  (LOG ast2050-faithful-qemu)
+    - THIS Zephyr native sys_read32 (new)          -> 0x00000202 on BOTH QEMU and silicon
+  Four independent mechanisms agreeing rules out a path-specific artifact -> the SCU device is
+  faithfully modeled AND correctly reachable from the Zephyr port.
+
+===== CAPTURED CONSOLE (real silicon, /dev/serial-bmc-console) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+SCU smoke: boot
+SCU7C (silicon rev) = 0x00000202  (expect 0x00000202)
+SCU70 (hw strap)    = 0x00819582
+SCU04 (sys rst ctrl)= 0x000ffe5c
+SCU RESULT: PASS
+
+===== QEMU (both-sides) =====
+SCU7C (silicon rev) = 0x00000202  (expect 0x00000202)
+SCU70 (hw strap)    = 0x00819582
+SCU04 (sys rst ctrl)= 0xffcffedc
+SCU RESULT: PASS
+
+Register-by-register comparison (silicon vs QEMU):
+  SCU7C 0x00000202 == 0x00000202  -> MATCH (the asserted golden value; PASS gate on both).
+  SCU70 0x00819582 == 0x00819582  -> MATCH. BONUS faithfulness: the QEMU machine's hardware-strap
+        register was modeled from the real board (not guessed) — bit-for-bit identical.
+  SCU04 0x000ffe5c vs 0xffcffedc  -> DIFFER, EXPECTED. SCU04 is the live System-Reset-Control state,
+        which depends on the boot path (silicon = JTAG-loaded, no U-Boot pre-init; QEMU = -kernel
+        direct). It is a runtime reset-status register, not a fixed ID, so it is printed for context
+        but deliberately NOT part of the PASS gate.
+
+RESULT: PASS on real silicon. The SCU (row 35) is present, mapped and readable from the Zephyr port,
+        and its identifying registers (SCU7C rev, SCU70 strap) match the real AST2050 bit-for-bit —
+        a genuine both-sides faithfulness cross-check, not merely "a register responded". Row 35:
+        ZQ ✅ + ZS ✅ (were ⬜⬜). QE/UQ/US/LQ/LS already ✅ (SCU is exercised by every stack's init).
+
+Scope honesty: this validates SCU READ access + identity/strap faithfulness. The SCU's clock-rate
+programming (H-PLL/CLKIN, task #142) and pinmux WRITE paths are exercised elsewhere (the I2C driver
+writes SCU00/SCU04[2]/SCU74 — evidence d08-fru, w83601g); a dedicated clock-rate validation remains
+tracked as #142. No step skipped or faked.

@@ -35,7 +35,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: SCU/PLL/reset-table/strap model (faithful G3; P2A SCU7C=0x0202 == silicon)
 - U-Boot: [x] QEMU (Raptor programs SCU/PLL) · [x] silicon (Raptor `boot#`, SCU70 freeze)
 - Linux: [x] QEMU (clk driver, g3-clk patch) · [x] silicon (console survives clk gating) · [N] userspace (clocks are not a userspace ABI beyond debugfs)
-- Zephyr: [~] QEMU (SoC pre-init assumes loader-configured SCU; no re-init needed) · [ ] silicon
+- Zephyr: [x] QEMU (`samples/scu_smoke` reads SCU7C rev = 0x0202) · [x] silicon (`scu_smoke` SCU7C=0x0202 AND SCU70 strap=0x00819582 match QEMU bit-for-bit on the real AST2050; evidence `d14-zephyr/19-scu-silicon.txt`, 2026-07-20)
 
 ### A2. SDMC — DDR2 controller → QU2 (§3)
 - [x] QEMU: SDMC/DDR2 model (64 MB, MCR04=0x585, DLL)

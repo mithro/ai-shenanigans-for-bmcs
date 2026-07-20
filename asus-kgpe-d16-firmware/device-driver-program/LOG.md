@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #169 DONE: Zephyr SCU smoke (row 35) both-sides PASS — SCU7C=0x0202 on QEMU AND real silicon
+
+Concrete both-sides device advance (goal: every device × 4 stacks). New `samples/scu_smoke` reads the
+SCU (0x1E6E2000) silicon-revision register SCU7C via the flat-mapped "scu" MMU page (sys_read32, read-
+only, safe on live silicon). Result: **SCU7C = 0x00000202 on BOTH QEMU and the real AST2050** — the
+golden G3 revision independently confirmed via culvert-P2A AND JTAG-AHB, so FOUR access paths now
+agree. BONUS: **SCU70 hw-strap = 0x00819582 matches bit-for-bit** silicon↔QEMU (the QEMU machine's
+strapping was modeled from the board, not guessed). SCU04 differs (0x000ffe5c silicon vs 0xffcffedc
+QEMU) — EXPECTED, it is the live System-Reset-Control state (boot-path dependent), so printed but not
+in the PASS gate. Silicon path: JTAG reset-halt → DDR2 trained → load @0x40000000 → resume; console
+/dev/serial-bmc-console; md5(zephyr.bin)=394d2f49… verified end-to-end. QEMU: kgpe-d16-bmc -kernel,
+"SCU RESULT: PASS".
+Matrix row 35 SCU: **ZQ ⬜→✅, ZS ⬜→✅** (QE/UQ/US/LQ/LS already ✅). Reconciled FULL-TASK-LIST A1
+Zephyr cell ([~]/[ ] → [x]/[x]) to match — a #159 FULL-TASK-LIST↔MATRIX reconcile done in passing.
+Re-ran tally.py: Zephyr@QEMU 9✅/8🔶/21⬜, Zephyr@silicon 9✅/1🔶/27⬜; embedded tally block updated.
+Evidence d14-zephyr/19-scu-silicon.txt. Scope honesty: this validates SCU READ + identity/strap
+faithfulness; the SCU clock-rate program (H-PLL/CLKIN) validation stays tracked as #142. No shortcut.
+
 ## 2026-07-20 — #159 partial: MATRIX rows 36/37/38 ZS now cite the captured silicon evidence + fix stale rename path + tally re-verified
 
 Followed through on #159 for the rows I just silicon-validated. DEVICE-MATRIX.md: rows 36 (VIC) +
