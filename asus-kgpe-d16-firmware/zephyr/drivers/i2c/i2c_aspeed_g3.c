@@ -411,6 +411,7 @@ static int i2c_aspeed_g3_transfer(const struct device *dev, struct i2c_msg *msgs
 static int i2c_aspeed_g3_configure(const struct device *dev, uint32_t dev_config)
 {
 	const struct i2c_aspeed_g3_config *cfg = dev->config;
+	struct i2c_aspeed_g3_data *data = dev->data;
 
 	if ((dev_config & I2C_MODE_CONTROLLER) == 0) {
 		return -ENOTSUP; /* target (slave) mode not implemented */
@@ -427,7 +428,17 @@ static int i2c_aspeed_g3_configure(const struct device *dev, uint32_t dev_config
 		return -ENOTSUP;
 	}
 
+	/*
+	 * hw_init() resets the controller's LIVE register state (I2CD_FUN_CTRL=0,
+	 * AC timing, INTR clear/re-arm), so it must serialise against an in-flight
+	 * transfer() on another thread. Take the SAME data->lock that transfer()
+	 * holds for its whole transaction — otherwise a concurrent configure()
+	 * would clobber a transfer mid-byte, corrupting the on-wire transaction and
+	 * leaving the bus (shared by every device on this engine) indeterminate.
+	 */
+	k_mutex_lock(&data->lock, K_FOREVER);
 	i2c_aspeed_g3_hw_init(cfg->base);
+	k_mutex_unlock(&data->lock);
 	return 0;
 }
 

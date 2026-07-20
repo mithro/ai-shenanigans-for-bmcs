@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(b) CODE REVIEW (Zephyr drivers): 1 real concurrency bug found + FIXED + re-validated; rest confirmed clean
+
+Executed a gate-(b) independent code review over the primary developed code body — the Zephyr AST2050
+SoC support + drivers (soc.c/vic.c/aspeed_timer.c/console.c + i2c/gpio/gpio_w83601g/wdt/rtc/w83795/sbtsi).
+A read-only code-reviewer sub-agent scanned for correctness/concurrency/UB/fail-loud bugs. It returned
+ONE high-confidence, high-severity finding, which I VERIFIED against the source (read the actual code) —
+it is real:
+
+  BUG (drivers/i2c/i2c_aspeed_g3.c): `i2c_aspeed_g3_configure()` called `i2c_aspeed_g3_hw_init()` —
+  which resets the controller's LIVE registers (I2CD_FUN_CTRL=0, AC timing, INTR clear/re-arm) — WITHOUT
+  taking `data->lock`, while `i2c_aspeed_g3_transfer()` holds that mutex for its ENTIRE transaction. So a
+  `configure()` on one thread races an in-flight `transfer()` on another: it zeroes FUN_CTRL mid-byte,
+  corrupting the on-wire transaction and leaving the bus (shared by every device on the engine — W83795,
+  W83601G, FRU, PSU) indeterminate. It's also a project-convention violation: the sibling gpio drivers
+  lock EVERY public entry point; configure() was the outlier.
+  FIX: wrap the hw_init() call in configure() with `k_mutex_lock(&data->lock, K_FOREVER)` / unlock,
+  matching transfer(). Rebuilt + re-ran pmbus_smoke in QEMU → still `PMBUS RESULT: PASS` (no regression).
+
+Everything else the review checked was CONFIRMED CLEAN (no other ≥80-confidence issues): it independently
+re-verified the previously-documented silicon-only fixes still hold — VIC ack-at-claim + the
+soc_irq_user_disabled level/edge split (no storm, no masked-forever), timer 32-bit wrap + enable-glitch
+guard, soc_reset_hook cache/TLB/write-buffer invalidate (CP15 c7/c8 sequence), RTC async-restart CONTROL[5]
+poll — plus the wdt uint64 timeout math, gpio shift-UB bounds check, and w83795/sbtsi scaling math
+(divide-by-zero sentinel, sign handling). So gate-(b) for the Zephyr module = 1 found, 1 fixed, 0
+remaining. (Scope note: this pass covered the ZEPHYR code; QEMU-model, U-Boot-patch, and Linux-patch
+gate-(b) passes are separate future reviews.)
+
 ## 2026-07-20 — Gate-(a) COMPLETENESS VERIFIED: independent sub-agent confirms DEVICE-MATRIX covers EVERY schematic device (no gaps); CU2 dispositioned
 
 Addressed the foundational completeness question the goal demands ("enumerate every item described in the
