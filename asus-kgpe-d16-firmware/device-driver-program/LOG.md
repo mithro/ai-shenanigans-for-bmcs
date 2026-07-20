@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(b): code review of this session's new code — both CLEAN (1 comment sync)
+
+Ran completion-gate (b) on the code developed THIS session (the prior gate-b sweep covered the older
+QEMU/Zephyr bodies). Two independent adversarial code-reviewer sub-agents:
+- **RTC advance model** (`hw/misc/aspeed_rtc_ast2050.c` + header, submodule f93addb7e0): NO functional
+  defects ≥80 confidence. Verified the tick math (no overflow, no drift — recomputed from a fixed anchor,
+  not accumulated), the base_ns anchoring across RESTART/enable/disable in every ordering incl. the real
+  driver's write-RELOAD→RESTART→enable sequence (monotonic, no double-count), pack/unpack round-trip,
+  reset, and register bounds. It also reasoned through my flagged v1→v2 `base_ns=0` migration concern and
+  found it BENIGN (reset runs before loadvm; QEMU_CLOCK_VIRTUAL is frozen while stopped, so base_ns lands
+  ~load time — not an enormous jump). Only finding: a doc-only stale HEADER top-comment (still described
+  the old field-packed 1 Hz layout) → FIXED (submodule 9a17c1132c, comment-only sync to byte-packed +
+  732.42x + #186 ref).
+- **W83795 alarm QE+LU** (`hw/sensor/w83795.c` seed + kernel patch 0003 inN_alarm/fanN_alarm): NO defects
+  ≥80. Verified bit-for-bit that 0xAA/0x04/0x03/0xFE encode in1/3/5/7 + in10 + in15/16 + fan2..8 per the
+  driver index formula; do_read returns them unshadowed with correct bank-0 gating + no ALARM5 collision;
+  the modern-hwmon index math (in: channel+(channel>14?1:0); fan: channel+32) is off-by-one-free and
+  in-bounds of alarms[6]; is_visible exposes exactly 21 in + 14 fan channels; values self-consistent with
+  the silicon capture; vmstate needs no bump. Bonus: confirmed the update_device dev_get_drvdata/data->client
+  refactor is a NECESSARY correctness fix, not a regression.
+
+Gate-(b) verdict for this session's code: CLEAN (one comment sync applied). The broader gate-(b) across
+all developed stacks + gates (c) weasel-audit and (d) new-task-discovery remain to run.
+
 ## 2026-07-21 — Gate-(a) RESULTS: coverage complete; 2 incorrect-absence claims fixed + 5 doc-accuracy nits
 
 All 4 independent audit sub-agents returned. **Result strongly satisfies the hook's concern:**
