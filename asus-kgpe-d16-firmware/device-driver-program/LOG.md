@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #177 IMPLEMENTED: Zephyr GPIO interrupts (edge/level) + shared ISR — QEMU PASS (edge caught the H2 power-on)
+
+Actually implemented the GPIO interrupt driver this cycle (last cycle I'd scoped+deferred it; the context
+held, so I built it carefully rather than defer again). drivers/gpio/gpio_aspeed_g3.c now implements the
+full interrupt API (was -ENOSYS): pin_interrupt_configure (maps GPIO_INT_EDGE_RISING/FALLING/BOTH +
+LEVEL_HIGH/LOW to the ASPEED INT_SENS_2:1:0 encoding 1/0/4/3/2 + sets INT_ENABLE), manage_callback,
+get_pending_int. The KEY design point (verified last cycle): the WHOLE controller raises ONE VIC source
+(20) across all sets, so a naive per-instance IRQ_CONNECT would drop a set's interrupts — instead a
+per-set registry + a SINGLE shared ISR (connected once, guarded) reads each set's INT_STATUS, W1C-clears
+it (de-asserting the level source), and dispatches gpio_fire_callbacks. INT regs at base+0x08 ENABLE /
++0x0C-14 SENS_0/1/2 / +0x18 STATUS.
+VALIDATED: new `samples/gpioh2_irq_smoke` — arm GPIOH2 (STA_LINE_POWER, gpio1 p26) for EDGE_BOTH, power
+the host ON so H2 transitions 0→1, verify the callback fires. QEMU: **`H2 0->1, callbacks=1
+pins=0x04000000` (=BIT(26)=GPIOH2), GPIO-IRQ RESULT: PASS** — the full path works (driver programs
+SENS/ENABLE → model raises VIC 20 on the edge → shared ISR reads+clears INT_STATUS → callback runs with
+exactly the armed pin). gpio_smoke still links (no regression). Evidence d14-zephyr/24.
+This gives rows 27-33 the interrupt sub-capability the §11 platform-monitor inputs (THERMTRIP#/PROCHOT#/
+etc.) actually need (watched as EVENTS, not polled). #177 ZQ implementation DONE; silicon (ZS, host-gated
+power-on edge) + Linux (phosphor-gpio-monitor; mainline aspeed-gpio already does interrupts) are the
+tracked follow-ons. The gate-d finding "GPIO interrupts untracked" is now closed for the Zephyr QEMU side
+with a real driver, not prose.
+
 ## 2026-07-20 — #177 feasibility VERIFIED + implementation scoped (GPIO interrupts): QEMU raises the IRQ, Zephyr driver stubs it; shared-ISR design needed
 
 Investigated #177 (GPIO interrupt/edge/debounce capability) to determine if it's a smoke or driver work.

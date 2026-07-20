@@ -40,10 +40,11 @@
  * register could momentarily disturb sibling output pins. Shadowing the latch
  * avoids that.
  *
- * Follow-up (not implemented here): edge/level interrupts via the per-bank
- * GPIO_*_INT_* registers wired to the G3 VIC (soc/aspeed_g3/ast2050/vic.c). The
- * interrupt driver_api hooks are left unimplemented, so
- * gpio_pin_interrupt_configure() returns -ENOSYS.
+ * Interrupts (#177): edge/level GPIO interrupts via the per-bank GPIO_*_INT_*
+ * registers wired to the single G3 VIC source 20 (soc/aspeed_g3/ast2050/vic.c).
+ * pin_interrupt_configure / manage_callback / get_pending_int are implemented;
+ * because the whole controller shares ONE VIC source across all sets, a single
+ * shared ISR (with a per-set registry) services them and W1C-clears INT_STATUS.
  */
 
 #define DT_DRV_COMPAT aspeed_ast2050_gpio
@@ -52,13 +53,35 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_utils.h> /* GPIO_PORT_PIN_MASK_FROM_DT_INST */
+#include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
 /* Per-bank register offsets from the node's reg base (the data-value reg). */
-#define GPIO_G3_DATA 0x00U /* Rd: input level, Wr: output write latch */
-#define GPIO_G3_DIR  0x04U /* 0 = input, 1 = output */
+#define GPIO_G3_DATA       0x00U /* Rd: input level, Wr: output write latch */
+#define GPIO_G3_DIR        0x04U /* 0 = input, 1 = output */
+/*
+ * Per-set interrupt registers (offsets from the set's data-value reg base, so
+ * ABCD INT_STATUS = 0x018, EFGH = 0x038, ... matching hw/gpio/aspeed_gpio.c).
+ * int_trigger = INT_SENS_2:1:0 selects the condition (aspeed_evaluate_irq):
+ *   0 falling edge · 1 rising edge · 2 level-low · 3 level-high · >=4 both edges.
+ * INT_STATUS is write-1-to-clear.
+ */
+#define GPIO_G3_INT_ENABLE 0x08U
+#define GPIO_G3_INT_SENS_0 0x0CU
+#define GPIO_G3_INT_SENS_1 0x10U
+#define GPIO_G3_INT_SENS_2 0x14U
+#define GPIO_G3_INT_STATUS 0x18U
+
+/*
+ * The WHOLE GPIO controller raises ONE VIC source (20, "GPIO hi-level", memory
+ * map §10) for all sets — not one per set. So a single shared ISR services
+ * every set (registry below), and the ISR clears INT_STATUS (W1C) to de-assert
+ * the level source.
+ */
+#define GPIO_G3_IRQ      20
+#define GPIO_G3_IRQ_PRIO 0
 
 /* One Aspeed "set" is a single 32-bit Zephyr GPIO port. */
 #define GPIO_G3_PINS_PER_BANK 32U
@@ -75,7 +98,41 @@ struct gpio_aspeed_g3_data {
 	struct k_spinlock lock;
 	/* Software shadow of the output write latch for this bank. */
 	uint32_t out_shadow;
+	/* Registered interrupt callbacks for this set. */
+	sys_slist_t callbacks;
 };
+
+/*
+ * Shared-ISR registry: one VIC source (20) covers all GPIO sets, but each set
+ * is a separate Zephyr device, so a naive per-instance IRQ_CONNECT would drop
+ * one set's interrupts. Every set registers here at init; the single ISR
+ * services whichever set(s) latched a pending interrupt.
+ */
+#define GPIO_G3_MAX_SETS 8
+static const struct device *gpio_g3_isr_devs[GPIO_G3_MAX_SETS];
+static uint8_t gpio_g3_isr_count;
+static bool gpio_g3_irq_connected;
+
+static void gpio_aspeed_g3_isr(const void *unused)
+{
+	ARG_UNUSED(unused);
+
+	for (uint8_t i = 0U; i < gpio_g3_isr_count; i++) {
+		const struct device *dev = gpio_g3_isr_devs[i];
+		const struct gpio_aspeed_g3_config *cfg = dev->config;
+		struct gpio_aspeed_g3_data *data = dev->data;
+		uint32_t status = sys_read32(cfg->base + GPIO_G3_INT_STATUS);
+
+		if (status != 0U) {
+			/* W1C the serviced bits (de-asserts the level VIC source), then
+			 * dispatch — clear-before-dispatch so an edge that re-fires during
+			 * the callback is not lost.
+			 */
+			sys_write32(status, cfg->base + GPIO_G3_INT_STATUS);
+			gpio_fire_callbacks(&data->callbacks, dev, status);
+		}
+	}
+}
 
 static int gpio_aspeed_g3_pin_configure(const struct device *dev,
 					gpio_pin_t pin, gpio_flags_t flags)
@@ -200,6 +257,78 @@ static int gpio_aspeed_g3_port_toggle_bits(const struct device *dev,
 	return 0;
 }
 
+static int gpio_aspeed_g3_pin_interrupt_configure(const struct device *dev,
+						  gpio_pin_t pin,
+						  enum gpio_int_mode mode,
+						  enum gpio_int_trig trig)
+{
+	const struct gpio_aspeed_g3_config *cfg = dev->config;
+	struct gpio_aspeed_g3_data *data = dev->data;
+	k_spinlock_key_t key;
+	uint32_t bit;
+	int sens; /* ASPEED int_trigger (SENS_2:1:0); -1 = disable */
+
+	if (pin >= GPIO_G3_PINS_PER_BANK) {
+		return -EINVAL; /* bounds-check before BIT(pin) (shift-UB if >= 32) */
+	}
+	bit = BIT(pin);
+
+	if (mode == GPIO_INT_MODE_DISABLED) {
+		sens = -1;
+	} else if (mode == GPIO_INT_MODE_EDGE) {
+		switch (trig) {
+		case GPIO_INT_TRIG_LOW:  sens = 0; break; /* falling edge */
+		case GPIO_INT_TRIG_HIGH: sens = 1; break; /* rising edge  */
+		case GPIO_INT_TRIG_BOTH: sens = 4; break; /* both edges   */
+		default: return -ENOTSUP;
+		}
+	} else { /* GPIO_INT_MODE_LEVEL */
+		switch (trig) {
+		case GPIO_INT_TRIG_LOW:  sens = 2; break; /* level low  */
+		case GPIO_INT_TRIG_HIGH: sens = 3; break; /* level high */
+		default: return -ENOTSUP;
+		}
+	}
+
+	key = k_spin_lock(&data->lock);
+	if (sens < 0) {
+		sys_write32(sys_read32(cfg->base + GPIO_G3_INT_ENABLE) & ~bit,
+			    cfg->base + GPIO_G3_INT_ENABLE);
+	} else {
+		uint32_t s0 = sys_read32(cfg->base + GPIO_G3_INT_SENS_0);
+		uint32_t s1 = sys_read32(cfg->base + GPIO_G3_INT_SENS_1);
+		uint32_t s2 = sys_read32(cfg->base + GPIO_G3_INT_SENS_2);
+
+		s0 = ((sens & 1) != 0) ? (s0 | bit) : (s0 & ~bit);
+		s1 = ((sens & 2) != 0) ? (s1 | bit) : (s1 & ~bit);
+		s2 = ((sens & 4) != 0) ? (s2 | bit) : (s2 & ~bit);
+		sys_write32(s0, cfg->base + GPIO_G3_INT_SENS_0);
+		sys_write32(s1, cfg->base + GPIO_G3_INT_SENS_1);
+		sys_write32(s2, cfg->base + GPIO_G3_INT_SENS_2);
+		/* Discard any stale latch for this pin, then enable it. */
+		sys_write32(bit, cfg->base + GPIO_G3_INT_STATUS);
+		sys_write32(sys_read32(cfg->base + GPIO_G3_INT_ENABLE) | bit,
+			    cfg->base + GPIO_G3_INT_ENABLE);
+	}
+	k_spin_unlock(&data->lock, key);
+	return 0;
+}
+
+static int gpio_aspeed_g3_manage_callback(const struct device *dev,
+					  struct gpio_callback *cb, bool set)
+{
+	struct gpio_aspeed_g3_data *data = dev->data;
+
+	return gpio_manage_callback(&data->callbacks, cb, set);
+}
+
+static uint32_t gpio_aspeed_g3_get_pending_int(const struct device *dev)
+{
+	const struct gpio_aspeed_g3_config *cfg = dev->config;
+
+	return sys_read32(cfg->base + GPIO_G3_INT_STATUS);
+}
+
 static const struct gpio_driver_api gpio_aspeed_g3_api = {
 	.pin_configure = gpio_aspeed_g3_pin_configure,
 	.port_get_raw = gpio_aspeed_g3_port_get_raw,
@@ -207,11 +336,9 @@ static const struct gpio_driver_api gpio_aspeed_g3_api = {
 	.port_set_bits_raw = gpio_aspeed_g3_port_set_bits_raw,
 	.port_clear_bits_raw = gpio_aspeed_g3_port_clear_bits_raw,
 	.port_toggle_bits = gpio_aspeed_g3_port_toggle_bits,
-	/*
-	 * pin_interrupt_configure / manage_callback / get_pending_int are left
-	 * NULL: the GPIO subsystem returns -ENOSYS for them until interrupt
-	 * support (per-bank INT regs + G3 VIC wiring) is added. See file header.
-	 */
+	.pin_interrupt_configure = gpio_aspeed_g3_pin_interrupt_configure,
+	.manage_callback = gpio_aspeed_g3_manage_callback,
+	.get_pending_int = gpio_aspeed_g3_get_pending_int,
 };
 
 static int gpio_aspeed_g3_init(const struct device *dev)
@@ -225,6 +352,20 @@ static int gpio_aspeed_g3_init(const struct device *dev)
 	 * (U-Boot / the QEMU machine) already configured.
 	 */
 	data->out_shadow = sys_read32(cfg->base + GPIO_G3_DATA);
+
+	/* Mask all interrupts for this set until a caller configures a pin. */
+	sys_write32(0U, cfg->base + GPIO_G3_INT_ENABLE);
+
+	/* Register this set for the single shared GPIO ISR, and connect the one
+	 * VIC source (20) exactly once across all sets. */
+	if (gpio_g3_isr_count < GPIO_G3_MAX_SETS) {
+		gpio_g3_isr_devs[gpio_g3_isr_count++] = dev;
+	}
+	if (!gpio_g3_irq_connected) {
+		IRQ_CONNECT(GPIO_G3_IRQ, GPIO_G3_IRQ_PRIO, gpio_aspeed_g3_isr, NULL, 0);
+		irq_enable(GPIO_G3_IRQ);
+		gpio_g3_irq_connected = true;
+	}
 	return 0;
 }
 

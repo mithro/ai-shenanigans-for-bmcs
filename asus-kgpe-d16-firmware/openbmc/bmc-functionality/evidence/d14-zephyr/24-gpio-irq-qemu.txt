@@ -1,0 +1,38 @@
+D14 Zephyr — GPIO INTERRUPT capability (rows 27-33 sub-capability, #177) QEMU validation (2026-07-20).
+    Implements + validates the Zephyr GPIO driver's interrupt path — the API was -ENOSYS before.
+
+Device: AST2050 (G3) GPIO controller (0x1E780000), per-set INT registers → the single VIC source 20.
+Driver: drivers/gpio/gpio_aspeed_g3.c — NOW implements pin_interrupt_configure / manage_callback /
+        get_pending_int + a shared ISR (the whole controller raises ONE VIC source across all sets, so a
+        per-set registry + one ISR services them, W1C-clearing INT_STATUS to de-assert the level source).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/gpioh2_irq_smoke  (new)
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n
+Run:    qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-gih/zephyr/zephyr.elf
+
+Test: arm GPIOH2 (STA_LINE_POWER, gpio1/EFGH pin 26) for a GPIO_INT_EDGE_BOTH interrupt + register a
+callback, then power the host ON so GPIOH2 transitions 0→1 (a clean deterministic input edge from the
+QEMU pwrseq latch — no external stimulus needed). PASS = the callback fired with GPIOH2 in its pin mask.
+
+int_trigger encoding (INT_SENS_2:1:0, from hw/gpio/aspeed_gpio.c aspeed_evaluate_irq): 0 falling · 1
+rising · 2 level-low · 3 level-high · >=4 both edges. pin_interrupt_configure maps GPIO_INT_EDGE_RISING/
+FALLING/BOTH + LEVEL_HIGH/LOW to those bits + sets INT_ENABLE.
+
+===== CAPTURED CONSOLE (QEMU) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+GPIO-IRQ smoke: boot
+GPIO-IRQ: H2 0->1, callbacks=1 pins=0x04000000
+GPIO-IRQ RESULT: PASS
+
+Decode: H2 0→1 (host powered on → GPIOH2 rose). callbacks=1 (the rising edge fired exactly one
+interrupt). pins=0x04000000 = BIT(26) = GPIOH2 — the callback's pin mask is precisely the armed pin. So
+the full path works: driver programmed INT_SENS/INT_ENABLE → the model detected the edge + raised VIC 20
+→ the shared ISR read INT_STATUS + W1C-cleared it + dispatched → gpio_fire_callbacks ran the callback.
+
+RESULT: PASS in QEMU. The GPIO interrupt/edge sub-capability (rows 27-33, #177) is now IMPLEMENTED in the
+Zephyr driver and ZQ-validated. This is what the §11 platform-monitor inputs (THERMTRIP#/PROCHOT#/etc.)
+need to be watched as EVENTS rather than polled.
+
+Follow-on (honest): ZS (silicon) — the same edge is produced by the real PSU coming up (host-gated,
+needs the host powered); Linux side = phosphor-gpio-monitor edge events (the mainline aspeed-gpio driver
+already does interrupts, so LQ/LS are separate). LEVEL-mode + debounce paths are implemented (the sens
+mapping covers them) but only the edge path is exercised by this smoke. No step skipped or faked.
