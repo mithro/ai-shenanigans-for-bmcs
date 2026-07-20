@@ -24,6 +24,15 @@ Row 38 Zephyr now covers reset AND timeout-interrupt. This is the Zephyr half of
 already done); Linux #189 stays scoped separately (mainline aspeed_wdt is a 2-stage pretimeout, a
 different semantic). Evidence d14-zephyr/27. Reuses the RTC-alarm VIC-callback + WFI-wait patterns.
 
+**Code-review fix (gate-b, confidence 90):** the reviewer found that after a one-shot interrupt
+fired, the ISR cleared `enabled` but left `installed` set, and `disable()`'s `if (!enabled) return
+-EFAULT` early-return then skipped ALL cleanup → `installed` leaked true → every later
+install_timeout() returned -ENOMEM, breaking the "disable then reinstall" contract (the
+warn→escalate pattern interrupt mode is FOR). Fixed by guarding on `(!enabled && !installed)`.
+Regression-tested (smoke now checks disable+reinstall after the fire): `after fire: disable=0
+reinstall=0` → `WDT-INTR-REINSTALL: PASS`. This is the 3rd real bug independent review caught this
+session (RTC-Linux lock, RTC-alarm set_time clobber, this) — the review discipline keeps paying off.
+
 ## 2026-07-21 — #187 Zephyr RTC alarm: review-finding fix + QEMU-model faithfulness + deterministic validation
 
 Follow-up to the Zephyr RTC alarm below. An independent code review found ONE real defect

@@ -56,3 +56,20 @@ already ✅ for reset; it now also includes the interrupt/callback capability. Z
 the interrupt-mode JTAG run is not yet done). This is the Zephyr half of #189
 (the QE model was already done at 46cee5fe6a); Linux #189 remains scoped separately
 (mainline aspeed_wdt is 2-stage pretimeout, a different semantic — see LOG).
+
+===== CODE-REVIEW FINDING + FIX (2026-07-21) =====
+An independent review (confidence 90) found a real defect: after a one-shot
+interrupt-mode timeout, the ISR clears `enabled` but leaves `installed` set, and
+disable()'s early-return `if (!enabled) return -EFAULT;` then SKIPPED all cleanup
+(hardware CTRL clear + clearing installed/interrupt_mode/callback). So after a
+fire, disable() was a no-op and `installed` leaked true forever -> every later
+wdt_install_timeout() failed -ENOMEM — breaking the Zephyr "disable then
+reinstall" contract, i.e. exactly the warn-via-interrupt-then-escalate-to-reset
+pattern interrupt mode exists for. FIX: guard on `(!enabled && !installed)` so a
+fired-but-still-installed WDT is still cleaned up.
+
+Regression-tested (the smoke now checks disable()+reinstall after the fire):
+wdt intr fires=1
+WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)
+after fire: disable=0 reinstall=0        <- both succeed (were -EFAULT/-ENOMEM)
+WDT-INTR-REINSTALL: PASS (disable+reinstall after fire)

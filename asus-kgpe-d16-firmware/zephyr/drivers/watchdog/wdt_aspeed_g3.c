@@ -255,9 +255,17 @@ static int wdt_aspeed_g3_disable(const struct device *dev)
 	struct wdt_aspeed_g3_data *data = dev->data;
 	k_spinlock_key_t key = k_spin_lock(&data->lock);
 
-	if (!data->enabled) {
+	/*
+	 * Nothing to do only if the WDT is neither running NOR installed. After a
+	 * one-shot interrupt-mode timeout the ISR clears `enabled` but leaves
+	 * `installed` set, and the caller is expected (Zephyr API) to disable() then
+	 * re-install; so a fired-but-still-installed WDT must still be cleaned up
+	 * here — guarding on `!enabled` alone would leak `installed` and block every
+	 * future install_timeout() with -ENOMEM.
+	 */
+	if (!data->enabled && !data->installed) {
 		k_spin_unlock(&data->lock, key);
-		return -EFAULT; /* not running */
+		return -EFAULT; /* not running and nothing installed */
 	}
 
 	/* Clear ENABLE (and everything else) -> QEMU deletes the timer. */

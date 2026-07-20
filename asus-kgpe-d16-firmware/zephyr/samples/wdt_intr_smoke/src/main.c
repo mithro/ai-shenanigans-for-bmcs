@@ -91,7 +91,23 @@ int main(void)
 		printk("WDT-INTR RESULT: FAIL (no callback within wait)\n");
 	}
 
-	/* Stop the WDT so it stays quiet after the test. */
+	/*
+	 * Regression for the #189 review finding: after a one-shot interrupt fires
+	 * the WDT stays `installed`, so disable() must still succeed (not -EFAULT)
+	 * and clear the install so a re-install works — the documented "disable then
+	 * install again" escalation contract.
+	 */
+	ret = wdt_disable(wdt);
+	channel = wdt_install_timeout(wdt, &cfg);
+	printk("after fire: disable=%d reinstall=%d\n", ret, channel);
+	if (ret == 0 && channel >= 0) {
+		printk("WDT-INTR-REINSTALL: PASS (disable+reinstall after fire)\n");
+	} else {
+		printk("WDT-INTR-REINSTALL: FAIL (disable=%d reinstall=%d)\n",
+		       ret, channel);
+	}
+
+	/* Leave the WDT stopped so it stays quiet after the test. */
 	(void)wdt_disable(wdt);
 
 	return 0;
