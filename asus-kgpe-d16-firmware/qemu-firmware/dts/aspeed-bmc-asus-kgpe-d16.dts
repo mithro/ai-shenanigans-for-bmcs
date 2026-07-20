@@ -355,21 +355,10 @@
 			    <&gpio ASPEED_GPIO(F, 5) GPIO_ACTIVE_HIGH>;
 
 		i2c@0 {
-			/* QU5 Y0: aux panel + (via QU9) TPM hdr + PCIe SMBus;
-			 * also the PSUSMB1 server-PSU PMBus @0x58 (I2C1 engine =
-			 * QEMU bus0 = this DT i2c0; hw/sensor/pmbus_psu.c). */
+			/* QU5 Y0: aux panel + (via QU9) TPM hdr + PCIe SMBus */
 			reg = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-
-			/* Generic server-PSU PMBus; binds the Linux generic
-			 * `pmbus` hwmon driver (CONFIG_SENSORS_PMBUS) which
-			 * auto-detects VIN/VOUT/IOUT/TEMP/FAN from the modeled
-			 * PMBus 1.2 device. Row 24 LQ. */
-			psu@58 {
-				compatible = "pmbus";
-				reg = <0x58>;
-			};
 		};
 
 		i2c@2 {

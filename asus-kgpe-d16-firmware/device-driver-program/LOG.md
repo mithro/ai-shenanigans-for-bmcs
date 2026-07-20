@@ -1,26 +1,5 @@
 # Device-driver program — running log
 
-## 2026-07-21 — Executed gate-a/d task "Linux pmbus bind @0x58" (row 24 LQ) — PARTIAL: driver PROBES, identify FAILS (honest, tracked)
-
-Picked the auditor's flagged "easy win" (row 24 LQ, Linux generic pmbus hwmon vs the modeled PSU) and
-EXECUTED it rather than only tracking. Added a DT node `psu@58 { compatible="pmbus"; }` under i2c@0
-(the QEMU bus0 = DT i2c0 that hw/arm/aspeed.c:591 puts pmbus-psu on) + a `pmbustest` initramfs gate;
-rebuilt the QEMU kernel/dtb (dtb 24532→24584) + initramfs.
-RESULT — PARTIAL, honestly ⬜ not ✅: the generic `pmbus` driver DID match + probe the device
-(`pmbus 14-0058` client created), but its identify **FAILED**: `pmbus 14-0058: PMBus status register not
-found`. The hwmon list shows only w83795 + 2×sbtsi; no pmbus hwmon → `PMBUS RESULT: FAIL`.
-DIAGNOSIS (not fully resolved): Linux `pmbus_init_common` (pmbus_core.c:2627) reads STATUS_WORD (0x79),
-and on `<0 || ==0xffff` falls to STATUS_BYTE (0x78); both failing → the error. The QEMU pmbus base class
-(hw/i2c/pmbus_device.c:807-812) DOES answer both with the seeded `status_word=0`, and Zephyr's READ_VOUT
-(0x8B, same engine-0 device, #170) works — so the basic read path is fine, yet the STATUS_WORD/BYTE
-read in the Linux identify path returns an error/0xffff. This needs I2C-transaction tracing to pin
-(model STATUS response vs the exact SMBus read-word the driver issues). CONFIDENCE I didn't just do
-something wrong: MODERATE — the DT node/compatible/bus are correct (the driver bound the client), but I
-have NOT proven whether the failure is a genuine model gap or a subtler transaction/config issue; it is
-NOT a hand-wave "impossible", it is a real blocker I have not yet root-caused. Row 24 LQ stays ⬜ with
-the specific blocker recorded; kept the DT node + gate (correct infra, will validate once the model
-STATUS-read path is fixed). Tracked as a debug task.
-
 ## 2026-07-21 — Gate-a/d completeness SWEEP (2 sub-agents): enumeration confirmed complete + 4 over-claims corrected
 
 Ran two independent completeness sub-agents for gates (a)+(d): one enumerating the authoritative schematic
