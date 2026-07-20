@@ -1,0 +1,46 @@
+Row 39 RTC — the AST2050 RTC keeps EXACT REAL TIME on the KGPE-D16 with SCU08[16]=0
+(2026-07-21). Corrects the earlier "732x fast / no real-time without a crystal" claim
+(#158/#186), which was an artifact of using SCU08[16]=1 (the 24 MHz "test only" tap).
+
+Device: AST2050 RTC @ 0x1E781000 (counter style, datasheet §24). SCU08[16] selects the
+RTC clock source: 0 = 32.768 kHz source (SoC default, SCU08 Init 0xE3F00070), 1 = 24 MHz
+"test only" tap (datasheet §24 "for test only").
+
+MEASUREMENT (register-level via U-Boot md/mw, no OS in the way; SCU08[16]=0 as U-Boot
+leaves it = 0x61800070): RESET the RTC, RELOAD=0, RESTART, enable, read COUNTER, sleep a
+clean 20 s wall-clock window, read COUNTER again, decode byte-packed sec/min/hour.
+
+===== CAPTURED (uboot_rtc_rate.py 20) =====
+>>> t0 counter=0x00000001 decoded=1s; sleeping 20s ...
+>>> t1 counter=0x00000016 decoded=22s
+>>> delta=21 RTC-seconds over 21.0 real seconds  => rate ~= 1.00x
+===== end =====
+
+RESULT: rate = 1.00x = **EXACT REAL TIME**. The internal 32.768 kHz source is present and
+running on this board (÷32768 → 1 Hz). So:
+  * SCU08[16]=0 (32.768 kHz source): RTC = real-time 1 Hz. FULLY FUNCTIONAL real-time clock
+    for time-of-day (HH:MM:SS) + a free-running day counter.
+  * SCU08[16]=1 (24 MHz test tap): 732x fast (24e6/32768) — Zephyr's evidence 14 measured
+    this (delta 22 over ~30 ms); it is the "test only" mode, NOT the production config.
+
+CORRECTION of prior claims:
+  * #158/#186 "the KGPE-D16 has no 32.768 kHz crystal so the RTC runs ~732x fast / can't do
+    real-time" is WRONG as a blanket statement. The board needs no EXTERNAL 32 kHz crystal
+    (datasheet §2.19) because the 32.768 kHz is derived INTERNALLY, and it IS running — the
+    RTC keeps real time with bit16=0. The 732x figure only applies to bit16=1 (test tap).
+  * The Linux driver (rtc-aspeed.c) now CLEARS bit16 (row-39-LS fix), so on real silicon it
+    is a REAL-TIME clock: the row-39-LS transcript `set 12:45:30 -> read 12:45:41` advanced
+    ~11 s over the ~11 s set->read window = real time (evidence 30), consistent with 1.00x.
+
+REMAINING HW limitation (honest): the counter RTC has NO month/year register — it tracks
+time-of-day (HH:MM:SS) + a plain up-counting "day" field only. So it is a real-time clock
+for time-of-day within/after a set, but cannot track a full Gregorian calendar (the driver
+reports a fixed Jan-2000 base + the day counter). This is a register-map limitation of the
+G3 counter RTC, independent of the clock-rate finding above.
+
+FOLLOW-UPS: (1) QEMU faithfulness — make hw/misc/aspeed_rtc_ast2050.c tick-rate track
+SCU08[16] (clk_hz=32768 → real-time when bit16=0; clk_hz=24e6 → 732x when bit16=1); the
+model's ns_per_tick=32768*1e9/clk_hz already parameterizes on clk_hz. (2) Zephyr: its driver
+forces bit16=1 (bare-metal boot; the earlier "bit16=0 → no clock" was likely the same
+missing-CONTROL[5]-poll async-load bug read as "no clock") — retest Zephyr with bit16=0 +
+the load-wait to see if ZS can become a real-time ✅.

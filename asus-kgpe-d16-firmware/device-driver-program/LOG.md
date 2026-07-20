@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-21 — CORRECTION: the AST2050 RTC keeps EXACT real time on silicon (bit16=0); the "732x" claim was a bit16=1 driving artifact
+
+Chased down the RTC rate on real silicon and CORRECTED a long-standing wrong claim. Prior docs
+(#158/#186) said "the KGPE-D16 has no 32.768 kHz crystal, so the RTC runs ~732x fast and can't keep
+real time." That is WRONG. It came from measuring with **SCU08[16]=1** (the 24 MHz "test only" tap,
+which Zephyr's driver forces). With **SCU08[16]=0** (the SoC default, what the row-39-LS-fixed Linux
+driver now uses), a clean register-level 20 s silicon measurement (U-Boot md/mw, no OS):
+```
+t0 counter=0x00000001 (1s); sleep 20s; t1 counter=0x00000016 (22s)
+delta=21 RTC-seconds over 21.0 real seconds  => rate ~= 1.00x  == EXACT REAL TIME
+```
+So the internal 32.768 kHz source IS present and running (÷32768 → 1 Hz); the board needs no EXTERNAL
+crystal (datasheet §2.19) and the RTC is a **functional real-time clock**. The 732x figure applies ONLY
+to bit16=1. This is the goal's thesis exactly — "the hardware is 100% reliable; it is your code/driving
+that is the issue": TWO stacked driving mistakes (forcing bit16=1 onto the test tap + not polling
+CONTROL[5] so even that read back 0) got rationalised into a false hardware limitation. One clean
+measurement dissolved it. Evidence `d14-zephyr/31-rtc-realtime-bit16-0-silicon.txt`.
+
+HW limitation that IS real (honest): the counter RTC has no month/year register — real-time for
+HH:MM:SS + a day counter, but no full Gregorian calendar (register-map limit, not a clock-rate issue).
+
+Follow-ups queued: (a) correct #158/#186 in the matrix + driver/model comments; (b) QEMU faithfulness —
+make `hw/misc/aspeed_rtc_ast2050.c` tick-rate track SCU08[16] (clk_hz 32768=real-time vs 24e6=732x;
+the model already parameterises ns_per_tick on clk_hz); (c) retest Zephyr with bit16=0 + the CONTROL[5]
+load-wait — the bare-metal "bit16=0 → no clock" was likely the SAME async-load misread, so ZS may reach
+a real-time ✅.
+
 ## 2026-07-21 — Row 38 LS ✅: Linux /dev/watchdog on real silicon (leveraging the now-working netboot)
 
 With the netboot unblocked (row 39 work), the many Linux-SILICON (LS) cells that were blocked purely on
