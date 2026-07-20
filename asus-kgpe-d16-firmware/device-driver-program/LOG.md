@@ -1,5 +1,38 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(b) CODE REVIEW #2 (QEMU device models): 2 real oracle bugs found + FIXED + re-validated; rest confirmed clean
+
+Second gate-(b) pass — the QEMU device MODELS (the faithfulness oracle: pmbus_psu, w83795, sbtsi,
+w83601g, kgpe_d16_i2c_fabric, and the aspeed_gpio KGPE additions). An independent code-reviewer sub-agent
+cross-checked each against QEMU's core i2c/pmbus/resettable/irq code + the pca954x mux pattern + the SoC
+realize order. It returned 2 real findings (both VERIFIED against the source before fixing) + confirmed
+the other 4 files clean:
+
+  1. HIGH — hw/sensor/w83795.c had NO reset handler: w83795_load_defaults() ran only at realize(), so
+     bank/ptr/count/vrlsb/regs survived a system/watchdog reset instead of returning to POR (unlike
+     sbtsi/w83601g/pmbus_psu). A guest resetting (e.g. the AST2050 WDT) + reading the w83795 assuming POR
+     bank 0 would get a stale bank / scratch byte → spurious probe fail or wrong telemetry, hiding a real
+     driver bug or faking a CI fail. FIX: register rc->phases.hold = w83795_reset_hold → load_defaults
+     (mirrors sbtsi). Submodule commit 84c7d1f119.
+  2. MEDIUM — hw/i2c/kgpe_d16_i2c_fabric.c: the sys-pwrgd handler re-applied the board-glue tie
+     sb_post_complt_n=!level on EVERY call, and the aspeed pwrseq re-drives host-on on every GPIO write
+     (qemu_set_irq doesn't de-dup) → an explicit sb-post-complt-n test override (the SP5100-owns-POST
+     window the fabric exists to model) got reverted by the next incidental GPIO write. FIX: apply the
+     tie only on a genuine SYS_PWRGD level TRANSITION. BMC-owns default path unchanged. Commit 27c6cccc26.
+
+CONFIRMED CLEAN (recorded so they aren't re-litigated): pmbus_psu (every LINEAR11/ULINEAR16 constant
+hand-verified), sbtsi (ptr auto-inc, RO/RW gating, OOB bound, reset leaves the modeled die-temp), w83601g
+(reserved-index checks, full reset+vmstate), the fabric MUX/channel logic (single-channel scan is right
+for a 4:1 analog mux, QU9 gate returns no-false-ACK, indices bounded), and the aspeed_gpio KGPE additions
+(reset ordering: i2c realizes before gpio so the fabric reset_hold runs first then gpio re-pushes the
+host-on latch → converges correct; pwrseq_busy re-entrancy guard correct; force-off-wins SR-latch correct).
+
+REBUILT qemu-system-arm (incremental) + RE-VALIDATED: w83795_smoke PASS (fan1=2641/temp0=50.500), spd_smoke
+PASS (fabric BMC-owns path intact). Both fixes are surgical + do NOT fire during a normal boot (reset only
+on WDT/system-reset; fabric fix only on the override path), so the legacy oracles (C2/C4/C-UBOOT) are
+unaffected — full oracle re-run is recommended due diligence but low-risk. Gate-(b) QEMU-model pass = 2
+found, 2 fixed, 0 remaining. (U-Boot-patch + Linux-patch gate-b passes still remain.)
+
 ## 2026-07-20 — #171 DONE: Zephyr DIMM SPD via the QU9/QU5 mux fabric (rows 17+18) — QEMU PASS (gate-c driver work)
 
 Second Tier-A roadmap item + first MULTI-subsystem Zephyr driver: `samples/spd_smoke` reads a DIMM SPD
