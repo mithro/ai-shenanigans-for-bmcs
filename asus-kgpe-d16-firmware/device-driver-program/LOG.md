@@ -1,5 +1,38 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #158: G3 RTC counter now ADVANCES at the datasheet-confirmed crystal-less 732.42x rate
+
+Rotated to the RTC after concluding #182 (USB virtual-media CD-ROM) is KVM-gated in this session — its
+only meaningful proof is the x86 host's SCSI INQUIRY (TYPE_ROM), which needs the two-VM usbip harness
+(/dev/kvm, and this user isn't in the kvm group); an in-guest CD-ROM demo would look identical to the
+disk demo (CD-ROM-ness is invisible at the USB-descriptor layer) and prove nothing — so I flagged #182
+and did NOT weasel it.
+
+#158 was fully local (ARM QEMU). The G3 counter-style RTC model (hw/misc/aspeed_rtc_ast2050.c) latched
+RELOAD→COUNTER but NEVER advanced the counter ("deferred behavioural add-on") — a frozen RTC, while
+silicon's counts. **Verify-before-modeling paid off twice:**
+1. RATE: the silicon evidence's "732x" was a divider-math *inference* (checked against an assumed ~30 ms
+   window, circular). I went to the datasheet: §24 shows the RTC /32768 tick (fractional divider makes
+   12MHz*128/46875 = 32768.0 Hz → real 1 Hz), and §2.19/§24/SCU08[16] confirm SCU08[16]=1 feeds raw
+   24 MHz → 24e6/32768 = 732.42x. So the rate is now datasheet-CONFIRMED, not inferred. (§2.19's "1MHz
+   from 24MHz" phrasing initially looked like it implied a different rate — §24's register spec settles
+   it.)
+2. LAYOUT CONFLICT (new finding #186): datasheet §24 RTC00 is FIELD-packed (sec[5:0] min[11:6]
+   hour[16:12] day[31:17]); the silicon-validated Zephyr driver is BYTE-packed (sec[7:0] min[15:8]
+   hour[23:16] day[31:24]). The one silicon set/get test can't distinguish them (sec 30→52 never wraps
+   past 60). The model advances BYTE-packed to keep the firmware oracle working (a field-packed re-encode
+   would corrupt the driver's values even without a wrap) — and I flagged the conflict as #186 (needs a
+   silicon minute-wrap test) rather than silently picking a side.
+
+MODEL: advance the counter at clk_hz/32768 while CONTROL[0] is enabled (clk_hz = device property,
+default 24 MHz; base_ns anchors on RESTART/enable, freezes on disable; vmstate v1→v2). INERT AT RESET
+(CONTROL[0]=0 → frozen, bit-identical to before), so no legacy-oracle regression. Validated in QEMU
+(`rtcrate` /dev/mem gate): load 00:00:00, enable, sleep 1 s → counter advanced +768 RTC-seconds (fast,
+not ~1); frozen before this change (evidence d14-zephyr/15). Legacy non-regression: normal boot of the
+same C2 kernel+QEMU reached BMC-READY cleanly; full C2/C-UBOOT/C4 multi-oracle confirmation runs in CI.
+This closes the "model the rate" half of #158; ZS row 39 stays 🔶 (true 1 Hz is impossible without a
+32.768 kHz crystal — the documented hardware constraint).
+
 ## 2026-07-20 — #183 (partial): W83795 ALARM(0..4) status seeded to silicon — both sides (QE model + LU userspace)
 
 Continued #183 with a bounded, faithful piece: the model's ALARM(0..4) status registers (bank 0,

@@ -79,8 +79,9 @@ same standard the U-Boot/Linux ✅ use on those rows — not a dedicated DDR/clo
 JTAG. Getting there fixed silicon-only bugs QEMU had hidden (cache/TLB invalidate, VIC
 ack-at-entry, enable-glitch tick, entry staleness — commits 918bc7e/b84ef58/78f5569; and the
 **SCU74[12] I2C5 pin-mux** #156 that the FRU/W83601G engine-4 devices need — see LOG.md).
-**Remaining frontiers:** RTC (39) runs on silicon but not real-time (ZS 🔶, SCU08[16] clock
-#158); host power-control (27) works in QEMU + the force-OFF drives real silicon but the
+**Remaining frontiers:** RTC (39) runs on silicon but not real-time (ZS 🔶, SCU08[16] clock;
+QE rate now MODELED 2026-07-21 — see the row-39 note — but silicon can't do true 1 Hz without a
+32.768 kHz crystal, #158); host power-control (27) works in QEMU + the force-OFF drives real silicon but the
 GPIOH2 feedback read needs work (#162); SB-TSI (23) needs the host CPU powered (#150); the
 **4 QEMU ⬜** (DDC/EDID, LPC-mailbox, SOL-mux, SMBus-ALERT); and the broad Zephyr breadth gap
 (ZS 27 ⬜). Open faithfulness notes: GPIO-input-readback silicon-vs-QEMU (IJKL floating; and
@@ -444,6 +445,22 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   aspeed_wdt doesn't expose `/sys/.../timeleft` (first API run FAILed on my over-strict criteria that
   required it — a test bug, fixed, not a driver issue); busybox watchdog here doesn't magic-close on
   SIGTERM; board exposes TWO WDTs (watchdog0+watchdog1 = AST2050 WDT1/WDT2). D11.
+- **39** RTC (0x1E781000, counter-style, datasheet §24). **QE counter-ADVANCE now modeled
+  (2026-07-21, #158, submodule f93addb7e0, `evidence/d14-zephyr/15-qemu-rtc-rate.txt`):** the model
+  latched RELOAD→COUNTER but the counter never ticked (a frozen RTC, while silicon's counts). The
+  KGPE-D16 has NO 32.768 kHz crystal, so the firmware clocks the RTC from the 24 MHz source
+  (SCU08[16]=1; datasheet §2.19 "not necessary to include an external 32 KHz oscillator" + §24
+  "clock source from 24MHz"); the RTC's fixed /32768 tick divider (datasheet §24:
+  12MHz*128/46875 = 32768.0 Hz) then yields **24e6/32768 = 732.42 "RTC seconds"/real second** — the
+  fast rate silicon showed (evidence 14). The model now advances the counter at clk_hz/32768 while
+  CONTROL[0] is enabled (clk_hz = device property, default 24 MHz), anchored on RESTART/enable and
+  frozen on disable. INERT AT RESET (CONTROL[0]=0 → frozen, bit-identical to before), so no
+  legacy-oracle boot changes (C2 boots to BMC-READY; the enabled behaviour matches silicon).
+  Register-validated (`rtcrate` /dev/mem gate): load 00:00:00, enable, sleep 1 s → +768 RTC-seconds
+  (fast, not ~1). **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
+  board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
+  silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked
+  as **#186** (needs a silicon minute-wrap test). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 - **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/

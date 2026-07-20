@@ -621,5 +621,38 @@ if grep -q w83795test /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- RTC counter-advance RATE validation (only when 'rtcrate' on the cmdline) ---
+# DEVICE-MATRIX row 39 / #158: the AST2050 G3 RTC (0x1E781000, counter-style) has
+# NO 32.768 kHz crystal on the KGPE-D16, so the firmware clocks it from the 24 MHz
+# source (SCU08[16]=1); the RTC's fixed /32768 tick divider then yields
+# 24e6/32768 = 732.42 "RTC seconds" per real second (datasheet §24 + silicon
+# evidence d14-zephyr/14). The QEMU model now advances the counter at that rate.
+# Validate register-level via /dev/mem: load 00:00:00, enable, read, sleep 1 real
+# second, read again, and confirm the counter advanced ~732 (NOT ~1 as a real-time
+# 1 Hz RTC would). Byte-packed counter: sec[7:0] min[15:8] hour[23:16] (see #186).
+if grep -q rtcrate /proc/cmdline; then
+	echo "=== RTC-RATE-BEGIN ==="
+	devmem 0x1e781014 32 0x99          # RESET: clear all registers
+	devmem 0x1e781008 32 0x00000000    # RELOAD = 00:00:00 day0 (byte-packed)
+	devmem 0x1e781010 32 0x5a          # RESTART: COUNTER := RELOAD + anchor
+	devmem 0x1e78100c 32 0x1           # CONTROL[0] enable
+	C0=$(devmem 0x1e781000)
+	sleep 1
+	C1=$(devmem 0x1e781000)
+	echo "COUNTER t0=$C0 t1=$C1"
+	D0=$(( (C0 & 0xff) + ((C0>>8)&0xff)*60 + ((C0>>16)&0xff)*3600 ))
+	D1=$(( (C1 & 0xff) + ((C1>>8)&0xff)*60 + ((C1>>16)&0xff)*3600 ))
+	DELTA=$(( D1 - D0 ))
+	echo "decoded t0=${D0}s t1=${D1}s  delta=${DELTA} RTC-seconds over ~1 real second"
+	echo "(expect ~732 = 24MHz/32768; a real-time 1 Hz RTC would give ~1)"
+	if [ "$DELTA" -ge 600 ] && [ "$DELTA" -le 900 ]; then
+		echo "RTC-RATE RESULT: PASS (fast 732x rate modeled, matches crystal-less silicon)"
+	else
+		echo "RTC-RATE RESULT: FAIL (delta=$DELTA not ~732)"
+	fi
+	echo "=== RTC-RATE-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

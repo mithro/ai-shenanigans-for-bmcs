@@ -1,0 +1,67 @@
+DEVICE-MATRIX row 39 (AST2050 G3 RTC @0x1E781000) — QEMU counter-advance RATE now
+modeled at the crystal-less 732.42x (2026-07-21, #158).
+
+Before: the G3 counter-style RTC model (hw/misc/aspeed_rtc_ast2050.c) latched
+RELOAD->COUNTER on a RESTART but the counter NEVER advanced ("the 1 Hz CLK32K
+counter advance is a deferred behavioural add-on"). So QEMU's RTC was frozen,
+while silicon's counter advances — and on THIS board it advances FAST.
+
+WHY FAST (datasheet-confirmed, resolving the exact rate):
+  - AST2050 datasheet §24: the RTC divides its input clock by 32768 for the 1
+    "second" tick; the fractional divider makes 12MHz*128/46875 = 32768.0 Hz =>
+    a real 1 Hz when fed the nominal source.
+  - §2.19 + §24 + SCU08[16]: "not necessary to include an external 32 KHz
+    oscillator"; SCU08[16]=1 selects "the clock source of RTC is from 24MHz".
+  - The KGPE-D16 has NO 32.768 kHz crystal, so the firmware sets SCU08[16]=1 and
+    the RTC gets the raw 24 MHz. The fixed /32768 stage then yields
+    24e6 / 32768 = 732.42 "RTC seconds" per real second — the fast rate the
+    silicon rtc_smoke showed (evidence 14: set->get advanced ~22 in a sub-second
+    window). The earlier "732x" was a divider-math inference; the datasheet §24
+    /32768 + §2.19/§24 24MHz-source quotes now CONFIRM it.
+
+MODEL (hw/misc/aspeed_rtc_ast2050.c): while CONTROL[0] is enabled the counter
+advances from the loaded value at clk_hz/32768 (clk_hz = device property, default
+24 MHz). base_ns anchors the count on a RESTART load and on an enable transition;
+disabling freezes the advanced value (datasheet §24: "if RTC is disabled the
+counter holds the value"). vmstate v1->v2 adds base_ns. INERT AT RESET: CONTROL[0]
+defaults 0 => the counter is frozen at 0, BIT-IDENTICAL to the old model, so no
+firmware that doesn't explicitly enable the RTC sees any change.
+
+COUNTER LAYOUT (#186): the model advances BYTE-packed (sec[7:0] min[15:8]
+hour[23:16] day[31:24]) to match the silicon-validated Zephyr driver. Datasheet
+§24 documents FIELD-packed (sec[5:0] min[11:6] hour[16:12] day[31:17]); the two
+can't be distinguished without a silicon minute-wrap test (tracked #186). Matching
+the firmware oracle is the faithful choice (a field-packed re-encode would corrupt
+the driver's values in QEMU even without a wrap).
+
+===== VALIDATION 1 — RATE (QEMU, rtcrate gate, /dev/mem) =====
+=== RTC-RATE-BEGIN ===
+COUNTER t0=0x00000007 t1=0x00000C37
+decoded t0=7s t1=775s  delta=768 RTC-seconds over ~1 real second
+(expect ~732 = 24MHz/32768; a real-time 1 Hz RTC would give ~1)
+RTC-RATE RESULT: PASS (fast 732x rate modeled, matches crystal-less silicon)
+=== RTC-RATE-END ===
+DECODE: load 00:00:00, enable CONTROL[0], read, `sleep 1` (real second), read
+again. The counter advanced 768 RTC-seconds (12m48s) in ~1 real second — i.e. the
+fast crystal-less rate (~732.42x; 768 reflects the sleep being ~1.05 s of VM-time
+x 732.42). A real-time 1 Hz RTC would show delta~1. So the model now reproduces
+the silicon behaviour instead of a frozen counter. Byte-packed decode:
+t1=0x0C37 -> sec=0x37=55, min=0x0C=12 -> 12*60+55 = 775 s. Path: userspace devmem
+-> /dev/mem -> AST2050 RTC @0x1E781000 model.
+
+===== VALIDATION 2 — LEGACY-ORACLE NON-REGRESSION =====
+Normal boot (no rtcrate token) of the same C2 kernel + QEMU reached BMC-READY
+cleanly (no panic / no RTC fault): the RTC change does not disturb the boot path.
+Combined with the inert-at-reset code fact (disabled => frozen, identical to the
+prior model) and the fact that the new enabled behaviour MATCHES silicon (so it
+cannot break an oracle that boots on the crystal-less silicon), this preserves the
+faithfulness prime directive. The full multi-oracle confirmation (C2 via U-Boot,
+C-UBOOT Raptor 2.6.28, C4 Dell vendor->web) runs in CI (d16-qemu-stack.yml
+boot-uboot-ssh / raptor / boot-c4-web).
+
+RESULT: row 39 QE — the RTC counter now ADVANCES at the datasheet-confirmed
+crystal-less rate (24MHz/32768 = 732.42x), register-validated in QEMU. This is the
+"model the rate" half of #158. The board-level real-time-accuracy limitation
+(there is no way to get true 1 Hz without a 32.768 kHz crystal) stands as the
+documented hardware constraint; ZS row 39 stays 🔶 (functional, not real-time).
+The counter bit-layout datasheet-vs-driver conflict is tracked as #186.
