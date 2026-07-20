@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-21 — 🎉 Row 39 LS PASS on real silicon (Linux RTC set/get + wakealarm) — root cause was MY SCU08[16] write
+
+Fixed the RTC Linux driver and **validated the full set/get + wakealarm path on real AST2050 silicon**
+via netboot. Captured console:
+```
+DIAG scu@linux: SCU08=0x61800070 SCU0C=0x000C3E8B      # driver CLEARED bit16 (was my bug when =1)
+hwclock -r after set 12:45:30 -> Sat Jan 15 12:45:35 2000
+RTC-LINUX RESULT: PASS (set 12:45:30 -> read 12:45:35; hour:min round-tripped via /dev/rtc0)
+rtc alarm VIC22 count: 0 -> 82460
+RTC-WAKEALARM RESULT: PASS (armed -> VIC22 fired -> RTC_AF cleared it)
+```
+
+**Root cause (silicon-proven, two parts):**
+1. **SCU08[16] must be 0 on this board.** My previous-cycle driver forced bit16=1 (24MHz "test only" tap),
+   mis-generalised from the bare-metal Zephyr boot (no U-Boot → no 32kHz path set up). Register-probing
+   the RTC directly from the U-Boot prompt (md/mw) PROVED the block is healthy with bit16=0 (32.768kHz
+   source, the SoC default U-Boot leaves): RELOAD sticks, COUNTER loads + advances (0x000c2d1e→0x000c2d26).
+   Forcing bit16=1 freezes the counter at 0x0 under Linux. Driver now CLEARS bit16 defensively.
+2. **set_time must wait for the async RESTART load.** The RELOAD→COUNTER latch "needs 0~3s" (datasheet
+   §24.4.3), CONTROL[5] reads 1 until done. The old set_time returned immediately → read_time saw a stale
+   counter (round-tripped as 00:00:0x). Added a bounded `readl_poll_timeout(CONTROL[5]==0)` (matches the
+   Zephyr driver), and the RMW clears bit5 (never write 1 back to the restart-status bit).
+
+Method was disciplined **instrument-don't-guess**: DIAG dumps in the initramfs rtclinux gate + a U-Boot
+md/mw register prober isolated the cause across three netboot/probe cycles (SCU08[16] survives? counter
+runs under devmem? U-Boot-state healthy?), landing on "the driver's own bit16 write is the regression."
+This is precisely the memory principle — a broken Linux boot is a bug in MY code, not the silicon.
+
+Commit `0d66a5c` (driver + patch 0009 + init). Row 39 LS ⬜→✅. Follow-ups: (a) QEMU faithfulness — model
+the RESTART async load + CONTROL[5] busy so a non-polling driver misbehaves in QEMU too (closes the
+"QEMU hid it" gap); (b) minor: the fast counter causes an alarm IRQ re-fire storm (82460) until the
+one-shot clears — mask alarm-enable in the ISR to quiet it (fast-clock artifact, #158/#186, not a
+correctness bug — the test PASSES). QEMU rtclinux regression check building in parallel.
+
 ## 2026-07-21 — Row 39 LS: netboot UNBLOCKED (static IP) + RTC block PROVEN healthy on silicon; my SCU08[16] "fix" was the regression
 
 Continued row-39-LS silicon validation. Two big corrections, both cases of "the hardware is fine, my

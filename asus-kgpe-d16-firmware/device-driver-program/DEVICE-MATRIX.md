@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 9 | 0 | 9 | 11 |
-| Linux @ silicon | 18 | 4 | 2 | 16 | 11 |
+| Linux @ silicon | 19 | 4 | 2 | 15 | 11 |
 | Linux userspace | 14 | 6 | 0 | 13 | 18 |
 | Zephyr @ QEMU | 17 | 5 | 0 | 19 | 10 |
 | Zephyr @ silicon | 11 | 4 | 0 | 25 | 11 |
@@ -79,9 +79,11 @@ same standard the U-Boot/Linux ✅ use on those rows — not a dedicated DDR/clo
 JTAG. Getting there fixed silicon-only bugs QEMU had hidden (cache/TLB invalidate, VIC
 ack-at-entry, enable-glitch tick, entry staleness — commits 918bc7e/b84ef58/78f5569; and the
 **SCU74[12] I2C5 pin-mux** #156 that the FRU/W83601G engine-4 devices need — see LOG.md).
-**Remaining frontiers:** RTC (39) runs on silicon but not real-time (ZS 🔶, SCU08[16] clock;
-QE rate now MODELED 2026-07-21 — see the row-39 note — but silicon can't do true 1 Hz without a
-32.768 kHz crystal, #158); host power-control (27) works in QEMU + the force-OFF drives real silicon but the
+**Remaining frontiers:** RTC (39) — **LS now ✅ on real silicon (2026-07-21): Linux set/get +
+wakealarm PASS** once the driver was fixed to CLEAR SCU08[16] (bit16=0/32.768kHz source is what
+runs under U-Boot's clock config; forcing bit16=1 was MY regression that froze the counter) and to
+poll CONTROL[5] restart-busy in set_time (evidence 30). ZS stays 🔶: the bare-metal Zephyr boot has
+no 32kHz path so its driver still needs bit16=1, and the crystal-less counter isn't true 1 Hz (#158); host power-control (27) works in QEMU + the force-OFF drives real silicon but the
 GPIOH2 feedback read needs work (#162); SB-TSI (23) needs the host CPU powered (#150); the
 **4 QEMU ⬜** (DDC/EDID, LPC-mailbox, SOL-mux, SMBus-ALERT); and the broad Zephyr breadth gap
 (ZS 27 ⬜). Open faithfulness notes: GPIO-input-readback silicon-vs-QEMU (IJKL floating; and
@@ -401,7 +403,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ✅ | ✅ | ✅ |
-| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ✅ | ✅ | 🔶 |
+| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ✅ | ✅ | ✅ | 🔶 |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |

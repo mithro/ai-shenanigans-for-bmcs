@@ -1,0 +1,54 @@
+Row 39 LS — Linux RTC driver (rtc-aspeed.c G3 counter variant) validated on REAL
+AST2050 silicon: set/get round-trip + /sys wakealarm both PASS (2026-07-21)
+
+Device: AST2050 RTC @ 0x1E781000 (counter style, datasheet §24). Powered from BMC
+5VSB; independent of the sensor rail.
+Kernel: Linux 6.6.70 realhw uImage (build-realhw-kernel.py) with patch 0009 (G3
+counter RTC: field-packed RTC04 alarm, VIC-22 alarm IRQ, SCU08[16] CLEARED, set_time
+CONTROL[5] restart-busy poll).
+Path: JTAG (RPi4) reset-halt -> DDR2 train -> U-Boot 2013.07 (boot#) -> STATIC-IP TFTP
+netboot (ipaddr 192.168.66.2 / serverip 192.168.66.1) -> initrd=<data>,<size> cmdline
++ `bootm <k> - <dtb>`. Console /dev/serial-bmc-console @115200.
+
+===== CAPTURED CONSOLE (rtclinux gate) =====
+[    1.764306] aspeed-rtc 1e781000.rtc: registered as rtc0
+[    5.206723] Run /init as init process
+DIAG scu@linux: SCU08=0x61800070 SCU0C=0x000C3E8B
+hwclock -r after set 12:45:30 -> Sat Jan 15 12:45:35 2000  0.000000 seconds
+rtc0/time = 12:45:35
+RTC-LINUX RESULT: PASS (set 12:45:30 -> read Sat Jan 15 12:45:35 2000; hour:min round-tripped via /dev/rtc0)
+rtc alarm VIC22 count: 0 -> 82460
+RTC-WAKEALARM RESULT: PASS (armed -> VIC22 fired (0->82460) -> RTC_AF cleared it)
+===== end =====
+
+RESULT: PASS on both sub-tests, real silicon:
+  * RTC-LINUX (set/get): userspace `date -s 12:45:30; hwclock -w; hwclock -r` read back
+    12:45:35 — hour:min AND the byte-packed day (Jan 15) round-tripped; sec advanced
+    30->35 on the crystal-less fast counter (#158/#186). Exercises set_time (RELOAD +
+    RESTART + CONTROL[5] load-wait), read_time (byte-packed COUNTER), and the /dev/rtc0
+    RTC_SET/RD_TIME ioctls.
+  * RTC-WAKEALARM: `/sys/class/rtc/rtc0/wakealarm` +5 armed, the fast counter crossed
+    the RTC04 field-packed alarm, the VIC-22 rtc IRQ was delivered+serviced by Linux
+    (count 0->82460) and the rtc core cleared the one-shot (wakealarm read back empty).
+    Exercises set_alarm/read_alarm (field-packed RTC04), alarm_irq_enable, the IRQ
+    handler, and device_init_wakeup.
+
+ROOT CAUSE (why earlier cycles read back 00:00:00) — silicon-proven, MY code:
+  1. SCU08[16] must be 0 on the KGPE-D16. An earlier driver revision forced bit16=1
+     (24MHz "test only" tap), over-generalised from the BARE-METAL Zephyr boot (which
+     sets up no 32kHz path). U-Boot md/mw register-probe PROVED the RTC block loads +
+     advances under U-Boot's clock config with bit16=0 (SCU08=0x61800070): RELOAD
+     0x000c2d1e sticks, COUNTER 0x000c2d26->0x000c2d2b. Forcing bit16=1 FREEZES the
+     counter at 0x0 under Linux. Driver now CLEARS bit16 in probe.
+  2. The RELOAD->COUNTER load is asynchronous (datasheet §24.4.3, "needs 0~3s",
+     CONTROL[5]=1 while loading). set_time now polls CONTROL[5]==0 before returning so
+     read_time sees the value just set (not a stale counter). RMW also clears bit5.
+
+Faithfulness note: QEMU advances the counter on CONTROL[0] regardless of SCU08[16] and
+models the RESTART load as instant (CONTROL[5] never busy) — which HID both bugs in
+QEMU. Follow-up: model the async load + CONTROL[5] busy in hw/misc/aspeed_rtc_ast2050.c
+so a non-polling driver misbehaves in QEMU too (the memory principle: QEMU must model
+the real AST2050 behaviour).
+
+Supersedes evidence 29 (netboot-DHCP blocker — resolved: mgmt net serves TFTP-only, use
+static IP; that was a driving mistake, not a NIC bug).
