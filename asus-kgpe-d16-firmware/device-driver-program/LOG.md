@@ -1,5 +1,34 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #178 row 14 DDC/EDID FAITHFULLY SCOPED: it is CRT-controller HW (VGACRB7), NOT an I²C-engine device — prevented an unfaithful shortcut
+
+Picked a `QE ⬜` gap to advance the goal's first bullet ("full QEMU emulation of *every* device"): row 14
+DDC/EDID (I²C → VGA1), flagged only as "totally unmodeled (audit gap #7)". Before modeling I checked the
+schematic + datasheet to model it FAITHFULLY (the "understand before you model" discipline that saved the
+AHBC pass from a boot-risking rewrite). **Finding — the naive model would have been UNFAITHFUL:** the DDC
+is NOT one of the 8 general I²C engines, so attaching an EDID EEPROM to an I2C engine bus (the obvious
+quick "win") would be wrong. Evidence:
+- Schematic pinmap (`schematic-wiring/pinmaps/QU1_pins.md:231-232`): B1 `DDCACLK/GPIOD7`→AST_DDCCLK→
+  VGA1[15]; B2 `DDCADAT/GPIOD6`→AST_DDCDAT→VGA1[12] — dedicated DDC pins muxed with GPIO port D, not SDA/SCL.
+- Datasheet (`datasheets/aspeed/AST2050_V1.05.txt`): l.3045/3052 the DDCADAT/DDCACLK pins; l.6086-6087 +
+  l.16851 "**18 RW Enable primary DDC pins**" (SCU74[18]); l.29699 "**VGACRB7: DDC Control Register**" +
+  l.29231 "DDC Control" — the controller is the **CRT block's** extended VGA register CRB7; l.16587-16617
+  a KVM "**Virtual EDID**" function; l.1313/28279 "Support VESA DDC" (headline feature).
+- QEMU (`qemu-firmware/qemu/qemu/hw/arm/aspeed_ast2400.c:360-433`): the G3 machine models the VIDEO
+  *capture* engine (0x1E700000, for `aspeed-video` KVM screen-grab) but **NOT the CRT *display*
+  controller** — so there is currently no register block to attach DDC to. `grep ddc|crb7|edid` across
+  the aspeed hw finds nothing (only the generic `hw/display/edid-region.c` EDID-blob helper + dpcd/DP).
+
+**Faithful path (correctly located, oracle-noted):** a CRT-controller register model exposing VGACRB7
+DDC-control backed by a downstream EDID (reuse in-tree `qemu_edid_region_io`/`edid-region.c` for the
+EDID blob); it lives in the VGA I/O space the C4 vendor firmware may touch, so add as a self-contained
+region and re-boot both oracles (C-UBOOT + C2) after. Updated the row-14 note with all citations,
+corrected the mislocation (I²C-engine → CRT controller), kept QE ⬜ (real work, NOT Ⓝ — VESA DDC to VGA1
+is genuine board function), and added task #178. This cycle's honest increment: converted a vague
+"unmodeled gap" into a precisely-scoped, datasheet-cited, correctly-located task AND prevented the
+unfaithful EDID-on-I2C shortcut a careless pass would have committed. No code claimed done; the model
+itself is #178, next.
+
 ## 2026-07-20 — #177 Linux side (LQ) VALIDATED: mainline aspeed-gpio + gpio-keys work on the C2 boot
 
 Confirmed the LINUX half of the GPIO-interrupt capability (#177) — via mainline, no new code. The C2
