@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — QEMU RTC model made FAITHFUL: tick-rate tracks SCU08[16] (#194 part 2 DONE)
+
+Closed the QEMU-side of the real-time correction. `hw/misc/aspeed_rtc_ast2050.c` used a fixed
+clk_hz (24 MHz → always 732x), which is exactly what HID the real-time-with-bit16=0 behaviour. Now
+the model reads SCU08[16] from the SCU (0x1E6E2008, via the address space) and picks the source Hz:
+32768 (÷32768 → 1 Hz real time) when bit16=0, clk_hz (24 MHz → 732x) when bit16=1; clk_hz=0 still
+forces a frozen RTC. So the modelled rate TRACKS the guest's clock-source choice, exactly like
+silicon — a fixed-732x model can no longer hide a rate bug. Submodule commit 0253877b15 (pushed).
+
+Updated the init gates to match (they had assumed the 732x fast counter): `rtcrate` now validates
+BOTH legs (bit16=0 → real time, bit16=1 → 732x — a stronger test that the model tracks SCU08[16]);
+`rtcalarm` + the `rtclinux` wakealarm set bit16=1 for the alarm CROSSING (rate-independent path, kept
+quick). VALIDATED IN QEMU (rebuilt qemu-system-arm + initramfs):
+```
+rtcrate : bit16=0 delta=3/3s (real time) + bit16=1 delta=769/1s (732x) -> RTC-RATE PASS
+rtclinux: set 12:45:30 -> read 12:45:30 EXACT (was 12:45:41 under the old always-732x model) -> PASS
+          wakealarm VIC22 0->1 -> PASS
+rtcalarm: VIC22 0->1 -> PASS
+```
+So QEMU now faithfully models a real-time RTC at bit16=0 and the 732x test tap at bit16=1. Follow-up
+still open in #194: the RESTART async-load + CONTROL[5] busy modelling (part 1); + re-run these
+updated gates on real silicon (behaviour already understood from evidence 30/31; expected to pass).
+
 ## 2026-07-21 — CORRECTION: the AST2050 RTC keeps EXACT real time on silicon (bit16=0); the "732x" claim was a bit16=1 driving artifact
 
 Chased down the RTC rate on real silicon and CORRECTED a long-standing wrong claim. Prior docs

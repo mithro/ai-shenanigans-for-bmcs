@@ -632,23 +632,33 @@ fi
 # 1 Hz RTC would). Byte-packed counter: sec[7:0] min[15:8] hour[23:16] (see #186).
 if grep -q rtcrate /proc/cmdline; then
 	echo "=== RTC-RATE-BEGIN ==="
-	devmem 0x1e781014 32 0x99          # RESET: clear all registers
-	devmem 0x1e781008 32 0x00000000    # RELOAD = 00:00:00 day0 (byte-packed)
-	devmem 0x1e781010 32 0x5a          # RESTART: COUNTER := RELOAD + anchor
-	devmem 0x1e78100c 32 0x1           # CONTROL[0] enable
-	C0=$(devmem 0x1e781000)
-	sleep 1
-	C1=$(devmem 0x1e781000)
-	echo "COUNTER t0=$C0 t1=$C1"
-	D0=$(( (C0 & 0xff) + ((C0>>8)&0xff)*60 + ((C0>>16)&0xff)*3600 ))
-	D1=$(( (C1 & 0xff) + ((C1>>8)&0xff)*60 + ((C1>>16)&0xff)*3600 ))
-	DELTA=$(( D1 - D0 ))
-	echo "decoded t0=${D0}s t1=${D1}s  delta=${DELTA} RTC-seconds over ~1 real second"
-	echo "(expect ~732 = 24MHz/32768; a real-time 1 Hz RTC would give ~1)"
-	if [ "$DELTA" -ge 600 ] && [ "$DELTA" -le 900 ]; then
-		echo "RTC-RATE RESULT: PASS (fast 732x rate modeled, matches crystal-less silicon)"
+	# The RTC clock source is SCU08[16] (silicon-proven, evidence d14-zephyr/31):
+	#   bit16=0 -> internal 32.768 kHz -> ÷32768 -> ~1x REAL TIME;
+	#   bit16=1 -> 24 MHz "test only" tap -> ÷32768 -> ~732x (24e6/32768).
+	# Validate BOTH register-level via /dev/mem (decode byte-packed sec/min/hour to
+	# seconds, delta over the window = rate). This also validates that the QEMU model
+	# TRACKS SCU08[16] (a fixed-732x model would fail the bit16=0 real-time leg).
+	measure_rate() {   # $1 = window seconds; echoes delta (RTC-seconds)
+		devmem 0x1e781014 32 0x99          # RESET
+		devmem 0x1e781008 32 0x00000000    # RELOAD = 0
+		devmem 0x1e781010 32 0x5a          # RESTART
+		devmem 0x1e78100c 32 0x1           # enable
+		C0=$(devmem 0x1e781000); sleep "$1"; C1=$(devmem 0x1e781000)
+		D0=$(( (C0 & 0xff) + ((C0>>8)&0xff)*60 + ((C0>>16)&0xff)*3600 ))
+		D1=$(( (C1 & 0xff) + ((C1>>8)&0xff)*60 + ((C1>>16)&0xff)*3600 ))
+		echo $(( D1 - D0 ))
+	}
+	devmem 0x1e6e2000 32 0x1688a8a8               # unlock SCU
+	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 & 0xfffeffff )))  # bit16=0
+	DR=$(measure_rate 3)
+	echo "bit16=0 (32.768kHz source): delta=$DR over 3s  (expect ~3 = real time)"
+	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 | 0x10000 )))     # bit16=1
+	DF=$(measure_rate 1)
+	echo "bit16=1 (24MHz test tap): delta=$DF over 1s  (expect ~732 = 24e6/32768)"
+	if [ "$DR" -ge 1 ] && [ "$DR" -le 9 ] && [ "$DF" -ge 500 ] && [ "$DF" -le 1000 ]; then
+		echo "RTC-RATE RESULT: PASS (bit16=0 real-time ~${DR}/3s AND bit16=1 fast ~${DF}/1s — model tracks SCU08[16])"
 	else
-		echo "RTC-RATE RESULT: FAIL (delta=$DELTA not ~732)"
+		echo "RTC-RATE RESULT: FAIL (bit16=0 delta=$DR/3s [want 1-9], bit16=1 delta=$DF/1s [want 500-1000])"
 	fi
 	echo "=== RTC-RATE-END ==="
 	poweroff -f 2>&1 || true
@@ -674,6 +684,12 @@ if grep -q rtcalarm /proc/cmdline; then
 	# own set_alarm). Count is field 2 of the 1e781000.rtc /proc/interrupts line.
 	C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 	[ -z "$C0" ] && C0=0
+	# Use the 24MHz FAST tap (SCU08[16]=1) for the alarm crossing so 00:00:05->10 is
+	# reached in ~7 ms (with bit16=0/real-time it would take 5 real s > our sleep).
+	# The alarm PATH (RTC04 match -> VIC22) is rate-independent; the fast tap just
+	# keeps the test quick + deterministic. (evidence d14-zephyr/31: bit16 sets rate.)
+	devmem 0x1e6e2000 32 0x1688a8a8    # unlock SCU
+	S8=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8 | 0x10000 )))
 	devmem 0x1e781014 32 0x99          # RESET
 	devmem 0x1e781008 32 0x00000005    # RELOAD = 00:00:05 (byte-packed sec=5)
 	devmem 0x1e781010 32 0x5a          # RESTART latch
@@ -755,11 +771,17 @@ if grep -q rtclinux /proc/cmdline; then
 		# /proc/interrupts; field 2 = CPU0 count). Default 0 if not yet present.
 		C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C0" ] && C0=0
+		# The set/get above already validated REAL TIME (bit16=0). For the alarm
+		# CROSSING, switch to the 24MHz fast tap (SCU08[16]=1) so the +5 alarm is
+		# reached in ~7 ms rather than 5 real s (evidence d14-zephyr/31: bit16 sets
+		# the rate; the alarm PATH is rate-independent). Keeps the test quick.
+		devmem 0x1e6e2000 32 0x1688a8a8    # unlock SCU
+		S8W=$(devmem 0x1e6e2008); devmem 0x1e6e2008 32 $(printf '0x%x' $(( S8W | 0x10000 )))
 		echo 0 > "$WAKE" 2>&1              # clear any pending
 		echo "+5" > "$WAKE" 2>&1           # alarm 5 RTC-seconds ahead
 		SET=$(cat "$WAKE" 2>&1)
 		echo "wakealarm set to (epoch)=$SET"
-		sleep 1                            # RTC advances ~732x, passes +5 in ~7ms
+		sleep 1                            # fast tap (bit16=1) passes +5 in ~7ms
 		AFTER=$(cat "$WAKE" 2>&1)
 		C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C1" ] && C1=0
