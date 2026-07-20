@@ -20,6 +20,13 @@ single-threaded smoke tests so no functional regression):
 DEFERRED (QEMU, tracked #196): (conf 80) hw/arm/aspeed_ast2400.c wires VUART and the G3 LPC to the
 SAME VIC source 8 with no OR-gate — last qemu_set_irq wins, so concurrent KCS(IPMI)+SOL can clobber an
 IRQ. Fix = route both through a TYPE_OR_IRQ; needs a QEMU rebuild + IPMI re-test.
+VALIDATION HONESTY: the 4 Zephyr fixes are compile-clean (3 sample ELFs link) + behaviour-neutral for
+single-threaded smoke; a QEMU RUNTIME re-run was attempted via `qemu-system-arm -M kgpe-d16-bmc -kernel
+zephyr.elf` but that is the WRONG launch path for this custom Zephyr board (no console output, just the
+timeout) — the proper Zephyr-QEMU runner wasn't located this pass, so runtime smoke re-validation is a
+follow-up. The one boot-risking fix (the gpio_aspeed_g3 base guard) is provably safe WITHOUT a run: the
+ast2050.dtsi instantiates only ABCD@0x1e780000 + EFGH@0x1e780020, both compile-time-constant bases that
+satisfy the guard, so it cannot reject either instantiated node.
 The gate-b sweep is proving its worth: 7 real bugs found+fixed this cycle across RTC(2)+Zephyr(4)+the
 RTC re-anchor, plus 1 QEMU bug queued — none of which the smoke tests would have caught.
 
