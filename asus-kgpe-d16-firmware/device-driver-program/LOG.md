@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #175 investigation: the AHBC boot-remap is COSMETIC on this QEMU (firmware runs from high DRAM) — re-scoped, not urgent
+
+Investigated the AHBC (row 49) before modeling it, to avoid a rushed boot-critical change. Found: the
+current QEMU machine keeps 0x0 = the boot-ROM throughout (hw/arm/aspeed.c spi_boot_container + boot_rom;
+NO AHBC/remap device exists — grep confirms). The AHBC's boot-critical function IS the 0x8C Address-Remap
+(0x0→SDRAM on silicon), but on THIS machine it's never driven AND never needed: the Raptor U-Boot
+relocates to high DRAM (0x4xxxxxxx) and Linux uses high exception vectors, so NEITHER oracle depends on
+0x0=SDRAM. That's why C-UBOOT + C2 both boot with the AHBC swallowed by the ASPEED_DEV_IOMEM catch-all
+(verified last cycle). CONCLUSION: a faithful AHBC 0x8C remap model is HIGH-RISK (it rewrites the
+boot-critical memory map, the ONE thing that can break every oracle) for LOW value (the remap is cosmetic
+here — nothing exercises it). So I did NOT rush it in. Re-scoped #175 LOWER priority (the boot-critical
+framing was wrong — it's a real "all functionality" gap but not urgent), corrected the row-49 note (which
+had mis-described the remap as "faked by an alias"; it's actually just 0x0=boot-ROM + the remap unused),
+and documented the safe partial path (a register-response AHBC, no memory-map change) vs the risky
+full-remap path (oracle-gated). This is the "hardware behaving weirdly = understand it first" discipline
+applied to a MODEL change: understanding WHY the boot works without the AHBC prevented a needless
+boot-risking rewrite. Honest: QE stays 🔶 (unmodelled), open at lower priority — not claimed done.
+
 ## 2026-07-20 — #177 IMPLEMENTED: Zephyr GPIO interrupts (edge/level) + shared ISR — QEMU PASS (edge caught the H2 power-on)
 
 Actually implemented the GPIO interrupt driver this cycle (last cycle I'd scoped+deferred it; the context

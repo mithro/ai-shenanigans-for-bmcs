@@ -441,11 +441,17 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   + the ⬜ driver cells are tracked follow-on work under #173.
 - **49–50 (ADDED 2026-07-20, #175/#176 — a 2ND gate-d pass caught the 1st enumeration itself missed these):**
   - **49 AHBC** (AHB Bus Controller, 0x1E600000/IRQ31; regs 0x00 key/0x80 priority/0x88 IRQ/**0x8C
-    Address-Remap** = boot remap of 0x0): **QE=🔶** — in QEMU it's swallowed by the `ASPEED_DEV_IOMEM`
-    unimplemented catch-all, and the boot-area remap is FAKED by the machine `spi_boot` alias, not a
-    faithful AHBC 0x8C model. **UQ/US=🔶** — the loader (Raptor/U-Boot) DOES use the AHBC8C boot-remap,
-    but on the faked model. L/Z=Ⓝ (no runtime OS driver). Follow-on: faithfully model 0x8C/priority/IRQ
-    (#175). This is boot-critical, so it is NOT a phantom to gate — it is a real block to MODEL.
+    Address-Remap** = boot remap of 0x0→SDRAM): **QE=🔶** — in QEMU it's swallowed by the
+    `ASPEED_DEV_IOMEM` unimplemented catch-all (register writes absorbed, reads 0), not a faithful AHBC
+    model. **CORRECTION (2026-07-20 investigation, #175):** the remap is NOT "faked by an alias" — the
+    machine simply keeps 0x0 = the boot-ROM (`spi_boot_container`/`boot_rom`, hw/arm/aspeed.c) throughout,
+    and the AHBC 0x8C remap is NEVER driven. It turns out NOT to matter on this machine: the Raptor U-Boot
+    relocates to high DRAM (0x4xxxxxxx) and Linux uses high exception vectors, so neither oracle depends on
+    0x0=SDRAM (hence C-UBOOT/C2 both boot with the AHBC unmodelled). So a faithful 0x8C remap model is
+    HIGH-RISK (boot-critical memory map) for LOW value (cosmetic here) — re-scoped lower-priority under
+    #175. UQ/US=🔶 reflect that the loader boots regardless. L/Z=Ⓝ. Honestly still QE=🔶 per "all
+    functionality" (the register model + remap remain unmodelled), just no longer mis-labelled as a
+    boot-critical urgent gap.
   - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=⬜** — not yet faithfully modeled. **SRAM/A2P
     discrepancy RESOLVED (2026-07-20, submodule 4de9aa40c7):** QEMU used to map `ASPEED_DEV_SRAM` (a G4
     RAM block) at 0x1E720000, but §9 assigns that address to the A2P bridge on the G3 — the SRAM phantom
