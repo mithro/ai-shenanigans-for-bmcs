@@ -34,6 +34,13 @@ harness: the model/driver were right, the test's proxy was racing the real fast 
 behavior-neutral — both gates still pass. Patch 0009 reverse- and forward-applies clean. Row 39
 LQ/LU stay ✅, now concurrency-hardened; LS (silicon) still ⬜ (JTAG rig run pending).
 
+An independent re-review of the hardened driver (feature-dev:code-reviewer, all 6 checks:
+every CONTROL RMW locked; lock init before devm_request_irq; no sleeping call under the lock
+and rtc_update_irq outside it; spin_lock_irqsave used consistently for the hard-IRQ+process
+mix; BCD path unchanged; no double-unlock/missing-unlock/wrong-lock) returned **CLEAN — race
+closed, no new defect**. Notably it confirmed the fix is correctly SCOPED: the BCD path has no
+alarm ops so it was never exposed to the race and correctly takes no lock. Gate-(b) CLOSED.
+
 ## 2026-07-21 — Gate-(b) on the new RTC Linux driver + #189-Linux scope refined (WDT pretimeout mismatch)
 
 Two things:
