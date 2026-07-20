@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(b) SEALED: confirm-clean re-review of all 4 fixes returns CLEAN (no issues reported)
+
+The literal gate-(b) criterion is "full code reviews from sub-agents of all developed code returns with
+NO issues reported". Round 1 (4 independent reviews across Zephyr drivers / QEMU models / Linux patches /
+U-Boot patches) found 4 real issues — all now fixed. Ran a 5th independent sub-agent as the confirm-clean
+re-review of the 4 fixes; it verified EACH against the actual code (not the description) and returned:
+  * FIX 1 Zephyr i2c configure() lock — RESOLVED clean (lock wraps hw_init, matches transfer(), early
+    -ENOTSUP returns before the lock so no leak; init()'s unlocked hw_init is pre-scheduler, out of scope).
+  * FIX 2 w83795 reset_hold — RESOLVED clean (full POR re-init via load_defaults; include set identical to
+    the compiling sbtsi/w83601g pattern; no UAF).
+  * FIX 3 fabric sys_pwrgd edge-tie — RESOLVED clean (tie only on level transition; sys_pwrgd always
+    updated; BMC-owns power-on path intact; explicit sb-post-complt-n override now survives).
+  * FIX 4 uboot 0004 revert — RESOLVED clean (glob confirms 0004 gone; remaining 0001/0002/0003 touch
+    disjoint files, no dependency on 0004's start.S target; only append-only logs reference the removed
+    file; SCTLR.A back to SET = fail-loud).
+  OVERALL VERDICT (sub-agent): "Gate-(b) confirm-clean: CLEAN. All 4 fixes correctly resolve their
+  original issues, verified against the actual code, with no new bugs introduced."
+So GATE (b) IS SEALED for the code developed so far: independent review → 0 issues reported. HONEST SCOPE
+NOTE: this seals the CURRENT developed code (Zephyr drivers, QEMU models, Linux/U-Boot patches as they
+stand at d4ccb27 + submodule 27c6cccc26). Gate (b) is a MOVING target — each NEW driver written under
+gate (c) must get the same find→fix→confirm-clean loop before it too counts as sealed. The re-review also
+independently re-confirmed #168 (the durable unaligned-access fix) is honestly logged as still-open, not
+silently dropped.
+
 ## 2026-07-20 — Gate-(b) CODE REVIEW #3+#4 (Linux + U-Boot patches): 12/13 CLEAN; 1 CRITICAL (uboot 0004 masked an unaligned access) → REVERTED per fail-loud
 
 Completed the final two gate-(b) code bodies — the Linux-kernel patches (10) + U-Boot patches (3) — in one
