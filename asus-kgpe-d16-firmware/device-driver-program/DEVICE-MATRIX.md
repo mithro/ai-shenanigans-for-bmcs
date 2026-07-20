@@ -488,12 +488,23 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   alarm_is_pending, alarm_set_callback) + a VIC-26 ISR (recurring, per the Zephyr contract — NOT
   the Linux one-shot) + a k_spinlock guarding the CONTROL RMW. Validated in QEMU (rtc_smoke,
   CONFIG_RTC_ALARM): armed 12:00:05 mask=0x07 → the ~732x counter reached it → VIC-26 → callback
-  (`alarm fires=1`) → `RTC-ALARM RESULT: PASS`. **ZS stays 🔶** (silicon Zephyr RTC — set/get runs
-  but not real-time, and the alarm via JTAG is not yet run).
-  The ZS 🔶 also reflects that true real-time 1 Hz is physically impossible on this crystal-less
-  board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
-  silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked
-  as **#186** (needs a silicon minute-wrap test). D11.
+  (`alarm fires=1`) → `RTC-ALARM RESULT: PASS`.
+  **SILICON-PROVEN + two model-hidden bugs FIXED (2026-07-21, #192, `d14-zephyr/28`):** the FIRST
+  silicon JTAG run FAILED and exposed two real bugs the QEMU model hid — exactly the goal's "it's
+  your code" mandate. (1) **RTC04 is FIELD-packed** (datasheet §24 hour[16:12]/min[11:6]/sec[5:0]),
+  not byte-packed: a byte-packed hour write read back 0 on silicon; #186 ANSWERED for RTC04. Fixed in
+  Zephyr+Linux drivers + the model's alarm compare. (2) **the alarm fires on VIC source 22** (the
+  RTC's single IRQ), NOT the assumed separate source 26: a register-dump diagnostic showed source-26
+  left VIC bit 22 latched-unserviced (fires=0), source-22 serviced it (fires=1). Fixed: driver IRQ
+  26→22, model pulses s->irq/VIC22 (phantom source-26 alarm_irq removed), machine rewired, Linux dts
+  interrupts=<22>. **Both fixes make the model FAITHFUL** — a byte-packed or source-26 alarm now FAILS
+  in QEMU too. RE-VALIDATED: SILICON Zephyr alarm `fires=1` PASS; QEMU Zephyr alarm + Linux wakealarm
+  + dev/mem rtcalarm all PASS on VIC 22. **So the RTC alarm now fires end-to-end on real silicon —
+  the Zephyr-alarm ZS deliverable is DONE** (the row-39 ZS 🔶 remains only for the crystal-less
+  non-real-time RATE, a documented hardware constraint, NOT the alarm).
+  The ZS 🔶 reflects that true real-time 1 Hz is physically impossible on this crystal-less
+  board — the documented hardware constraint. RTC04-layout is now RESOLVED (field-packed, silicon);
+  the COUNTER bit-layout at a minute-wrap is still #186-open (a separate question). D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 - **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/
