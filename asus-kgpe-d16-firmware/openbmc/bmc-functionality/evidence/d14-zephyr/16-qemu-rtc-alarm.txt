@@ -1,0 +1,50 @@
+DEVICE-MATRIX row 39 (AST2050 G3 RTC) — QEMU RTC alarm (RTC04) + alarm-interrupt
+(VIC 26) now modeled + validated (2026-07-21, #187, gate-d finding).
+
+Gate-(d)'s new-task sweep flagged that #158 modeled only the free-running RTC
+counter — the datasheet §24 alarm (RTC04 Clock Alarm Register) + its interrupt were
+unmodeled (the G3 RTC model didn't handle reg 0x04 at all, and only the RTC IRQ 22
+was wired, not the separate RTC-alarm IRQ 26). This closes the QE half of #187.
+
+DATASHEET §24 semantics modeled:
+  - RTC04 (0x04): hour[16:12]/min[11:6]/sec[5:0] alarm value.
+  - RTC0C (control): [0] RTC-enable, [1] enable second alarm, [2] minute, [3] hour,
+    [4] day. The alarm fires when the counter matches RTC04 on the ENABLED fields
+    (datasheet example: "trigger at 12:10:15 -> hour=0xC min=0xA sec=0xF").
+  - VIC: IRQ 22 = RTC, IRQ 26 = RTC-alarm (distinct lines; on the AST2400 line 26 is
+    SDHCI which the G3 lacks, #172).
+
+MODEL (hw/misc/aspeed_rtc_ast2050.c + hw/arm/aspeed_ast2400.c):
+  - a periodic QEMUTimer runs at the counter's own RTC-second rate (clk_hz/32768)
+    while armed (RTC0C[0] set AND >=1 of RTC0C[1:4] set); each tick compares the
+    enabled RTC04 fields against the live counter and PULSES a dedicated alarm IRQ on
+    a rising match edge (edge-detect via `alarm_matched`);
+  - a 2nd sysbus IRQ (index 1) is wired straight to VIC input 26;
+  - arm/disarm is re-evaluated on every write to RTC04/RTC0C/RESTART/RESET;
+  - reset/vmstate v2->v3 add the timer + edge state.
+  Alarm fields are compared BYTE-packed, consistent with the counter model (the same
+  datasheet-vs-driver layout question #186 applies to RTC04).
+
+VALIDATION (QEMU, rtcalarm /dev/mem gate): RESET; RELOAD=00:00:05; RESTART; RTC04
+alarm=00:00:10 (sec+min+hour enabled); CONTROL=0xF (enable+sec+min+hour alarm). The
+fast counter (732x) passes 10 s in ~7 ms, so the alarm fires; the rising edge latches
+in the VIC raw-status (0x1E6C0008). VIC raw is read before + after:
+
+===== CAPTURED CONSOLE (QEMU) =====
+=== RTC-ALARM-BEGIN ===
+VIC raw before=0x00020000 after=0x04020000 (alarm bit26=0x04000000)
+IRQ26 latched: before=0 after=67108864
+RTC-ALARM RESULT: PASS (counter reached RTC04 -> alarm IRQ 26 latched in VIC)
+=== RTC-ALARM-END ===
+
+DECODE: bit26 (0x04000000) is 0 before and set after — the RTC-alarm interrupt fired
+exactly when the counter reached the RTC04 value and latched (edge) in the VIC. (The
+pre-existing bit17 in raw is an unrelated boot-time IRQ, untouched.) Full path:
+RTC04 compare -> QEMUTimer -> alarm IRQ 26 -> VIC edge-latch -> /dev/mem read.
+
+RESULT: RTC alarm + alarm-interrupt now MODELED (row 39 QE) and register-validated in
+QEMU. This closes the QE half of #187. Remaining #187: Linux (rtc-aspeed RTC_ALM_SET/
+RTC_AIE + /sys/class/rtc/rtc0/wakealarm) and Zephyr (rtc alarm API) alarm drivers +
+their QEMU/silicon validation; the alarm's interaction with the crystal-less 732x
+counter (#158/#186) is faithfully reproduced here (the alarm ticks at the same fast
+rate as the counter, so a 1-second wakealarm fires ~732x fast on this board).

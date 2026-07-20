@@ -654,5 +654,36 @@ if grep -q rtcrate /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- RTC ALARM (RTC04) + alarm-interrupt (VIC 26) validation ('rtcalarm', #187) ---
+# The G3 RTC can raise an interrupt when the counter matches the RTC04 alarm on the
+# enabled RTC0C[1:4] fields (datasheet §24). The model pulses a dedicated alarm IRQ
+# wired to VIC input 26. Validate register-level via /dev/mem: load 00:00:05, set the
+# alarm for 00:00:10 (sec+min+hour enabled), enable; the fast counter passes 10s in
+# ~7 ms, so the alarm fires and the edge latches in the VIC raw-status (0x1E6C0008
+# bit26=0x04000000). Read it before (0) and after (set).
+if grep -q rtcalarm /proc/cmdline; then
+	echo "=== RTC-ALARM-BEGIN ==="
+	VICRAW=0x1e6c0008
+	B4=$(devmem $VICRAW)
+	devmem 0x1e781014 32 0x99          # RESET
+	devmem 0x1e781008 32 0x00000005    # RELOAD = 00:00:05 (byte-packed sec=5)
+	devmem 0x1e781010 32 0x5a          # RESTART latch
+	devmem 0x1e781004 32 0x0000000a    # RTC04 alarm = 00:00:10 (sec=10)
+	devmem 0x1e78100c 32 0xf           # CONTROL: RTC-enable + sec+min+hour alarm
+	sleep 1
+	AF=$(devmem $VICRAW)
+	echo "VIC raw before=$B4 after=$AF (alarm bit26=0x04000000)"
+	b26_before=$(( B4 & 0x04000000 ))
+	b26_after=$(( AF & 0x04000000 ))
+	echo "IRQ26 latched: before=$b26_before after=$b26_after"
+	if [ "$b26_before" = "0" ] && [ "$b26_after" -ne 0 ]; then
+		echo "RTC-ALARM RESULT: PASS (counter reached RTC04 -> alarm IRQ 26 latched in VIC)"
+	else
+		echo "RTC-ALARM RESULT: FAIL (before=$b26_before after=$b26_after)"
+	fi
+	echo "=== RTC-ALARM-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

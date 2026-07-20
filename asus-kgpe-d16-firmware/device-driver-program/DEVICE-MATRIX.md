@@ -664,8 +664,10 @@ enumeration is complete (every schematic device has a row), but an independent g
 found five datasheet-level functional sub-blocks that a "complete emulation of ALL functionality" demands
 and that are NOT yet modeled inside otherwise-✅ QE cells. Now tracked as tasks so they are not silently
 absent — these keep the affected rows from being TRULY 100% until dispositioned:
-- **#187 — RTC alarm (RTC04) + alarm IRQ 26** (row 39): §24 mandates a programmable alarm with interrupt;
-  #158 modeled only the free-running counter. Ties to the #158/#186 crystal-less-tick thread.
+- **#187 — RTC alarm (RTC04) + alarm IRQ 26** (row 39): **QE DONE (2026-07-21, submodule 31ea873582,
+  evidence `d14-zephyr/16`):** modeled RTC04 + RTC0C[1:4] alarm-enables + a periodic match-check that pulses
+  a dedicated alarm IRQ wired to VIC 26; validated (VIC raw bit26 latches when the counter reaches the
+  alarm). Linux (rtc-aspeed wakealarm) + Zephyr (rtc alarm API) validation remain. Ties to #158/#186.
 - **#188 — I²C SDA bus-lock recovery (§31.5.11)** (row 15): SCL-toggle recovery on a stuck SDA, relevant to
   the multi-master shared sensor bus; not modeled/validated.
 - **#189 — WDT timeout-INTERRUPT mode (WDT0C[2]/WDT18)** (row 38): only the reset path is validated; the

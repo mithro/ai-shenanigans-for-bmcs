@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #187 QE: RTC alarm (RTC04) + alarm IRQ 26 modeled + validated (closing a gate-d finding)
+
+Turned a gate-(d) finding straight into working emulation (converting audit output → functionality). #187:
+the datasheet §24 RTC alarm was unmodeled — #158 modeled only the free-running counter; the G3 RTC model
+didn't handle reg 0x04 and wired only the RTC IRQ 22, not the separate RTC-alarm IRQ 26.
+
+Modeled it (submodule 31ea873582): RTC04 alarm register + RTC0C[1:4] per-field alarm-enables; a periodic
+QEMUTimer at the counter's own RTC-second rate (clk_hz/32768) compares the ENABLED alarm fields against the
+live counter while armed and PULSES a dedicated alarm IRQ on a rising match edge; a 2nd sysbus IRQ wired to
+VIC input 26 in the G3 machine; arm/disarm re-evaluated on every RTC04/RTC0C/RESTART/RESET write; reset +
+vmstate v2->v3 add the timer + edge state. Byte-packed field compare, consistent with the counter (#186).
+
+Validated in QEMU (new rtcalarm /dev/mem gate, evidence d14-zephyr/16): RELOAD=00:00:05, RTC04=00:00:10
+(sec+min+hour enabled), enable -> the 732x-fast counter reaches 10s in ~7ms -> alarm fires -> VIC raw-status
+(0x1E6C0008) bit26: before=0, after=0x04000000 -> **RTC-ALARM RESULT: PASS**. Full path proven: RTC04
+compare -> QEMUTimer -> alarm IRQ 26 -> VIC edge-latch -> userspace /dev/mem read. Nice faithfulness bonus:
+because the alarm ticks at the same crystal-less 732x rate as the counter, a 1-second wakealarm would fire
+~732x fast on this board — the #158/#186 rate story carries through to the alarm.
+
+QE half of #187 DONE. Remaining #187: Linux rtc-aspeed wakealarm (RTC_ALM_SET/RTC_AIE + /sys wakealarm) and
+Zephyr rtc alarm API drivers + their QEMU/silicon validation. Gate-d list shrinks by one QE cell.
+
 ## 2026-07-21 — Gate-(c) integrity + Gate-(d) new-task discovery: trackers HONEST; 5 sub-block tasks added
 
 Ran the two remaining completion gates as independent sub-agent sweeps.
