@@ -1,5 +1,49 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(a)/(c)/(d) audit pass (3 parallel independent sub-agents): completeness + honesty CONFIRMED; gate-d found 3 real new tasks (#181/#182/#183)
+
+Rotated from the gate-(b) code sweep to the completeness/faithfulness gates (a/c/d), which the feedback flagged
+as un-run. Dispatched THREE independent sub-agents in parallel with DIFFERENT lenses; verified each finding.
+
+- **Gate-(a) device completeness → MATRIX COMPLETE.** The auditor cross-checked the authoritative schematic
+  §§2-15 + the §16 per-pin table AND the machine-generated netlist far-end lists in QU1_pins.md (not just the
+  prose) against all 51 rows. **No schematic-wired BMC device that is a real driver/emulation target lacks a
+  row; no phantom row.** Every unrowed schematic part is passive glue / host-side chip / PCI peer (ZU1 FW322 =
+  SP5100 PCI peer, not BMC-driven) / CU2 clock-gen / the JTAG harness — each justified. This is the
+  device-by-device (not section-level) gate-a pass the feedback said was missing. Actionable detail folded in:
+  the §16 table names 6 specific §11 platform-GPIO NETS the §11 prose omits (AST_BIOS_POST_COMPLT#/
+  AST_SYNCFLOODIN#/AST_PSONEN/FP_NMIBNT#/AST_RESETDIS#/AST_PWRBNTDIS#) — GPIO line functions on rows 27-29,
+  not separate devices; added to the row-28/29 note.
+- **Gate-(c) over-claim/evidence → SAMPLED ✅ CELLS ARE EVIDENCE-BACKED.** The auditor opened the cited
+  evidence for the full ZS ✅ set + the named core rows and confirmed every SILICON claim has a real-hardware
+  JTAG transcript and every "both-sides" shows both — noting the matrix is "unusually disciplined" with many
+  self-downgrades. Two doc-hygiene items fixed: (1) the snapshot prose said "8 rows ZS ✅" but the tally+grid
+  show **11** (1/15/16/20/21/22/34/35/36/37/38) — an UNDER-statement, now corrected + enumerated; (2) rows 1
+  (DDR2) + 34 (clock) ZS ✅ are indirect (stack runs-from/consumes, same standard as U-Boot/Linux ✅ on those
+  rows) — noted explicitly in the prose (reviewer explicitly would NOT force a downgrade).
+- **Gate-(d) new-task identification → 3 REAL non-duplicate tasks (so gate-d correctly does NOT seal).** All
+  verified against the tree before adding:
+  - **#181** faithfulness: `hw/net/ftgmac100.c` returns RTL8201**CP** PHY-ID but schematic §14 names U5 as
+    RTL8201**N** — row 10's note said "(unresolved)" with NO task. Added #181; row-10 note updated.
+  - **#182** capability: §9 scopes USB as "keyboard/mouse/**CD**" but only the HID kbd/mouse gadget is
+    validated (F8-KVM) — the virtual-MEDIA (mass-storage/CD) gadget path is un-validated + untracked. Added
+    #182; row-9 note updated.
+  - **#183** completeness / OVER-CLAIM CAUGHT: the W83795 model does reads + linear PWM→tach (#174) but NOT
+    SmartFan auto-mode / alarm-limit+SMBALERT / CASEOPEN / VID — so row 16 QE ✅ ("all functionality")
+    over-claimed. **Downgraded row 16 QE ✅→🔶** (consistent with row 42 PECI's "not complete functionality →
+    🔶" precedent) + scoped the note; added #183 to restore ✅. Tally: QEMU emulation 30→29 ✅, 9→10 🔶.
+  - Bookkeeping flag (SMBus-ALERT #135 "dropped") was a FALSE ALARM — #135 is open (in_progress, covers SALT);
+    I simply omitted it from the ID list I handed the agent.
+
+Net: gates (a)+(c) came back CLEAN/confirmed (strong independent rebuttal of the "not enumerated / over-
+claimed" concerns), and gate (d) found 3 genuine gaps → added as #181/#182/#183 + one honest self-downgrade
+(row 16). This is the correct gate outcome: the completeness dimension holds, the honesty dimension holds
+(with one over-claim caught + corrected), and the enumeration converges (3 new tasks, all attaching to
+EXISTING rows — no missing DEVICE, just missing capability/faithfulness sub-tasks). To SEAL gate (a)/(d) a
+FUTURE independent pass must come up empty; this pass did not, so it stays open — honestly.
+Also self-reviewed the Zephyr `w83795` sensor driver (gate-b, non-conflicting): CLEAN (VRLSB two-read latch
+protocol correct, 12-bit tach + signed-temp reconstruction match the model, sensor_value sign contract OK).
+
 ## 2026-07-20 — gate-(b) sweep round 3: the Linux/U-Boot/kernel-driver bodies — 5 reviewed, all CLEAN; 1 small RTC hardening applied
 
 Extended the gate-(b) sweep to the Linux kernel patches + U-Boot + the remaining boot-critical Zephyr drivers
