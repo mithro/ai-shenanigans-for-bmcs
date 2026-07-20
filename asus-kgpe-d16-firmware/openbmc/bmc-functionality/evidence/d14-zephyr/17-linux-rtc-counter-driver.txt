@@ -64,3 +64,39 @@ userspace (/sys wakealarm) -> rtc-aspeed set_alarm -> RTC04/RTC0C -> QEMU alarm 
 VIC 26 -> IRQ handler -> RTC_AF. This closes the Linux half of the #187 RTC-alarm capability
 (LQ/LU) on top of the counter-RTC driver. Remaining #187: Zephyr rtc alarm API + silicon
 validation of the Linux RTC + alarm (driver + dts ready; needs a JTAG rig run).
+
+===== GATE-(b) CODE-REVIEW FIX: CONTROL-register concurrency + robust gate (2026-07-21) =====
+A gate-(b) code review (independent sub-agent, confidence 80) found a real concurrency
+bug in the counter-style driver: G3_RTC_CONTROL (0x0C) is read-modify-written from BOTH
+the hard-IRQ alarm handler (via aspeed_rtc_alarm_enable) AND process context (set_time's
+master-enable, set_alarm/alarm_irq_enable) with NO lock. A mid-RMW preempt can lose either
+the alarm-disable (re-arming a consumed one-shot) or the master G3_RTC_CTRL_ENABLE bit
+(leaving the RTC disabled after a "successful" hwclock -w). The 732x acceleration makes the
+window realistic — the one-shot fires ~7ms after arming. FIX (patch 0009, +211/-4):
+  - added `spinlock_t lock;` to struct aspeed_rtc + spin_lock_init() in probe;
+  - wrapped EVERY G3_RTC_CONTROL RMW in spin_lock_irqsave/spin_unlock_irqrestore:
+    set_time's counter-enable, and aspeed_rtc_alarm_enable (which set_alarm,
+    alarm_irq_enable, and the IRQ handler all funnel through);
+  - bare single readl() of CONTROL (read_time enable-check, read_alarm enabled flag)
+    stays lock-free — a 32-bit aligned MMIO read is atomic, only RMW needs the lock.
+The lock is behavior-neutral; both gates still PASS after the rebuild (below).
+
+Separately, the wakealarm gate's PASS heuristic was made robust. It previously required the
+sysfs value to read back non-empty ("armed") — but the crystal-less counter runs ~732x, so
+the +5 RTC-second one-shot can fire (~7ms) BEFORE the shell reads it back, leaving SET empty
+even on success (a test race against the FAITHFUL fast counter, not a driver/model bug). The
+gate now keys PASS on the race-free evidence: the VIC-26 rtc-alarm interrupt-count delta in
+/proc/interrupts (armed->fired) plus the one-shot being cleared (AFTER empty).
+
+===== RE-VALIDATED CONSOLE (QEMU, hardened driver + robust gate, 2026-07-21) =====
+[    1.047150] aspeed-rtc 1e781000.rtc: registered as rtc0
+RTC-LINUX RESULT: PASS (set 12:45:30 -> read Sat Jan 15 12:45:40 2000; hour:min round-tripped via /dev/rtc0)
+--- wakealarm ---
+wakealarm set to (epoch)=            <- empty: one-shot already fired before readback (732x)
+wakealarm after sleep = '' (empty = fired+cleared)
+rtc alarm IRQ26 count: 0 -> 1        <- race-free arm->fire proof
+RTC-WAKEALARM RESULT: PASS (armed -> IRQ26 fired (0->1) -> RTC_AF cleared it)
+
+RESULT: gate-(b) concurrency finding RESOLVED (irq-safe lock around all CONTROL RMW);
+both RTC-LINUX (set/get) and RTC-WAKEALARM (arm->IRQ26->clear) still PASS. Row 39 LQ/LU
+remain ✅ and are now concurrency-hardened. LS (silicon) still ⬜ (needs JTAG rig run).

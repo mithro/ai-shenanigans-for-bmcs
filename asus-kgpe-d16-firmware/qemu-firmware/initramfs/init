@@ -740,22 +740,31 @@ if grep -q rtclinux /proc/cmdline; then
 	echo "--- wakealarm ---"
 	WAKE=/sys/class/rtc/rtc0/wakealarm
 	if [ -w "$WAKE" ]; then
-		I0=$(grep -aiE 'rtc|aspeed' /proc/interrupts 2>&1)
+		# RTC-alarm IRQ26 count BEFORE arming (the 1e781000.rtc line in
+		# /proc/interrupts; field 2 = CPU0 count). Default 0 if not yet present.
+		C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
+		[ -z "$C0" ] && C0=0
 		echo 0 > "$WAKE" 2>&1              # clear any pending
 		echo "+5" > "$WAKE" 2>&1           # alarm 5 RTC-seconds ahead
 		SET=$(cat "$WAKE" 2>&1)
 		echo "wakealarm set to (epoch)=$SET"
 		sleep 1                            # RTC advances ~732x, passes +5 in ~7ms
 		AFTER=$(cat "$WAKE" 2>&1)
-		I1=$(grep -aiE 'rtc|aspeed' /proc/interrupts 2>&1)
+		C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
+		[ -z "$C1" ] && C1=0
 		echo "wakealarm after sleep = '$AFTER' (empty = fired+cleared)"
-		echo "rtc irq line: $I1"
-		# PASS = the alarm was armed (SET non-empty) and then fired (AFTER empty,
-		# the rtc core clears a one-shot wakealarm once RTC_AF is delivered).
-		if [ -n "$SET" ] && [ -z "$AFTER" ]; then
-			echo "RTC-WAKEALARM RESULT: PASS (armed then fired -> IRQ26 -> RTC_AF cleared it)"
+		echo "rtc alarm IRQ26 count: $C0 -> $C1"
+		# PASS = the alarm FIRED: the VIC-26 rtc-alarm interrupt was delivered
+		# (count incremented) AND the rtc core cleared the one-shot wakealarm
+		# (AFTER empty). We do NOT require SET to read back non-empty: the
+		# crystal-less counter runs ~732x (no 32.768kHz xtal, #158/#186), so the
+		# +5 RTC-second one-shot can fire in ~7ms — before the shell reads it
+		# back — leaving SET empty even on success. The IRQ-count delta is the
+		# race-free arm->fire proof.
+		if [ "$C1" -gt "$C0" ] && [ -z "$AFTER" ]; then
+			echo "RTC-WAKEALARM RESULT: PASS (armed -> IRQ26 fired ($C0->$C1) -> RTC_AF cleared it)"
 		else
-			echo "RTC-WAKEALARM RESULT: FAIL (set='$SET' after='$AFTER')"
+			echo "RTC-WAKEALARM RESULT: FAIL (set='$SET' after='$AFTER' irq=$C0->$C1)"
 		fi
 	else
 		echo "RTC-WAKEALARM RESULT: SKIP (wakealarm attr not present)"

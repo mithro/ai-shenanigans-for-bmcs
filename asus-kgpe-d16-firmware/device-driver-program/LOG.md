@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(b) RESOLVED: RTC-driver CONTROL-register concurrency fix + robust wakealarm gate
+
+The gate-(b) code review (below) returned one real finding (confidence 80): the counter-style
+`G3_RTC_CONTROL` (0x0C) register is read-modify-written from BOTH the hard-IRQ alarm handler
+(via `aspeed_rtc_alarm_enable`) AND process context (`set_time`'s master-enable, `set_alarm`,
+`alarm_irq_enable`) with **no lock**. A mid-RMW preempt loses either the alarm-disable
+(re-arming a consumed one-shot) or the master `G3_RTC_CTRL_ENABLE` bit (RTC silently left
+disabled after a "successful" `hwclock -w`). The 732x acceleration makes the window realistic —
+the one-shot fires ~7 ms after arming. Everything else the reviewer checked was correct (mday
+clamp, calendar base, alarm symmetry, one-shot, BCD non-regression).
+
+**Fix (patch 0009 regenerated, drivers/rtc/rtc-aspeed.c, +211/-4):**
+- `spinlock_t lock;` added to `struct aspeed_rtc` + `spin_lock_init()` in probe;
+- `spin_lock_irqsave`/`spin_unlock_irqrestore` around EVERY `G3_RTC_CONTROL` RMW —
+  `set_time`'s counter-enable and `aspeed_rtc_alarm_enable` (the single choke-point that
+  `set_alarm`, `alarm_irq_enable`, and the IRQ handler all funnel through, so the IRQ path is
+  covered transitively);
+- bare single `readl()` of CONTROL (read_time enable-check, read_alarm enabled flag) left
+  lock-free — a 32-bit aligned MMIO read is atomic; only RMW needs the lock.
+
+**Also fixed a test race (not a driver/model bug):** the wakealarm gate previously required the
+sysfs value to read back non-empty as its "armed" proof — but the crystal-less counter runs
+~732x (the FAITHFUL no-xtal behavior, #158/#186), so the `+5` RTC-second one-shot can fire
+(~7 ms) BEFORE the shell reads it back, leaving SET empty even on success. Last rebuild happened
+to lose that race → spurious FAIL. Re-keyed the gate PASS on the race-free evidence: the VIC-26
+rtc-alarm **interrupt-count delta** in /proc/interrupts (armed→fired) + the one-shot cleared
+(AFTER empty). This is the "weird behavior = my code, fix it proper" principle applied to the
+harness: the model/driver were right, the test's proxy was racing the real fast counter.
+
+**Re-validated (QEMU, hardened driver + robust gate):** `RTC-LINUX RESULT: PASS` (set/get) and
+`RTC-WAKEALARM RESULT: PASS (armed -> IRQ26 fired (0->1) -> RTC_AF cleared it)`. The spinlock is
+behavior-neutral — both gates still pass. Patch 0009 reverse- and forward-applies clean. Row 39
+LQ/LU stay ✅, now concurrency-hardened; LS (silicon) still ⬜ (JTAG rig run pending).
+
 ## 2026-07-21 — Gate-(b) on the new RTC Linux driver + #189-Linux scope refined (WDT pretimeout mismatch)
 
 Two things:
