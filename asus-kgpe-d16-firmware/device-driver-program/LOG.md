@@ -30,9 +30,12 @@ This is precisely the memory principle — a broken Linux boot is a bug in MY co
 
 Commit `0d66a5c` (driver + patch 0009 + init). Row 39 LS ⬜→✅. Follow-ups: (a) QEMU faithfulness — model
 the RESTART async load + CONTROL[5] busy so a non-polling driver misbehaves in QEMU too (closes the
-"QEMU hid it" gap); (b) minor: the fast counter causes an alarm IRQ re-fire storm (82460) until the
-one-shot clears — mask alarm-enable in the ISR to quiet it (fast-clock artifact, #158/#186, not a
-correctness bug — the test PASSES). QEMU rtclinux regression check building in parallel.
+"QEMU hid it" gap); (b) minor: the fast counter causes an alarm IRQ re-fire storm (82460 in ~1s) —
+the ISR ALREADY masks alarm-enable (CONTROL[1:4]=0) yet the line keeps re-asserting, so masking
+alarm-enable alone does NOT deassert the RTC alarm interrupt (needs a status-clear or it's a
+fast-clock re-match; investigate against datasheet §24 + reproduce in QEMU once #194 models the
+alarm-status). Fast-clock artifact (#158/#186), NOT a correctness bug — the wakealarm test PASSES
+(fires + one-shot cleared). QEMU rtclinux regression check building in parallel.
 
 ## 2026-07-21 — Row 39 LS: netboot UNBLOCKED (static IP) + RTC block PROVEN healthy on silicon; my SCU08[16] "fix" was the regression
 
