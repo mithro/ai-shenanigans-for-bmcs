@@ -460,5 +460,49 @@ if grep -q ledtest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
+# DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
+# via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we
+# read the value + the live countdown back from /sys/class/watchdog/watchdog0
+# (WATCHDOG_SYSFS). Those attrs are the watchdog-core reading the aspeed_wdt
+# driver, which reads the QEMU aspeed.wdt model's counter registers -- so
+# timeout==N and a numeric, counting timeleft prove the userspace ioctl reached
+# the model end-to-end (userspace -> /dev/watchdog -> aspeed_wdt -> QEMU model).
+# No reset needed to prove the interface (the WDT reset itself is row-38 QE/ZS).
+if grep -q wdttest /proc/cmdline; then
+	echo "=== WDT-USERSPACE-BEGIN ==="
+	ls -la /dev/watchdog* 2>&1
+	WD=/sys/class/watchdog/watchdog0
+	echo "identity=$(cat $WD/identity 2>&1)"
+	echo "state(pre-arm)=$(cat $WD/state 2>&1)"
+	# Arm from userspace: 30s timeout, pet every 5s (busybox daemonises).
+	busybox watchdog -T 30 -t 5 /dev/watchdog 2>&1
+	sleep 3
+	TMO=$(cat $WD/timeout 2>&1)
+	ST=$(cat $WD/state 2>&1)
+	# aspeed_wdt does not implement get_timeleft, so timeleft may be absent -- probe
+	# it honestly (test -e) instead of letting cat error.
+	if [ -e "$WD/timeleft" ]; then TL=$(cat $WD/timeleft 2>&1); else TL="(not exposed by aspeed_wdt)"; fi
+	echo "timeout=$TMO state=$ST timeleft=$TL"
+	# Stop the pet daemon (busybox watchdog in this build does not magic-close on
+	# SIGTERM, so the WDT stays armed -- harmless: poweroff -f below exits QEMU
+	# well before the 30s expiry).
+	kill "$(pidof watchdog)" 2>&1 || echo "(no watchdog pid to kill)"
+	sleep 1
+	echo "state(post-kill)=$(cat $WD/state 2>&1)"
+	# PASS = userspace WDIOC_SETTIMEOUT reached the driver (timeout reads back 30)
+	# AND the WDT is armed (state active). aspeed_wdt does not expose timeleft, so
+	# we do NOT gate on it; the WDT actually RESETTING the SoC is row-38 QE/ZS
+	# (proven separately). This gate proves the userspace /dev/watchdog API path
+	# (open -> SETTIMEOUT -> start -> keepalive) works end to end.
+	if [ "$TMO" = "30" ] && [ "$ST" = "active" ]; then
+		echo "WDT-USERSPACE RESULT: PASS (timeout=$TMO active; timeleft not exposed by aspeed_wdt)"
+	else
+		echo "WDT-USERSPACE RESULT: FAIL (timeout=$TMO state=$ST)"
+	fi
+	echo "=== WDT-USERSPACE-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

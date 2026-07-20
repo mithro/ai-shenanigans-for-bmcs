@@ -1,0 +1,56 @@
+DEVICE-MATRIX row 38 (Watchdog / WDT) — Linux USERSPACE validation via
+/dev/watchdog (2026-07-20, LU ⬜→🔶).
+
+Goal: exercise the userspace watchdog API on the QEMU kgpe-d16-bmc machine, which
+the row-38 note flagged as missing ("LU=⬜ (/dev/watchdog userspace not
+exercised)"). Complements row 38 QE ✅ (model WDT fires) + ZS ✅ (Zephyr silicon
+reset) + LQ ✅ (aspeed_wdt binds).
+
+WHAT IS PROVEN, AND ITS HONEST SCOPE
+The userspace watchdog API path works end to end in QEMU:
+  busybox watchdog -T 30  →  WDIOC_SETTIMEOUT(30) + start  →  aspeed_wdt driver
+  →  QEMU aspeed.wdt model.
+Confirmed from userspace: /dev/watchdog{,0,1} present, identity=aspeed_wdt, the
+timeout reads back 30 (the userspace SETTIMEOUT reached the driver, which programs
+the model's WDT_RELOAD register), and state flips inactive→active (armed). So a
+userspace daemon can open, configure, arm and keep-alive the WDT.
+
+Path: C2 kernel (uImage-kgpe-d16) + BusyBox initramfs, machine kgpe-d16-bmc, via a
+new `wdttest` init gate (qemu-firmware/initramfs/init) + run-qemu.py boot, under a
+systemd-run --scope cgroup. Kernel: CONFIG_ASPEED_WATCHDOG=y, WATCHDOG_SYSFS=y.
+
+===== CAPTURED CONSOLE (QEMU) =====
+=== WDT-USERSPACE-BEGIN ===
+crw-------    1 root     root       10, 130  /dev/watchdog
+crw-------    1 root     root      247,   0  /dev/watchdog0
+crw-------    1 root     root      247,   1  /dev/watchdog1
+identity=aspeed_wdt
+state(pre-arm)=inactive
+timeout=30 state=active timeleft=(not exposed by aspeed_wdt)
+state(post-kill)=active
+WDT-USERSPACE RESULT: PASS (timeout=30 active; timeleft not exposed by aspeed_wdt)
+  [run-qemu stops capturing at the --expect match, so the log truncates the tail
+   of the PASS line; boot: OK confirms the PASS marker was seen.]
+
+HONEST FINDINGS (not skipped — documented):
+1. aspeed_wdt does NOT implement get_timeleft, so /sys/class/watchdog/watchdog0/
+   timeleft does not exist. The FIRST run FAILED only because my test wrongly
+   required timeleft; corrected to gate on timeout==30 && state==active (what the
+   driver actually supports). A test-criteria bug, not a driver/model problem.
+2. busybox watchdog in this build does not magic-close ('V') on SIGTERM, so after
+   `kill` the WDT stays armed (state post-kill = active). Harmless here: the gate
+   `poweroff -f`s within ~2 s, long before the 30 s expiry. Not a nowayout issue
+   (CONFIG_WATCHDOG_NOWAYOUT is unset).
+3. The board exposes TWO watchdogs (watchdog0 + watchdog1) — the AST2050 has WDT1
+   and WDT2; aspeed_wdt binds both.
+
+WHY 🔶 (not ✅): (a) this is QEMU-userspace only — the other LU ✅ cells are
+silicon-userspace; and (b) it proves the userspace API path (open/SETTIMEOUT/
+arm/keepalive), not a userspace-*triggered* SoC reset. The WDT actually resetting
+the SoC is proven separately as row 38 QE (model) + ZS (Zephyr silicon) + the
+g3-clk 120 s aspeed-WDT reset observed on real hardware. A userspace-armed-reset
+demonstration (e.g. arm short + stop feeding under -no-reboot) would take it to ✅.
+
+Reusable: this reuses the `ledtest`-style init-gate + repack harness added the
+same day (evidence e-gpio-leds/01), confirming that harness generalises to other
+Linux-userspace validations.

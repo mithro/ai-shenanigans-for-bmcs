@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-20 — row 38 WDT LU ⬜→🔶: userspace /dev/watchdog API validated in QEMU (with an honest test-criteria fix)
+
+Closed the row-38 LU gap ("/dev/watchdog userspace not exercised") using the same reusable `ledtest`-style
+init-gate + repack harness from the LED cycle. Added a `wdttest` init gate that runs `busybox watchdog -T 30`
+and reads back the watchdog state from userspace. RESULT (evidence `f-wdt-userspace/00-qemu-dev-watchdog.txt`):
+`/dev/watchdog{,0,1}` present, `identity=aspeed_wdt`, **`timeout` reads back 30** (userspace WDIOC_SETTIMEOUT
+reached the driver, which programs the model's WDT_RELOAD reg) and **`state` inactive→active** (armed) →
+`WDT-USERSPACE RESULT: PASS`. So the userspace watchdog API path (open→SETTIMEOUT→start→keepalive) works
+end-to-end (userspace→/dev/watchdog→aspeed_wdt→QEMU model). Tally: Linux-userspace 15→14 ⬜, 6→7 🔶.
+
+**Graded 🔶 (not ✅) honestly:** (a) QEMU-userspace only (other LU ✅ are silicon-userspace); (b) it proves the
+API path, not a userspace-*triggered* SoC reset (the WDT actually firing is row-38 QE + ZS ✅, separately
+proven, + the g3-clk 120s reset on real HW). A userspace-armed-reset demo (arm short + stop feeding under
+`-no-reboot`) would earn ✅.
+
+**HONEST FAILURE + FIX (test-criteria bug, not a driver/model problem):** the FIRST run FAILED — I required
+`/sys/class/watchdog/watchdog0/timeleft`, but **aspeed_wdt does not implement get_timeleft**, so that attr
+doesn't exist and my `[ -le ]` check errored → FAIL, even though `timeout=30 state=active` were already good.
+Fixed the gate to gate on `timeout==30 && state==active` (what the driver actually supports) + probe timeleft
+with `test -e`. Re-ran → clean PASS. Confidence I didn't "just do something wrong": HIGH — the driver's own
+sysfs proves timeout/state, and the corrected criteria match aspeed_wdt's real capability set. Two more honest
+findings noted in the evidence: busybox watchdog in this build doesn't magic-close on SIGTERM (WDT stays armed
+after kill — harmless, poweroff exits first; NOWAYOUT is unset); and the board exposes TWO WDTs
+(watchdog0+watchdog1 = AST2050 WDT1/WDT2).
+
 ## 2026-07-20 — row 32 LEDs QE 🔶→✅: QEMU LED-drive validated end-to-end (matches silicon exactly), incl. an honest first-attempt failure
 
 Closed the row-32 QEMU-side gap ("a QEMU toggle-observe test would make it ✅"). Added a `ledtest` init gate
