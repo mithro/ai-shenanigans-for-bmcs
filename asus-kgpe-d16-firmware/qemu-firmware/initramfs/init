@@ -654,32 +654,39 @@ if grep -q rtcrate /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
-# --- RTC ALARM (RTC04) + alarm-interrupt (VIC 26) validation ('rtcalarm', #187) ---
+# --- RTC ALARM (RTC04) + alarm-interrupt (VIC 22) validation ('rtcalarm', #187) ---
 # The G3 RTC can raise an interrupt when the counter matches the RTC04 alarm on the
-# enabled RTC0C[1:4] fields (datasheet §24). The model pulses a dedicated alarm IRQ
-# wired to VIC input 26. Validate register-level via /dev/mem: load 00:00:05, set the
-# alarm for 00:00:10 (sec+min+hour enabled), enable; the fast counter passes 10s in
-# ~7 ms, so the alarm fires and the edge latches in the VIC raw-status (0x1E6C0008
-# bit26=0x04000000). Read it before (0) and after (set).
+# enabled RTC0C[1:4] fields (datasheet §24). The RTC has a SINGLE interrupt line =
+# VIC source 22 and the alarm fires on it (silicon-proven #192; NOT a separate 26).
+# Validate register-level via /dev/mem: load 00:00:05, set the alarm for 00:00:10
+# (sec+min+hour enabled), enable; the fast counter passes 10s in ~7 ms, so the alarm
+# fires and the edge latches in the VIC raw-status (0x1E6C0008 bit22=0x00400000).
+# (RTC04 sec=10 fits both packings; hour/min are 0 here — the field-packed layout
+# is exercised by the Zephyr/Linux hour-alarm tests.) Read it before (0) and after.
 if grep -q rtcalarm /proc/cmdline; then
 	echo "=== RTC-ALARM-BEGIN ==="
-	VICRAW=0x1e6c0008
-	B4=$(devmem $VICRAW)
+	# The RTC alarm delivers on the RTC's real IRQ (VIC 22), which Linux SERVICES
+	# (the dts wires rtc interrupts=<22> and rtc-aspeed registered a handler). So
+	# the edge does NOT sit latched in the VIC raw-status for us to read — Linux
+	# claims + EOIs it. The race-free proof is therefore the Linux rtc IRQ COUNT
+	# incrementing after a raw /dev/mem-programmed alarm (proving the register-level
+	# alarm path reaches the real serviced VIC-22 IRQ, independent of the driver's
+	# own set_alarm). Count is field 2 of the 1e781000.rtc /proc/interrupts line.
+	C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
+	[ -z "$C0" ] && C0=0
 	devmem 0x1e781014 32 0x99          # RESET
 	devmem 0x1e781008 32 0x00000005    # RELOAD = 00:00:05 (byte-packed sec=5)
 	devmem 0x1e781010 32 0x5a          # RESTART latch
-	devmem 0x1e781004 32 0x0000000a    # RTC04 alarm = 00:00:10 (sec=10)
+	devmem 0x1e781004 32 0x0000000a    # RTC04 alarm = 00:00:10 (sec=10, field-packed)
 	devmem 0x1e78100c 32 0xf           # CONTROL: RTC-enable + sec+min+hour alarm
-	sleep 1
-	AF=$(devmem $VICRAW)
-	echo "VIC raw before=$B4 after=$AF (alarm bit26=0x04000000)"
-	b26_before=$(( B4 & 0x04000000 ))
-	b26_after=$(( AF & 0x04000000 ))
-	echo "IRQ26 latched: before=$b26_before after=$b26_after"
-	if [ "$b26_before" = "0" ] && [ "$b26_after" -ne 0 ]; then
-		echo "RTC-ALARM RESULT: PASS (counter reached RTC04 -> alarm IRQ 26 latched in VIC)"
+	sleep 1                            # fast counter passes 00:00:10 in ~7 ms
+	C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
+	[ -z "$C1" ] && C1=0
+	echo "rtc alarm VIC22 count: $C0 -> $C1 (/dev/mem-armed)"
+	if [ "$C1" -gt "$C0" ]; then
+		echo "RTC-ALARM RESULT: PASS (dev/mem RTC04 arm -> counter match -> VIC 22 IRQ serviced by Linux)"
 	else
-		echo "RTC-ALARM RESULT: FAIL (before=$b26_before after=$b26_after)"
+		echo "RTC-ALARM RESULT: FAIL (count $C0 -> $C1)"
 	fi
 	echo "=== RTC-ALARM-END ==="
 	poweroff -f 2>&1 || true
@@ -736,11 +743,11 @@ if grep -q rtclinux /proc/cmdline; then
 		*" 12:4"*|*" 12:5"*) echo "RTC-LINUX RESULT: PASS (set 12:45:30 -> read $R; hour:min round-tripped via /dev/rtc0)" ;;
 		*) echo "RTC-LINUX RESULT: FAIL (readback=$R)" ;;
 	esac
-	# --- wakealarm (#187 Linux alarm: RTC04 + IRQ26 via the new driver) ---
+	# --- wakealarm (#187 Linux alarm: RTC04 + VIC22 via the new driver) ---
 	echo "--- wakealarm ---"
 	WAKE=/sys/class/rtc/rtc0/wakealarm
 	if [ -w "$WAKE" ]; then
-		# RTC-alarm IRQ26 count BEFORE arming (the 1e781000.rtc line in
+		# RTC-alarm (VIC22) count BEFORE arming (the 1e781000.rtc line in
 		# /proc/interrupts; field 2 = CPU0 count). Default 0 if not yet present.
 		C0=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C0" ] && C0=0
@@ -753,8 +760,8 @@ if grep -q rtclinux /proc/cmdline; then
 		C1=$(grep -a '1e781000.rtc' /proc/interrupts 2>&1 | awk '{print $2}')
 		[ -z "$C1" ] && C1=0
 		echo "wakealarm after sleep = '$AFTER' (empty = fired+cleared)"
-		echo "rtc alarm IRQ26 count: $C0 -> $C1"
-		# PASS = the alarm FIRED: the VIC-26 rtc-alarm interrupt was delivered
+		echo "rtc alarm VIC22 count: $C0 -> $C1"
+		# PASS = the alarm FIRED: the VIC-22 rtc-alarm interrupt was delivered
 		# (count incremented) AND the rtc core cleared the one-shot wakealarm
 		# (AFTER empty). We do NOT require SET to read back non-empty: the
 		# crystal-less counter runs ~732x (no 32.768kHz xtal, #158/#186), so the
@@ -762,7 +769,7 @@ if grep -q rtclinux /proc/cmdline; then
 		# back — leaving SET empty even on success. The IRQ-count delta is the
 		# race-free arm->fire proof.
 		if [ "$C1" -gt "$C0" ] && [ -z "$AFTER" ]; then
-			echo "RTC-WAKEALARM RESULT: PASS (armed -> IRQ26 fired ($C0->$C1) -> RTC_AF cleared it)"
+			echo "RTC-WAKEALARM RESULT: PASS (armed -> VIC22 fired ($C0->$C1) -> RTC_AF cleared it)"
 		else
 			echo "RTC-WAKEALARM RESULT: FAIL (set='$SET' after='$AFTER' irq=$C0->$C1)"
 		fi

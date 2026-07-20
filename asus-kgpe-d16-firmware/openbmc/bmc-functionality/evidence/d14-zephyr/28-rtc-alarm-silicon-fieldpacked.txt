@@ -50,3 +50,44 @@ question — this fix is scoped to the RTC04 alarm register the silicon proved.)
 RIG: bridge Pi asus-bmc, JTAG free (no openocd running), board powered (DDR2
 TRAINED, JTAG halt OK). boot-zephyr-silicon-long.sh 0x40002724. No others
 disturbed (checked who/pgrep before use).
+
+===== ISSUE 2 RESOLVED — RTC alarm is VIC source 22, NOT 26 (silicon-proven) =====
+With the arm correct (field-packed), the alarm still did not fire on silicon
+(fires=0). A register-dump diagnostic added to the smoke localized it:
+  source-26 driver: DIAG vic_raw=03400000  (bits 22,24,25 set; bit 26 CLEAR)
+  source-22 driver: DIAG vic_raw=03000000  (bit 22 CLEARED by servicing) + fires=1
+So the RTC alarm asserts VIC source 22 (the RTC's single interrupt line), NOT the
+separate source 26 the QEMU model invented. Differential proof: on the source-26
+run bit 22 sat LATCHED (asserted, never serviced); on the source-22 run the driver
+serviced source 22 and the framework eoi CLEARED bit 22, and the callback fired.
+It can't be a periodic tick masquerading as the alarm: the G3 RTC CONTROL (RTC0C)
+has ONLY alarm-enable bits [1:4] — no periodic-interrupt-enable — so the RTC's
+sole interrupt is the alarm. (Bits 24,25 are persistent unrelated background.)
+
+SILICON CONFIRMED (boot-zephyr-silicon-long.sh, driver on VIC 22):
+  alarm armed at 12:00:05 mask=0x07
+  DIAG counter=070ca18f rtc04=0000c005 ctrl=0000000f vic_raw=03000000 vic_sts=00000000
+  alarm fires=1
+  RTC-ALARM RESULT: PASS
+
+COORDINATED FIX (all stacks + model faithful):
+  - Zephyr driver rtc_aspeed_g3.c: RTC_G3_IRQ 26 -> 22.
+  - QEMU model aspeed_rtc_ast2050.c/.h: the alarm pulses the RTC's single IRQ
+    (s->irq -> VIC 22); the phantom alarm_irq (index 1 -> VIC 26) is REMOVED.
+  - QEMU machine aspeed_ast2400.c: drop the index-1 -> VIC 26 wiring; the RTC has
+    one IRQ (index 0 -> VIC 22). Fixed the stale "IRQ 26 = RTC-alarm" #172 comment.
+  - Linux board dts: rtc interrupts = <22> (was 26).
+  - init gates: bare-metal `rtcalarm` now checks the Linux rtc IRQ-count delta
+    (source 22 is SERVICED by Linux, so the VIC raw edge no longer sits latched to
+    read — the count delta is the correct proof); wakealarm labels -> VIC22.
+
+RE-VALIDATED IN QEMU (all on VIC 22):
+  Zephyr rtc_smoke: alarm fires=1 -> RTC-ALARM RESULT: PASS (armed -> VIC22 -> callback)
+  Linux wakealarm:  rtc alarm count 0 -> 1 -> RTC-WAKEALARM RESULT: PASS
+  Linux rtcalarm (dev/mem): rtc alarm VIC22 count 0 -> 1 -> RTC-ALARM RESULT: PASS
+
+RESULT: #192 RESOLVED. Row 39 RTC alarm now fires end-to-end on QEMU AND real
+silicon (ZS ✅ for the Zephyr alarm). The QEMU model is faithful — a byte-packed
+RTC04 driver OR a source-26 alarm now both FAIL in QEMU, matching silicon. The
+same fix (dts interrupts=<22>) makes the Linux wakealarm silicon-ready (LS pending
+a JTAG Linux run, but the IRQ path is now correct).

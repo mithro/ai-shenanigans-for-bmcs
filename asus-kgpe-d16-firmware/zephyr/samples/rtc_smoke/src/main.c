@@ -14,6 +14,17 @@
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/sys_io.h>
+
+/* #192 diagnostic: raw MMIO to localize why the alarm IRQ (VIC 26) doesn't fire
+ * on silicon. Both regions are identity-mapped by the SoC (rtc/vic drivers). */
+#define RTC_REG_BASE  0x1E781000U
+#define RTC_REG_COUNTER (RTC_REG_BASE + 0x00U)
+#define RTC_REG_ALARM   (RTC_REG_BASE + 0x04U)
+#define RTC_REG_CONTROL (RTC_REG_BASE + 0x0CU)
+#define G3VIC_BASE      0x1E6C0000U
+#define G3VIC_RAW_STATUS (G3VIC_BASE + 0x08U) /* raw (pre-mask) IRQ status */
+#define G3VIC_IRQ_STATUS (G3VIC_BASE + 0x00U) /* post-mask/enable IRQ status */
 
 #define RTC_SMOKE_NODE DT_NODELABEL(rtc0)
 
@@ -108,9 +119,15 @@ static void rtc_alarm_test(const struct device *rtc)
 		irq_unlock(key);
 	}
 
+	/* #192 diagnostic: localize the alarm-IRQ path (RTC assert vs VIC route). */
+	printk("DIAG counter=%08x rtc04=%08x ctrl=%08x vic_raw=%08x vic_sts=%08x\n",
+	       sys_read32(RTC_REG_COUNTER), sys_read32(RTC_REG_ALARM),
+	       sys_read32(RTC_REG_CONTROL), sys_read32(G3VIC_RAW_STATUS),
+	       sys_read32(G3VIC_IRQ_STATUS));
+
 	printk("alarm fires=%u\n", alarm_fires);
 	if (alarm_fires > 0U) {
-		printk("RTC-ALARM RESULT: PASS (armed -> IRQ26 -> callback)\n");
+		printk("RTC-ALARM RESULT: PASS (armed -> VIC22 -> callback)\n");
 	} else {
 		printk("RTC-ALARM RESULT: FAIL (no callback within busy-poll)\n");
 	}

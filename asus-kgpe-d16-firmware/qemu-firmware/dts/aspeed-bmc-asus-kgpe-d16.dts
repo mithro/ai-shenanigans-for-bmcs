@@ -474,6 +474,6 @@
 &rtc {
 	compatible = "aspeed,ast2050-rtc";
 	reg = <0x1e781000 0x20>;
-	interrupts = <26>;	/* VIC 26 = RTC-alarm (datasheet §24); wakealarm */
+	interrupts = <22>;	/* VIC 22 = the RTC's single IRQ = alarm (silicon-proven #192); wakealarm */
 	status = "okay";
 };

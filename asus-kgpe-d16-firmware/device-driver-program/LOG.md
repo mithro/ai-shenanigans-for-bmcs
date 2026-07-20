@@ -20,19 +20,25 @@ submodule ed7b917d31). RE-VALIDATED: QEMU Zephyr alarm PASS (armed reads back 12
 QEMU Linux wakealarm PASS (IRQ26 0→1); and on SILICON the arm now reads back 12:00:05 correctly
 (was 00) — the field-packed layout is PROVEN on hardware. Evidence d14-zephyr/28.
 
-**Issue 2 — RTC alarm interrupt (VIC 26) does NOT fire on silicon even with a correct arm (OPEN).**
-With the arm now correct (12:00:05) and the counter advancing past it (732x), the alarm STILL did
-not fire on silicon (alarm fires=0). The WFI wait ran its full 1000 iterations over ~10 s (the
-system tick woke it each time — so the tick works), but VIC-26 never arrived. VIC-26 as the
-RTC-alarm source has only ever been validated in QEMU (Linux LS is ⬜ too), never on silicon — so
-either the source number is wrong for silicon, or the alarm-match needs an extra RTC interrupt
-enable / status handshake I'm not doing, or the alarm-match doesn't assert the IRQ the way the
-model assumes. Confidence this is a real silicon gap (not a test artifact): HIGH — the arm/counter
-are provably correct and the tick-woken WFI loop ran to completion. NEXT (new task): JTAG-inspect
-the RTC + VIC registers at the moment the counter passes the alarm (is an alarm-status/pending bit
-set? does VIC raw-status bit 26 assert?), and reconcile the RTC-alarm IRQ number against the
-datasheet. Row 39 ZS stays OPEN for the alarm (honest — NOT claimed done). Taking a break from this
-per the goal; the field-packed win stands on its own.
+**Issue 2 — RTC alarm interrupt was on the WRONG VIC source (RESOLVED: it's VIC 22, not 26).**
+With the arm correct, the alarm still didn't fire on silicon (fires=0). Rather than park it, added a
+register-dump diagnostic to the smoke (VIC raw-status + RTC regs). It localized the fault decisively:
+source-26 driver → `vic_raw=03400000` (bits 22,24,25 set; **bit 26 CLEAR**); source-22 driver →
+`vic_raw=03000000` (bit 22 CLEARED by servicing) + **fires=1, PASS**. So the RTC alarm asserts VIC
+source **22** (the RTC's single interrupt line), NOT the separate source 26 the QEMU model invented.
+Differential proof: source-26 left bit 22 LATCHED (never serviced); source-22 serviced+eoi'd it and
+the callback fired. And it's not a periodic tick faking the alarm — RTC0C has ONLY alarm-enables
+[1:4], no periodic-int-enable, so the RTC's sole interrupt is the alarm. COORDINATED FAITHFUL FIX:
+Zephyr driver IRQ 26→22; QEMU model pulses the RTC's single s->irq (VIC 22), phantom source-26
+alarm_irq REMOVED; machine drops the index-1→VIC-26 wiring; Linux dts interrupts=<22>; init gates
+updated (bare-metal rtcalarm now checks the Linux IRQ-count delta — source 22 is SERVICED so the raw
+edge no longer sits latched to read). RE-VALIDATED all on VIC 22: QEMU Zephyr alarm PASS, Linux
+wakealarm PASS (0→1), Linux bare-metal rtcalarm PASS (0→1); SILICON Zephyr alarm PASS (fires=1).
+**#192 RESOLVED — row 39 RTC alarm now fires end-to-end on QEMU AND real silicon (ZS ✅).** This is
+the goal's mandate delivered: silicon exposed THREE model-hidden bugs (fast counter, field-packed
+RTC04, wrong IRQ source), each fixed and the model made faithful so they now fail in QEMU too.
+Evidence d14-zephyr/28. (Confidence: HIGH — silicon fires deterministically; the byte-packed vs
+field-packed and source-26 vs 22 were both differentially proven, not guessed.)
 
 ## 2026-07-21 — #189 Zephyr WDT timeout-INTERRUPT mode (WDT_CTRL[2] + VIC-27) implemented + validated
 

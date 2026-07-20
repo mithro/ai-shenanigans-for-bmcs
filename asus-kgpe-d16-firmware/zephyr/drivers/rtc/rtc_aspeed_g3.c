@@ -131,7 +131,8 @@
  * connected by number. The framework's z_soc_irq_eoi() clears the latched edge,
  * so the ISR only services the alarm.
  */
-#define RTC_G3_IRQ            26
+#define RTC_G3_IRQ            22  /* silicon #192: RTC alarm delivers on the RTC
+				   * source (22), NOT the assumed separate 26 */
 #define RTC_G3_IRQ_PRIO       0
 #define RTC_G3_ALARM_ID       0         /* single hardware alarm */
 #define RTC_G3_ALARM_FIELDS   (RTC_ALARM_TIME_MASK_SECOND | \
