@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #189 QE: WDT timeout-INTERRUPT mode (WDT0C[2] -> VIC 27) modeled + validated
+
+Another gate-d sub-block turned into validated emulation. #189: datasheet §27 says the WDT generates
+EITHER an interrupt OR a reset (WDT0C[2] "wdt_intr"), but the QEMU aspeed WDT had no IRQ line and always
+reset (watchdog_perform_action), ignoring the bit. This is SHARED upstream code (wdt_aspeed.c, used by
+AST2400/2500/2600), so I was careful:
+- Change is purely ADDITIVE: added a qemu_irq + sysbus_init_irq; at expiry, `if (WDT_CTRL & WDT_INTR)
+  { pulse IRQ; return; }` BEFORE the unchanged watchdog_perform_action() reset. Reset mode (WDT_INTR=0 —
+  what the Linux aspeed_wdt driver, U-Boot, and every legacy oracle use) hits the untouched reset path.
+- The G3 machine wires WDT0's IRQ to VIC 27, G3-gated so the AST2400 path is unchanged (an unconnected
+  qemu_irq is a no-op on other machines).
+- Modelled as a pulse (interrupt EVENT); held-level-until-WDT_TIMEOUT_CLEAR is a follow-on.
+
+DUAL-PATH validated (both matter — the reset path is legacy-critical):
+1. INTERRUPT mode (new wdtintr /dev/mem gate, evidence f-wdt-userspace/01): RELOAD=10ms, CTRL=WDT_INTR|
+   1MHZ|ENABLE -> after ~10ms the WDT raised IRQ 27, VIC raw bit27 `0 -> 0x08000000` -> **WDT-INTR PASS**.
+2. RESET mode UNCHANGED: re-ran the wdtreset gate — WDT armed (timeout=3 active), and raw QEMU without
+   -no-reboot reboot-looped (repeated "Booting Linux"), i.e. the WDT reset still fires. Code-additive +
+   empirical = reset path preserved.
+
+QE half of #189 done. Remaining: WDT18 reset-assert-width; Linux/Zephyr exercising interrupt mode (both
+use reset mode today -> low-priority both-sides follow-on). Discipline note: took extra care with the
+shared-code reset path per the prime directive, and validated BOTH the new interrupt path AND the
+unchanged legacy reset path rather than assuming.
+
 ## 2026-07-21 — #190 verified + rescoped: I²C buffer-pool ALREADY modeled; DMA is the (unexercised) gap
 
 Investigated gate-d finding #190 (I²C buffer-pool/DMA transfer modes "undispositioned") before assuming a

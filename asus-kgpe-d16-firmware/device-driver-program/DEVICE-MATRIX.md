@@ -670,8 +670,11 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   alarm). Linux (rtc-aspeed wakealarm) + Zephyr (rtc alarm API) validation remain. Ties to #158/#186.
 - **#188 — I²C SDA bus-lock recovery (§31.5.11)** (row 15): SCL-toggle recovery on a stuck SDA, relevant to
   the multi-master shared sensor bus; not modeled/validated.
-- **#189 — WDT timeout-INTERRUPT mode (WDT0C[2]/WDT18)** (row 38): only the reset path is validated; the
-  pre-timeout interrupt path is unmodeled.
+- **#189 — WDT timeout-INTERRUPT mode (WDT0C[2]/WDT18)** (row 38): **QE DONE (2026-07-21, submodule
+  46cee5fe6a, evidence `f-wdt-userspace/01`):** added an IRQ to the WDT model; at expiry, if WDT_CTRL[2]
+  is set the WDT PULSES its IRQ (wired to VIC 27) instead of resetting; reset path UNCHANGED when the bit
+  is clear (proven — wdtreset still resets). Validated (VIC raw bit27 latches in interrupt mode). Remaining:
+  WDT18 reset-assert-WIDTH + Linux/Zephyr exercising interrupt mode (both use reset mode today, low-pri).
 - **#190 — I²C buffer-pool/DMA-buffer transfer modes (§31.5.2/3/9)** (row 15): **verified + rescoped
   2026-07-21.** BUFFER-POOL is ALREADY MODELED (the gate-d "byte-only" premise was wrong): the G3
   aspeed_i2c class sets `has_share_pool=true`/`pool_size=0x800` and the model does functional pool TX/RX

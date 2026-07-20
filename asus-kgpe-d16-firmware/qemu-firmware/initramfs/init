@@ -685,5 +685,33 @@ if grep -q rtcalarm /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- WDT timeout-INTERRUPT mode (WDT0C[2]) validation ('wdtintr', #189) ---
+# The WDT can raise an interrupt INSTEAD of resetting when it counts to zero
+# (datasheet §27, WDT0C[2] wdt_intr). The model now pulses a WDT IRQ wired to VIC 27
+# when the intr bit is set (reset mode is unchanged). Validate via /dev/mem: program
+# WDT (base 0x1E785000) reload=10ms, CTRL = wdt_intr|1MHz|enable (0x15) to arm in
+# interrupt mode; after ~10ms the WDT fires the interrupt (NOT a reset) and the edge
+# latches in the VIC raw-status (0x1E6C0008 bit27=0x08000000). Read before + after.
+if grep -q wdtintr /proc/cmdline; then
+	echo "=== WDT-INTR-BEGIN ==="
+	VICRAW=0x1e6c0008
+	B4=$(devmem $VICRAW)
+	devmem 0x1e785004 32 10000         # RELOAD = 10000 us = 10 ms (with 1MHz clk)
+	devmem 0x1e78500c 32 0x15          # CTRL: WDT_INTR|1MHZ_CLK|ENABLE -> arm interrupt mode
+	sleep 1                            # >> 10ms; WDT fires in interrupt mode (no reset)
+	AF=$(devmem $VICRAW)
+	echo "VIC raw before=$B4 after=$AF (WDT bit27=0x08000000)"
+	b27_before=$(( B4 & 0x08000000 ))
+	b27_after=$(( AF & 0x08000000 ))
+	echo "IRQ27 latched: before=$b27_before after=$b27_after"
+	if [ "$b27_before" = "0" ] && [ "$b27_after" -ne 0 ]; then
+		echo "WDT-INTR RESULT: PASS (WDT timeout raised IRQ 27 instead of resetting the SoC)"
+	else
+		echo "WDT-INTR RESULT: FAIL (before=$b27_before after=$b27_after)"
+	fi
+	echo "=== WDT-INTR-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

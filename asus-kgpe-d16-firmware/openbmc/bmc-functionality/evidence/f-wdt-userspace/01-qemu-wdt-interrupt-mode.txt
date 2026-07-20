@@ -1,0 +1,49 @@
+DEVICE-MATRIX row 38 (AST2050 WDT) — QEMU WDT timeout-INTERRUPT mode (WDT0C[2])
+modeled + validated (2026-07-21, #189, gate-d finding).
+
+Gate-(d) flagged that all WDT validation (rows 38 / A6) exercised only the RESET
+path — the datasheet §27 pre-timeout INTERRUPT mode (WDT0C[2] "wdt_intr": "generate
+either interrupt or reset after counting down to zero (programmable)") was
+unmodeled. The QEMU aspeed WDT had NO IRQ line and always called
+watchdog_perform_action() (reset) at expiry, ignoring the intr bit.
+
+MODEL (hw/watchdog/wdt_aspeed.c + include/.../wdt_aspeed.h + hw/arm/aspeed_ast2400.c):
+  - added a qemu_irq to the WDT state + sysbus_init_irq (index 0);
+  - aspeed_wdt_timer_expired: if WDT_CTRL[2] (WDT_INTR) is set, PULSE the WDT IRQ
+    and stop (interrupt mode) instead of resetting; the reset path is UNCHANGED
+    when the bit is clear;
+  - the G3 machine wires WDT0's IRQ to VIC input 27 (ASPEED_DEV_WDT), G3-gated so
+    the AST2400 path is untouched (raising an unconnected qemu_irq is a no-op).
+  Modelled as an interrupt EVENT (pulse); a held level asserted until firmware
+  writes WDT_TIMEOUT_CLEAR (currently-unimplemented status/clear regs) is a
+  documented follow-on refinement.
+
+===== VALIDATION 1 — INTERRUPT MODE (QEMU, wdtintr /dev/mem gate) =====
+Program the WDT (base 0x1E785000): RELOAD=10000 (10 ms at the 1 MHz clk),
+CTRL = WDT_INTR|1MHZ_CLK|ENABLE (0x15) to arm interrupt mode. After ~10 ms the WDT
+fires the interrupt (NOT a reset); the edge latches in the VIC raw-status.
+=== WDT-INTR-BEGIN ===
+VIC raw before=0x00020000 after=0x08020000 (WDT bit27=0x08000000)
+IRQ27 latched: before=0 after=134217728
+WDT-INTR RESULT: PASS (WDT timeout raised IRQ 27 instead of resetting the SoC)
+=== WDT-INTR-END ===
+DECODE: bit27 (0x08000000) 0 -> set: the WDT raised its timeout interrupt (VIC 27)
+instead of resetting. Full path: WDT expiry -> WDT_INTR check -> IRQ 27 pulse -> VIC
+edge-latch -> userspace /dev/mem read.
+
+===== VALIDATION 2 — RESET MODE UNCHANGED (legacy-critical non-regression) =====
+The change is purely ADDITIVE: the interrupt branch is gated on WDT_CTRL[2]; when
+the bit is clear (reset mode — what the Linux aspeed_wdt driver, U-Boot, and every
+legacy oracle use) the code falls through to the UNCHANGED watchdog_perform_action()
+reset. Empirically confirmed: re-running the existing `wdtreset` gate, the WDT armed
+(WDT-RESET-ARMED: timeout=3 state=active) and — booting raw QEMU without -no-reboot —
+the SoC reset fired and the guest reboot-looped (repeated "Booting Linux" banners),
+exactly a WDT reset. So reset-mode behaviour is preserved; only the new (unexercised
+by any board firmware) interrupt mode is added.
+
+RESULT: WDT timeout-INTERRUPT mode now MODELLED (row 38 QE) and validated in QEMU,
+with the reset path proven unchanged. Closes the QE half of #189. Remaining #189:
+WDT18 reset-assert-WIDTH, and Linux/Zephyr drivers exercising the interrupt mode
+(both firmware stacks use reset-mode today, so this is a low-priority both-sides
+follow-on). Interrupt is modelled as a pulse; held-level-until-WDT_TIMEOUT_CLEAR is
+a further refinement.
