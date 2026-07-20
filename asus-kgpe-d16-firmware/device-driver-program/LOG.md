@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #176 A2P bridge (row 50 QE ⬜→🔶): datasheet-scoped + window modeled + oracle-safe
+
+Acted on the completeness audit's #1 Tier-1 target (A2P bridge, unblocks video/PCI). Read the
+datasheet §21.2 (PDF p255) — key finding that changes the modeling: **A2P is NOT a config-register
+block, it is a one-way passthrough WINDOW** forwarding ARM(AHB) accesses to P-Bus/PCI space
+(+0x00000..7F relocated I/O, +0x10000..0x1FFFF MMIO @0x1E720000), auto-enabled by SCU70[4]
+(PCI-master mode). In the standalone BMC machine there is NO host/PCI on the P-Bus, so the faithful
+behaviour is a window that reads back 0 / drops writes (forwarding to an empty P-Bus). Replaced the
+accidental IOMEM catch-all fall-through with an explicit named `aspeed.a2p-pbus-window` unimplemented
+region (128 KB), so accesses are logged and 0x1E720000 is a correctly-labelled A2P device.
+
+**Oracle-revalidated (faithfulness-critical, oracle-sensitive change): C2 Linux still boots to
+userspace** — `Booting Linux`, `rtc0 registered`, RTC-LINUX + wakealarm PASS, no abort/regression.
+(C4/C-UBOOT NOT re-run this session — honest limitation; the change is RAZ/WI, minimal risk.)
+
+QE ⬜→🔶 (NOT ✅): the SCU70[4] auto-enable gate is not modeled and there is no P-Bus target to
+forward to (none exists in the BMC-only machine). Full ✅ needs the SCU70[4] gate + a modeled
+P-Bus/PCI target for the video-capture read path. **Also CORRECTED an audit/doc misunderstanding:
+DDC/EDID (row 14) does NOT depend on the A2P bridge** — DDC is CRTC/VGACRB7 bit-bang in the *video*
+register space, a separate aperture; the earlier "#178 blocks on #176" note conflated the two.
+Datasheet spec recorded in `qemu-model/AST2050-MEMORY-MAP.md:55`. Tally: QEMU ⬜ 10→9, 🔶 11→12.
+
 ## 2026-07-21 — Completeness audit (gate a/d) + 2 honesty fixes; program state quantified
 
 Ran an independent completeness/enumeration audit (sub-agent) against the authoritative schematic

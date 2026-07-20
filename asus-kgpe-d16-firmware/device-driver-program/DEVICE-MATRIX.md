@@ -59,7 +59,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 28 | 11 | 0 | 10 | 2 |
+| QEMU emulation | 28 | 12 | 0 | 9 | 2 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 9 | 0 | 9 | 11 |
@@ -412,7 +412,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 49 | AHBC AHB-bus controller (0x1E600000, IRQ31) | AHBC | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 50 | A2P AHB→PCI bridge (0x1E720000) | A2P | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 50 | A2P AHB→PCI bridge (0x1E720000) | A2P | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **35** SCU: exercised by every stack's init (QE/UQ/US/LQ/LS ✅). **Zephyr ZQ+ZS ✅ now
   (2026-07-20, `evidence/d14-zephyr/19-scu-silicon.txt`):** `samples/scu_smoke` reads the SCU
@@ -591,15 +591,25 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     #175. UQ/US=🔶 reflect that the loader boots regardless. L/Z=Ⓝ. Honestly still QE=🔶 per "all
     functionality" (the register model + remap remain unmodelled), just no longer mis-labelled as a
     boot-critical urgent gap.
-  - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=⬜** — not yet faithfully modeled. **SRAM/A2P
-    discrepancy RESOLVED (2026-07-20, submodule 4de9aa40c7):** QEMU used to map `ASPEED_DEV_SRAM` (a G4
-    RAM block) at 0x1E720000, but §9 assigns that address to the A2P bridge on the G3 — the SRAM phantom
-    is now GATED off the G3 (like xdma/sdhci #172), so 0x1E720000 falls back to the `ASPEED_DEV_IOMEM`
-    unimplemented catch-all (responds, no abort) instead of a wrong SRAM. Validated: mtree shows 0
-    aspeed.sram; spd/w83795 smokes PASS. The A2P forward bridge + the PCI-slave P2A backdoor (culvert)
-    are partly under row 8; a FAITHFUL A2P model there (QE ⬜→) + oracle re-validation of the SRAM gate
-    remain the open #176 follow-on (oracle-sensitive). All driver stacks Ⓝ (no runtime
-    BMC A2P driver). **Consistency fix (2026-07-20):** row 44 MIC ZQ/ZS Ⓝ→⬜ to match its LQ/LS=⬜ (an
+  - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=🔶 (2026-07-21, #176 — A2P window now modeled).**
+    **SRAM/A2P discrepancy RESOLVED (2026-07-20, submodule 4de9aa40c7):** QEMU used to map
+    `ASPEED_DEV_SRAM` (a G4 RAM block) at 0x1E720000, but §9 assigns that address to the A2P bridge on the
+    G3 — the SRAM phantom is GATED off the G3 (like xdma/sdhci #172). **A2P now EXPLICITLY MODELLED
+    (2026-07-21):** read the datasheet §21.2 — A2P is NOT a config-register block but a one-way
+    passthrough WINDOW forwarding ARM(AHB) accesses to P-Bus/PCI space (+0x00000..7F relocated I/O,
+    +0x10000..0x1FFFF MMIO), auto-enabled by SCU70[4]. In the standalone BMC machine there is NO host/PCI
+    on the P-Bus, so the faithful behaviour is a window that reads back 0 / drops writes (forwarding to an
+    empty P-Bus). Replaced the accidental IOMEM fall-through with an explicit named
+    `aspeed.a2p-pbus-window` unimplemented region (128 KB @0x1E720000), so accesses are logged and the
+    address is a correctly-labelled A2P device. **Oracle-revalidated: C2 Linux still boots to userspace
+    (rtc0 registered, RTC-LINUX + wakealarm PASS) — no regression.** QE is **🔶 not ✅** because (a) the
+    SCU70[4] auto-enable gating is not modelled (window is always present) and (b) forwarding to real
+    P-Bus/PCI targets is not exercised (none exist in the BMC-only machine — that would need a modelled
+    host). Full ✅ would require the SCU70[4] gate + a P-Bus target for the video-capture read path.
+    (C4/C-UBOOT oracles NOT re-run this session — honest limitation; the change is RAZ/WI, minimal risk.)
+    **DDC/EDID (row 14) does NOT depend on this** — that is CRTC/VGACRB7 bit-bang in the video register
+    space, a separate aperture; the earlier "#178 blocks on #176" note conflated the two. All driver
+    stacks Ⓝ (no runtime BMC A2P driver — it is an aperture, not a device with a driver). **Consistency fix (2026-07-20):** row 44 MIC ZQ/ZS Ⓝ→⬜ to match its LQ/LS=⬜ (an
     error-reporter driver is equally plausible/absent on every runtime stack).
     **DOWNSTREAM DEPENDENT (2026-07-20, #178):** this A2P bridge is the aperture through which the BMC
     ARM reaches the PCI "internal VGA" CRTC registers — datasheet §36 l.19634: "AHB to P-bus bridge
