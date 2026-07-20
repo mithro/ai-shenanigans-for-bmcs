@@ -118,6 +118,16 @@ if ! grep -q "g3_strap_phantoms" drivers/pinctrl/aspeed/pinmux-aspeed.h; then
     git apply "$ROOT/kernel/patches/0008-pinctrl-aspeed-g3-strap-phantom-quirk.patch"
 fi
 
+# 0009: the AST2050 (G3) RTC at 0x1E781000 is COUNTER-style (datasheet §24:
+# COUNTER/RELOAD/CONTROL/RESTART), register-incompatible with the mainline
+# aspeed-rtc ast2400-rtc (BCD: TIME/YEAR/CTRL@0x10) that the g4.dtsi base binds --
+# so Linux got NO working /dev/rtc0 (empirically confirmed). This adds an
+# "aspeed,ast2050-rtc" counter-style variant to rtc-aspeed (the board dts re-points
+# the node at it). Idempotent guard on the new compatible the patch adds. #187.
+if ! grep -q "aspeed,ast2050-rtc" drivers/rtc/rtc-aspeed.c; then
+    git apply "$ROOT/kernel/patches/0009-rtc-aspeed-ast2050-counter.patch"
+fi
+
 # Device tree.
 cp "$ROOT/dts/aspeed-bmc-asus-kgpe-d16.dts" arch/arm/boot/dts/aspeed/
 if ! grep -q kgpe-d16 arch/arm/boot/dts/aspeed/Makefile; then

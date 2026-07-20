@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #187 Linux: G3 counter-RTC driver IMPLEMENTED + validated — over-claim → real functionality
+
+Converted last turn's row-39 RTC over-claim (LQ ⬜, "no working Linux RTC") into a genuine, validated Linux
+driver. This is the "implement proper Linux driver + validate in QEMU + validate userspace" deliverable.
+
+The mainline `rtc-aspeed` only knows the AST2400 BCD layout (TIME/YEAR/CTRL@0x10) and the g4.dtsi node was
+disabled → no /dev/rtc0. Implemented the G3 counter-style variant (kernel patch 0009, extends
+drivers/rtc/rtc-aspeed.c): a new `aspeed,ast2050-rtc` compatible with a counter_style config; read_time
+reads COUNTER (0x00) byte-packed and reports a fixed calendar base (the counter has no year/month —
+datasheet §24); set_time writes RELOAD (0x08) + pulses RESTART (0x10)=0x5A + enables CONTROL (0x0C)[0] —
+mirroring the silicon-validated Zephyr rtc_aspeed_g3.c. The ast2400/2500/2600 BCD path is untouched. The
+board dts (dts/aspeed-bmc-asus-kgpe-d16.dts) gets an `&rtc` override re-pointing the node at the new
+compatible + status=okay; build-kernel.sh registers 0009 (idempotent guard on the new compatible).
+
+Validated in QEMU + userspace (rtclinux gate, evidence d14-zephyr/17): `aspeed-rtc 1e781000.rtc: registered
+as rtc0` → /dev/rtc0 exists (over-claim fixed). `date -s 12:45:30` → `hwclock -w` (set_time) → `hwclock -r`
+reads back `12:45:40` and `/sys/class/rtc/rtc0/time`=`12:45:50` — hour:min round-tripped, sec advancing
+~732x (crystal-less rate, #158/#186), day = the set Jan 15. Full path userspace→driver→MMIO→G3 RTC model.
+
+Row 39: LQ ⬜→✅, LU ⬜→✅ (tally LQ 21→22, LU 13→14). LS stays ⬜ (silicon via JTAG not yet run). Remaining
+#187: RTC04/IRQ-26 wakealarm (RTC_ALM_SET/RTC_AIE) on top of this driver + Zephyr alarm + silicon. NICE
+arc: an over-claim caught by empirical check last turn is now a real, functionally-validated driver this
+turn — the honest way to move a cell to ✅.
+
 ## 2026-07-21 — INTEGRITY sweep: independent audit found 3 MORE bind-only over-claims (all corrected)
 
 The RTC over-claim (below) exposed a class — "✅ resting on the driver binding / a model existing, not on a

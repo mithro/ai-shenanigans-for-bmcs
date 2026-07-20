@@ -720,13 +720,22 @@ fi
 # over-claim.
 if grep -q rtclinux /proc/cmdline; then
 	echo "=== RTC-LINUX-BEGIN ==="
-	ls -la /dev/rtc* /sys/class/rtc/ 2>&1
-	for f in name date time since_epoch; do
-		if [ -e "/sys/class/rtc/rtc0/$f" ]; then
-			echo "rtc0/$f = $(cat /sys/class/rtc/rtc0/$f 2>&1)"
-		fi
-	done
-	echo "hwclock -r: $(hwclock -r 2>&1 || busybox hwclock -r 2>&1 || echo '(hwclock failed)')"
+	ls -la /dev/rtc* 2>&1
+	echo "rtc0/name = $(cat /sys/class/rtc/rtc0/name 2>&1)"
+	# Userspace set->get through the driver: set the system clock, write it to the
+	# RTC (drives set_time: RELOAD+RESTART+enable), read it back (read_time). The
+	# G3 RTC advances ~732x, so hour:min round-trips while sec runs ahead.
+	date -s "2024-01-15 12:45:30" 2>&1
+	hwclock -w 2>&1 || busybox hwclock -w 2>&1
+	R=$(hwclock -r 2>&1 || busybox hwclock -r 2>&1)
+	echo "hwclock -r after set 12:45:30 -> $R"
+	echo "rtc0/time = $(cat /sys/class/rtc/rtc0/time 2>&1)"
+	# PASS if the readback preserved the set hour (12) and minute band (advancing
+	# from 45); the counter-RTC has no calendar so year/month are the fixed base.
+	case "$R" in
+		*" 12:4"*|*" 12:5"*) echo "RTC-LINUX RESULT: PASS (set 12:45:30 -> read $R; hour:min round-tripped via /dev/rtc0)" ;;
+		*) echo "RTC-LINUX RESULT: FAIL (readback=$R)" ;;
+	esac
 	echo "=== RTC-LINUX-END ==="
 	poweroff -f 2>&1 || true
 fi

@@ -462,3 +462,17 @@
 	aspeed,vhub-downstream-ports = <7>;
 	aspeed,vhub-generic-endpoints = <21>;
 };
+
+/*
+ * AST2050 (G3) counter-style RTC (0x1E781000, datasheet §24). The g4.dtsi base
+ * declares this node as "aspeed,ast2400-rtc" (BCD layout) and disables it — but
+ * the AST2050 RTC is COUNTER-style (COUNTER/RELOAD/CONTROL/RESTART), register-
+ * incompatible with the ast2400 driver. Re-point it at the counter-style variant
+ * (rtc-aspeed "aspeed,ast2050-rtc") and enable it so Linux gets a working
+ * /dev/rtc0. See kernel patch 0009 + qemu-model/peripherals/rtc + #187.
+ */
+&rtc {
+	compatible = "aspeed,ast2050-rtc";
+	reg = <0x1e781000 0x20>;
+	status = "okay";
+};

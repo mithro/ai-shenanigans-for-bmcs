@@ -1,0 +1,42 @@
+DEVICE-MATRIX row 39 (AST2050 G3 RTC) — Linux counter-style RTC driver: implemented +
+QEMU + userspace validated (2026-07-21, #187, converts the LQ over-claim to real).
+
+Last turn's integrity sweep caught that row-39 LQ ✅ "rtc-aspeed" was an OVER-CLAIM:
+the board dts is based on aspeed-g4.dtsi whose rtc@1e781000 = "aspeed,ast2400-rtc"
+(BCD layout, disabled), register-incompatible with the G3 COUNTER-style RTC — and
+empirically the C2 kernel created NO /dev/rtc0. This turn CONVERTS that ⬜ into a real
+working Linux RTC.
+
+DRIVER (kernel patch 0009, extends drivers/rtc/rtc-aspeed.c):
+  - added an "aspeed,ast2050-rtc" compatible with a counter-style config flag;
+  - read_time: read COUNTER (0x00) byte-packed (sec[7:0]/min[15:8]/hour[23:16]/
+    day[31:24]); the counter-RTC has no month/year (datasheet §24) so a fixed
+    calendar base (2000/Jan) is reported and the day up-counter is clamped to a
+    valid mday; returns -EINVAL when CONTROL[0] disabled (un-set), like mainline;
+  - set_time: write RELOAD (0x08), pulse RESTART (0x10)=0x5A to latch RELOAD->COUNTER,
+    enable CONTROL (0x0C)[0] — matching the silicon-validated Zephyr rtc_aspeed_g3.c;
+  - the existing ast2400/2500/2600 BCD path is unchanged (config_bcd).
+DTS (dts/aspeed-bmc-asus-kgpe-d16.dts): &rtc override re-points the g4.dtsi node at
+"aspeed,ast2050-rtc" + status="okay" so the driver binds.
+build-kernel.sh registers 0009 with an idempotent guard on the new compatible.
+
+===== VALIDATION (QEMU boot + userspace, rtclinux gate) =====
+[    1.007270] aspeed-rtc 1e781000.rtc: registered as rtc0
+hwclock -r after set 12:45:30 -> Sat Jan 15 12:45:40 2000  0.000000 seconds
+rtc0/time = 12:45:50
+RTC-LINUX RESULT: PASS (set 12:45:30 -> read back; hour:min round-tripped via /dev/rtc0)
+
+DECODE: the driver registers rtc0 (so /dev/rtc0 exists — the over-claim is fixed).
+Userspace set->get: `date -s 12:45:30` + `hwclock -w` drives set_time (RELOAD+RESTART+
+enable); `hwclock -r` + `cat /sys/class/rtc/rtc0/time` drive read_time. The time reads
+back 12:45:40 then 12:45:50 — the set 12:45(:30) hour:min round-tripped and the seconds
+advance ~732x fast (the crystal-less rate, #158/#186), exactly as expected. Day = Jan 15
+(the set mday, calendar base fixed). Full path: userspace (hwclock//sys/class/rtc) ->
+rtc-aspeed counter-style driver -> /dev/mem-equivalent MMIO -> the G3 RTC model.
+
+RESULT: row 39 LINUX now REAL — LQ ⬜→✅ (driver binds + set/get functional in QEMU),
+LU ⬜→✅ (hwclock + /sys/class/rtc userspace interface works). LS stays ⬜ (silicon RTC
+via JTAG not yet run). This is the "implement proper Linux driver + validate in QEMU +
+validate userspace" deliverable for the RTC, and it turns the corrected over-claim into
+genuine functionality. Remaining #187: the RTC04/IRQ-26 wakealarm on top of this driver
+(RTC_ALM_SET/RTC_AIE), Zephyr alarm, and silicon validation of all.

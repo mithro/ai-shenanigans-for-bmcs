@@ -62,9 +62,9 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 | QEMU emulation | 29 | 10 | 0 | 10 | 2 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
-| Linux @ QEMU | 21 | 9 | 0 | 10 | 11 |
+| Linux @ QEMU | 22 | 9 | 0 | 9 | 11 |
 | Linux @ silicon | 18 | 4 | 2 | 16 | 11 |
-| Linux userspace | 13 | 6 | 0 | 14 | 18 |
+| Linux userspace | 14 | 6 | 0 | 13 | 18 |
 | Zephyr @ QEMU | 17 | 5 | 0 | 19 | 10 |
 | Zephyr @ silicon | 11 | 4 | 0 | 25 | 11 |
 
@@ -401,7 +401,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 36 | VIC interrupt controller (0x1e6c0000) | VIC | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 37 | Timers | timer | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | 38 | Watchdog (WDT) | wdt | ✅ | 🔶 | 🔶 | ✅ | 🔶 | ✅ | ✅ | ✅ |
-| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ✅ | 🔶 |
+| 39 | RTC | rtc | ✅ | Ⓝ | Ⓝ | ✅ | ⬜ | ✅ | ✅ | 🔶 |
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -463,8 +463,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   `aspeed-g4.dtsi` (`rtc@1e781000` = `aspeed,ast2400-rtc`, BCD layout), but the real G3 RTC is
   counter-style — register-incompatible. Empirically (rtclinux gate) the C2 kernel creates NO `/dev/rtc0`
   / `/sys/class/rtc/rtc0`, so there is NO working Linux RTC on the G3; the prior "LQ ✅ (rtc-aspeed)" was a
-  bind/assumption over-claim. Proper Linux support needs a NEW `aspeed,ast2050-rtc` counter-style driver
-  (like the silicon-validated Zephyr `rtc_aspeed_g3.c`) + a G3 dts rtc node — the #187 Linux stack.
+  bind/assumption over-claim. **LQ/LU ⬜→✅ — NOW REAL (2026-07-21, kernel patch 0009, evidence
+  `d14-zephyr/17`):** implemented the `aspeed,ast2050-rtc` counter-style variant in `rtc-aspeed.c` (read
+  COUNTER byte-packed; set via RELOAD+RESTART=0x5A+enable; fixed calendar base since the counter has no
+  year/month) + the `&rtc` dts override. Validated QEMU + userspace: `aspeed-rtc 1e781000.rtc: registered
+  as rtc0`; `date -s 12:45:30` → `hwclock -w` → `hwclock -r` reads `12:45:40` (hour:min round-trip, sec
+  advancing ~732x) + `/sys/class/rtc/rtc0/time` works. The over-claim is now genuine functionality.
+  **LS stays ⬜** (silicon RTC via JTAG not yet run).
   **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
   board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
   silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked
