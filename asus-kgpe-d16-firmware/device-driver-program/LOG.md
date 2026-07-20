@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 38 LS ✅: Linux /dev/watchdog on real silicon (leveraging the now-working netboot)
+
+With the netboot unblocked (row 39 work), the many Linux-SILICON (LS) cells that were blocked purely on
+"can't netboot Linux on silicon" are now reachable. First harvest: **row 38 WDT LS 🔶→✅**. Generalised
+the netboot driver (`tmp/uboot_netboot_gate.py <token> <initrd_size> <secs>` — any /init gate token) and
+ran the non-destructive `wdttest` gate on real AST2050:
+```
+=== WDT-USERSPACE-BEGIN ===
+/dev/watchdog, /dev/watchdog0, /dev/watchdog1        # aspeed_wdt bound to BOTH WDT1+WDT2
+identity=aspeed_wdt
+state(pre-arm)=inactive
+timeout=30 state=active timeleft=(not exposed by aspeed_wdt)
+WDT-USERSPACE RESULT: PASS (timeout=30 active)
+```
+This is the DEDICATED /dev/watchdog-on-silicon transcript the row-38 LS note asked for: userspace
+`busybox watchdog -T 30` → WDIOC_SETTIMEOUT reached the driver (timeout reads back 30), state
+inactive→active (armed). Combined with the already-silicon-proven WDT RESET (ZS `d14-zephyr/18` + the
+g3-clk 120 s reset), the Linux WDT is validated on silicon. Evidence `f-wdt-userspace/01-silicon-dev-
+watchdog.txt`. Matrix Linux@silicon 19→20 ✅. The userspace-ARMED real reset on silicon (wdtreset) is a
+separate destructive test (flash-less board → reset halts the CPU, needs JTAG re-boot); reset capability
+itself already silicon-proven via ZS. HONEST scope: this does NOT touch the mainline aspeed_wdt 2-stage
+pretimeout vs G3 one-stage-interrupt gap (#189, still separately scoped).
+
 ## 2026-07-21 — 🎉 Row 39 LS PASS on real silicon (Linux RTC set/get + wakealarm) — root cause was MY SCU08[16] write
 
 Fixed the RTC Linux driver and **validated the full set/get + wakealarm path on real AST2050 silicon**

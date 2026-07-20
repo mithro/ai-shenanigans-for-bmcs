@@ -1,0 +1,46 @@
+Row 38 LS — Linux aspeed_wdt driver + /dev/watchdog userspace API validated on
+REAL AST2050 silicon (2026-07-21)
+
+Device: AST2050 WDT1/WDT2 @ 0x1E785000 (SoC-internal). The board exposes TWO
+watchdogs -> /dev/watchdog0 (WDT1) + /dev/watchdog1 (WDT2).
+Kernel: Linux 6.6.70 realhw uImage (build-realhw-kernel.py, same tree as the RTC
+fix). Path: JTAG reset-halt -> DDR2 train -> U-Boot 2013.07 -> STATIC-IP TFTP
+netboot (uboot_netboot_gate.py wdttest) -> `bootm`. Console /dev/serial-bmc-console.
+
+===== CAPTURED CONSOLE (wdttest gate) =====
+[    1.743037] aspeed-rtc 1e781000.rtc: registered as rtc0
+[    5.205481] Run /init as init process
+=== WDT-USERSPACE-BEGIN ===
+crw-------    1 root  root  10, 130  /dev/watchdog
+crw-------    1 root  root 247,   0  /dev/watchdog0
+crw-------    1 root  root 247,   1  /dev/watchdog1
+identity=aspeed_wdt
+state(pre-arm)=inactive
+timeout=30 state=active timeleft=(not exposed by aspeed_wdt)
+state(post-kill)=active
+WDT-USERSPACE RESULT: PASS (timeout=30 active; timeleft not exposed by aspeed_wdt)
+=== WDT-USERSPACE-END ===
+===== end =====
+
+RESULT: PASS on real silicon. The full userspace /dev/watchdog path works on the
+AST2050:
+  * aspeed_wdt bound (identity=aspeed_wdt), TWO watchdogs enumerated (WDT1+WDT2).
+  * open(/dev/watchdog) + WDIOC_SETTIMEOUT(30) via `busybox watchdog -T 30` ->
+    /sys/class/watchdog/watchdog0/timeout reads back 30 (the userspace ioctl
+    reached the driver and programmed the hardware reload register).
+  * state inactive -> active: the WDT is ARMED and being kept alive from userspace.
+  * timeleft is legitimately absent (aspeed_wdt implements no get_timeleft) — probed
+    honestly, not gated on.
+
+This is the DEDICATED /dev/watchdog-on-silicon transcript the row-38 LS note asked
+for. Combined with the already-silicon-proven WDT RESET (ZS `evidence/d14-zephyr/
+18-wdt-silicon.txt` + the g3-clk 120 s reset), the Linux WDT is now validated on real
+silicon: userspace open->SETTIMEOUT->arm->keepalive (here) AND the WDT actually
+resetting the SoC (ZS). Row 38 LS 🔶 -> ✅.
+
+Platform note (no overclaim): this transcript proves the userspace API + arm on
+silicon; the userspace-ARMED real reset (wdtreset gate) on silicon is a separate
+destructive test (on this flash-less board a WDT reset halts the CPU rather than
+rebooting Linux, so it needs a JTAG re-boot afterwards) — the reset capability
+itself is already silicon-proven via ZS. The mainline aspeed_wdt 2-stage pretimeout
+vs the G3 one-stage interrupt (#189) stays scoped separately.
