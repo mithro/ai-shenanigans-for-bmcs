@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(b) CODE REVIEW #3+#4 (Linux + U-Boot patches): 12/13 CLEAN; 1 CRITICAL (uboot 0004 masked an unaligned access) → REVERTED per fail-loud
+
+Completed the final two gate-(b) code bodies — the Linux-kernel patches (10) + U-Boot patches (3) — in one
+independent review pass. The reviewer cross-checked each diff against the vendored pre/post source trees
+(not the patch commentary): clk PLL/strap math + the ASPEED_NUM_CLKS=38 hws[] allocation (no overflow),
+the single-bank G3 VIC bitmasks (G3VIC_SENSE/EVENT/DUAL decoded bit-by-bit, ffs()-1 no off-by-one),
+ftgmac100 speed handling (10/100/1000, default leaves bits clear), w83795 hwmon drvdata resolution
+(both paths → same data ptr), i2c AC-timing FIELD_PREP widths, the video JFIF header layout + spinlock
+discipline, the USB-vhub probe-only bounded poll, the pinctrl G3-strap gating, and the i2c SCU-release
+chan arithmetic. Verdict: **12 of 13 CLEAN.**
+
+CRITICAL (1): `uboot-patches/0004-arm926-disable-alignment-fault-checking-g3.patch` — it changes
+start.S `orr r0,#2` (set SCTLR.A) → `bic` (clear SCTLR.A). The reviewer independently reached the SAME
+conclusion I flagged earlier + that #168 tracks: on ARMv5TE there is NO SCTLR.U, so clearing SCTLR.A does
+NOT make unaligned accesses work — it only SUPPRESSES the fault. The CPU still executes the unaligned
+LDR as a word-ROTATED read (and an unaligned STR writes to the wrong aligned address), converting a loud,
+deterministic data-abort into SILENT wrong-data / memory corruption — a direct violation of this repo's
+own CLAUDE.md "Fail loud and fast" principle, and it's unconditional in shared arm926ejs cpu-generic code.
+
+ACTION (principled, not deferred): **REVERTED patch 0004** (git rm; build-uboot.sh globs *.patch so it's
+now simply not applied → start.S keeps SCTLR.A SET = upstream default). This (a) removes the dangerous
+silent-corruption mask, restoring fail-loud; (b) makes #168 MORE debuggable — the data-abort now points
+DIRECTLY at the faulting unaligned access, versus the masked build's unreadable prefetch-abort cascade
+(the earlier #168 wall); (c) regresses NO validated path — the modern U-Boot is WIP/blocked at #168
+regardless, and the working Raptor U-Boot oracle is a separate tree not touched by uboot-patches/. So
+the honest state of #168 is corrected: the alignment abort was MASKED (dangerously), NOT fixed; the
+durable fix — find + fix the specific early unaligned access (get_unaligned/align, near timer_init) with
+SCTLR.A kept SET — remains the real #168 work. Gate-(b) Linux+U-Boot pass = 1 found, 1 fixed (by
+reverting the bad workaround), 0 remaining. **Gate-(b) now covers ALL FOUR developed code bodies
+(Zephyr / QEMU-models / Linux / U-Boot); total across the 4 passes: 4 real issues found, all resolved.**
+
 ## 2026-07-20 — Gate-(b) CODE REVIEW #2 (QEMU device models): 2 real oracle bugs found + FIXED + re-validated; rest confirmed clean
 
 Second gate-(b) pass — the QEMU device MODELS (the faithfulness oracle: pmbus_psu, w83795, sbtsi,
