@@ -1,6 +1,40 @@
 # Device-driver program — running log
 
-## 2026-07-21 — Row 39 LS: netboot ATTEMPTED on silicon — U-Boot came up, DHCP blocked (honest failure)
+## 2026-07-21 — Row 39 LS: netboot UNBLOCKED (static IP) + RTC block PROVEN healthy on silicon; my SCU08[16] "fix" was the regression
+
+Continued row-39-LS silicon validation. Two big corrections, both cases of "the hardware is fine, my
+code/driving was wrong":
+
+1. **Netboot DHCP was MY driving mistake, not a NIC bug (#193 RESOLVED).** The BMC mgmt segment
+   (Pi `eth-bmc` = 192.168.66.1) runs dnsmasq with `--enable-tftp` but **no `--dhcp-range`** — it
+   serves TFTP only. So `dhcp` correctly gets no answer. Fix = STATIC ip: `setenv ipaddr 192.168.66.2`
+   / `serverip 192.168.66.1`; `ping` → "host is alive"; three TFTPs load; boot via
+   `initrd=<data>,<size>` cmdline + `bootm <k> - <dtb>` (U-Boot 2013.07's DTB-initrd fixup doesn't
+   reach this kernel). Linux now boots to `/init` on real silicon and the rtclinux gate runs.
+
+2. **Linux RTC still read back 00:00:00 / alarm count 0 → instrumented, NOT guessed.** Added a devmem
+   DIAG to the rtclinux gate. First finding: `SCU08=0x61810070` (bit16 already set) yet COUNTER=0 even
+   after an explicit devmem RESET+RELOAD+RESTART+enable. So SCU08[16]=1 is NOT sufficient — and the
+   RESTART latch (a clocked op) does nothing → the RTC tick-clock is dead under Linux.
+
+3. **Register-probed the RTC directly from the U-Boot prompt (md/mw) — the RTC BLOCK IS HEALTHY.**
+   Under U-Boot's real clock state (`SCU08=0x61800070` → **bit16=0**, 32.768kHz source; `SCU0C=0x000c3e89`
+   bit6=0, 24MHz REFCLK running): RELOAD write **sticks** (`0x000c2d1e`), CONTROL enable sticks, and the
+   **COUNTER loads + advances** (`0x000c2d26` → `0x000c2d2b`). So on THIS board, under U-Boot's config,
+   the RTC runs with **bit16 = 0**. Forcing `SCU08=0xE3F10070` (bit16=1 + other dividers) produced
+   GARBAGE counter values (`0x08c0e421`…). 
+
+**Consequence / reconciliation:** the earlier Zephyr silicon note "bit16 must be 1 or the RTC has no
+clock" was an artifact of the *bare openocd-reset* boot (no U-Boot; the 32kHz path wasn't set up). Under
+the fuller U-Boot init the 32.768kHz source works and **forcing bit16=1 is wrong** — my previous-cycle
+Linux-driver `SCU08[16]=1` write is a strong suspect for the Linux regression itself (it changes the RTC
+onto a source that misbehaves under Linux's clock tree). This is exactly the memory principle: a broken
+legacy/Linux boot is a bug in MY code, not the silicon. Currently running a Linux DIAG that CLEARS bit16
+(restores U-Boot's proven-good state) + ensures SCU0C[6]=0, then drives the RTC and reads back RELOAD +
+COUNTER×2 — to confirm the RTC runs under Linux with bit16=0 before rewriting the driver. Row 39 LS still
+⬜; root cause now narrowed to a Linux-side clock clobber, RTC hardware exonerated.
+
+## 2026-07-21 — Row 39 LS: netboot ATTEMPTED on silicon — U-Boot came up, DHCP blocked (honest failure) [SUPERSEDED by static-IP fix above]
 
 Followed through on the row-39-LS silicon validation (not just staged): worked around the TFTP
 permission block (scp'd under new names /srv/tftp-bmc/{uImage,dtb,initrd}-rtc39, owned by tim),
