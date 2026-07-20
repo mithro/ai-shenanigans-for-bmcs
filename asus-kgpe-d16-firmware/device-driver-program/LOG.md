@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(a) COMPLETENESS VERIFIED: independent sub-agent confirms DEVICE-MATRIX covers EVERY schematic device (no gaps); CU2 dispositioned
+
+Addressed the foundational completeness question the goal demands ("enumerate every item described in the
+BMC wiring"). Launched a read-only sub-agent to enumerate EVERY device/peripheral/interface/connector in
+the authoritative `schematic-wiring/AST2050-BMC-WIRING.md` §§2–15 (+ §14/§15 + the sibling connector/I2C/
+pinmap docs) and cross-check each against the 43 DEVICE-MATRIX rows. VERDICT: **the matrix is COMPLETE at
+the device level — NO missing device found.** Every schematic device maps to ≥1 row. I VERIFIED the
+audit's specific claims against the source (grepped the schematic-wiring docs): CU2/PIKE2/AST_SRST# all
+exist exactly as reported.
+  * Only unrowed NARRATIVE items = reset-output NETS (`AST_SRST#`/R20, `AST_BRST#`/P21) — not devices,
+    already tracked in FULL-TASK-LIST E6.
+  * Only "spurious" row = 41 (ADC), self-flagged as a removed G4 phantom (all-Ⓝ). Correct.
+  * The audit raised 2 pinmap-level ambiguities; I dispositioned them:
+    - **CU2 (ICS9112AM clock-gen)** — was undispositioned. It supplies the 50 MHz RMII RX ref clocks to
+      the BMC MAC RX paths (QU1_pins.md:198/207/211, balls A7/B7). Verified it has NO BMC control
+      interface → folded into rows 10/11 (Ethernet), no dedicated row, justified like the §2 LDOs.
+      Differs from QOSC1/row-34 (the BMC's own core reference, consumed by every stack's boot). Added an
+      explicit "Support-component completeness" note at the end of DEVICE-MATRIX.md.
+    - **PIKE2** (host LPC/SATA mezzanine peer) — already FULL-TASK-LIST B1g `[N]`; **ZU1/FW322,
+      VGA_HDR1, glue U3/U4/NU2** — already folded (rows 8/12/E6). Confirmed, no action needed.
+Recorded the verification prominently at the top of DEVICE-MATRIX (gate-a milestone) + the end-of-file
+disposition. So every part the schematic AND the finer pinmap names now has an explicit home: device rows
+for devices, FULL-TASK-LIST per-pin entries for nets/peers/glue, and the new note for the one passive
+clock-gen. This is one of the gate-(a) reviews the goal requires ("independent review unable to find
+anything missed") — PASSED for device-level coverage. (Prose-only; tally unchanged, still matches.)
+
 ## 2026-07-20 — #170 DONE: Zephyr PSU PMBus smoke (row 24) — first Tier-A breadth driver, QEMU PASS 12.000 V
 
 Executed the first Tier-A item from the triage roadmap: a real new Zephyr driver for the PSU on I2C1.

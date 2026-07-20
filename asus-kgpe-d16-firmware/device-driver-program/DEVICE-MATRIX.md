@@ -40,7 +40,13 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 ## Coverage snapshot (this table IS the enumerated per-stack task list)
 
 **Every device wired in `AST2050-BMC-WIRING.md` is one row below** (43 rows, §§2–15 +
-the SoC-internal blocks). **Every column is a task**: QE = full QEMU emulation; UQ/US =
+the SoC-internal blocks). **COMPLETENESS INDEPENDENTLY VERIFIED (2026-07-20, gate-a):** a
+sub-agent enumerated every device/peripheral/interface/connector in the authoritative schematic
+§§2–15 (+ §14/§15) and cross-checked each against these rows — **no missing device found**. The only
+unrowed narrative items are reset-output *nets* (`AST_SRST#`/R20, `AST_BRST#`/P21 — not devices,
+tracked in FULL-TASK-LIST E6); the one spurious row (41 ADC) is self-flagged as a removed G4 phantom.
+Non-narrative pinmap support parts (clock-gen `CU2`, host-peer `PIKE2`) are dispositioned at the end of
+this file. **Every column is a task**: QE = full QEMU emulation; UQ/US =
 U-Boot driver validated in QEMU / on silicon; LQ/LS/LU = Linux driver validated in QEMU /
 on silicon / from userspace; ZQ/ZS = Zephyr driver validated in QEMU / on silicon. So the
 grid is 43 × 8 = 344 explicit per-device-per-stack tasks. Machine-counted status
@@ -447,3 +453,22 @@ read had missed, now folded into FULL-TASK-LIST (the authoritative doc): **B1f**
 `AST_SRST#` (R20) reset-output→PHY. So the "nothing skipped" claim was ~95% true
 at the section level but not at the per-pin level — these 6 rows are now explicit
 (honestly `[ ]`/`[~]`/`[N]`). See FULL-TASK-LIST B1f/B1g/B2/E6 for the stack cells.
+
+**Support-component completeness (2026-07-20 independent schematic audit).** The audit that
+verified device-level completeness (top of file) flagged one schematic-named part not previously
+dispositioned anywhere:
+- **`CU2` — ICS9112AM-16LFT clock generator** (`pinmaps/QU1_pins.md:198`; 8 pins, 2 nets). It supplies
+  the 50 MHz RMII RX reference clocks `C_MNG_50M_AST_RMII1RXCLK`/`RMII2RXCLK` to the BMC MAC RX paths
+  (balls A7/B7). **Disposition: folded into rows 10/11 (Ethernet), no dedicated row — justified.** It is
+  a fixed-function passive clock source with NO BMC control/configuration interface (the BMC cannot
+  program the ICS9112AM; it only receives the clock), so there is no driver to write or emulate for it
+  beyond the MAC rows it feeds — exactly like the §2 LDOs (folded into SCU/SDMC). It differs from QOSC1
+  (row 34, which *did* get a row) because QOSC1 is the BMC's OWN primary reference consumed by the SCU
+  on every boot of every stack, whereas CU2 feeds only the Ethernet interface, so its status is
+  subordinate to rows 10/11. If those rows are ever built out, CU2 is validated implicitly (the PHY RX
+  path won't work without its clock).
+The audit's other flagged items are already dispositioned: **`PIKE2`** (host LPC/SATA mezzanine peer) =
+FULL-TASK-LIST **B1g** `[N]`; **`AST_SRST#`/R20** + **`AST_BRST#`/P21** = reset-output nets, FULL-TASK-LIST
+**E6**; `ZU1`/FW322, `VGA_HDR1`, glue `U3/U4/NU2` = signals/peers folded into rows 8/12/E6. So every part
+the schematic (and the finer pinmap) names now has an explicit home — device rows for devices, FULL-TASK-LIST
+per-pin entries for nets/peers, and this note for the one passive clock-gen.
