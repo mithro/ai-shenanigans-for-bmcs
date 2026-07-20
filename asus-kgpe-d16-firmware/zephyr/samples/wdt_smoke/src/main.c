@@ -6,7 +6,7 @@
  * reset in the boot log, so the QEMU harness must run WITHOUT -no-reboot (and
  * with QEMU's default watchdog action = reset) so the fire path reboots the
  * machine instead of halting it. Console output goes through the M0 polling UART
- * backend (soc/aspeed/ast2050/console.c); no console config beyond
+ * backend (soc/aspeed_g3/ast2050/console.c); no console config beyond
  * CONFIG_WATCHDOG in prj.conf is needed.
  *
  * Sequence each boot:

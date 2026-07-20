@@ -6,7 +6,7 @@
  * sensor_sample_fetch() then sensor_channel_get() for the CPU die temperature
  * (SENSOR_CHAN_DIE_TEMP), and prints a clear PASS/FAIL line. The driver reaches
  * the chip over the AST2050 (G3) I2C master via the Zephyr I2C API; console
- * output goes through the M0 polling UART backend (soc/aspeed/ast2050/console.c),
+ * output goes through the M0 polling UART backend (soc/aspeed_g3/ast2050/console.c),
  * so no extra console config is needed.
  *
  * Target: the AMD SB-TSI at 7-bit address 0x4C (socket P0) on I2C engine 3

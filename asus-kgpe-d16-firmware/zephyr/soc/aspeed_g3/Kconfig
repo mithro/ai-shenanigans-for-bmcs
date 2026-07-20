@@ -6,7 +6,7 @@
 # interrupt controller, the MMU, and the C-based atomics (ARMv5TE has no
 # LDREX/STREX).
 
-config SOC_FAMILY_ASPEED
+config SOC_FAMILY_ASPEED_G3
 	select ARM
 	select CPU_ARM926EJ_S
 	select ARM_CUSTOM_INTERRUPT_CONTROLLER
@@ -14,16 +14,18 @@ config SOC_FAMILY_ASPEED
 	select ATOMIC_OPERATIONS_C
 	select SOC_RESET_HOOK
 	# SOC_RESET_HOOK is REQUIRED, not optional: soc_reset_hook()
-	# (soc/aspeed/ast2050/soc.c) invalidates the ARM926 I/D-cache + TLB before
+	# (soc/aspeed_g3/ast2050/soc.c) invalidates the ARM926 I/D-cache + TLB before
 	# z_arm_mmu_init turns the MMU/caches on. Without it, on real silicon the
 	# freshly-enabled D-cache serves stale power-on garbage and the image
 	# data-aborts at __start (QEMU cannot catch this — it models no cache
-	# contents). Select it explicitly here; do NOT rely on an upstream SoC-root
-	# family of the same Kconfig symbol name happening to select it.
+	# contents). Select it explicitly here. This symbol is deliberately
+	# SOC_FAMILY_ASPEED_G3, disjoint from upstream Zephyr's SOC_FAMILY_ASPEED
+	# (the Cortex-M AST10x0/AST2600 family): if the names collided, Kconfig would
+	# append both families' selects onto one symbol.
 	# MMU is required by the ARM9 arch (CONFIG_MMU stays y even if not
 	# selected here). The port RUNS AN APPLICATION under QEMU (evidence
 	# d14-zephyr/03): "*** Booting Zephyr OS ***" + "Hello World!" via a
-	# static-mapped physical-address SoC console (soc/aspeed/ast2050/console.c,
+	# static-mapped physical-address SoC console (soc/aspeed_g3/ast2050/console.c,
 	# printk+stdout hooks), sidestepping the brand-new upstream ARM9 arm_mmu not
 	# translating the ns16550 z_phys_map device VA. The M1 VIC + aspeed timer
 	# (vic.c/aspeed_timer.c) deliver interrupts; sustained tickful scheduling

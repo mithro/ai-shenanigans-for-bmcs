@@ -1,0 +1,17 @@
+# ASPEED AST2050 (G3) SoC family.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Symbol is SOC_FAMILY_ASPEED_G3, NOT the upstream SOC_FAMILY_ASPEED: upstream
+# Zephyr's soc/aspeed defines SOC_FAMILY_ASPEED for the Cortex-M AST10x0/AST2600
+# parts. A shared symbol name would let Kconfig append both families' selects to
+# one symbol (ARM926 + Cortex-M), so we keep a disjoint G3 namespace.
+
+config SOC_FAMILY_ASPEED_G3
+	bool
+	help
+	  ASPEED BMC SoCs (ARM926EJ-S G3 generation: AST2050 / AST1100).
+
+config SOC_FAMILY
+	default "aspeed_g3" if SOC_FAMILY_ASPEED_G3
+
+rsource "*/Kconfig.soc"

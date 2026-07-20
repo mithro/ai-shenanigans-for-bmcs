@@ -5,7 +5,7 @@
  * Validates the aspeed,ast2050-gpio driver's device-ready + configure + REAL-
  * register read path on a genuine AST2050 GPIO register, on both QEMU and real
  * silicon. Console output goes through the M0 polling UART backend
- * (soc/aspeed/ast2050/console.c), so no UART/console config is needed beyond
+ * (soc/aspeed_g3/ast2050/console.c), so no UART/console config is needed beyond
  * CONFIG_GPIO in prj.conf.
  *
  * Test pin: GPIOH2 = bit 26 of the EFGH set (devicetree node gpio1, "Extended

@@ -3,7 +3,7 @@
 CONFIG_CONSOLE=y
 CONFIG_SERIAL=y
 CONFIG_UART_NS16550=y
-# M0 console = the direct-physical polling backend (soc/aspeed/ast2050/console.c)
+# M0 console = the direct-physical polling backend (soc/aspeed_g3/ast2050/console.c)
 # installed as the printk hook, writing UART5 @ 0x1e784000 via the static
 # identity MMU region in soc.c. UART_CONSOLE is OFF so the ns16550 poll_out
 # (whose CONFIG_MMU DEVICE_MMIO_MAP z_phys_map returns a VA the brand-new ARM9
@@ -12,7 +12,7 @@ CONFIG_UART_NS16550=y
 CONFIG_UART_CONSOLE=n
 CONFIG_MULTITHREADING=y
 
-# Milestone 1 (VIC + system timer): the real G3 VIC (soc/aspeed/ast2050/vic.c,
+# Milestone 1 (VIC + system timer): the real G3 VIC (soc/aspeed_g3/ast2050/vic.c,
 # 0x1e6c0000) and a tickful aspeed timer (aspeed_timer.c, Timer1 @ 1 MHz, VIC
 # source 16) are in-tree; the VIC+timer deliver interrupts through the cortex_a_r
 # isr_wrapper, and with SYS_CLOCK_EXISTS=y the kernel now runs SUSTAINED tickful

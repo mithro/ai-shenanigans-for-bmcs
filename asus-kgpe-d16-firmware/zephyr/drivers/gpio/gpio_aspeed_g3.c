@@ -25,7 +25,7 @@
  *   table (lines 99-172).
  *
  * MMIO is reached at its PHYSICAL address via the static identity MMU region
- * added in soc/aspeed/ast2050/soc.c (mirroring the UART/VIC/timer regions). We
+ * added in soc/aspeed_g3/ast2050/soc.c (mirroring the UART/VIC/timer regions). We
  * deliberately do NOT use the DEVICE_MMIO_MAP path: under CONFIG_MMU on this
  * brand-new ARM926 arm_mmu, z_phys_map returns a virtual base the MMU does not
  * translate back to 0x1E780000 (see the console.c comment for the same issue).
@@ -41,7 +41,7 @@
  * avoids that.
  *
  * Follow-up (not implemented here): edge/level interrupts via the per-bank
- * GPIO_*_INT_* registers wired to the G3 VIC (soc/aspeed/ast2050/vic.c). The
+ * GPIO_*_INT_* registers wired to the G3 VIC (soc/aspeed_g3/ast2050/vic.c). The
  * interrupt driver_api hooks are left unimplemented, so
  * gpio_pin_interrupt_configure() returns -ENOSYS.
  */

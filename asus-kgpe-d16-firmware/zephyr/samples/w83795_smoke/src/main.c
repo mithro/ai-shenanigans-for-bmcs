@@ -7,7 +7,7 @@
  * and the CPU thermal diode (SENSOR_CHAN_DIE_TEMP), and prints a clear PASS/FAIL
  * line. The driver reaches the chip over the AST2050 (G3) I2C master via the
  * Zephyr I2C API; console output goes through the M0 polling UART backend
- * (soc/aspeed/ast2050/console.c), so no extra console config is needed.
+ * (soc/aspeed_g3/ast2050/console.c), so no extra console config is needed.
  *
  * Target: the Nuvoton/Winbond W83795G at 7-bit address 0x2F on I2C engine 1
  * (devicetree node w83795, child of i2c1 @ 0x1E78A080). The kgpe-d16-bmc QEMU

@@ -1,0 +1,12 @@
+# ASPEED AST2050 (G3) — ARM926EJ-S BMC SoC.
+# Family name is "aspeed_g3" (NOT "aspeed") to stay disjoint from upstream
+# Zephyr's soc/aspeed family, which is the Cortex-M AST10x0/AST2600 generation.
+# Sharing the name would make HWMv2 silently merge our ast2050 series into
+# upstream's "aspeed" family and make the SOC_FAMILY_ASPEED Kconfig symbol carry
+# both generations' selects. See soc/aspeed_g3/Kconfig.
+family:
+- name: aspeed_g3
+  series:
+  - name: ast2050
+    socs:
+    - name: ast2050

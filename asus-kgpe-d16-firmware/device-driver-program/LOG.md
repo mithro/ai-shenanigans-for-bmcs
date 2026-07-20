@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #154 DONE: rename Zephyr module SoC family aspeed → aspeed_g3 (de-collide with upstream SOC_FAMILY_ASPEED)
+
+Closed the re-review finding #154. CONFIRMED the collision is real (not hypothetical): upstream
+Zephyr's soc/aspeed declares `family: aspeed` + `config SOC_FAMILY_ASPEED` for the Cortex-M
+AST10x0/AST2600 parts (tmp/zws/zephyr/soc/aspeed/soc.yml: family aspeed → series ast10x0 → soc
+ast1030), and OUR module declared the IDENTICAL `family: aspeed` + `SOC_FAMILY_ASPEED` for the
+ARM926 ast2050 while registering soc_root:. So HWMv2 SILENTLY MERGES our ast2050 series into
+upstream's "aspeed" family (verified: the wdt build's SOC_DIRECTORIES/SOC_FULL_DIR still resolve
+to our soc/aspeed because ast2050 is unique, but the family name is shared), and Kconfig would
+APPEND both generations' selects (ARM926 + Cortex-M) onto one SOC_FAMILY_ASPEED symbol. Currently
+DORMANT (only the selected soc's Kconfig tree is sourced, so no Cortex-M leak in today's .config —
+verified CPU_ARM926EJ_S=y, no CPU_CORTEX_M) but fragile to a menuconfig / multi-SoC build / future
+upstream select.
+
+FIX (disjoint G3 namespace): `git mv soc/aspeed soc/aspeed_g3`; soc.yml family name aspeed →
+aspeed_g3; Kconfig symbol SOC_FAMILY_ASPEED → SOC_FAMILY_ASPEED_G3 (Kconfig.soc def + SOC_FAMILY
+string default "aspeed_g3"; Kconfig family selects; Kconfig.defconfig if/endif; ast2050/Kconfig.soc
+select). Series/soc names (ast2050) and board vendor (aspeed) unchanged — they don't collide.
+Updated ~14 stale `soc/aspeed/ast2050/` doc-comment paths across drivers/samples/board-defconfig/
+PORT-PLAN to soc/aspeed_g3/. Added rationale comments in soc.yml + both Kconfigs so the disjointness
+is self-documenting.
+
+VALIDATED: clean rebuild (west -p always) links green; .config now SOC_FAMILY="aspeed_g3",
+SOC_FAMILY_ASPEED_G3=y, CPU_ARM926EJ_S=y, SOC_SERIES_AST2050=y, SOC_AST2050=y (no stale
+SOC_FAMILY_ASPEED); QEMU boot of the renamed wdt_smoke still runs + WDT resets (5 boots/5 s). No
+other soc-root/CMake/dts hardcodes the family name or path (top CMakeLists uses ${SOC_SERIES},
+drivers depend on DT_HAS_ASPEED_AST2050_* not the family).
+
 ## 2026-07-20 — WDT (row 38, ZS) SoC-reset captured on REAL silicon — closes a gate-d evidence gap (break from #168)
 
 Took the goal's "take a break from #168, work on another part" and captured a bounded device-silicon

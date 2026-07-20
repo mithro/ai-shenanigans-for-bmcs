@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * k_msleep() puts the thread to sleep and only returns when a system-timer tick
- * IRQ (Timer1 @ VIC source 16, soc/aspeed/ast2050/aspeed_timer.c + vic.c) fires
+ * IRQ (Timer1 @ VIC source 16, soc/aspeed_g3/ast2050/aspeed_timer.c + vic.c) fires
  * and the kernel's tick handler wakes it; k_uptime_get() is derived from the same
  * tick count. So N successful k_msleep()+uptime iterations = N proofs that the
  * timer is running, the VIC is routing + acking its IRQ, and the ISR path works.

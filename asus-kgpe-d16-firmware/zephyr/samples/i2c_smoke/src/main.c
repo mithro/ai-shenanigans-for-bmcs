@@ -4,7 +4,7 @@
  *
  * Does ONE deterministic register read against a device the kgpe-d16-bmc QEMU
  * machine actually models, and prints a clear PASS/FAIL line. Console output
- * goes through the M0 polling UART backend (soc/aspeed/ast2050/console.c), so
+ * goes through the M0 polling UART backend (soc/aspeed_g3/ast2050/console.c), so
  * no UART/console config is needed beyond CONFIG_I2C in prj.conf.
  *
  * Target: the Nuvoton/Winbond W83795G hardware monitor at 7-bit address 0x2F on

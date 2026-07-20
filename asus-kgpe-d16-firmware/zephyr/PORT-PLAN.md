@@ -44,8 +44,8 @@ precedent are in **open PR #103557** (`TonyHan11/zephyr:arm9_4_sam9x7`).
 ## Files to create (out-of-tree, or upstream layout mirrored here)
 
 Mirror the sam9x7 structure under a new vendor `aspeed`:
-- `soc/aspeed/ast2050/{Kconfig.soc,Kconfig.defconfig,soc.c,soc.h,CMakeLists.txt}`
-  + `soc/aspeed/{soc.yml,Kconfig.soc,CMakeLists.txt}` — `SOC_ASPEED_AST2050`
+- `soc/aspeed_g3/ast2050/{Kconfig.soc,Kconfig.defconfig,soc.c,soc.h,CMakeLists.txt}`
+  + `soc/aspeed_g3/{soc.yml,Kconfig.soc,CMakeLists.txt}` — `SOC_ASPEED_AST2050`
   selects `CPU_ARM926EJ_S`; CMakeLists sets `SOC_LINKER_SCRIPT` = the
   cortex_a_r linker; `soc.c` does minimal early init (MMU/caches off first).
 - `boards/aspeed/kgpe_d16_bmc/{board.yml, kgpe_d16_bmc.dts,

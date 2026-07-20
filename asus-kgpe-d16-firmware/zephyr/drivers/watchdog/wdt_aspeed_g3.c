@@ -55,7 +55,7 @@
  * runs from the top again.
  *
  * MMIO is reached at its PHYSICAL address via the static identity MMU region
- * added in soc/aspeed/ast2050/soc.c ("wdt" 0x1e785000), mirroring the UART/VIC/
+ * added in soc/aspeed_g3/ast2050/soc.c ("wdt" 0x1e785000), mirroring the UART/VIC/
  * timer/GPIO/I2C regions. We deliberately do NOT use the DEVICE_MMIO_MAP path:
  * under CONFIG_MMU on this brand-new ARM926 arm_mmu, z_phys_map returns a virtual
  * base the MMU does not translate back (see the console.c / gpio_aspeed_g3.c /
@@ -68,7 +68,7 @@
  * <zephyr/drivers/watchdog.h>, which is #included below.
  *
  * Follow-ups (not implemented): the pre-timeout interrupt callback via WDT_CTRL[2]
- * (WDT_INTR) wired to the G3 VIC (soc/aspeed/ast2050/vic.c) - so install_timeout
+ * (WDT_INTR) wired to the G3 VIC (soc/aspeed_g3/ast2050/vic.c) - so install_timeout
  * rejects a non-NULL callback; the windowed (min > 0) lower bound; reset-width /
  * external-reset (WDT18) pulse shaping; per-target reset-scope selection.
  */

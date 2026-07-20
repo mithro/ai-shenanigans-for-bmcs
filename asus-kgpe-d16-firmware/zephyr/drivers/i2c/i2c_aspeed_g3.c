@@ -94,7 +94,7 @@
  * the functional FSM, but programming it is correct for real silicon.)
  *
  * MMIO is reached at its PHYSICAL address via the static identity MMU regions
- * added in soc/aspeed/ast2050/soc.c (the I2C controller page 0x1E78A000 and the
+ * added in soc/aspeed_g3/ast2050/soc.c (the I2C controller page 0x1E78A000 and the
  * SCU page 0x1E6E2000), mirroring the UART/VIC/timer/GPIO regions. We
  * deliberately do NOT use the DEVICE_MMIO_MAP path: under CONFIG_MMU on this
  * brand-new ARM926 arm_mmu, z_phys_map returns a virtual base the MMU does not
@@ -102,7 +102,7 @@
  * are 32-bit sys_read32/sys_write32.
  *
  * Follow-ups (not implemented): interrupt-driven transfers via the per-engine
- * INTR regs + G3 VIC (soc/aspeed/ast2050/vic.c); the pool-buffer/DMA fast paths;
+ * INTR regs + G3 VIC (soc/aspeed_g3/ast2050/vic.c); the pool-buffer/DMA fast paths;
  * per-speed AC-timing divider computation from the APB clock; 10-bit addressing;
  * multi-master arbitration handling; bus recovery.
  */

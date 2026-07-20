@@ -41,7 +41,7 @@
  * the set value — the rtc_smoke sample allows for that.
  *
  * MMIO is reached at its physical address via the static identity MMU region
- * added in soc/aspeed/ast2050/soc.c (mirroring the uart5/vic/timer/wdt regions);
+ * added in soc/aspeed_g3/ast2050/soc.c (mirroring the uart5/vic/timer/wdt regions);
  * accesses are 32-bit (the QEMU model's valid.min/max_access_size = 4).
  */
 
