@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Correction: row 30 (UART console) Zephyr-silicon ⬜ → 🔶 (it was a false "not-existing" claim)
+
+The goal warns that incorrect "functionality-not-existing" claims have been made — found one. Row 30
+(UART console) had ZS = ⬜ (todo/nothing), but the Zephyr static-mapped polling console is DEMONSTRABLY
+working on real silicon: EVERY Zephyr silicon smoke in this program prints its results through it on
+`/dev/serial-bmc-console` — that is literally how I read the heartbeat/WDT/SCU/RTC/GPIO transcripts
+(evidence d14-zephyr/17,18,19,14,15). Corrected ZS ⬜→🔶 to MIRROR ZQ (also 🔶): the polling backend
+works on BOTH sides; only the *proper* ns16550 driver path stays blocked (the same upstream arm_mmu
+`z_phys_map` device-VA gap) on QEMU AND silicon — so 🔶 (partial: functional via workaround), not ✅
+(proper driver) and definitely not ⬜. Updated the row-30 note + FULL-TASK-LIST F1 ([ ] silicon →
+[~] silicon w/ evidence) + tally (Zephyr@silicon 9✅/2🔶/26⬜). No new capture needed — the evidence
+already existed; this fixes the bookkeeping to match reality.
+
 ## 2026-07-20 — #169 DONE: Zephyr SCU smoke (row 35) both-sides PASS — SCU7C=0x0202 on QEMU AND real silicon
 
 Concrete both-sides device advance (goal: every device × 4 stacks). New `samples/scu_smoke` reads the

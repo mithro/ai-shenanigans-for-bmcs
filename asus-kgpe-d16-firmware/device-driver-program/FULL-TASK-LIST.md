@@ -327,7 +327,7 @@ pin the B2/B3b PCI-target model must generate)**)
 - [x] QEMU: SERIAL_MM UART5 @0x1e784000 (serial_hd(0))
 - U-Boot: [x] QEMU · [x] silicon (Raptor `boot#` @115200, our serial-bmc-console)
 - Linux: [x] QEMU (ttyS4 console) · [x] silicon (login shell) · [x] userspace (getty/dropbear)
-- Zephyr: [~] QEMU (static-mapped polling SoC console — banner + Hello World; ns16550 blocked by upstream arm_mmu z_phys_map) · [ ] silicon
+- Zephyr: [~] QEMU (static-mapped polling SoC console — banner + Hello World; ns16550 blocked by upstream arm_mmu z_phys_map) · [~] silicon (the polling console output appears on `/dev/serial-bmc-console` in EVERY Zephyr silicon smoke — evidence `d14-zephyr/17`(heartbeat)/`18`(WDT)/`19`(SCU)/`14`(RTC)/`15`(GPIO); mirrors QEMU — ns16550 proper-driver path still blocked both sides)
 
 ### F2. UART1 → SOL via QU8 mux → Super-I/O (§12)
 - [~] QEMU: VUART byte-flow model; QU8 2:1 mux (BMC_PRESENT# select) not modeled (D10)

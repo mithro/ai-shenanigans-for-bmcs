@@ -55,7 +55,7 @@ grid is 43 × 8 = 344 explicit per-device-per-stack tasks. Machine-counted statu
 | Linux @ silicon | 18 | 4 | 2 | 13 | 6 |
 | Linux userspace | 12 | 6 | 0 | 13 | 12 |
 | Zephyr @ QEMU | 9 | 8 | 0 | 21 | 5 |
-| Zephyr @ silicon | 9 | 1 | 0 | 27 | 6 |
+| Zephyr @ silicon | 9 | 2 | 0 | 26 | 6 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
@@ -224,7 +224,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | ⬜ |
+| 30 | UART console (UART2, AST_UART1) | UART | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🔶 | 🔶 |
 | 31 | UART1 / SOL via QU8 mux → Super-I/O (§12) | UART+glue | 🔶 | Ⓝ | Ⓝ | 🔶 | ⬜ | ⬜ | ⬜ | ⬜ |
 
 - **30** console both sides (all boots). **Zephyr RUNS AN APP in QEMU** (ZQ 🔶): the
@@ -240,7 +240,12 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   `SYS_CLOCK_EXISTS=y`; the app then runs the FULL 12 s with 0 data-aborts (task #141
   DONE). Do NOT blame upstream. (The standard `uart_ns16550.c` console IS still blocked
   by the separate `z_phys_map` device-VA gap — that one is real + open.) Per-device Zephyr
-  drivers (GPIO #147, I2C #148, WDT #149) build on this now-clean tick. D10/D11/D14.
+  drivers (GPIO #147, I2C #148, WDT #149) build on this now-clean tick. **ZS = 🔶 (not ⬜):
+  corrected 2026-07-20** — the static-mapped polling console is PROVEN on real silicon: EVERY Zephyr
+  silicon smoke this program prints through it on `/dev/serial-bmc-console` (evidence `d14-zephyr/17`
+  heartbeat, `/18` WDT, `/19` SCU, `/14` RTC, `/15` GPIO). ZS mirrors ZQ (🔶): the polling backend
+  works both sides; only the *proper* ns16550 driver stays blocked (same `z_phys_map` device-VA gap)
+  on QEMU **and** silicon. Leaving it ⬜ understated real, evidenced functionality. D10/D11/D14.
 - **31** SOL essentially unimplemented end-to-end (audit gap #2): no QU8-mux/Super-I/O model, no Linux SOL session, no host bytes on silicon. D10.
 
 ## JTAG / LEDs / clock / straps (§13)
