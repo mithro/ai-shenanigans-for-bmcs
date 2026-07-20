@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b): the last 2 Zephyr DRIVERS reviewed (sbtsi + gpio_w83601g) — both CLEAN → ALL Zephyr code now reviewed
+
+Rotated off the heavy W83795 modeling (2 straight cycles) per the "work on another part" guidance, and closed
+the Zephyr side of gate-(b). Dispatched 2 parallel independent sub-agent reviews of the only Zephyr DRIVER
+files not yet reviewed; verified both. Both CLEAN (0 substantive issues ≥80):
+- **Zephyr `drivers/sensor/sbtsi/sbtsi.c`:** temp reconstruction `temp_int + (temp_dec>>5)*125000` correct
+  (unsigned, right shift), no int32 overflow, fail-loud I2C return checks, correct fetch/get caching, init
+  error path. The reviewer cross-checked it **bit-exact against real-silicon evidence** (`d09-sbtsi/01`:
+  TEMP_INT=0x0e, TEMP_DEC=0x60 → 14.375 C) — independent silicon confirmation.
+- **Zephyr `drivers/gpio/gpio_w83601g.c`:** single-transaction indexed-CR access (no shared-index race;
+  multi-step RMW under the per-instance mutex), input-CR reads distinct from the shadow-based output flush
+  (siblings preserved), BIT(pin) guarded by pin>=16 rejection (no shift-UB), glitch-free IOCFG ordering,
+  per-instance independent state (0x18/0x19 don't alias), fail-loud I2C. One non-actionable dead-code note
+  (reg_out/reg_in defined-but-unused) — not a bug.
+
+**Gate-(b) Zephyr coverage is now COMPLETE:** gpio_aspeed_g3 (2 bugs FIXED) + i2c_aspeed_g3 (clean, #180
+latent note) + wdt_aspeed_g3 (clean) + rtc_aspeed_g3 (clean, +neg-input hardening) + w83795-sensor (clean) +
+sbtsi-sensor (clean) + gpio_w83601g (clean) + the SoC support vic/timer/console/soc (clean) = every Zephyr
+.c reviewed. Gate (b) overall still NOT sealed — remaining un-reviewed: the smaller Linux patches
+(ftgmac/i2c-timing/ipmi-kcs/pinctrl/media-video/usb-vhub/hwmon-registration), U-Boot 0001-p2a-dram, QEMU
+peci/lpc/smc/sdmc/video, and the DTS files — but the ENTIRE Zephyr stack + the QEMU sensor/gpio models + the
+Linux clk/irqchip keystones + U-Boot i2c are now confirmed clean-or-fixed.
+
 ## 2026-07-20 — #183 (part): W83795 CASEOPEN + VID MODELED + register-validated in QEMU (real implementation, not a mis-flag)
 
 The 3rd gate-d task WAS genuine model work (unlike #181/#182 mis-flags). Implemented two W83795G functions the
