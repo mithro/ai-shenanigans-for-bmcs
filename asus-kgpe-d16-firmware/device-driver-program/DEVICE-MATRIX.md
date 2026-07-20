@@ -39,33 +39,34 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 ## Coverage snapshot (this table IS the enumerated per-stack task list)
 
-**Every device is one row below** (49 rows: the §§2–15 schematic devices + the SoC-INTERNAL
+**Every device is one row below** (51 rows: the §§2–15 schematic devices + the SoC-INTERNAL
 engines from the datasheet §9 memory map). **COMPLETENESS — TWO DIMENSIONS:** (1) EXTERNAL
 schematic devices (2026-07-20 gate-a): an independent sub-agent enumerated every
 device/peripheral/interface/connector in the authoritative schematic §§2–15 (+ §14/§15) and cross-checked
 each against these rows — **no missing device found** (only unrowed narrative items are reset-output *nets*
 `AST_SRST#`/R20, `AST_BRST#`/P21, tracked in FULL-TASK-LIST E6; the CU2/PIKE2 pinmap parts are
 dispositioned at the end of this file). (2) SoC-INTERNAL engines (2026-07-20 gate-d, #173): the
-schematic-scoped audit STRUCTURALLY could not reach internal blocks with no external pins — a gate-d pass
-found 6 real ones the matrix omitted (HACE/MIC/MDMA/2D/PUART/PCI-arbiter, all "Yes" in the memory map §9);
-**rows 43–48 now add them** (see their note). Two G4 phantoms (XDMA/SDHCI) that WERE realized on the G3
+schematic-scoped audit STRUCTURALLY could not reach internal blocks with no external pins — two gate-d
+passes found 8 real ones the matrix omitted (HACE/MIC/MDMA/2D/PUART/PCI-arbiter + AHBC/A2P, all "Yes" in
+the memory map §9); **rows 43–50 now add them** (see their notes; the 2nd gate-d pass caught that the 1st
+enumeration itself missed AHBC/A2P — #175/#176). Two G4 phantoms (XDMA/SDHCI) that WERE realized on the G3
 machine are now gated off (#172). So both the external-device and internal-engine dimensions are now
 enumerated. **Every column is a task**: QE = full QEMU emulation; UQ/US =
 U-Boot driver validated in QEMU / on silicon; LQ/LS/LU = Linux driver validated in QEMU /
 on silicon / from userspace; ZQ/ZS = Zephyr driver validated in QEMU / on silicon. So the
-grid is 49 × 8 = 392 explicit per-device-per-stack tasks. Machine-counted status
+grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted status
 (regenerate with `uv run tally.py`, 2026-07-20):
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 29 | 9 | 0 | 9 | 2 |
-| U-Boot @ QEMU | 10 | 3 | 0 | 3 | 33 |
-| U-Boot @ silicon | 8 | 4 | 1 | 3 | 33 |
-| Linux @ QEMU | 25 | 7 | 0 | 9 | 8 |
-| Linux @ silicon | 18 | 4 | 2 | 16 | 9 |
-| Linux userspace | 12 | 6 | 0 | 15 | 16 |
-| Zephyr @ QEMU | 17 | 5 | 0 | 18 | 9 |
-| Zephyr @ silicon | 11 | 4 | 0 | 24 | 10 |
+| QEMU emulation | 29 | 10 | 0 | 10 | 2 |
+| U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
+| U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
+| Linux @ QEMU | 25 | 7 | 0 | 9 | 10 |
+| Linux @ silicon | 18 | 4 | 2 | 16 | 11 |
+| Linux userspace | 12 | 6 | 0 | 15 | 18 |
+| Zephyr @ QEMU | 17 | 5 | 0 | 19 | 10 |
+| Zephyr @ silicon | 11 | 4 | 0 | 25 | 11 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
@@ -342,11 +343,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | Ⓝ | Ⓝ |
+| 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 49 | AHBC AHB-bus controller (0x1E600000, IRQ31) | AHBC | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 50 | A2P AHB→PCI bridge (0x1E720000) | A2P | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **35** SCU: exercised by every stack's init (QE/UQ/US/LQ/LS ✅). **Zephyr ZQ+ZS ✅ now
   (2026-07-20, `evidence/d14-zephyr/19-scu-silicon.txt`):** `samples/scu_smoke` reads the SCU
@@ -436,6 +439,20 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   These are first-pass dispositions to CLOSE the completeness gap (they were silently missing); the QE=⬜
   items are genuine QEMU-faithfulness todos (the real silicon has these blocks) and HACE's model-fidelity
   + the ⬜ driver cells are tracked follow-on work under #173.
+- **49–50 (ADDED 2026-07-20, #175/#176 — a 2ND gate-d pass caught the 1st enumeration itself missed these):**
+  - **49 AHBC** (AHB Bus Controller, 0x1E600000/IRQ31; regs 0x00 key/0x80 priority/0x88 IRQ/**0x8C
+    Address-Remap** = boot remap of 0x0): **QE=🔶** — in QEMU it's swallowed by the `ASPEED_DEV_IOMEM`
+    unimplemented catch-all, and the boot-area remap is FAKED by the machine `spi_boot` alias, not a
+    faithful AHBC 0x8C model. **UQ/US=🔶** — the loader (Raptor/U-Boot) DOES use the AHBC8C boot-remap,
+    but on the faked model. L/Z=Ⓝ (no runtime OS driver). Follow-on: faithfully model 0x8C/priority/IRQ
+    (#175). This is boot-critical, so it is NOT a phantom to gate — it is a real block to MODEL.
+  - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=⬜** — NOT modeled; worse, QEMU currently maps
+    `ASPEED_DEV_SRAM` at 0x1E720000, but the memory-map §9 assigns that address to the A2P bridge on the
+    G3 (a G4-vs-G3 address discrepancy, #176 — SRAM was even in #144's phantom-removal scope). The A2P
+    forward bridge + the PCI-slave P2A backdoor (culvert path) are partly under row 8; a faithful A2P
+    model + resolving the SRAM placement is #176 (oracle-sensitive). All driver stacks Ⓝ (no runtime
+    BMC A2P driver). **Consistency fix (2026-07-20):** row 44 MIC ZQ/ZS Ⓝ→⬜ to match its LQ/LS=⬜ (an
+    error-reporter driver is equally plausible/absent on every runtime stack).
 
 ## Roll-up (honest)
 

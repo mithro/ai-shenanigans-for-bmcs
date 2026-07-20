@@ -1,5 +1,34 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(b) new-code SEAL (CLEAN) + 2nd gate-(d) pass found MORE (AHBC/A2P/GPIO-irq → #175-177); rows 49-50 added
+
+Combined independent pass over THIS session's new code + a 2nd adversarial task-hunt.
+GATE-(b) new code = CLEAN: the sub-agent verified the xdma/sdhci gating (create-vs-realize consistent;
+s->sdhci referenced by machine code only via .num_slots which is 0 on G3 since the sub-struct is never
+initialized → the loops run 0 iterations, no uninitialized deref — a subtle safety I had not explicitly
+checked), the w83795 fan-control (index 0x2E+(reg-0x10) in-bounds, no overflow, reset path intact, reset
+re-inits), and all 4 new smokes (scu/pmbus/spd/fanctl — non-tautological PASS gates, correct registers).
+So gate-(b) is re-sealed for the CURRENT code (including this session's changes).
+GATE-(d) 2nd pass FOUND MORE (it did NOT rubber-stamp — the process is still catching real gaps):
+  * #175 (HIGH): AHBC (0x1E600000/IRQ31) — a §9 "Yes" boot-critical block (0x8C Address-Remap) with NO
+    row. My OWN #173 enumeration was incomplete — it missed AHBC. Verified vs AST2050-MEMORY-MAP.md:45.
+  * #176 (HIGH faithfulness): QEMU maps ASPEED_DEV_SRAM at 0x1E720000, but §9 assigns that address to the
+    A2P AHB→PCI bridge on the G3 (verified map:55 + aspeed_ast2400.c:42/79/480). A G4-vs-G3 address
+    discrepancy (SRAM was even in #144's phantom-removal scope, yet still mapped). Needs A2P modeled there
+    + the SRAM placement resolved.
+  * #177 (capability): GPIO interrupt/edge/debounce (per-bank INT regs → VIC, §23) untracked — only prose;
+    board-relevant (the §11 monitor inputs are edge events, not polling). Same class as #174/#164. The
+    pass also flagged borderline siblings (RTC alarm-IRQ, WDT pre-timeout IRQ, I2C bus-recovery) → noted
+    in #177.
+  * No over-claims found in the session's ✅ cells (all evidence-backed); rows 43-48 dispositions honest.
+ACTED: added rows 49 (AHBC, QE=🔶 faked-remap; UB=🔶 loader uses it; #175) + 50 (A2P, QE=⬜; #176) — so
+the SoC-internal enumeration is now 8 engines (was the incomplete 6). Fixed the row-44 MIC ZQ/ZS Ⓝ→⬜
+consistency nit. Matrix 49→51 rows (408 cells); intro + embedded tally updated (verified == tally.py).
+CONSEQUENCE: gate (d) is STILL not sealed — a 2nd independent pass found 3 more tasks (incl. that #173
+itself was incomplete). That is the multi-pass requirement doing its job; sealing needs a pass that comes
+up empty. HONEST: the "internal-engine dimension complete" claim I made last turn was itself premature —
+the 2nd pass caught AHBC/A2P. Now corrected.
+
 ## 2026-07-20 — #174 DONE: W83795 FAN CONTROL modeled + Zephyr-validated (write side of row 16)
 
 Closed the gate-d capability finding: row 16 validated only the READ side (fan RPM/temp); the BMC's
