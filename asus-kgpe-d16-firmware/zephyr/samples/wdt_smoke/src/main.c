@@ -17,7 +17,7 @@
  *   5. stop feeding and idle -> ~500 ms later the WDT fires -> SoC reset
  *   6. QEMU reboots -> Zephyr banner + step 1 run AGAIN
  *
- * PROOF THE RESET FIRED (grep the captured boot log):
+ * PROOF THE RESET FIRED — QEMU (has a backing flash image, so it REBOOTS):
  *   - the line "WDT smoke: boot" appears >= 2 times, OR
  *   - the Zephyr banner "*** Booting Zephyr OS" appears >= 2 times, AND
  *   - a second "WDT smoke: boot" appears AFTER "WDT armed, not feeding, expect
@@ -26,6 +26,19 @@
  * (each cycle ~1 s in QEMU); a ~4 s capture window catches at least two boots.
  * If the WDT did NOT reset, only ONE "WDT smoke: boot" is ever printed and the
  * program idles forever after "WDT armed, not feeding, expect reset".
+ * Measured: 6 boots in a 6 s window (see evidence d14-zephyr/18-wdt-silicon.txt).
+ *
+ * PROOF THE RESET FIRED — REAL AST2050 silicon (the BMC SPI flash is NOT wired,
+ * so a SoC reset canNOT reboot into Zephyr — there is nothing at the reset
+ * vector to run). The signature is therefore different from QEMU:
+ *   (1) the console shows exactly ONE cycle (banner .. "expect reset") then goes
+ *       SILENT at the ~500 ms timeout, AND
+ *   (2) a JTAG halt afterwards shows the CPU has LEFT Zephyr: Undefined-instr
+ *       mode with PC in the flash-mapped low region (NOT 0x40xxxxxx DRAM) and a
+ *       stale Zephyr sp_und — i.e. the SoC reset and is now faulting on the empty
+ *       flash bus. Observable (1) alone is ambiguous (an idle for(;;) is also
+ *       silent); (2) is what makes it a rigorous reset proof.
+ * Both silicon observables captured in evidence d14-zephyr/18-wdt-silicon.txt.
  */
 
 #include <zephyr/device.h>

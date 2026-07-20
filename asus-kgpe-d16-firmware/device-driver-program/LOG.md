@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — WDT (row 38, ZS) SoC-reset captured on REAL silicon — closes a gate-d evidence gap (break from #168)
+
+Took the goal's "take a break from #168, work on another part" and captured a bounded device-silicon
+win: the Zephyr watchdog resetting the real AST2050. Companion to yesterday's VIC/Timer heartbeat
+(evidence 17). Both-sides:
+  * QEMU (build-wdt, run WITHOUT -no-reboot so the reset reboots): **6 boots in a 6 s window** —
+    banner + "WDT smoke: boot" + "WDT alive 1/2/3" + "expect reset", repeating. PASS (>=2 = reset fired).
+  * SILICON (entry 0x40002448, md5 7883f45f… verified end-to-end; SoC-internal WDT1 @0x1E785000 works at
+    the board's 4 W deep-S5): the console showed EXACTLY ONE cycle (banner → armed → alive 1/2/3 → "WDT
+    armed, not feeding, expect reset") then went SILENT at the ~500 ms timeout. On this board the BMC SPI
+    flash is NOT wired, so a SoC reset canNOT reboot into Zephyr (nothing at the reset vector) — hence one
+    cycle, not a QEMU-style reboot loop. Console-silence alone is ambiguous (an idle for(;;) is also
+    silent), so I CONFIRMED the reset via JTAG (openocd attach + halt, NO reset, reading the live post-WDT
+    CPU): **mode=Undefined-instruction, cpsr=0x000000db, pc=0x01a41210 (flash-mapped LOW region, NOT the
+    0x40xxxxxx Zephyr DRAM image), sp=0x4001ca30 (a STALE Zephyr sp_und)**. Decode: the WDT reset forced
+    PC→0 and CPSR→SVC but ARM leaves the register file intact, so the SMC un-remapped DRAM/re-mapped the
+    empty flash at 0x0, the CPU fetched 0xFF garbage off the floating bus, tripped an undefined instruction
+    and cascaded to 0x01a41210 while sp_und still held Zephyr's leftover value — the fingerprint that the
+    SAME silicon RESTARTED (not a cold power-on). So the watchdog demonstrably RESET THE SoC on both the
+    faithful QEMU model and real silicon; the observable differs only because QEMU has a flash image to
+    reboot from. ZS ✅ (rows 38 / task #149 / #150) is now EVIDENCE-BACKED (was LOG-prose only per the
+    gate-d audit). Honesty: HIGH confidence; the only thing not directly read is the SCU wdt-reset-cause
+    status bit (reading it needs re-attach-through-reset and is unnecessary given the PC/mode proof).
+    Wrote evidence d14-zephyr/18-wdt-silicon.txt; documented the silicon-vs-QEMU signature split in the
+    sample header (samples/wdt_smoke/src/main.c). No step skipped or faked.
+
 ## 2026-07-20 — #168 fix attempt: pt_regs unreadable (sp_abt garbage); pivot the extraction to bp-per-init-function or single-step
 
 Tried to pin the exact faulting instruction by reading do_prefetch_abort's pt_regs. Seeded a valid

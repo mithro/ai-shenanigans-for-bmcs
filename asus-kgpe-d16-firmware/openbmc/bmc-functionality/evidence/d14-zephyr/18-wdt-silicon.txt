@@ -1,0 +1,79 @@
+D14 Zephyr — Watchdog (row 38) SoC-RESET captured on REAL AST2050 silicon (2026-07-20).
+    Closes the gate-d "WDT ZS ✅ has no captured silicon transcript" gap (companion to
+    evidence 17, the VIC/Timer heartbeat).
+
+Device: AST2050 WDT1 @0x1E785000 (SoC-internal watchdog, WDT_FLAG_RESET_SOC).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/wdt_smoke  (entry 0x40002448)
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n. SoC-internal — runs at
+        the board's 4 W deep-S5 state (no sensor/host rails needed).
+Path:   JTAG reset-halt -> DDR2 TRAINED -> load @0x40000000 -> reg pc -> resume; console
+        /dev/serial-bmc-console @115200. md5(zephyr.bin)=7883f45f9f90e42ed0a95105d90f4c64 (verified
+        end-to-end: local build == staged copy on the bridge Pi).
+
+What the sample does: arm a 500 ms watchdog (RESET_SOC), feed it 3x at 150 ms ("WDT alive N"),
+then STOP feeding and idle. The watchdog then expires and resets the SoC.
+
+===== WHY THE SILICON SIGNATURE DIFFERS FROM QEMU =====
+On QEMU (which has a backing flash image) the SoC reset REBOOTS and re-runs main(), so the
+proof there is ">= 2 boots" — measured: 6 boots in a 6 s window (banner + WDT smoke:boot +
+alive 1/2/3 + expect reset, repeating). See the QEMU note at the bottom.
+
+On THIS board the BMC SPI flash is NOT connected (all silicon bring-up is JTAG/netboot). So a
+SoC reset canNOT reboot into Zephyr — there is nothing at the reset vector to run. The silicon
+watchdog proof is therefore two independent observables:
+  (1) the console shows exactly ONE cycle, then goes SILENT at the ~500 ms timeout, and
+  (2) a JTAG halt afterwards shows the CPU is NO LONGER running Zephyr — it reset and is now
+      faulting in the empty flash-mapped low region.
+Observable (1) alone is ambiguous (an idle for(;;) loop is also silent); (2) removes the
+ambiguity and is what makes this a rigorous reset proof.
+
+===== (1) CAPTURED CONSOLE (real silicon, /dev/serial-bmc-console) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+WDT smoke: boot
+WDT armed for 500 ms, feeding 3x
+WDT alive 1
+WDT alive 2
+WDT alive 3
+WDT armed, not feeding, expect reset
+<<< console then SILENT — no re-run (no boot flash to reboot from) >>>
+
+The three "WDT alive N" prove the watchdog was ARMED and being FED (each feed resets its
+counter, so the program keeps running). "expect reset" is printed the instant feeding stops;
+~500 ms later the console dies = the watchdog expired and pulled the SoC reset.
+
+===== (2) JTAG POST-RESET STATE (openocd attach + halt, NO reset — reads the live post-WDT CPU) =====
+  target halted in ARM state due to debug-request, current mode: Undefined instruction
+  cpsr: 0x000000db   pc: 0x01a41210   sp: 0x4001ca30
+
+Decode:
+  * cpsr = 0x000000db -> mode[4:0] = 0b11011 = UNDEFINED-INSTRUCTION mode, I=1 F=1, ARM state.
+  * pc   = 0x01a41210 -> in the SMC/flash-mapped low region (CS0 at 0x0), i.e. BELOW the DRAM
+           image. Zephyr lives at 0x40000000+; if the watchdog had NOT fired the CPU would be
+           idling at a PC inside 0x400xxxxx. It is not — it reset.
+  * sp   = 0x4001ca30 -> a STALE Zephyr undefined-mode stack pointer. ARM reset forces PC->0 and
+           CPSR->Supervisor but leaves the register file (incl. banked r13) with its pre-reset
+           values, so sp_und still holds the value Zephyr programmed. This is the fingerprint
+           that the SAME silicon RESTARTED (not a cold power-on): registers survived, control
+           flow restarted at the reset vector, fetched 0xFF garbage off the floating flash bus,
+           tripped an undefined instruction, and cascaded to 0x01a41210 in Undefined mode.
+
+RESULT: PASS on real silicon. The AST2050 watchdog (row 38, WDT1 @0x1E785000) armed, was fed,
+        and on feed-stop RESET THE SoC — proven by the console dying after exactly one cycle AND
+        the JTAG-observed post-reset CPU state (Undefined mode, PC in flash-mapped low memory,
+        stale Zephyr sp_und). ZS ✅ is now EVIDENCE-BACKED (was LOG-prose only per the gate-d
+        audit), matching the QEMU both-sides result below.
+
+Honesty note on confidence: HIGH. The console single-cycle-then-silence is consistent with the
+reset, and the JTAG read independently confirms the CPU left Zephyr and restarted (not merely
+idle). The only thing NOT directly shown is the exact reset-cause register bit (SCU wdt-reset
+status) — reading it would itself require re-attaching through the reset and is not needed given
+the PC/mode evidence. No step was skipped or faked.
+
+===== BOTH-SIDES: QEMU (backing flash present -> reboots) =====
+  $ qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-wdt/zephyr/zephyr.elf   # NO -no-reboot
+  boots seen: 6   (>=2 = reset fired + rebooted)
+  *** Booting Zephyr OS ... ***
+  WDT smoke: boot / WDT armed for 500 ms, feeding 3x / WDT alive 1/2/3 / WDT armed, not feeding, expect reset
+  *** Booting Zephyr OS ... ***   (repeats 6x)
+So the WDT resets the SoC on BOTH the faithful QEMU model and real silicon; the observable just
+differs because only QEMU has a flash image to reboot from.
