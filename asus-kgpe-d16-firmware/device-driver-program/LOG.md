@@ -1,6 +1,34 @@
 # Device-driver program — running log
 
-## 2026-07-21 — #158: G3 RTC counter now ADVANCES at the datasheet-confirmed crystal-less 732.42x rate
+## 2026-07-21 — Completion-gate (a): fresh authoritative-schematic re-read + independent coverage audit
+
+Re-grounded against the AUTHORITATIVE source per the standing goal (and a Stop-hook prompt to prove
+complete coverage, not just incremental device work). Read `schematic-wiring/AST2050-BMC-WIRING.md`
+END-TO-END (all 597 lines, §1–§16) fresh and cross-checked every section against DEVICE-MATRIX.md:
+
+- §2 power/PLL/LDO → passive (no driver target), folded into SCU/SDMC (row 35) + #142; §3 DDR2 → row 1;
+  §4 SPI → row 2; §5 LPC → rows 3–7; §6 PCI-33/iKVM → row 8; §7 Ethernet → rows 10/11; §8 VGA → rows
+  12–14; §9 USB → row 9; §10 I²C (8 buses) → rows 15–26; §11 GPIO → rows 27–29; §12 SOL → rows 30/31;
+  §13 JTAG/LEDs/clock/straps → AST_JTAG1 (Ⓝ harness) + rows 32/33/34; §14 neighbour chips → all active
+  chips have rows, passive glue/LDOs folded, SU1/OU1/NU1 = host-side reached via LPC/PCI/I²C; §15
+  connectors → mapped to their function rows; §16 per-pin table → the gate-(d) per-pin sweep (B1f/B1g/
+  B2/E6) + CU2 clock-gen already dispositioned.
+- CONFIRMED the existing "Doc section → Matrix rows" coverage map (DEVICE-MATRIX.md ~l.594–647) is
+  accurate against this fresh read — every §maps to a row or a justified disposition. The comprehensive
+  task list already EXISTS (50 device rows × 8 stacks + FULL-TASK-LIST + coverage map); the right move is
+  to independently VERIFY it, not duplicate it.
+
+Executed gate-(a) properly: dispatched 4 INDEPENDENT sub-agents (≤5 concurrent) to freshly audit
+schematic-vs-matrix coverage and specifically hunt the failure the goal names — "incorrect claims that
+functionality doesn't exist / features are unconnected" that CONTRADICT the authoritative schematic:
+  1. §1–§9 coverage + false-claim check;
+  2. §10 I²C/SMBus full topology (8 buses, muxes, every far-end, multi-master arbitration);
+  3. §11–§16 (GPIO/SOL/JTAG/LEDs/clock/straps/connectors/per-pin) coverage;
+  4. dedicated skeptical hunter for "impossible/absent/unconnected/not-wired" claims across
+     DEVICE-MATRIX/FULL-TASK-LIST/LOG, classifying each JUSTIFIED vs SUSPECT with schematic citations.
+Findings (gaps or genuinely-wrong absence claims) will be actioned as new tasks/fixes when the agents
+return; this entry records the process. Nothing is being marked complete on the basis of my own read
+alone — gate-(a) requires the independent reviewers to come back empty.
 
 Rotated to the RTC after concluding #182 (USB virtual-media CD-ROM) is KVM-gated in this session — its
 only meaningful proof is the x86 host's SCSI INQUIRY (TYPE_ROM), which needs the two-VM usbip harness
