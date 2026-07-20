@@ -1,0 +1,52 @@
+#187 / #186 — RTC ALARM on real AST2050 (row 39 ZS): silicon caught a REAL bug —
+RTC04 is FIELD-PACKED, not byte-packed (2026-07-21)
+================================================================================
+First silicon (JTAG) run of the Zephyr RTC alarm (rtc_smoke + CONFIG_RTC_ALARM),
+booted over JTAG into trained DRAM on the real AST2050 (board powered, entry
+0x40002724). The alarm FAILED to fire on silicon — and the console shows exactly
+why, a genuine silicon-only bug my QEMU model hid.
+
+===== CAPTURED CONSOLE (real AST2050, 20 s window) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+RTC set=12:45:30 day=7  get=12:45:39 day=7  (delta=9s)
+RTC RESULT: PASS
+alarm supported-fields mask=0x07
+alarm armed at 00:00:05 mask=0x07          <-- armed 12:00:05, HOUR read back 00
+alarm fires=0
+RTC-ALARM RESULT: FAIL (no callback within busy-poll)
+after set_time, alarm mask=0x07
+RTC-ALARM-PRESERVE: PASS (set_time kept the alarm armed)
+
+===== ROOT CAUSE (high confidence) — RTC04 is FIELD-packed, not byte-packed =====
+The smoke armed 12:00:05, but alarm_get_time read the hour back as 00. The driver
+writes RTC04 BYTE-packed: reg = (hour<<16)|(min<<8)|sec, i.e. hour at bits[23:16].
+It read back hour=0. The datasheet §24 says RTC04 is FIELD-packed:
+  hour[16:12] / min[11:6] / sec[5:0]
+So hour=12 written to bits[23:16] lands in RESERVED bits (>bit16) and is dropped;
+the field-packed hour field [16:12] stays 0. Hence hour reads back 0, and the
+hardware alarm comparator (which compares the COUNTER's hour with RTC04's hour
+field = 0) never matches while the counter's hour is 12 -> the alarm never fires.
+  - sec=5 and min=0 could NOT distinguish the layouts (5 and 0 fit both [5:0] and
+    [7:0]); only the HOUR=12 write, at byte-position [23:16] vs field-position
+    [16:12], exposed the difference — the smoking gun.
+  - The set/get (COUNTER) round-trip PASSED byte-packed ONLY because sec 30->39
+    stays within [5:0] and [7:0] alike (no minute wrap, values <60) — it cannot
+    distinguish the layouts either. This is precisely why #186 flagged that a
+    silicon MINUTE-WRAP test was needed; the alarm-hour write did the equivalent
+    job for RTC04.
+
+RESOLUTION of #186 (for RTC04): the DATASHEET (field-packed) is authoritative;
+the byte-packed RTC04 in my Zephyr driver, Linux driver, and QEMU model is WRONG.
+The QEMU model used byte-packed for consistency with the byte-packed counter, so
+the alarm PASSED in QEMU and only silicon exposed it — the exact "QEMU must model
+the real hardware so the bug shows in QEMU too" faithfulness gap.
+
+FIX (in progress): program/read RTC04 FIELD-packed (hour<<12|min<<6|sec) in the
+Zephyr + Linux drivers, and make the QEMU model's alarm compare extract RTC04
+field-packed. Re-test on silicon to CONFIRM the alarm then fires. (The COUNTER's
+own layout at the minute-wrap boundary remains #186-open and is a separate
+question — this fix is scoped to the RTC04 alarm register the silicon proved.)
+
+RIG: bridge Pi asus-bmc, JTAG free (no openocd running), board powered (DDR2
+TRAINED, JTAG halt OK). boot-zephyr-silicon-long.sh 0x40002724. No others
+disturbed (checked who/pgrep before use).

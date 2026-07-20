@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-21 — SILICON caught a real bug: RTC04 alarm is FIELD-packed (fixed, #186 resolved for RTC04); alarm-IRQ-on-silicon still OPEN
+
+First silicon (JTAG) run of the Zephyr RTC alarm (row 39 ZS) FAILED — and honestly, that is the
+goal working: the hardware exposed a real bug my QEMU model hid. Two issues, peeled one at a time.
+
+**Issue 1 — RTC04 is FIELD-packed, not byte-packed (FOUND + FIXED + silicon-CONFIRMED).**
+The smoke armed 12:00:05 but alarm_get_time read the HOUR back as 00 on silicon. The driver wrote
+RTC04 byte-packed (hour at bits[23:16]); the datasheet §24 says RTC04 is FIELD-packed
+(hour[16:12]/min[11:6]/sec[5:0]), so hour=12 landed in reserved bits >16 and was dropped. Only the
+hour distinguished the layouts (sec=5/min=0 fit both); the COUNTER set/get couldn't expose it (sec
+30→39, no wrap) — exactly the #186 question, now ANSWERED by silicon: field-packed. The QEMU model
+compared RTC04 byte-packed too, so a byte-packed driver PASSED in QEMU and only silicon caught it —
+the precise "QEMU must model the real hardware so the bug shows in QEMU too" faithfulness gap.
+FIX across ALL THREE stacks: Zephyr driver (rtc_aspeed_g3.c RTC_G3_ALARM_ENC/_OF field-packed),
+Linux driver (rtc-aspeed.c read/set_alarm field-packed, patch 0009 regenerated), QEMU model
+(aspeed_rtc_ast2050.c alarm_match_value extracts RTC04 field-packed vs the byte-packed counter,
+submodule ed7b917d31). RE-VALIDATED: QEMU Zephyr alarm PASS (armed reads back 12:00:05, fires=1);
+QEMU Linux wakealarm PASS (IRQ26 0→1); and on SILICON the arm now reads back 12:00:05 correctly
+(was 00) — the field-packed layout is PROVEN on hardware. Evidence d14-zephyr/28.
+
+**Issue 2 — RTC alarm interrupt (VIC 26) does NOT fire on silicon even with a correct arm (OPEN).**
+With the arm now correct (12:00:05) and the counter advancing past it (732x), the alarm STILL did
+not fire on silicon (alarm fires=0). The WFI wait ran its full 1000 iterations over ~10 s (the
+system tick woke it each time — so the tick works), but VIC-26 never arrived. VIC-26 as the
+RTC-alarm source has only ever been validated in QEMU (Linux LS is ⬜ too), never on silicon — so
+either the source number is wrong for silicon, or the alarm-match needs an extra RTC interrupt
+enable / status handshake I'm not doing, or the alarm-match doesn't assert the IRQ the way the
+model assumes. Confidence this is a real silicon gap (not a test artifact): HIGH — the arm/counter
+are provably correct and the tick-woken WFI loop ran to completion. NEXT (new task): JTAG-inspect
+the RTC + VIC registers at the moment the counter passes the alarm (is an alarm-status/pending bit
+set? does VIC raw-status bit 26 assert?), and reconcile the RTC-alarm IRQ number against the
+datasheet. Row 39 ZS stays OPEN for the alarm (honest — NOT claimed done). Taking a break from this
+per the goal; the field-packed win stands on its own.
+
 ## 2026-07-21 — #189 Zephyr WDT timeout-INTERRUPT mode (WDT_CTRL[2] + VIC-27) implemented + validated
 
 Added the timeout-interrupt/callback path to the Zephyr WDT driver

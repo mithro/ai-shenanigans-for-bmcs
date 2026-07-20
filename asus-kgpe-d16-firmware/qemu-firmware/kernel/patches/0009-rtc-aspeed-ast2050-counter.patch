@@ -1,5 +1,5 @@
 diff --git a/drivers/rtc/rtc-aspeed.c b/drivers/rtc/rtc-aspeed.c
-index 880b015ee..82a49a518 100644
+index 880b015ee..5d262e311 100644
 --- a/drivers/rtc/rtc-aspeed.c
 +++ b/drivers/rtc/rtc-aspeed.c
 @@ -1,17 +1,48 @@
@@ -134,7 +134,7 @@ index 880b015ee..82a49a518 100644
  	cent = (tm->tm_year + 1900) / 100;
  	year = tm->tm_year % 100;
  
-@@ -77,11 +168,98 @@ static int aspeed_rtc_set_time(struct device *dev, struct rtc_time *tm)
+@@ -77,11 +168,102 @@ static int aspeed_rtc_set_time(struct device *dev, struct rtc_time *tm)
  	return 0;
  }
  
@@ -177,9 +177,12 @@ index 880b015ee..82a49a518 100644
 +	struct aspeed_rtc *rtc = dev_get_drvdata(dev);
 +	u32 reg = readl(rtc->base + G3_RTC_ALARM);
 +
-+	alrm->time.tm_sec  = (reg >>  0) & 0xff;
-+	alrm->time.tm_min  = (reg >>  8) & 0xff;
-+	alrm->time.tm_hour = (reg >> 16) & 0xff;
++	/* RTC04 is FIELD-packed (datasheet §24: hour[16:12]/min[11:6]/sec[5:0]),
++	 * NOT byte-packed like the COUNTER read — proven on real AST2050 silicon.
++	 */
++	alrm->time.tm_sec  = (reg >>  0) & 0x3f;
++	alrm->time.tm_min  = (reg >>  6) & 0x3f;
++	alrm->time.tm_hour = (reg >> 12) & 0x1f;
 +	alrm->time.tm_mday = 1;
 +	alrm->time.tm_mon  = 0;
 +	alrm->time.tm_year = 100;
@@ -193,9 +196,10 @@ index 880b015ee..82a49a518 100644
 +	struct aspeed_rtc *rtc = dev_get_drvdata(dev);
 +	u32 reg;
 +
-+	reg = (((u32)alrm->time.tm_hour & 0xff) << 16) |
-+	      (((u32)alrm->time.tm_min  & 0xff) <<  8) |
-+	       ((u32)alrm->time.tm_sec  & 0xff);
++	/* RTC04 field-packed: hour[16:12]/min[11:6]/sec[5:0] (silicon-proven). */
++	reg = (((u32)alrm->time.tm_hour & 0x1f) << 12) |
++	      (((u32)alrm->time.tm_min  & 0x3f) <<  6) |
++	       ((u32)alrm->time.tm_sec  & 0x3f);
 +	writel(reg, rtc->base + G3_RTC_ALARM);
 +	aspeed_rtc_alarm_enable(rtc, alrm->enabled);
 +	return 0;
@@ -233,7 +237,7 @@ index 880b015ee..82a49a518 100644
  static int aspeed_rtc_probe(struct platform_device *pdev)
  {
  	struct aspeed_rtc *rtc;
-@@ -90,6 +268,12 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
+@@ -90,6 +272,12 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
  	if (!rtc)
  		return -ENOMEM;
  
@@ -246,7 +250,7 @@ index 880b015ee..82a49a518 100644
  	rtc->base = devm_platform_ioremap_resource(pdev, 0);
  	if (IS_ERR(rtc->base))
  		return PTR_ERR(rtc->base);
-@@ -100,17 +284,40 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
+@@ -100,17 +288,40 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
  
  	platform_set_drvdata(pdev, rtc);
  

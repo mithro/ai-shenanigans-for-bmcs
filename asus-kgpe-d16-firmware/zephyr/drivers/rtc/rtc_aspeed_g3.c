@@ -96,16 +96,28 @@
 #define RTC_G3_RESET_MAGIC   0x99U      /* RESET: clear all registers      */
 
 /*
- * Alarm (datasheet §24, matches the faithful QEMU G3 model + the Linux
- * rtc-aspeed counter-style driver): RTC04 (0x04) holds the alarm time-of-day,
- * byte-packed [23:16]=hour [15:8]=min [7:0]=sec (no day/month/year — the same
- * hardware limitation as the COUNTER). CONTROL[1:3] are the per-field alarm
- * enables; the alarm fires (VIC source 26) when every ENABLED field of RTC04
- * matches the live COUNTER. Day-alarm (CONTROL[4]) exists in hardware but is not
- * exposed here — the counter's "day" is a free-running up-counter, not a
- * calendar day (same reasoning as get_time), so we support sec/min/hour only.
+ * Alarm. RTC04 (0x04) holds the alarm time-of-day. IMPORTANT: RTC04 is
+ * FIELD-packed (datasheet §24: hour[16:12] / min[11:6] / sec[5:0]) — NOT
+ * byte-packed like the COUNTER read path. This was PROVEN on real silicon
+ * (2026-07-21, evidence d14-zephyr/28): programming the alarm hour byte-packed
+ * at bits[23:16] read back as 0 and the alarm never fired, because hour=12 landed
+ * in reserved bits above bit16; the field-packed hour[16:12] stayed 0. (The
+ * COUNTER set/get could not expose this — sec values <60 fit both layouts with no
+ * wrap; #186.) CONTROL[1:3] are the per-field alarm enables; the alarm fires (VIC
+ * source 26) when every ENABLED field of RTC04 matches the live COUNTER's field.
+ * Day-alarm (CONTROL[4]) is not exposed — RTC04 has no day field (field-packed is
+ * 17 bits) and the counter's "day" is a free-running up-counter — so sec/min/hour
+ * only.
  */
 #define RTC_G3_ALARM          0x04U
+/* RTC04 field-packed encode/decode. */
+#define RTC_G3_ALARM_ENC(hour, min, sec)                                       \
+	((((uint32_t)(hour) & 0x1fU) << 12) |                                  \
+	 (((uint32_t)(min)  & 0x3fU) << 6)  |                                  \
+	  ((uint32_t)(sec)  & 0x3fU))
+#define RTC_G3_ALARM_SEC_OF(r)   ((int)((r) & 0x3fU))
+#define RTC_G3_ALARM_MIN_OF(r)   ((int)(((r) >> 6) & 0x3fU))
+#define RTC_G3_ALARM_HOUR_OF(r)  ((int)(((r) >> 12) & 0x1fU))
 #define RTC_G3_CTRL_ALARM_SEC  BIT(1)
 #define RTC_G3_CTRL_ALARM_MIN  BIT(2)
 #define RTC_G3_CTRL_ALARM_HOUR BIT(3)
@@ -323,21 +335,21 @@ static int rtc_aspeed_g3_alarm_set_time(const struct device *dev, uint16_t id,
 		if (timeptr->tm_sec < 0 || timeptr->tm_sec > 59) {
 			return -EINVAL;
 		}
-		reg |= (uint32_t)timeptr->tm_sec;
+		reg |= RTC_G3_ALARM_ENC(0, 0, timeptr->tm_sec);
 		ctrl_bits |= RTC_G3_CTRL_ALARM_SEC;
 	}
 	if (mask & RTC_ALARM_TIME_MASK_MINUTE) {
 		if (timeptr->tm_min < 0 || timeptr->tm_min > 59) {
 			return -EINVAL;
 		}
-		reg |= (uint32_t)timeptr->tm_min << 8;
+		reg |= RTC_G3_ALARM_ENC(0, timeptr->tm_min, 0);
 		ctrl_bits |= RTC_G3_CTRL_ALARM_MIN;
 	}
 	if (mask & RTC_ALARM_TIME_MASK_HOUR) {
 		if (timeptr->tm_hour < 0 || timeptr->tm_hour > 23) {
 			return -EINVAL;
 		}
-		reg |= (uint32_t)timeptr->tm_hour << 16;
+		reg |= RTC_G3_ALARM_ENC(timeptr->tm_hour, 0, 0);
 		ctrl_bits |= RTC_G3_CTRL_ALARM_HOUR;
 	}
 
@@ -371,9 +383,9 @@ static int rtc_aspeed_g3_alarm_get_time(const struct device *dev, uint16_t id,
 	ctrl = sys_read32(cfg->base + RTC_G3_CONTROL);
 
 	*timeptr = (struct rtc_time){0};
-	timeptr->tm_sec = (int)(reg & 0xFFU);
-	timeptr->tm_min = (int)((reg >> 8) & 0xFFU);
-	timeptr->tm_hour = (int)((reg >> 16) & 0xFFU);
+	timeptr->tm_sec = RTC_G3_ALARM_SEC_OF(reg);   /* RTC04 field-packed */
+	timeptr->tm_min = RTC_G3_ALARM_MIN_OF(reg);
+	timeptr->tm_hour = RTC_G3_ALARM_HOUR_OF(reg);
 	timeptr->tm_wday = -1;
 	timeptr->tm_yday = -1;
 
