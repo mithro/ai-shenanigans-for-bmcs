@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #174 DONE: W83795 FAN CONTROL modeled + Zephyr-validated (write side of row 16)
+
+Closed the gate-d capability finding: row 16 validated only the READ side (fan RPM/temp); the BMC's
+fan-DRIVING function (schematic §10.2 "write FANCTL1-8 PWM") was unmet — the QEMU model just stored PWM
+writes in scratch (no tach response), so even the "all functionality" QEMU clause was partial. Fixed
+hw/sensor/w83795.c (submodule 463833bed1): a PWM-output-duty write (bank 2, 0x10..0x17 = PWM1..8) now
+drives the matching fan-tach input (bank 0, 0x2E..0x35 = fan1..8), RPM = duty*27 (linear, deterministic;
+matches the silicon idle ~2641 at 0x61/38%). The reset seeds fan/PWM via DIRECT stores, not the I2C
+write path, so a read without a prior PWM write keeps the reset value — the read-only w83795_smoke is
+untouched. New `samples/w83795_fanctl_smoke` (raw-I2C PWM write via bank-select + sensor-driver RPM read)
+PASSes in QEMU: **baseline 2641, PWM 0x80→3461 rpm, PWM 0x40→1728 rpm** — the fan tach TRACKS the
+commanded duty (evidence d14-zephyr/23). Rebuilt QEMU; w83795_smoke still reads baseline 2641 (read path
+unchanged). Row 16 QE "all functionality" now covers read AND control; the Zephyr fan-control path is
+ZQ-validated. Silicon fan-response + SmartFan auto-mode (temperature-driven duty) are live-hardware
+follow-ons, not code gaps — honestly noted, not claimed. This is the same "covered device, untracked
+distinct capability" class as #164 (I2C slave mode), now closed for W83795 fan control.
+
 ## 2026-07-20 — #173 DONE (enumeration): added matrix rows 43–48 for the SoC-internal engines the schematic-scoped audits couldn't reach
 
 Closed the completeness gate-d blind spot: verified each of the 6 gate-d-flagged internal engines against

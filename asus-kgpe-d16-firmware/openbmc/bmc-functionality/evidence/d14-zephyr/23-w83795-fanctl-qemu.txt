@@ -1,0 +1,44 @@
+D14 Zephyr — W83795G FAN CONTROL (row 16, write side) QEMU validation (2026-07-20).
+    Closes #174: the BMC's fan-DRIVING capability (schematic §10.2 "write FANCTL1-8 PWM"), which the
+    matrix previously tracked only on the READ side (fan RPM/temp via w83795_smoke).
+
+Device: W83795G hwmon @0x2F on I2C engine 1 (i2c1). QEMU model hw/sensor/w83795.c.
+Sample: asus-kgpe-d16-firmware/zephyr/samples/w83795_fanctl_smoke  (new)
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n
+Run:    qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-fc/zephyr/zephyr.elf
+
+===== MODEL CHANGE (faithfulness: "all functionality", not just reads) =====
+Before: a PWM-output-duty write to the W83795G (bank 2, regs 0x10..0x17 = PWM1..8) just landed in the
+scratch register store — the fan tach did NOT respond, so the QEMU "all functionality" clause was only
+partially met (gate-d finding). Now w83795_do_write() detects a PWM write and drives the matching fan
+tach input (bank 0, 0x2E..0x35 = fan1..8): RPM = duty * 27 (linear, deterministic; 0xFF -> ~6885,
+0x61/38% -> ~2619 ≈ the silicon idle 2641, 0x00 -> stopped). The reset seeds fan/PWM via DIRECT stores
+(not the I2C write path), so a read WITHOUT a prior PWM write keeps the reset-captured value — the
+read-only w83795_smoke is unaffected. (submodule commit 463833bed1.)
+
+===== WHAT THE SAMPLE DOES =====
+1. read fan1 baseline via the sensor driver (SENSOR_CHAN_RPM).
+2. write PWM1 duty = 0x80 over raw I2C (BANKSEL bank 2 → reg 0x10 = 0x80 → BANKSEL bank 0), read fan1.
+3. write PWM1 duty = 0x40, read fan1.
+4. PASS if the fan tach TRACKS the duty (high-duty ≈ 3456, low-duty ≈ 1728, high > low).
+
+===== CAPTURED CONSOLE (QEMU) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+W83795 fanctl smoke: boot
+W83795 fanctl: baseline=2641 rpm, PWM=0x80 -> 3461 rpm, PWM=0x40 -> 1728 rpm
+W83795 FANCTL RESULT: PASS
+
+Decode: baseline=2641 (reset value, no PWM written yet — proves the read path is untouched). After
+PWM1=0x80: 0x80*27=3456 → tach count 390 → readback 1350000/390 = 3461 rpm (the ~5-rpm delta is the
+12-bit tach-count rounding). After PWM1=0x40: 0x40*27=1728 → count 781 → readback 1728 rpm (exact).
+3461 > 1728 and both in the expected windows → the fan speed TRACKED the commanded duty.
+
+RESULT: PASS in QEMU. The W83795G fan-CONTROL function is now modeled + Zephyr-validated: writing a PWM
+duty drives the fan, not just stores a byte. Row 16 QE "all functionality" now includes the write/control
+side (was reads-only); the Zephyr fan-control path (raw-I2C PWM write + sensor RPM read) works.
+
+Both-sides honesty: this validates ZQ (QEMU). On real silicon the raw PWM write reaches the chip's PWM
+output register, but whether the PHYSICAL fan1 tach then tracks depends on the live fan + the SmartFan
+auto-mode config on the board (which may override manual duty) — a live-hardware follow-on, not a code
+gap. SmartFan auto-mode (temperature-driven duty) is a further capability beyond this manual-PWM test.
+No step skipped or faked.
