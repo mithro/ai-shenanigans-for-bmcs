@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #190 verified + rescoped: I²C buffer-pool ALREADY modeled; DMA is the (unexercised) gap
+
+Investigated gate-d finding #190 (I²C buffer-pool/DMA transfer modes "undispositioned") before assuming a
+disposition. Verify-first paid off — the finding was PARTLY WRONG:
+- **Buffer-pool: ALREADY MODELED.** The G3 aspeed_i2c class (aspeed_2400_i2c_class_init) sets
+  `has_share_pool=true` + `pool_size=0x800`, and the QEMU model does functional pool TX/RX
+  (hw/i2c/aspeed_i2c.c pool_tx_count/pool_rx_count → i2c_send/recv from the shared pool). So row 15 QE
+  already covers byte-mode AND buffer-pool mode — not a gap.
+- **DMA-buffer: a genuine but firmware-UNEXERCISED gap, NOT Ⓝ.** I checked the datasheet before
+  dispositioning: §31.5.9 "DMA Buffer Mode Usage" + line 14076 "REQ21 I2C DMA buffer mode read/write"
+  CONFIRM the AST2050 I²C has DMA — so a blanket "Ⓝ/absent" would be WRONG (the exact error class the lead
+  warns about). But the G3 model has `has_dma=false` and NO board firmware uses I²C DMA (U-Boot byte via
+  trbbr; mainline Linux i2c-aspeed byte/pool, DMA gated to AST2500+; Zephyr byte-only). So #190 stays OPEN,
+  narrowed to: RE the AST2050 I²C-DMA register mechanism, model it for the G3 class, validate with a
+  synthetic /dev/mem test (no firmware oracle). LOW priority (unexercised), honestly NOT closed.
+
+Net: turned a vague "undispositioned" flag into an accurate split — one half already done, the other a
+real (low-value) open item — without weaseling the DMA part into a false "absent" claim.
+
 ## 2026-07-21 — #187 QE: RTC alarm (RTC04) + alarm IRQ 26 modeled + validated (closing a gate-d finding)
 
 Turned a gate-(d) finding straight into working emulation (converting audit output → functionality). #187:

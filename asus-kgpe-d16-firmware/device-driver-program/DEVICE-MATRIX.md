@@ -672,8 +672,15 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   the multi-master shared sensor bus; not modeled/validated.
 - **#189 — WDT timeout-INTERRUPT mode (WDT0C[2]/WDT18)** (row 38): only the reset path is validated; the
   pre-timeout interrupt path is unmodeled.
-- **#190 — I²C buffer-pool/DMA-buffer transfer modes (§31.5.2/3/9)** (row 15): only byte-mode is modeled;
-  the other transfer modes need an explicit model-or-Ⓝ disposition.
+- **#190 — I²C buffer-pool/DMA-buffer transfer modes (§31.5.2/3/9)** (row 15): **verified + rescoped
+  2026-07-21.** BUFFER-POOL is ALREADY MODELED (the gate-d "byte-only" premise was wrong): the G3
+  aspeed_i2c class sets `has_share_pool=true`/`pool_size=0x800` and the model does functional pool TX/RX
+  (`hw/i2c/aspeed_i2c.c`, pool_tx_count/pool_rx_count send+recv) — row 15 QE covers byte AND buffer-pool.
+  DMA-buffer is a genuine but firmware-UNEXERCISED gap: §31.5.9 "DMA Buffer Mode" + the REQ21 "I2C DMA
+  buffer mode" line confirm the AST2050 I²C HAS DMA, but the G3 model has `has_dma=false` (DMA regs log
+  "No DMA support") and NO board firmware uses it (U-Boot/Linux-mainline/Zephyr are all byte/pool). #190
+  stays OPEN, narrowed to: RE the AST2050 I²C-DMA register mechanism (the modeled AST2500 has_dma path, or
+  an older one?), model it, validate with a synthetic DMA test. LOW priority (unexercised) but NOT Ⓝ.
 - **#191 — SCU freq-counter (SCU10/14/28) + int ctrl/status (SCU18) + 32.768 kHz error-correction (SCU1C)**
   (row 35): un-enumerated SCU functions; SCU1C ties to the #158/#186 RTC-accuracy story.
 These are register-level completeness items, not device-enumeration gaps; the schematic→device coverage
