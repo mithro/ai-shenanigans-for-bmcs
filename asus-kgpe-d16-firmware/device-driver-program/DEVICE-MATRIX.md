@@ -59,7 +59,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 29 | 10 | 0 | 10 | 2 |
+| QEMU emulation | 30 | 9 | 0 | 10 | 2 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 25 | 7 | 0 | 9 | 10 |
@@ -331,7 +331,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 
 | # | Device (schematic) | SoC block | QE | UQ | US | LQ | LS | LU | ZQ | ZS |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | 🔶 | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | 🔶 | ⬜ |
+| 32 | LEDs (BMCRDY/MLED/CPUERR/chassis-ID) | GPIO/LED | ✅ | Ⓝ | Ⓝ | 🔶 | ✅ | ✅ | 🔶 | ⬜ |
 | 33 | Straps (IKVMEN#/SOLEN#/IPMI_SEL) | GPIO | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | 🔶 | 🔶 |
 
 - **27-29/32-33 ZQ = 🔶 (2026-07-18):** the enabling **Zephyr GPIO driver
@@ -345,7 +345,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 34 | 24 MHz clock input (QOSC1) | SCU/clk | ✅ | ✅ | ✅ | ✅ | ✅ | Ⓝ | ✅ | ✅ |
 | — | AST_JTAG1 (§13/§15) | ARM debug | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
-- **32** LS/LU=✅: **silicon LED-drive DONE (2026-07-18, host on)** — `echo 1 > /sys/class/leds/identify/brightness` flips the real GPIO `led-id-n out hi→out lo` (LED ON) and `echo 0` flips it back; the `/sys/class/leds` userspace → aspeed-GPIO path drives the real hardware. Evidence `evidence/e-gpio-leds/00`. The same debug-gpio dump also confirmed the BMC driving `led-bmc-status-n` (ON) + `led-cpu1/2-err-n` (no faults), the E1 power/reset GPIO map, and the D6 QU5 mux selects on silicon. QE stays 🔶 (LED nodes present in the QEMU DTS; a QEMU toggle-observe test would make it ✅).
+- **32** LS/LU=✅: **silicon LED-drive DONE (2026-07-18, host on)** — `echo 1 > /sys/class/leds/identify/brightness` flips the real GPIO `led-id-n out hi→out lo` (LED ON) and `echo 0` flips it back; the `/sys/class/leds` userspace → aspeed-GPIO path drives the real hardware. Evidence `evidence/e-gpio-leds/00`. The same debug-gpio dump also confirmed the BMC driving `led-bmc-status-n` (ON) + `led-cpu1/2-err-n` (no faults), the E1 power/reset GPIO map, and the D6 QU5 mux selects on silicon. **QE 🔶→✅ (2026-07-20, `evidence/e-gpio-leds/01-qemu-led-drive-observe.txt`):** a QEMU C2-Linux boot with a new `ledtest` init gate drives `echo 1/0 > /sys/class/leds/identify/brightness` and observes `/sys/kernel/debug/gpio` (= the aspeed-gpio driver reading the QEMU model's data register) — `gpio-560 (led-id-n |identify) out hi → out lo → out hi`, `LED-TEST RESULT: PASS`. IDENTICAL to the silicon dump (same gpio-560, same label, same hi↔lo), so QEMU emulates the LED-drive path end-to-end (userspace→gpio-leds→aspeed-gpio→model), not just "nodes present". First boot FAILED honestly (repack left `/init` non-exec → EACCES → BusyBox fallback; fixed via chmod 0755 per build.py:183 — see LOG).
 - **34** the 24 MHz ref is consumed by SCU/clk (validated via every boot). Ⓝ userspace. **Zephyr
   ZQ/ZS ⬜→✅ (2026-07-20):** the 24 MHz QOSC1 input is consumed by EVERY Zephyr boot exactly as for
   U-Boot/Linux (which are ✅) — the SCU/PLL lock onto it (the SCU smoke #169 read SCU registers clocked

@@ -423,5 +423,42 @@ if grep -q usbiphost /proc/cmdline; then
 	echo "=== USBIP-EXPORT-END ==="
 fi
 
+# --- LED drive-observe (only when 'ledtest' is on the kernel cmdline) ---
+# DEVICE-MATRIX row 32: prove QEMU emulates BMC LED drive END-TO-END through the
+# Linux path (/sys/class/leds -> gpio-leds -> aspeed-gpio -> QEMU model),
+# mirroring the silicon LS/LU evidence (evidence/e-gpio-leds/00). The 'identify'
+# LED is GPIO(G,0) ACTIVE_LOW, so brightness=1 drives the line LOW (LED on) and
+# brightness=0 drives it HIGH (off). We read the line state back from
+# /sys/kernel/debug/gpio -- that is the aspeed-gpio driver reading the QEMU data
+# register, so a state change there proves the MODEL received the write (not just
+# the LED class caching a value).
+if grep -q ledtest /proc/cmdline; then
+	echo "=== LED-DRIVE-OBSERVE-BEGIN ==="
+	mount -t debugfs none /sys/kernel/debug 2>&1 || echo "(debugfs already mounted)"
+	echo "--- /sys/class/leds ---"
+	ls /sys/class/leds 2>&1
+	LED=/sys/class/leds/identify
+	if [ ! -d "$LED" ]; then
+		echo "LED-TEST: $LED MISSING"
+		echo "LED-TEST RESULT: FAIL"
+	else
+		echo "--- gpio 'out' lines, default (LED off) ---"
+		grep -i out /sys/kernel/debug/gpio 2>&1
+		echo 1 > "$LED/brightness"; echo "wrote brightness=1 rc=$?"
+		ON=$(grep -i identify /sys/kernel/debug/gpio | grep -i out)
+		echo "identify ON : $ON"
+		echo 0 > "$LED/brightness"; echo "wrote brightness=0 rc=$?"
+		OFF=$(grep -i identify /sys/kernel/debug/gpio | grep -i out)
+		echo "identify OFF: $OFF"
+		if echo "$ON" | grep -q 'out lo' && echo "$OFF" | grep -q 'out hi'; then
+			echo "LED-TEST RESULT: PASS"
+		else
+			echo "LED-TEST RESULT: FAIL (expected ON=out lo, OFF=out hi)"
+		fi
+	fi
+	echo "=== LED-DRIVE-OBSERVE-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

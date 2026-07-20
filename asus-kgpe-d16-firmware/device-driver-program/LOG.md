@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — row 32 LEDs QE 🔶→✅: QEMU LED-drive validated end-to-end (matches silicon exactly), incl. an honest first-attempt failure
+
+Closed the row-32 QEMU-side gap ("a QEMU toggle-observe test would make it ✅"). Added a `ledtest` init gate
+(qemu-firmware/initramfs/init, following the existing `f6usb`/`usbip` cmdline-token convention) that boots C2
+Linux, drives `echo 1/0 > /sys/class/leds/identify/brightness`, and observes the underlying GPIO line in
+`/sys/kernel/debug/gpio` — which is the aspeed-gpio driver reading back the QEMU model's DATA register, so a
+change there proves the MODEL received the write (not just the LED class caching a value).
+RESULT (evidence `e-gpio-leds/01-qemu-led-drive-observe.txt`): `gpio-560 (led-id-n |identify) out hi → out lo
+→ out hi`, **LED-TEST RESULT: PASS**. This is IDENTICAL to the silicon dump (`00-silicon-gpio-map.txt`): same
+gpio-560, same `led-id-n |identify` label, same ACTIVE_LOW hi↔lo. The QEMU debugfs even shows the same
+gpio-line-names (led-bmc-status-n, led-cpu1/2-err-n, spd-mux-s0/s1) as the board, confirming the QEMU DTS
+line-name map is faithful. So QEMU emulates BMC LED-drive end-to-end (userspace→gpio-leds→aspeed-gpio→model),
+matching hardware — row 32 QE ✅ (QEMU-emulation tally 29→30 ✅, 10→9 🔶). LS/LU already ✅ (silicon drive).
+
+**HONEST FAILURE + FIX (the "weirdness = my code" discipline applied to my own tooling):** the FIRST boot
+FAILED — console showed `Run /init as init process` → `Failed to execute /init (error -13)` → fell back to
+`/sbin/init` (BusyBox) which spammed `can't open /dev/tty2/3/4` and never ran my ledtest. error -13 = EACCES:
+my repack helper (`tmp/repack_initramfs.py`) copied the source `init` (mode 664, no exec bit) into the rootfs
+WITHOUT chmod, so the kernel couldn't exec `/init`. `build.py:183` does `os.chmod(rootfs/"init", 0o755)` right
+after its copy; I'd omitted the equivalent. Fixed the helper (chmod 0o755), repacked, re-booted → PASS. Not a
+QEMU/model problem at all — a defect in my build tooling, found + fixed properly rather than worked around.
+Confidence I didn't "just do something wrong" earlier: HIGH — the failure was self-inflicted + fully explained
+by the EACCES, and the corrected run passes cleanly and matches silicon byte-for-byte.
+Reusable win: the `ledtest` gate + the repack path give a clean "boot C2 → scripted userspace test → capture"
+harness that future Linux-userspace validations (e.g. #177 GPIO-userspace, WDT `/dev/watchdog`) can reuse.
+
 ## 2026-07-20 — #178 row 14 DDC/EDID FAITHFULLY SCOPED: it is CRT-controller HW (VGACRB7), NOT an I²C-engine device — prevented an unfaithful shortcut
 
 Picked a `QE ⬜` gap to advance the goal's first bullet ("full QEMU emulation of *every* device"): row 14
