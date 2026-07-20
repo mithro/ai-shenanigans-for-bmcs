@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #168 fix attempt: pt_regs unreadable (sp_abt garbage); pivot the extraction to bp-per-init-function or single-step
+
+Tried to pin the exact faulting instruction by reading do_prefetch_abort's pt_regs. Seeded a valid
+abort stack at the literal [0x40] (which the DATA-abort handler @0x180 loads via `ldr sp,[pc,#-0x148]`),
+set a HW bp at do_prefetch_abort (0x1038), booted. Clean read AT the bp (via -c not -f — the -f script's
+`reg` prints nothing): pc=0x1038, cpsr=0x13 (SVC), **r0 (the pt_regs* arg) = 0xffffffcb** = an INVALID
+pointer, lr=0x168 (return into the _prefetch_abort stub). So the PREFETCH-abort handler builds pt_regs on
+a GARBAGE sp_abt (my [0x40] seed only fixes the data-abort handler's stack; the prefetch stub loads its
+sp from a different literal), => the faulting context is UNREADABLE via pt_regs (0xffffffcb is not valid
+memory). CONFIRMED still: it IS a prefetch abort (do_prefetch_abort reached, SVC after the stub) near
+timer_init; mechanism unchanged. HONEST: I could not extract the faulting instruction this way — the
+invalid abort stack blocks it. REFINED NEXT APPROACH (avoid pt_regs): (a) bp at each early
+init_sequence_f fn (arch_cpu_init@0x1059c, initf_dm, get_clocks, timer_init@0x37d10) and see which is the
+LAST reached before the cascade => the faulting function; then single-step IT to the exact instruction;
+OR (b) find the prefetch stub's own sp-literal (disassemble the 0x0c vector -> handler) and seed THAT so
+pt_regs is valid. Then apply the durable fix (revert 0004 + fix the unaligned access, not mask). Rig:
+load-remap-only.tcl + boot-mu-pabt.tcl on the Pi.
+
 ## 2026-07-20 — #168 MECHANISM CRACKED: early PREFETCH ABORT (do_prefetch_abort @0x1038) cascading on an uninitialised abort stack — the A-fix (0004) MASKS an unaligned access that then makes a bad code pointer
 
 Identified the mystery loop functions from u-boot.map: the recurring low PC (~0x140) is the ARM
