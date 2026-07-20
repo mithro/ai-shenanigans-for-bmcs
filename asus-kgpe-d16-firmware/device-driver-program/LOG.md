@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #173 DONE (enumeration): added matrix rows 43–48 for the SoC-internal engines the schematic-scoped audits couldn't reach
+
+Closed the completeness gate-d blind spot: verified each of the 6 gate-d-flagged internal engines against
+the AUTHORITATIVE memory map (qemu-model/AST2050-MEMORY-MAP.md §9) — all are REAL AST2050 blocks (marked
+"Yes"), so they need ROWS (unlike xdma/sdhci which were G4 phantoms → gated in #172). Added rows 43–48
+with honest first-pass dispositions:
+  * 43 HACE (0x1E6E3000/IRQ4): QE=🔶 (aspeed.hace IS modeled+mapped+wired, but G3 11-reg fidelity
+    unverified); LQ/LS/LU/ZQ/ZS=⬜ (mainline aspeed-hace exists, not G3-validated; a full BMC could use
+    crypto); UQ/US=Ⓝ.
+  * 44 MIC (0x1E640000/IRQ1): QE=⬜ (real, NOT modeled → reads unassigned = faithfulness todo); LQ/LS=⬜;
+    rest Ⓝ (init-time config).
+  * 45 MDMA (0x1E740000/IRQ6): QE=⬜ (real, unmodeled — the addr the #172 SDHCI phantom squatted on);
+    drivers Ⓝ (autonomous DMA, no BMC runtime need).
+  * 46 2D BitBLT (§35): QE=⬜ (real, unmodeled); drivers Ⓝ (host-side display accel via PCI/VGA).
+  * 47 PUART (0x1E788000): QE=⬜ (real, unmodeled); LQ/LS/LU+ZQ/ZS=⬜ (host UART pass-through, real BMC
+    work); UQ/US=Ⓝ.
+  * 48 PCI-arbiter (0x1E78C000): QE=⬜ (real, unmodeled); all drivers Ⓝ (autonomous arbiter).
+Matrix grew 43→49 rows (392 cells). Updated the intro (now documents BOTH completeness dimensions:
+external schematic §§2–15 AND internal §9 engines) + the embedded tally (verified == tally.py:
+QEMU 29✅/9🔶/9⬜, Zephyr@QEMU 17✅/18⬜, etc.). HONEST: #173's ENUMERATION+DISPOSITIONING is now done (the
+rows exist, nothing silently omitted); the QE=⬜ items are genuine QEMU-faithfulness todos (real silicon
+HAS these) and HACE model-fidelity + the ⬜ driver cells are the follow-on WORK those rows now TRACK.
+Consequence for gate (a): the completeness claim is now honest across BOTH dimensions — the schematic-
+scoped "no missing device" PLUS the internal-engine dimension the earlier audits structurally couldn't
+reach.
+
 ## 2026-07-20 — #172 DONE: gated the phantom XDMA + SDHCI off the G3 machine (completes the #144 phantom sweep)
 
 Fixed the HIGH gate-d finding immediately (didn't just track it). hw/arm/aspeed_ast2400.c realized

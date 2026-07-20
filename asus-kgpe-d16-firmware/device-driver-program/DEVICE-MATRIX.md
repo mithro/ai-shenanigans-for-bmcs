@@ -39,29 +39,33 @@ sections in [`TASKLIST.md`](TASKLIST.md) hold the detail and next-steps, and
 
 ## Coverage snapshot (this table IS the enumerated per-stack task list)
 
-**Every device wired in `AST2050-BMC-WIRING.md` is one row below** (43 rows, §§2–15 +
-the SoC-internal blocks). **COMPLETENESS INDEPENDENTLY VERIFIED (2026-07-20, gate-a):** a
-sub-agent enumerated every device/peripheral/interface/connector in the authoritative schematic
-§§2–15 (+ §14/§15) and cross-checked each against these rows — **no missing device found**. The only
-unrowed narrative items are reset-output *nets* (`AST_SRST#`/R20, `AST_BRST#`/P21 — not devices,
-tracked in FULL-TASK-LIST E6); the one spurious row (41 ADC) is self-flagged as a removed G4 phantom.
-Non-narrative pinmap support parts (clock-gen `CU2`, host-peer `PIKE2`) are dispositioned at the end of
-this file. **Every column is a task**: QE = full QEMU emulation; UQ/US =
+**Every device is one row below** (49 rows: the §§2–15 schematic devices + the SoC-INTERNAL
+engines from the datasheet §9 memory map). **COMPLETENESS — TWO DIMENSIONS:** (1) EXTERNAL
+schematic devices (2026-07-20 gate-a): an independent sub-agent enumerated every
+device/peripheral/interface/connector in the authoritative schematic §§2–15 (+ §14/§15) and cross-checked
+each against these rows — **no missing device found** (only unrowed narrative items are reset-output *nets*
+`AST_SRST#`/R20, `AST_BRST#`/P21, tracked in FULL-TASK-LIST E6; the CU2/PIKE2 pinmap parts are
+dispositioned at the end of this file). (2) SoC-INTERNAL engines (2026-07-20 gate-d, #173): the
+schematic-scoped audit STRUCTURALLY could not reach internal blocks with no external pins — a gate-d pass
+found 6 real ones the matrix omitted (HACE/MIC/MDMA/2D/PUART/PCI-arbiter, all "Yes" in the memory map §9);
+**rows 43–48 now add them** (see their note). Two G4 phantoms (XDMA/SDHCI) that WERE realized on the G3
+machine are now gated off (#172). So both the external-device and internal-engine dimensions are now
+enumerated. **Every column is a task**: QE = full QEMU emulation; UQ/US =
 U-Boot driver validated in QEMU / on silicon; LQ/LS/LU = Linux driver validated in QEMU /
 on silicon / from userspace; ZQ/ZS = Zephyr driver validated in QEMU / on silicon. So the
-grid is 43 × 8 = 344 explicit per-device-per-stack tasks. Machine-counted status
+grid is 49 × 8 = 392 explicit per-device-per-stack tasks. Machine-counted status
 (regenerate with `uv run tally.py`, 2026-07-20):
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 29 | 8 | 0 | 4 | 2 |
-| U-Boot @ QEMU | 10 | 3 | 0 | 3 | 27 |
-| U-Boot @ silicon | 8 | 4 | 1 | 3 | 27 |
-| Linux @ QEMU | 25 | 7 | 0 | 6 | 5 |
-| Linux @ silicon | 18 | 4 | 2 | 13 | 6 |
-| Linux userspace | 12 | 6 | 0 | 13 | 12 |
-| Zephyr @ QEMU | 17 | 5 | 0 | 16 | 5 |
-| Zephyr @ silicon | 11 | 4 | 0 | 22 | 6 |
+| QEMU emulation | 29 | 9 | 0 | 9 | 2 |
+| U-Boot @ QEMU | 10 | 3 | 0 | 3 | 33 |
+| U-Boot @ silicon | 8 | 4 | 1 | 3 | 33 |
+| Linux @ QEMU | 25 | 7 | 0 | 9 | 8 |
+| Linux @ silicon | 18 | 4 | 2 | 16 | 9 |
+| Linux userspace | 12 | 6 | 0 | 15 | 16 |
+| Zephyr @ QEMU | 17 | 5 | 0 | 18 | 9 |
+| Zephyr @ silicon | 11 | 4 | 0 | 24 | 10 |
 
 **Reading it honestly:** U-Boot (Raptor) + Linux (OpenBMC) ARE substantially validated
 BOTH sides (not "none" — 8/18 silicon-✅ respectively, CI-gated); the many U-Boot Ⓝ are
@@ -330,6 +334,12 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | Ⓝ | Ⓝ |
+| 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **35** SCU: exercised by every stack's init (QE/UQ/US/LQ/LS ✅). **Zephyr ZQ+ZS ✅ now
   (2026-07-20, `evidence/d14-zephyr/19-scu-silicon.txt`):** `samples/scu_smoke` reads the SCU
@@ -395,6 +405,30 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   (UART1 modem lines) — UART1 = the SOL console; it wires TXD1/RXD1/**`NRTS1`(V21)/`NCTS1`(W22) → QU8
   2:1 mux → SOL** (row 33 / D10 / #133), i.e. 4-wire with RTS/CTS flow control; the remaining
   full-modem lines (DTR/DSR/DCD/RI) are NC (SOL does not use them). #145 enumeration complete.
+- **43–48 SoC-internal engines (ADDED 2026-07-20, #173 — the gate-d structural blind-spot closure):**
+  the schematic-scoped completeness audits (external wiring §§2–15) STRUCTURALLY could not reach SoC
+  engines with no external pins. A gate-d pass found 6 real ones (all "**Yes**" in `AST2050-MEMORY-MAP.md`
+  §9) that the matrix had omitted. Honest first-pass dispositions:
+  - **43 HACE** (hash/crypto, 0x1E6E3000/IRQ4, 11 regs MD5/SHA/AES/RC4): **QE=🔶** — `aspeed.hace` IS
+    modeled+mapped+IRQ-wired (aspeed_ast2400.c:355/862), but whether the generic G4 model matches the
+    AST2050 11-reg variant is unverified. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline
+    `aspeed-hace` crypto driver exists but is NOT G3-validated; a full BMC secure-boot/TLS could use it).
+    ZQ/ZS=⬜ (no Zephyr crypto driver). *Real work, honestly ⬜.*
+  - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=⬜** — real block, NOT modeled (reads unassigned
+    on the G3 machine; a faithfulness todo). Configured at DRAM init; LQ/LS=⬜ (an EDAC-style error
+    reporter could exist); UQ/US Ⓝ (init-time, no runtime U-Boot driver); LU/ZQ/ZS=Ⓝ.
+  - **45 MDMA** (memory-DMA, 0x1E740000/IRQ6): **QE=⬜** (real, unmodeled — the address the #172 SDHCI
+    phantom used to squat on). Autonomous DMA accel; no BMC runtime driver need → drivers Ⓝ.
+  - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
+    accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
+  - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=⬜** (real, unmodeled). Routes the host UART
+    through the BMC (SOL-adjacent, row 31); LQ/LS/LU + ZQ/ZS=⬜ (a pass-through driver is real BMC work);
+    UQ/US Ⓝ.
+  - **48 PCI arbiter** (0x1E78C000): **QE=⬜** (real, unmodeled). Autonomous bus arbiter, init-configured,
+    no runtime driver → all Ⓝ.
+  These are first-pass dispositions to CLOSE the completeness gap (they were silently missing); the QE=⬜
+  items are genuine QEMU-faithfulness todos (the real silicon has these blocks) and HACE's model-fidelity
+  + the ⬜ driver cells are tracked follow-on work under #173.
 
 ## Roll-up (honest)
 
