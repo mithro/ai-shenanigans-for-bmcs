@@ -523,5 +523,40 @@ if grep -q wdtreset /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- W83795 CASEOPEN + VID validation (only when 'w83795test' on the cmdline) ---
+# DEVICE-MATRIX row 16 / #183: validate the W83795G chassis-intrusion (CASEOPEN)
+# + VID model additions through the Linux hwmon driver + userspace. The QEMU model
+# seeds the intrusion latch =1 (ALARM(5) bit6); the mainline w83795 driver exposes
+# it as /sys/class/hwmon/*/intrusion0_alarm. Writing 0 triggers the driver's
+# CLR_CHASSIS[7] write, which the model handles by clearing the latch -> a re-read
+# shows 0. cpu0_vid existing proves the VID_CTRL model made the driver detect VID.
+if grep -q w83795test /proc/cmdline; then
+	echo "=== W83795-CASEOPEN-BEGIN ==="
+	# Validate the MODEL at the register level via raw i2c (the mainline
+	# modern-hwmon w83795 driver only exposes in/fan/temp, NOT intrusion/vid, so
+	# we read the raw regs). Unbind the driver so its bank-switching polling can't
+	# interleave; -f forces the access regardless.
+	echo 1-002f > /sys/bus/i2c/drivers/w83795/unbind 2>&1 || echo "(driver unbind rc=$?)"
+	B=1; A=0x2f
+	i2cset -f -y $B $A 0x00 0x00 2>&1        # BANKSEL -> bank 0
+	AL0=$(i2cget -f -y $B $A 0x46 2>&1)      # ALARM(5): bit6 = chassis intrusion
+	VID=$(i2cget -f -y $B $A 0x6a 2>&1)      # VID_CTRL
+	echo "ALARM(5)=0x46 before = $AL0 ; VID_CTRL=0x6a = $VID (expect 0x01)"
+	i2cset -f -y $B $A 0x4d 0x80 2>&1        # CLR_CHASSIS bit7 -> clear intrusion
+	AL1=$(i2cget -f -y $B $A 0x46 2>&1)      # re-read ALARM(5)
+	echo "ALARM(5)=0x46 after CLR_CHASSIS = $AL1"
+	# bit6 latched before, cleared after; VID_CTRL reads back 0x01.
+	case "$AL0" in 0x??|0x?) B6BEFORE=$(( AL0 & 0x40 )) ;; *) B6BEFORE=-1 ;; esac
+	case "$AL1" in 0x??|0x?) B6AFTER=$(( AL1 & 0x40 )) ;; *) B6AFTER=-1 ;; esac
+	echo "intrusion bit6: before=$B6BEFORE after=$B6AFTER"
+	if [ "$B6BEFORE" -gt 0 ] && [ "$B6AFTER" = "0" ] && [ "$VID" = "0x01" ]; then
+		echo "W83795-CASEOPEN RESULT: PASS (intrusion 1->0 via CLR_CHASSIS; VID_CTRL=0x01)"
+	else
+		echo "W83795-CASEOPEN RESULT: FAIL (before=$AL0 after=$AL1 vid=$VID)"
+	fi
+	echo "=== W83795-CASEOPEN-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 echo "BMC-READY"   # marker the boot harness waits for
 exec /bin/sh

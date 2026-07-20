@@ -1,0 +1,54 @@
+DEVICE-MATRIX row 16 (W83795G hwmon) — QEMU CASEOPEN (chassis-intrusion) + VID
+model, register-level validation (2026-07-20, #183).
+
+Adds two W83795G functions the model lacked (gate-d #183): the chassis-intrusion
+(CASEOPEN) latch and the VID (CPU voltage-ID) control register. Register numbers
+are from the mainline driver drivers/hwmon/w83795.c:
+  ALARM_CTRL 0x40, ALARM(i) 0x41+i (intrusion = ALARM(5)=0x46 bit6),
+  CLR_CHASSIS 0x4D (write bit7 clears the latch), VID_CTRL 0x6A (mode 1..6 = VID).
+
+MODEL (hw/sensor/w83795.c):
+  - new state `intrusion`, seeded LATCHED=1 (a real board opened during assembly
+    holds the latch across power cycles until cleared — faithful + exercisable);
+  - do_read ALARM(5)=0x46 returns bit6 = intrusion (OR'd with any stored bits);
+  - do_write CLR_CHASSIS=0x4D with bit7 set clears the latch;
+  - load_defaults seeds VID_CTRL=0x6A = 0x01 (VID present);
+  - vmstate v1->v2 adds `intrusion`.
+
+WHY RAW-I2C (not /sys/class/hwmon): the C2 kernel's w83795 driver uses the modern
+hwmon_device_register_with_info interface (kernel patch 0003) whose
+HWMON_CHANNEL_INFO exposes only in/fan/temp — NOT intrusion0_alarm / cpu0_vid. So
+the register-level MODEL is validated directly with busybox i2c-tools over i2c-dev
+(userspace -> aspeed I2C engine -> QU9/QU5 fabric -> W83795 model). The missing
+driver attrs are a separate Linux-side gap, tracked as its own follow-up.
+
+Path: C2 kernel (uImage-kgpe-d16) + BusyBox+i2c-tools initramfs, machine
+kgpe-d16-bmc, new `w83795test` init gate; freshly-built QEMU with the model change.
+Run under a systemd-run --scope cgroup.
+
+===== CAPTURED CONSOLE (QEMU) =====
+=== W83795-CASEOPEN-BEGIN ===
+ALARM(5)=0x46 before = 0x40 ; VID_CTRL=0x6a = 0x01 (expect 0x01)
+ALARM(5)=0x46 after CLR_CHASSIS = 0x00
+intrusion bit6: before=64 after=0
+W83795-CASEOPEN RESULT: PASS (intrusion 1->0 via CLR_CHASSIS; VID_CTRL=0x01)
+=== W83795-CASEOPEN-END ===
+
+DECODE: ALARM(5) reads 0x40 = bit6 set = chassis-intrusion latched (as seeded).
+VID_CTRL reads 0x01 = VID present (matches the seeded value, so a driver would
+detect has_vid). Writing CLR_CHASSIS bit7 (i2cset 0x4d 0x80) clears the latch, so
+a re-read of ALARM(5) returns 0x00 (bit6=0). before=64 (0x40) -> after=0 is the
+full detect->clear cycle. PASS. The transaction went userspace i2c-tools ->
+/dev/i2c-1 -> ftgmac... no: -> aspeed I2C engine 1 -> the QU9/QU5 mux fabric ->
+the W83795 @0x2f model — so the whole I2C path + the new CASEOPEN/VID registers
+are exercised together.
+
+RESULT: CASEOPEN (intrusion latch + CLR_CHASSIS clear) and VID_CTRL are now
+MODELLED + register-validated in QEMU. This closes the CASEOPEN + VID part of
+#183. Row 16 QE stays 🔶 (not ✅) because the REMAINING #183 pieces — SmartFan
+automatic thermal->fan-curve control, and the alarm/limit comparison + SMBALERT#
+assertion — are still unmodelled (SmartFan is board-firmware-dependent + needs
+deep W83795 datasheet RE; SMBALERT ties into the shared aspeed_i2c ALERT work
+#135/#157). Honest first attempt FAILED: the initial test read /sys/class/hwmon/
+*/intrusion0_alarm, which the modern-hwmon driver patch does NOT expose — a
+test-path bug (+ a real Linux-driver gap), fixed by validating the raw registers.

@@ -1,5 +1,31 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #183 (part): W83795 CASEOPEN + VID MODELED + register-validated in QEMU (real implementation, not a mis-flag)
+
+The 3rd gate-d task WAS genuine model work (unlike #181/#182 mis-flags). Implemented two W83795G functions the
+model lacked — chassis-intrusion (CASEOPEN) + VID — faithful to the mainline driver's register map
+(drivers/hwmon/w83795.c: ALARM_CTRL 0x40, ALARM(i) 0x41+i, intrusion = ALARM(5)=0x46 bit6, CLR_CHASSIS 0x4D
+bit7, VID_CTRL 0x6A). Model (submodule 2d135ec3f9): new `intrusion` latch seeded=1 (persists across power
+cycles on real HW); do_read ALARM(5) returns bit6=intrusion; do_write CLR_CHASSIS[7] clears it; VID_CTRL
+seeded 0x01; vmstate v1→v2. Incremental QEMU rebuild clean.
+VALIDATED (evidence `d08-w83795-caseopen/00`): a new `w83795test` init gate reads the raw registers over
+busybox i2c-tools → **`ALARM(5)=0x46` before=`0x40` (bit6 latched), `VID_CTRL=0x6A`=`0x01`; after
+`i2cset 0x4d 0x80` (CLR_CHASSIS) `ALARM(5)`=`0x00`; W83795-CASEOPEN RESULT: PASS`**. The transaction runs
+userspace → aspeed I2C engine 1 → QU9/QU5 fabric → W83795 model, so the whole path + the new registers are
+exercised together.
+
+**Honest FIRST-attempt FAILURE (the "weird behaviour = my code" discipline):** the initial w83795test read
+`/sys/class/hwmon/*/intrusion0_alarm` and got "No such file". Root cause: the modern-hwmon w83795 driver
+patch (kernel 0003) registers via hwmon_device_register_with_info with a HWMON_CHANNEL_INFO of only
+in/fan/temp — it does NOT expose intrusion0_alarm / cpu0_vid. So the MODEL was right; the DRIVER doesn't
+surface those attrs. Fixed the test to validate the raw registers (i2cget/i2cset, which the initramfs ships)
+— the correct way to validate a MODEL anyway. Tracked the driver-exposure gap as a NEW task #184.
+
+Row 16 QE stays 🔶 (honest): CASEOPEN+VID now done, but SmartFan auto-mode + alarm/limit+SMBALERT remain
+(#183 re-scoped to those). This is genuine forward progress on the last real gate-d task — a new device
+capability implemented + validated, an honest test-failure diagnosed + fixed, and a new Linux gap (#184)
+surfaced. #181/#182 were mis-flags; #183 was real and is now partly closed.
+
 ## 2026-07-20 — #182 re-scoped: the USB virtual-media "unvalidated" flag was a MIS-FLAG — mass-storage gadget IS validated QEMU + SILICON
 
 Investigated the 2nd gate-d task (#182, "iKVM virtual-media validated by no stack") before implementing —
