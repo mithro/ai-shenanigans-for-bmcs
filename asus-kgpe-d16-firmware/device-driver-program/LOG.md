@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Gate-(d) adversarial pass FOUND REAL GAPS (did NOT rubber-stamp) → 3 new tasks + 2 doc fixes; key = a STRUCTURAL blind spot (SoC-internal engines)
+
+Ran a gate-(d) adversarial "find new tasks / anything missed" independent pass. It did NOT come up empty
+— it found real, untracked work, most importantly a STRUCTURAL blind spot: all prior completeness audits
+(gate-a 07-20, 07-18) were scoped to the EXTERNAL schematic wiring §§2-15, which structurally cannot
+reach SoC-INTERNAL engines that have no external pins. Findings (verified against source before acting):
+  * F1 HIGH (faithfulness) → **new task #172**: hw/arm/aspeed_ast2400.c realizes+maps+IRQ-wires
+    aspeed.xdma (0x1E6E7000/IRQ6, lines 729-736) + aspeed.sdhci (0x1E740000/IRQ26, 759-766) UNGATED —
+    confirmed no silicon_rev guard (ADC/video/EHCI all have one). Both are G4 phantoms: per the memory map
+    XDMA is absent on G3 and 0x1E740000 = MDMA, INT#6=MDMA, INT#26=RTC-alarm. Same class as the ADC
+    phantom (#146) but #144's scope missed them. (Fix deferred to #172 — needs create+realize+map gating
+    + qtree verify + oracle re-run.)
+  * F2 HIGH (completeness) → **new task #173**: SoC-internal engines with NO matrix row/disposition —
+    HACE hash/crypto (0x1E6E3000/IRQ4, actually instantiated+wired on the kgpe machine, sharpest), MIC
+    (0x1E640000), MDMA (0x1E740000/IRQ6), 2D-graphics, PUART (0x1E788000), PCI-arbiter (0x1E78C000). The
+    sibling qemu-model/README.md:115 recognizes HACE/MIC as work; the device-driver matrix silently omits.
+  * F3 MEDIUM (capability) → **new task #174**: W83795 row 16 validates READS only; the BMC's fan-CONTROL
+    (write FANCTL1-8 PWM, SmartFan) is untracked, and the QEMU model only STORES PWM writes (no RPM
+    response) → even the QEMU "all functionality" clause is partial. Same class as #164.
+  * F4 LOW → FIXED (doc): row 30's "#141 DONE" clarified — it covers the SHORT-run tickful fix ONLY; the
+    SEPARATE open QEMU-only arm_mmu ~2264-tick sustained corruption (evidence 17/03) is NOT closed and is
+    no longer hidden behind the DONE label.
+  * F5 LOW → FIXED (doc): removed a leftover duplicate/contradictory `- Zephyr: [ ] QEMU · [ ] silicon`
+    stub in FULL-TASK-LIST D10 (left over from the #170 PSU edit) that corrupted the tally.
+Held-up (NOT over-claimed, independently re-confirmed by the pass): rows 27-ZQ / 36-ZS / 37-ZS are
+genuinely evidence-backed (the verify-and-capture pass worked); the §14 neighbour-chip / pinmap far-end
+dispositions (CU2/QQ11/PIKE2/VGA_HDR1/QD3-5/SU1-OU1-NU1) are all reasoned.
+CONSEQUENCE for gate (d): this pass IDENTIFIED new tasks, so gate (d) is correctly NOT sealed — the
+system worked (it caught the SoC-internal blind spot the schematic-scoped audits couldn't). The matrix's
+own claim that it covers "every device" needs the internal-engine dimension (#173) to be truly complete.
+
 ## 2026-07-20 — Gate-(b) SEALED: confirm-clean re-review of all 4 fixes returns CLEAN (no issues reported)
 
 The literal gate-(b) criterion is "full code reviews from sub-agents of all developed code returns with

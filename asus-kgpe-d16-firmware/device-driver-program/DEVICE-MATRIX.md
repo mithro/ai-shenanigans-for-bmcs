@@ -276,7 +276,12 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   config: the per-thread stack-guard MMU reconfig removed write access from the static
   `l1_page_table`'s own page), NOT an upstream bug. Fix = `HW_STACK_PROTECTION=n` +
   `SYS_CLOCK_EXISTS=y`; the app then runs the FULL 12 s with 0 data-aborts (task #141
-  DONE). Do NOT blame upstream. (The standard `uart_ns16550.c` console IS still blocked
+  DONE — for the SHORT-run tickful case). **HONESTY CLARIFICATION (2026-07-20 gate-d):** #141 "DONE"
+  covers the HW_STACK_PROTECTION short-run fix ONLY; there is a SEPARATE, still-OPEN **QEMU-only**
+  arm_mmu sustained-ticking corruption at ~2264 ticks (evidence `d14-zephyr/17`/`03`) that longer runs
+  hit — do not read "#141 DONE" as "all Zephyr tick issues closed". That sustained-tick QEMU limit is
+  why the silicon smokes are kept short; it does NOT affect real silicon (no such limit there). Do NOT
+  blame upstream. (The standard `uart_ns16550.c` console IS still blocked
   by the separate `z_phys_map` device-VA gap — that one is real + open.) Per-device Zephyr
   drivers (GPIO #147, I2C #148, WDT #149) build on this now-clean tick. **ZS = 🔶 (not ⬜):
   corrected 2026-07-20** — the static-mapped polling console is PROVEN on real silicon: EVERY Zephyr

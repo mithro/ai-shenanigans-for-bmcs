@@ -251,7 +251,6 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - U-Boot: [N] (PSU monitoring is an OS function)
 - Linux: [ ] QEMU (`pmbus`) · [B] silicon (**needs a PMBus-capable PSU present + I2C1 engine enabled; PSU-hardware-dependent**) · [ ] userspace (hwmon)
 - Zephyr: [x] QEMU (`samples/pmbus_smoke` reads VOUT_MODE/READ_VOUT=12000 mV/REVISION @0x58 on i2c0 via `i2c_aspeed_g3` — evidence `d14-zephyr/21`) · [B] silicon (rig-gated — no PMBus PSU on PSUSMB1 on this bench, #165; matrix row 24 ZQ/ZS = ✅/⬜)
-- Zephyr: [ ] QEMU · [ ] silicon
 
 ### D11. SMBus ALERT — SALT1/2, I2C7 B12 (§10.2, §10.4)
 - [ ] QEMU: SMBALERT# line model on I2C7 (task #135)
