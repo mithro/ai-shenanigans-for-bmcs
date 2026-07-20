@@ -13,8 +13,15 @@ index f60a019bb..88e0cc3e5 100644
 +	 * underlying condition, so the level line re-asserts and this handler
 +	 * re-enters forever, wedging the CPU (a hard boot hang on real G3
 +	 * silicon). Quiesce the bus by dropping the upstream connect so the
-+	 * condition can clear; a subsequent bus reset re-inits the HW. The G4
-+	 * never reaches this because its PHY comes up from the CTRL[31] write.
++	 * fatal level condition clears and the CPU is no longer livelocked --
++	 * this deliberately trades USB availability for system LIVENESS. NOTE:
++	 * this leaves the gadget disconnected until connect is re-asserted, and
++	 * today only probe's ast_vhub_init_hw() does that (ast_vhub_hub_reset()
++	 * never touches AST_VHUB_CTRL), so a deadlock keeps USB/KVM down until a
++	 * driver reload / reboot. A PHY-gated deferred re-init (re-assert connect
++	 * once CTRL[31] PHY_CLK reads ready again) is the proper recovery --
++	 * tracked as device-driver-program #185. The G4 never reaches this
++	 * because its PHY comes up from the CTRL[31] write.
 +	 */
 +	if (istat & VHUB_IRQ_USB_CMD_DEADLOCK) {
 +		u32 ctrl = readl(vhub->regs + AST_VHUB_CTRL);

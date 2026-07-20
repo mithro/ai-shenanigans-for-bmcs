@@ -1,5 +1,45 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b) FINAL substantial batch (4 agents): SDMC + video-model CLEAN; 1 REAL vhub finding; 1 FALSE-POSITIVE caught by verification
+
+Dispatched the final substantial gate-(b) batch — 4 parallel agents on the last developed QEMU + Linux
+bodies (the generic-upstream `aspeed_smc`/`lpc`/`peci`, 0 G3-refs, are not project code). VERIFIED every
+finding against the ACTUAL vendored code — which mattered a lot this round:
+- **QEMU `aspeed_sdmc.c` (AST2050 DDR2, BOOT-CRITICAL): CLEAN.** Agent cross-checked vs the datasheet extract
+  + the JTAG-captured MCR04=0x585: R_PROT lock-latch correct, MCR100/MCR170 genuinely read-only, MCR04 a
+  firmware-owned verbatim latch (not synthesised), and it correctly AVOIDS the AST2500/2600 status-bit
+  special-casing that would corrupt G3 offset 0x60. Lock protocol matches Raptor platform.S → DRAM init
+  faithful for all 3 oracles.
+- **QEMU `aspeed_video_ast2050.c` (the iKVM capture model): CLEAN.** DMA bounds provably confined to
+  [0,dram_size) (underflow-safe comp_bus<dram_base check first), VR_SEQ_CTRL 0→1 transition logic matches
+  the real driver, mode-detect bit-fields bit-exact vs upstream, stream-buf-size formula matches. (2 sub-
+  threshold notes: only 8 of 12 JPEG quant tables, VR310/314 restriction-window unused — both harmless.)
+- **Linux `0007-usb-aspeed-vhub` — 1 REAL finding (verified), low-severity.** The USB-command-deadlock
+  (ISR[18]) handler drops VHUB_CTRL_UPSTREAM_CONNECT to avoid a CPU livelock (correct for liveness) but
+  NOTHING re-asserts it: verified in the vendored driver that connect is set ONLY in init_hw (core.c:287-8,
+  probe-once) and cleared ONLY by this handler; ast_vhub_hub_reset never touches AST_VHUB_CTRL. So a deadlock
+  leaves USB/KVM dead until reboot, and the patch comment "a subsequent bus reset re-inits the HW" is FALSE.
+  Does NOT affect the validated path (the init_hw PHY-wait prevents the deadlock; row-9 QEMU+silicon USB/IP
+  never hit it). Action: CORRECTED the misleading comment (accurate: liveness tradeoff, no auto-recovery);
+  tracked the proper PHY-gated deferred re-init as #185 (delicate ISR concurrency + hard to validate).
+- **Linux `0006-media-aspeed-video` — FALSE POSITIVE (conf-92 "critical"), disproved by verification.** The
+  agent claimed the G3 AUTO_COMP fix is a no-op because `aspeed_video_init_regs()` "unconditionally sets
+  AUTO_COMP" so the (patched) conditional get_resolution write (clear=0) can't clear it. VERIFIED against the
+  ACTUAL built driver: build-kernel.sh clones **fresh mainline v6.6.70**; in v6.6.70 `init_regs` does NOT
+  write VE_SEQ_CTRL at all (grep: AUTO_COMP appears ONLY at the #define + the conditional line 1275; the
+  patch doesn't add/remove any init_regs VE_SEQ_CTRL write), and update_regs' seq_ctrl never gets AUTO_COMP.
+  So get_resolution is the ONLY AUTO_COMP setter and the conditional fix is correct + SUFFICIENT. The agent
+  reasoned against a different kernel version. NO CHANGE — the patch is right. (Lesson: a confidence-92
+  finding with a plausible scenario was wrong at its root; a 10-second grep of the vendored tree — "does
+  init_regs actually touch VE_SEQ_CTRL?" — disproved it. Verify findings against the code that ACTUALLY
+  builds, not a different upstream.)
+
+**Gate-(b) status:** the substantial developed-code sweep is now essentially COMPLETE — Zephyr stack, QEMU
+sensor/gpio/SoC/SDMC/video models, ALL Linux patches (clk/irqchip/i2c/ftgmac/kcs/pinctrl/hwmon/media-video/
+usb-vhub), ALL U-Boot patches — reviewed. Tally of the whole sweep: 3 real bugs fixed (GPIO-irq ×2, RTC
+hardening), 1 real finding comment-fixed + tracked (#185 vhub), 1 false-positive caught, everything else
+clean. Only the DTS files + the generic-upstream QEMU models (not project code) remain unreviewed.
+
 ## 2026-07-20 — gate-(b): 5 more bodies self-reviewed (4 Linux patches + U-Boot p2a-dram) — all CLEAN
 
 Continued the gate-(b) sweep over the small self-contained diffs (efficient to self-review honestly, as done
