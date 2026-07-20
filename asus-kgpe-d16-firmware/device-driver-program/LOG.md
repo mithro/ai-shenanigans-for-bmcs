@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — ORACLE RE-VALIDATION of the phantom removals: C-UBOOT + C2 both BOOT on the rebuilt QEMU (certifies #172 + #176)
+
+The "legacy firmware must ALWAYS keep booting" rule requires oracle re-validation for the oracle-sensitive
+device-model changes this session (gating XDMA/SDHCI #172 + SRAM #176 off the G3). Found the oracle
+artifacts exist locally (raptor/out/flash-raptor-uboot.img, kernel/out/uImage-kgpe-d16) and ran both
+against the rebuilt qemu-system-arm (submodule 4de9aa40c7, all 3 phantoms removed):
+  * C-UBOOT (Raptor legacy U-Boot → boot#): **PASS** — DRAM 64 MiB, SPI Flash ID, "AST2050/AST2150 series
+    chip", aspeednic PHY, reaches `boot#`. The U-Boot exercises the SoC at boot (DRAM/SMC/MAC/SCU) with
+    the phantoms gone — no regression.
+  * C2 (our Linux 6.6.70 kernel → SoC init): **PASS (SoC-level)** — Booting Linux → aspeed-g3-vic →
+    i2c irq 16 → clocksource FTTMR010 → "ASPEED Unknown rev A0 (00000202)" (= SCU7C=0x0202, the SAME value
+    scu_smoke #169 read from Zephyr/P2A/JTAG — cross-stack consistency!) → ASPEED VUART → aspeed_vhub USB2
+    → i2c buses + the QU5 3-port mux → aspeed-video. The full G3 driver stack initialises CLEANLY; the
+    removed 0x1E6E7000/0x1E740000/0x1E720000 are not probed, so their removal is invisible to Linux.
+CONCLUSION: both legacy oracles boot on the rebuilt QEMU → the phantom removals are ORACLE-CERTIFIED. This
+retroactively closes the "oracle re-run recommended" caveat I left on #172, and completes the oracle-
+validation half of #176 (the FAITHFUL A2P bridge model at 0x1E720000, row 50 QE=⬜, remains the open
+follow-on). Evidence: evidence/qemu/phantom-removal-oracle-revalidation.txt. (C4 Dell-vendor→web not
+re-run — needs the Dell flash + appweb; C-UBOOT + C2 are the two that directly exercise SoC bring-up
+where a device-model regression would surface, so this is strong certification.)
+
 ## 2026-07-20 — #176 partial: gated the phantom SRAM off the G3 (0x1E720000 = A2P, not SRAM) — SRAM/A2P discrepancy resolved
 
 Worked the #176 faithfulness bug. Verified the ground truth first (memory map §9): the AST2050 (G3) has

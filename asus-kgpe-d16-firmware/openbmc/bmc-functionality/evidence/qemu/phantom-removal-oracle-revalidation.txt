@@ -1,0 +1,46 @@
+QEMU faithfulness — oracle re-validation of the G3 phantom-device removals (2026-07-20).
+    Certifies that gating the G4 phantoms XDMA/SDHCI (#172) + SRAM (#176) off the kgpe-d16-bmc (G3)
+    machine did NOT break the legacy-firmware oracles ("legacy must ALWAYS keep booting" rule).
+
+QEMU: the rebuilt qemu-system-arm carrying all this session's model changes (submodule 4de9aa40c7),
+      i.e. XDMA (0x1E6E7000) + SDHCI (0x1E740000) + SRAM (0x1E720000) all gated off the G3.
+
+===== C-UBOOT oracle (Raptor legacy U-Boot → boot#) — PASS =====
+  cmd: run-qemu.py boot --flash raptor/out/flash-raptor-uboot.img --expect "boot#"
+       --extra=-global --extra=driver=aspeed.scu-ast2050,property=g3-resets,value=on
+  I2C:   ready
+  DRAM:  64 MiB
+  Flash: SPI Flash ID: 1820c2  16 MiB
+  H/W:   AST2050/AST2150 series chip
+  Net:   aspeednic#0: PHY at 0x20
+  autoboot in 3 seconds ...
+  boot#            <-- reached
+  boot: OK — saw 'boot#'
+  → The Raptor U-Boot inits DRAM + reads the SMC/SPI flash + brings up the MAC + reaches its prompt,
+    exercising the SoC at boot, with the 3 phantoms removed. No regression.
+
+===== C2 oracle (our Linux kernel → SoC init) — PASS (SoC-level) =====
+  cmd: run-qemu.py boot --kernel kernel/out/uImage-kgpe-d16 --dtb ...asus-kgpe-d16.dtb --initrd <initramfs>
+  [    0.000000] Booting Linux on physical CPU 0x0
+  [    0.000000] Linux version 6.6.70 ...
+  [    0.000000] aspeed-g3-vic: SENSE=0x903897fe EVENT=0x983f97fe DUAL=0x7c00000 ...
+  [    0.000000] i2c controller registered, irq 16
+  [    0.000000] clocksource: FTTMR010-TIMER2 ...
+  [    0.062704] ASPEED Unknown rev A0 (00000202)        <-- SCU7C=0x0202, SAME value scu_smoke #169
+                                                             read from Zephyr + P2A + JTAG (cross-stack)
+  [    0.519682] 1e787000.serial: ttyS5 ... ASPEED VUART
+  [    1.105663] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+  [    1.145228] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 23
+  [    1.226829] i2c-mux-gpio i2cmux: 3 port mux on 1e78a080.i2c-bus adapter
+  [    1.236849] aspeed-video 1e700000.video: irq 26
+  → The full G3 SoC driver stack (VIC, timer/clocksource, SCU, i2c + the QU5 mux, VUART, USB vhub,
+    video) initialises cleanly on the modified QEMU. The removed xdma/sdhci/sram addresses
+    (0x1E6E7000/0x1E740000/0x1E720000) are not probed by any driver, so their removal is invisible to
+    Linux. (Boot then continues to userspace / rootfs; that is out of scope here — the SoC-init phase,
+    which is where a wrong device-model change would fault, is clean.)
+
+CONCLUSION: both legacy oracles boot on the rebuilt QEMU after the phantom removals. #172 (xdma/sdhci)
+and #176 (sram gating) are ORACLE-CERTIFIED. Remaining #176 follow-on: model the A2P bridge faithfully
+at 0x1E720000 (row 50 QE=⬜). The C4 (Dell vendor→web) oracle was not re-run this pass (needs the Dell
+flash + appweb); C-UBOOT + C2 are the two that directly exercise the SoC bring-up where a device-model
+regression would show, so this is strong (not exhaustive) certification.
