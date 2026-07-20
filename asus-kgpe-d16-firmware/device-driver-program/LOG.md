@@ -1,5 +1,42 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b) code review of the Zephyr GPIO-interrupt driver: 2 REAL latent bugs found + fixed
+
+Advanced completion-gate (b) ("full code reviews of all developed code, no issues") on the most substantial
+code written this session that hadn't been independently reviewed since I wrote it — the #177 Zephyr GPIO
+interrupt driver `zephyr/drivers/gpio/gpio_aspeed_g3.c` (shared-ISR design). Dispatched ONE focused
+code-reviewer sub-agent (well under the 5-agent cap) with the hardware/design context, then VERIFIED both
+findings myself against the code before fixing (the discipline that caught 4 real bugs earlier this session).
+
+Both findings were REAL (not style):
+1. **manage_callback races the shared ISR (High).** Every other accessor takes `data->lock` (which masks the
+   GPIO IRQ on this single-core ARM926, excluding the ISR), but `gpio_aspeed_g3_manage_callback` called
+   `gpio_manage_callback` — a multi-step non-atomic slist mutation — with NO lock, while the shared ISR walks
+   the SAME list via `gpio_fire_callbacks`. A runtime `gpio_add/remove_callback` on a bank with an active
+   interrupt can corrupt the list / drop a callback / crash on a mid-unlink node. FIX: wrap the call in the
+   existing spinlock (matches every other path; `gpio_manage_callback` doesn't block or re-enter → no
+   deadlock).
+2. **Disable doesn't clear the pin's latched INT_STATUS (Med-High).** The ENABLE path discards the stale
+   latch before enabling (existing line), but the DISABLE branch only cleared INT_ENABLE. INT_STATUS and
+   INT_ENABLE are independent, so a disabled-but-already-latched pin gets spuriously re-delivered when a
+   SIBLING pin in the same set later interrupts (the shared ISR reads/clears/dispatches the whole INT_STATUS
+   word), and `get_pending_int` misreports it. FIX: clear the pin's INT_STATUS bit on disable too (symmetry
+   with the enable path).
+
+The reviewer also explicitly CHECKED-AND-CLEARED (documented) the SENS mapping, the enable-path write
+ordering, the out_shadow RMW paths, the bounds checks, the registry silent-drop (dead code — only 7 sets),
+and the inherent W1C edge race — so the review was thorough, not just the two hits.
+
+**Verification of the fixes (honest scope):** both are compile-safe by inspection (every symbol is already
+used elsewhere in this same file; fix 2's added write is byte-identical to the enable-path line) and are
+isolated from the validated `gpioh2_irq_smoke` measured path (it adds its callback once before enabling —
+fix 1 uncontended there — and only hits disable AFTER the PASS check — fix 2 post-measurement), so no
+regression. I did NOT re-run the QEMU smoke this cycle: no west workspace is present in this worktree (the
+`asus-kgpe-d16-firmware/zephyr/` tree is a Zephyr MODULE; a rebuild needs a multi-GB `west init/update`).
+Tracked that rebuild + a NEW smoke that positively exercises the two fixed paths as **#179** — not skipped,
+explicitly deferred. #177 ZQ stays ✅ (the validated edge→callback functionality is unchanged; these harden
+latent bugs the smoke didn't reach).
+
 ## 2026-07-20 — row 38 WDT LU 🔶→✅: userspace-ARMED WDT resets the SoC (6/6 reboot cycles) — the full LU deliverable
 
 Completed the WDT userspace validation from 🔶→✅ by proving the missing half (a userspace-*triggered* SoC

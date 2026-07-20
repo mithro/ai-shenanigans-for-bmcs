@@ -294,6 +294,15 @@ static int gpio_aspeed_g3_pin_interrupt_configure(const struct device *dev,
 	if (sens < 0) {
 		sys_write32(sys_read32(cfg->base + GPIO_G3_INT_ENABLE) & ~bit,
 			    cfg->base + GPIO_G3_INT_ENABLE);
+		/*
+		 * Also clear any already-latched status for this pin (symmetry with
+		 * the enable path's stale-latch discard below). INT_STATUS and
+		 * INT_ENABLE are independent: gating ENABLE does not retroactively
+		 * clear a latched bit, so without this a sibling pin's later
+		 * interrupt would re-deliver this disabled pin (the shared ISR
+		 * reads/clears/dispatches the whole INT_STATUS word).
+		 */
+		sys_write32(bit, cfg->base + GPIO_G3_INT_STATUS);
 	} else {
 		uint32_t s0 = sys_read32(cfg->base + GPIO_G3_INT_SENS_0);
 		uint32_t s1 = sys_read32(cfg->base + GPIO_G3_INT_SENS_1);
@@ -318,8 +327,20 @@ static int gpio_aspeed_g3_manage_callback(const struct device *dev,
 					  struct gpio_callback *cb, bool set)
 {
 	struct gpio_aspeed_g3_data *data = dev->data;
+	k_spinlock_key_t key;
+	int ret;
 
-	return gpio_manage_callback(&data->callbacks, cb, set);
+	/*
+	 * Take data->lock (which masks the shared GPIO IRQ on this single-core
+	 * target) so the multi-step slist mutation in gpio_manage_callback cannot
+	 * be preempted by the shared ISR walking the SAME list via
+	 * gpio_fire_callbacks — every other accessor in this driver relies on the
+	 * same lock to exclude the ISR.
+	 */
+	key = k_spin_lock(&data->lock);
+	ret = gpio_manage_callback(&data->callbacks, cb, set);
+	k_spin_unlock(&data->lock, key);
+	return ret;
 }
 
 static uint32_t gpio_aspeed_g3_get_pending_int(const struct device *dev)
