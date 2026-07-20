@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — INTEGRITY sweep: independent audit found 3 MORE bind-only over-claims (all corrected)
+
+The RTC over-claim (below) exposed a class — "✅ resting on the driver binding / a model existing, not on a
+functional result" — so I dispatched an independent sub-agent to hunt the same pattern across every
+QEMU/userspace/Zephyr ✅ cell. It audited ~25 cells against their evidence and found exactly THREE more,
+now corrected:
+- **Row 19 DIMM TSOD, LQ ✅→Ⓝ (HIGH, near-exact RTC twin):** the ✅ rested on "the jc42 model file exists",
+  but the machine deliberately does NOT instantiate a jc42 on this rig (0x19 NAKs faithfully). LS/LU/ZS
+  were already Ⓝ → LQ must be Ⓝ. Internally-inconsistent ✅ removed.
+- **Row 5 LPC POST-snoop, LQ ✅→🔶 (MEDIUM):** rested on the `aspeed-lpc-snoop` driver binding +
+  `/dev/aspeed-lpc-snoop0` being created — NO POST byte is ever captured in the host-less QEMU machine
+  (self-disclosed by scripts/lpc-test.py). BMC-side bind done → 🔶, not ✅.
+- **Row 6 LPC vUART, LQ ✅→🔶 (MEDIUM):** rested on `8250_aspeed_vuart` binding + ttyS5 appearing — no
+  host-visible vUART byte transferred (needs a host LPC master QEMU lacks). → 🔶.
+
+CRUCIALLY the audit was DISCRIMINATING, not reflexive: it CONFIRMED row 3 (LPC KCS) — which ALSO uses a G4
+compatible (`aspeed,ast2400-kcs-bmc-v2`) on the G3 — is genuinely FUNCTIONAL (ODR3 write 0x5A→readback
+0x5A + LADR/HICR programmed + silicon host `mc info` answered). So "G4 driver on G3" is not automatically an
+over-claim (RTC was, KCS wasn't) — each needs a functional check, which is exactly the point. Every other
+audited ✅ cell (DDR2, SPI-ID, eth, I2C/W83795/SPD/FRU/W83601G/SB-TSI/PSU/power/LEDs/straps/SCU/VIC/timer/
+WDT/RTC-ZQ/USB) carries real functional evidence. Regenerated the tally after the 3 glyph changes.
+
 ## 2026-07-21 — INTEGRITY: caught + corrected an RTC Linux-stack OVER-CLAIM (row 39 LQ ✅ → ⬜)
 
 While scoping the #187 Linux stack I found — and empirically confirmed — a real OVER-CLAIM in the trackers
