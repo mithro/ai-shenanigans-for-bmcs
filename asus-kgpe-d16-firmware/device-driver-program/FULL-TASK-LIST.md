@@ -47,7 +47,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [x] QEMU: SMC model (SPI CS0/CS2, m25p80)
 - U-Boot: [x] QEMU (Raptor SMC) · [B] silicon (**rig limitation, NOT N/A: the SMC/SPI *is* the board's boot device by design, but the socketed flash is not populated/wired on this rig, so boot is JTAG+TFTP and the SMC read path is untestable here. Confidence: driver is correct in QEMU; blocker is the rig's missing flash, fixable by populating BMC_FW1**)
 - Linux: [x] QEMU (spi-nor/MTD) · [B] silicon (same rig limitation — no BMC-attached flash to bind spi-nor to) · [ ] userspace MTD write path (`/dev/mtd*`) — QEMU-side TODO
-- Zephyr: [ ] QEMU (spi-nor) · [B] silicon (same rig limitation)
+- Zephyr: [ ] QEMU (spi-nor) · [ ] silicon (no Zephyr spi-nor driver written yet, so this is todo, NOT merely rig-blocked — unlike U-Boot/Linux which HAVE a driver that the empty socket blocks; matrix row 2 ZS = ⬜)
 
 ### A4. VIC — interrupt controller 0x1e6c0000 (§ implied; datasheet §16)
 - [x] QEMU: faithful G3 VIC (TYPE_ASPEED_2050_VIC, single-bank, sense/dual/event)
@@ -283,19 +283,19 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - [~] QEMU: aspeed GPIO inputs modeled; the full §11 signal-map wiring (incl. the three added inputs) is incomplete — needs DTS `gpio-line-names` + input nodes
 - U-Boot: [N] (platform-event monitoring is an OS function)
 - Linux: [~] QEMU · [ ] silicon (**needs DTS `gpio-line-names` exposing these balls as GPIO inputs + a reboot; on 2026-07-18 a `/sys/kernel/debug/gpio` dump on silicon showed only `bmc-ctl-lockout-n` named — the §11 monitor pins are not yet line-named/exported, several are in TACH alt-mode**) · [ ] userspace (gpio sysfs / gpio-keys)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [~] QEMU (generic aspeed GPIO input driver reads a pin — evidence `d14-zephyr/06`; the specific §11 monitor pins pending) · [~] silicon (generic Zephyr GPIO silicon INPUT-read proven — evidence `d14-zephyr/15`, GPIOH2 PASS; specific monitor pins pending) — matrix row 28 ZQ/ZS = 🔶/🔶
 
 ### E3. LEDs — BMCRDY/CPUERR/MLED/ID (§13)  ✅ silicon+userspace this session
 - [~] QEMU: LED GPIOs present; DTS `gpio-leds` nodes (a QEMU toggle-observe test would confirm ✅)
 - U-Boot: [N] (front-panel LEDs are an OS/runtime function)
 - Linux: [~] QEMU · [x] **silicon (`echo 1 > /sys/class/leds/identify/brightness` flips the real GPIO led-id-n out hi→lo, `echo 0` back; the leds-gpio driver drives the real AST2050 GPIO — evidence e-gpio-leds/00)** · [x] userspace (`/sys/class/leds/*/brightness`)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [~] QEMU (generic aspeed GPIO OUTPUT driver — evidence `d14-zephyr/06`; per-LED toggle-observe test pending) · [ ] silicon (Zephyr output-drive-on-silicon not captured — the silicon LED-drive proof above is the *Linux* leds-gpio path, not Zephyr) — matrix row 32 ZQ/ZS = 🔶/⬜
 
 ### E4. Straps — IPMI_SEL/IKVMEN#/SOLEN# + SCU70 measured (§13)
 - [x] QEMU: measured HW_STRAP1 = 0x00819582; pinctrl G3 strap-phantom patch 0008
 - U-Boot: [x] QEMU · [x] silicon (SCU70 read == 0x00819582)
 - Linux: [x] QEMU · [x] silicon (pinctrl binds, mux selects work) · [N] userspace (straps not a userspace ABI)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [~] QEMU (generic aspeed GPIO INPUT driver — evidence `d14-zephyr/06`) · [~] silicon (generic Zephyr GPIO silicon input-read proven — evidence `d14-zephyr/15`; specific strap pins pending) — matrix row 33 ZQ/ZS = 🔶/🔶
 
 ### E5. Platform-control OUTPUT lines — CLRTC#/BIOSREVRY#/CPU1-2DISABLE#/PCI_RST#/ATXPSON#/SYSRESET# + RESETDIS#/PWRBNTDIS#/BRST# (§11 + per-pin netlist)
 (the discrete BMC-driven control signals beyond the E1 power-latch: `AST_CLRTC#`
@@ -314,7 +314,7 @@ pin the B2/B3b PCI-target model must generate)**)
   observed effect — CLRTC# clears CMOS, CPUxDISABLE# gates a socket, PCI_RST#
   resets the SB PCI. Achievable via sysfs GPIO on silicon + a host to observe;
   undone, not blocked**) · [ ] userspace (`/sys/class/gpio` per-line)
-- Zephyr: [ ] QEMU · [ ] silicon
+- Zephyr: [~] QEMU (generic aspeed GPIO OUTPUT driver — evidence `d14-zephyr/06`; per-signal drive-observe pending) · [ ] silicon (Zephyr output-drive-on-silicon not captured) — matrix row 29 ZQ/ZS = 🔶/⬜
 
 ### E6. Unidentified + test/reset pins (§13 + per-pin netlist)  [added: gate-(d) round-2 enumeration audit 2026-07-18]
 - [ ] **GPIOE6/GPIOE7 ↔ SP5100** (balls U4/U3, nets N85607608/N85622904 → NQ5/NQ6/SR137/SR157/SU1[AE18,B8]): two unidentified BMC↔southbridge GPIO handshake signals. RE the function from the netlist (sibling of the D13 unidentified-responder open item), then model or dispose. Currently untracked.

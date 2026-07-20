@@ -1,5 +1,51 @@
 # Device-driver program — running log
 
+## 2026-07-20 — Independent audit (sub-agent) of Zephyr matrix cells vs evidence → applied 7 verified corrections (both over- and under-stated)
+
+After manually catching the row-30 mis-claim, launched ONE independent read-only sub-agent to
+cross-check EVERY Zephyr ZQ/ZS matrix cell against the captured evidence + sample sources (a gate-(a)/(d)
+step). It returned 9 findings; I VERIFIED each against the actual evidence files before applying (the
+agent is advisory — I re-read evidence 07/09/10/15 to confirm its quotes were accurate, which they
+were). Applied the confirmed ones:
+
+UNDERSTATED (same class as row 30), fixed by the matrix's OWN generic-driver convention now that the
+silicon side exists:
+  * row 28 (platform MONITORS, INPUT reads) ZS ⬜→🔶 — evidence `15` proves the Zephyr GPIO driver
+    reads a real bonded input pin on live silicon (GPIOH2 PASS); generic silicon input-read proven,
+    specific pins pending (exactly the basis ZQ=🔶 already used).
+  * row 33 (straps, INPUT reads) ZS ⬜→🔶 — same basis.
+  * KEPT ⬜ (honest): row 29 (control) + row 32 (LEDs) are OUTPUT rows; evidence `15` is read-only, so
+    Zephyr output-drive-on-silicon is NOT proven — did NOT upgrade (the silicon LED-drive proof is the
+    *Linux* path, not Zephyr). row 27 ZS stays ⬜ (smoke FAILs, #162).
+
+INTERNAL-CONSISTENCY (ZS=✅ ⟹ ZQ can't be merely partial) + complete QEMU evidence:
+  * row 15 (I2C controller) ZQ 🔶→✅ — evidence `07` is a COMPLETE START/write/rSTART/read/STOP pass,
+    and ZS already ✅. (Slave/target mode = separate capability #164.)
+  * row 16 (W83795 hwmon) ZQ 🔶→✅ — evidence `09` `fan1=2641 … PASS`; ZS already ✅.
+  * row 23 (SB-TSI) ZQ 🔶→✅ — evidence `10` `SBTSI 45.500 C PASS` in QEMU; ZS stays ⬜ (host-gated).
+
+OVERSTATED (the opposite error — fixed by verify-and-capture, NOT by hiding):
+  * row 27 (power) ZQ was ✅ by ASSERTION only (audit finding 9). I BUILT+RAN power_smoke in QEMU and
+    captured it: `POWER RESULT: PASS`, GPIOH2 0→1→0 — evidence `d14-zephyr/20-power-qemu.txt`. ZQ=✅
+    is now evidence-backed. (Did not downgrade — the claim was true, just uncaptured.)
+
+MATRIX↔FULL-TASK-LIST reconciles (the docs' header requires agreement): FULL E2/E3/E4/E5 (rows
+28/29/32/33) Zephyr `[ ] QEMU` understated the generic driver → set to `[~]` matching matrix ZQ=🔶,
+with the input/output silicon split applied (E2/E4 → [~] silicon, E3/E5 → [ ]). FULL A3 (row 2 SPI)
+`[B] silicon` → `[ ]` (Zephyr has NO spi-nor driver, so it's todo not rig-blocked — unlike U-Boot/Linux
+which have a driver the empty socket blocks; matches matrix ZS=⬜).
+
+DEFERRED (reviewed, deliberately NOT changed): audit finding 7 (row 1 DDR2 ZQ ⬜ vs FULL [x] "runs from
+DDR2") is a genuine labeling nuance — the loader (U-Boot/JTAG) inits SDMC and Zephyr merely USES the
+RAM; there is no Zephyr SDMC "driver" to validate, so both docs state different true things. Left as-is
+pending a decision on whether a memory-controller warrants a driver cell at all. Finding 8 handled via
+the FULL A3 reconcile above (kept matrix ⬜, corrected FULL).
+
+Tally regenerated: Zephyr@QEMU 12✅/5🔶/21⬜ (was 9/8/21), Zephyr@silicon 9✅/4🔶/24⬜ (was 9/2/26);
+embedded block updated. Net: +3 QEMU ✅ (evidence-backed reconciles), +2 silicon 🔶 (real evidence),
++1 QEMU transcript captured (row 27), 0 unbacked claims remaining in the audited set. No finding was
+applied without re-verifying the underlying evidence.
+
 ## 2026-07-20 — Correction: row 30 (UART console) Zephyr-silicon ⬜ → 🔶 (it was a false "not-existing" claim)
 
 The goal warns that incorrect "functionality-not-existing" claims have been made — found one. Row 30

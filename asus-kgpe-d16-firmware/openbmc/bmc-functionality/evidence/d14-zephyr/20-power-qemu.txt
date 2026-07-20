@@ -1,0 +1,38 @@
+D14 Zephyr — Power control (row 27) QEMU validation (2026-07-20).
+    Backs the row-27 ZQ = ✅ claim with a CAPTURED transcript (previously asserted-only — an
+    independent audit flagged it as an evidence gap; this closes it by verify-and-capture).
+
+Device: KGPE-D16 BMC power-sequence GPIOs (DEVICE-MATRIX row 27), driven by the Zephyr AST2050
+GPIO driver (drivers/gpio/gpio_aspeed_g3.c) over the QEMU kgpe-d16-bmc pwrseq model
+(hw/gpio/aspeed_gpio.c aspeed_gpio_kgpe_d16_pwrseq).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/power_smoke
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n
+Run:    qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-pwr/zephyr/zephyr.elf
+
+Signals exercised (soc §11 power seq):
+  GPIOA4  ASUS_BMC_CTL_LOCKOUT_N  out  HIGH = "BMC in control" (reclaimed from PHYLINK alt-fn)
+  GPIOB1  CTL_REQ_POWERUP_N       out  active-low power-up request
+  GPIOF0  CTL_REQ_POWERDOWN_N     out  active-low force-off request
+  GPIOH2  STA_LINE_POWER          in   1 = host powered, 0 = off (feedback)
+
+PASS gate: GPIOH2 observed 0 (off) -> 1 (after power-ON request) -> 0 (after force-OFF request) —
+i.e. the Zephyr GPIO driver both DRIVES the power-request outputs and READS the resulting power-
+state feedback, and the QEMU pwrseq latch tracks it.
+
+===== CAPTURED CONSOLE (QEMU) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+POWER: H2 start=0
+POWER: io_ok=1 H2 start=0 ever-high post-ON=1 post-OFF=0
+POWER RESULT: PASS (GPIOH2 tracks host power)
+
+Decode: io_ok=1 (all GPIO get/set/configure calls returned 0), H2 start=0 (host initially off),
+ever-high post-ON=1 (after the power-up request the pwrseq latched GPIOH2=1 = powered), post-OFF=0
+(after the force-off request GPIOH2 returned to 0 = off). Full 0->1->0 trajectory => PASS.
+
+RESULT: PASS in QEMU. Row 27 ZQ = ✅ is now EVIDENCE-BACKED (was assertion-only per the audit).
+
+Both-sides status (honest): ZS (silicon) is NOT ✅ and is deliberately left ⬜ — on real silicon the
+Zephyr power_smoke OUTPUT actuation works (it drives the real board power 4W<->97W, see LOG
+2026-07-18/kgpe-power) but the automated smoke RESULT is FAIL because the GPIOH2 feedback READ is a
+mis-modeled standby-rail sense (tracked as #162). A FAILing smoke is not a partial-pass, so ZS stays
+⬜ until #162 makes the feedback read correct. This QEMU evidence backs ZQ only; it does not claim ZS.
