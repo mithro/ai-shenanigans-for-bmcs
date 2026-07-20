@@ -82,8 +82,11 @@ ack-at-entry, enable-glitch tick, entry staleness — commits 918bc7e/b84ef58/78
 **Remaining frontiers:** RTC (39) — **LS now ✅ on real silicon (2026-07-21): Linux set/get +
 wakealarm PASS** once the driver was fixed to CLEAR SCU08[16] (bit16=0/32.768kHz source is what
 runs under U-Boot's clock config; forcing bit16=1 was MY regression that froze the counter) and to
-poll CONTROL[5] restart-busy in set_time (evidence 30). ZS stays 🔶: the bare-metal Zephyr boot has
-no 32kHz path so its driver still needs bit16=1, and the crystal-less counter isn't true 1 Hz (#158); host power-control (27) works in QEMU + the force-OFF drives real silicon but the
+poll CONTROL[5] restart-busy in set_time (evidence 30). **RATE CLAIM CORRECTED (evidence 31): with
+bit16=0 the RTC keeps EXACT real time (silicon 20 s window = 1.00x) — the "732x can't do real-time"
+line (#158/#186) was a bit16=1 test-tap artifact; the board IS a real-time clock.** ZS stays 🔶 only
+because the Zephyr driver still forces bit16=1 (732x) — a bit16=0 retest may make ZS real-time.
+host power-control (27) works in QEMU + the force-OFF drives real silicon but the
 GPIOH2 feedback read needs work (#162); SB-TSI (23) needs the host CPU powered (#150); the
 **4 QEMU ⬜** (DDC/EDID, LPC-mailbox, SOL-mux, SMBus-ALERT); and the broad Zephyr breadth gap
 (ZS 27 ⬜). Open faithfulness notes: GPIO-input-readback silicon-vs-QEMU (IJKL floating; and
@@ -514,11 +517,20 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   interrupts=<22>. **Both fixes make the model FAITHFUL** — a byte-packed or source-26 alarm now FAILS
   in QEMU too. RE-VALIDATED: SILICON Zephyr alarm `fires=1` PASS; QEMU Zephyr alarm + Linux wakealarm
   + dev/mem rtcalarm all PASS on VIC 22. **So the RTC alarm now fires end-to-end on real silicon —
-  the Zephyr-alarm ZS deliverable is DONE** (the row-39 ZS 🔶 remains only for the crystal-less
-  non-real-time RATE, a documented hardware constraint, NOT the alarm).
-  The ZS 🔶 reflects that true real-time 1 Hz is physically impossible on this crystal-less
-  board — the documented hardware constraint. RTC04-layout is now RESOLVED (field-packed, silicon);
-  the COUNTER bit-layout at a minute-wrap is still #186-open (a separate question). D11.
+  the Zephyr-alarm ZS deliverable is DONE**.
+  **LS ✅ + RATE-CLAIM CORRECTED (2026-07-21, `evidence/d14-zephyr/30`+`31`):** the Linux RTC now
+  PASSES on real silicon — `set 12:45:30 → read 12:45:41` set/get + wakealarm (VIC22) both PASS —
+  after fixing the driver to CLEAR SCU08[16] and poll CONTROL[5] restart-busy (an earlier driver
+  revision forcing bit16=1 was MY regression that froze the counter). **And the "732x / can't do
+  real time" claim (#158/#186) is WRONG:** a clean 20 s register-level silicon measurement with
+  **bit16=0** gave **delta=21 over 21.0 s = 1.00x = EXACT REAL TIME** (evidence 31). The internal
+  32.768 kHz source works; 732x only applies to bit16=1 (the "test only" 24 MHz tap Zephyr forces).
+  So the board IS a real-time clock for HH:MM:SS + a day counter (the ONLY real HW limit is the
+  absent month/year register — a register-map limit, not a clock-rate one). **ZS stays 🔶** only
+  because the Zephyr driver still uses bit16=1 (732x) — a retest with bit16=0 + the CONTROL[5]
+  load-wait (the bare-metal "bit16=0 → no clock" was likely the same async-load misread) may reach
+  a real-time ZS ✅. RTC04-layout RESOLVED (field-packed, silicon); COUNTER minute-wrap still #186.
+  QEMU-rate-tracks-bit16 faithfulness = #194-adjacent follow-up. D11.
 - **40** the VP*/TACH* balls are GPIO monitors on this board; fans are on the W83795G FANCTL, not the AST2050 PWM → Ⓝ board-disposition (SoC model is complete). D13.
 - **41** ADC — **CORRECTED (2026-07-18 honesty/faithfulness audit): the AST2050 (G3) has
   NO ADC block at all.** The repo's own authoritative datasheet extract `qemu-model/
