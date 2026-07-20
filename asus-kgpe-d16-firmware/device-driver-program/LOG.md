@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 24 LQ (Linux pmbus @0x58): attempted, REVERTED the DT node — model STATUS-read must be fixed first (honest, tracked #165)
+
+Executed the auditor's flagged "easy win" (row 24 LQ = Linux generic `pmbus` hwmon vs the QEMU-modeled
+PSU on engine 0). Added a DT node `psu@58 { compatible="pmbus"; }` under i2c@0 + a `pmbustest` initramfs
+gate, rebuilt kernel/dtb (24532→24584) + initramfs, and ran it (commit a7e1383).
+RESULT — PARTIAL: the generic `pmbus` driver DID match + probe (`pmbus 14-0058` client created), but its
+identify **FAILED**: `pmbus 14-0058: PMBus status register not found`. hwmon list = only w83795 + 2×sbtsi.
+DIAGNOSIS (not yet root-caused): Linux `pmbus_init_common` (pmbus_core.c) reads STATUS_BYTE with page 0xff
+first (which needs a PMBUS_PAGE=0xff write, an all-pages selector some models reject), then falls back to
+STATUS_WORD (0x79) on page 0. The QEMU base class (hw/i2c/pmbus_device.c:807-812) answers STATUS_WORD/BYTE
+with the seeded `status_word=0`, and Zephyr READ_VOUT (0x8B, same engine-0 device, #170) works — so the
+basic word-read path is sound, yet the Linux identify STATUS read errors. Leading hypothesis: the
+PMBUS_PAGE=0xff write is NAK'd/mishandled by the model, poisoning the subsequent read; needs QEMU I2C
+transaction tracing to confirm.
+DECISION — REVERTED the DT node + gate (commit 773c78e): shipping a DT node whose driver can't bind adds a
+permanent benign `PMBus status register not found` line to EVERY Linux boot (rtclinux/wdttest/… logs), and
+the correct engineering order is **fix the model STATUS/PAGE path FIRST, then re-add the node so it
+validates**. The knowledge (this diagnosis) is the real output of the attempt; the non-binding config is
+not. Row 24 LQ stays ⬜ with the specific blocker recorded. CONFIDENCE I didn't just do something wrong:
+MODERATE — DT node/compatible/bus were correct (the client bound), but I have NOT proven model-gap vs
+transaction/config; it is a real blocker, not a hand-wave "impossible". Tracked under #165 (PSU-PMBus).
+
 ## 2026-07-21 — Gate-a/d completeness SWEEP (2 sub-agents): enumeration confirmed complete + 4 over-claims corrected
 
 Ran two independent completeness sub-agents for gates (a)+(d): one enumerating the authoritative schematic
