@@ -474,7 +474,15 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   `echo +5 > /sys/class/rtc/rtc0/wakealarm` arms it, the fast counter reaches it, QEMU raises VIC-26, the
   handler delivers RTC_AF and the core clears the one-shot (readback empty). Consumes the #187 QE alarm
   model. **LS stays ⬜** (silicon RTC via JTAG not yet run).
-  **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
+  **ZEPHYR ALARM also done (2026-07-21, #187, `d14-zephyr/26`):** the ZQ ✅ (which had covered
+  set/get only) now also includes the Zephyr `rtc_driver_api` alarm ops in `rtc_aspeed_g3.c`
+  (alarm_get_supported_fields=sec/min/hour, alarm_set_time→RTC04+CONTROL[1:3], alarm_get_time,
+  alarm_is_pending, alarm_set_callback) + a VIC-26 ISR (recurring, per the Zephyr contract — NOT
+  the Linux one-shot) + a k_spinlock guarding the CONTROL RMW. Validated in QEMU (rtc_smoke,
+  CONFIG_RTC_ALARM): armed 12:00:05 mask=0x07 → the ~732x counter reached it → VIC-26 → callback
+  (`alarm fires=1`) → `RTC-ALARM RESULT: PASS`. **ZS stays 🔶** (silicon Zephyr RTC — set/get runs
+  but not real-time, and the alarm via JTAG is not yet run).
+  The ZS 🔶 also reflects that true real-time 1 Hz is physically impossible on this crystal-less
   board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
   silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked
   as **#186** (needs a silicon minute-wrap test). D11.

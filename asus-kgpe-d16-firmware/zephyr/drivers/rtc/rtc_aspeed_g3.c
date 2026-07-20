@@ -50,6 +50,8 @@
 #include <errno.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/kernel.h>
+#include <zephyr/irq.h>
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
@@ -94,6 +96,37 @@
 #define RTC_G3_RESET_MAGIC   0x99U      /* RESET: clear all registers      */
 
 /*
+ * Alarm (datasheet §24, matches the faithful QEMU G3 model + the Linux
+ * rtc-aspeed counter-style driver): RTC04 (0x04) holds the alarm time-of-day,
+ * byte-packed [23:16]=hour [15:8]=min [7:0]=sec (no day/month/year — the same
+ * hardware limitation as the COUNTER). CONTROL[1:3] are the per-field alarm
+ * enables; the alarm fires (VIC source 26) when every ENABLED field of RTC04
+ * matches the live COUNTER. Day-alarm (CONTROL[4]) exists in hardware but is not
+ * exposed here — the counter's "day" is a free-running up-counter, not a
+ * calendar day (same reasoning as get_time), so we support sec/min/hour only.
+ */
+#define RTC_G3_ALARM          0x04U
+#define RTC_G3_CTRL_ALARM_SEC  BIT(1)
+#define RTC_G3_CTRL_ALARM_MIN  BIT(2)
+#define RTC_G3_CTRL_ALARM_HOUR BIT(3)
+#define RTC_G3_CTRL_ALARM_MASK (RTC_G3_CTRL_ALARM_SEC | RTC_G3_CTRL_ALARM_MIN | \
+				RTC_G3_CTRL_ALARM_HOUR)
+
+/*
+ * VIC source 26 = RTC alarm (memory map §10; edge/falling in the RE'd G3 VIC
+ * map, soc/aspeed_g3/ast2050/vic.c). Hardcoded like the GPIO driver's source
+ * 20 — the G3 VIC is not modelled as a DT interrupt-controller, so IRQs are
+ * connected by number. The framework's z_soc_irq_eoi() clears the latched edge,
+ * so the ISR only services the alarm.
+ */
+#define RTC_G3_IRQ            26
+#define RTC_G3_IRQ_PRIO       0
+#define RTC_G3_ALARM_ID       0         /* single hardware alarm */
+#define RTC_G3_ALARM_FIELDS   (RTC_ALARM_TIME_MASK_SECOND | \
+			       RTC_ALARM_TIME_MASK_MINUTE | \
+			       RTC_ALARM_TIME_MASK_HOUR)
+
+/*
  * Bound on the CONTROL[5] restart-busy poll. The load "needs about 0~3 seconds"
  * (datasheet §24.4.3), synchronised to the RTC clock; the loop exits the instant
  * hardware clears the bit, so this bound only caps the pathological "never
@@ -105,6 +138,29 @@
 struct rtc_aspeed_g3_config {
 	mem_addr_t base;
 };
+
+struct rtc_aspeed_g3_data {
+	/*
+	 * Serialises the CONTROL read-modify-write shared between the alarm ISR
+	 * (which the Zephyr contract does NOT auto-disable — see the ISR) and
+	 * process-context alarm ops, and guards the callback/pending state. A
+	 * spinlock (not a mutex): the critical sections are a couple of MMIO
+	 * accesses, and one holder is the hard-IRQ ISR.
+	 */
+	struct k_spinlock lock;
+#if defined(CONFIG_RTC_ALARM)
+	rtc_alarm_callback alarm_cb;
+	void *alarm_user_data;
+	bool alarm_pending;
+#endif
+};
+
+#if defined(CONFIG_RTC_ALARM)
+/* Single RTC instance; the ISR recovers the device from this (mirrors the GPIO
+ * driver's shared-ISR device registry). Set in init before irq_enable().
+ */
+static const struct device *rtc_g3_isr_dev;
+#endif
 
 static int rtc_aspeed_g3_set_time(const struct device *dev,
 				  const struct rtc_time *timeptr)
@@ -179,16 +235,197 @@ static int rtc_aspeed_g3_get_time(const struct device *dev,
 	return 0;
 }
 
+#if defined(CONFIG_RTC_ALARM)
+
+/*
+ * Alarm ISR (VIC source 26). Per the Zephyr RTC contract the alarm stays ARMED
+ * (recurring) until disabled via rtc_alarm_set_time(mask=0) — so, unlike the
+ * Linux one-shot handler, we do NOT clear the CONTROL alarm-enable bits here.
+ * We just deliver the event; the framework's z_soc_irq_eoi() clears the latched
+ * VIC edge, and the next COUNTER==RTC04 match re-latches a fresh edge.
+ */
+static void rtc_aspeed_g3_isr(const void *unused)
+{
+	const struct device *dev = rtc_g3_isr_dev;
+	struct rtc_aspeed_g3_data *data = dev->data;
+	rtc_alarm_callback cb;
+	void *user_data;
+	k_spinlock_key_t key;
+
+	ARG_UNUSED(unused);
+
+	key = k_spin_lock(&data->lock);
+	cb = data->alarm_cb;
+	user_data = data->alarm_user_data;
+	if (cb == NULL) {
+		/* No callback: latch pending for rtc_alarm_is_pending(). */
+		data->alarm_pending = true;
+	}
+	k_spin_unlock(&data->lock, key);
+
+	/* Contract: invoking the callback clears the pending status. Call it
+	 * OUTSIDE the lock (it may re-enter the driver, e.g. to disarm).
+	 */
+	if (cb != NULL) {
+		cb(dev, RTC_G3_ALARM_ID, user_data);
+	}
+}
+
+static int rtc_aspeed_g3_alarm_get_supported_fields(const struct device *dev,
+						    uint16_t id, uint16_t *mask)
+{
+	ARG_UNUSED(dev);
+
+	if (id != RTC_G3_ALARM_ID || mask == NULL) {
+		return -EINVAL;
+	}
+	*mask = RTC_G3_ALARM_FIELDS;
+	return 0;
+}
+
+static int rtc_aspeed_g3_alarm_set_time(const struct device *dev, uint16_t id,
+					uint16_t mask, const struct rtc_time *timeptr)
+{
+	const struct rtc_aspeed_g3_config *cfg = dev->config;
+	struct rtc_aspeed_g3_data *data = dev->data;
+	uint32_t reg = 0U, ctrl_bits = 0U, ctrl;
+	k_spinlock_key_t key;
+
+	if (id != RTC_G3_ALARM_ID) {
+		return -EINVAL;
+	}
+	if ((mask & ~(uint16_t)RTC_G3_ALARM_FIELDS) != 0U) {
+		return -EINVAL; /* unsupported field requested */
+	}
+	if (mask != 0U && timeptr == NULL) {
+		return -EINVAL;
+	}
+
+	/* Build RTC04 + the CONTROL enable bits from ONLY the enabled fields
+	 * (the others are don't-care in hardware). Range-check the enabled ones.
+	 */
+	if (mask & RTC_ALARM_TIME_MASK_SECOND) {
+		if (timeptr->tm_sec < 0 || timeptr->tm_sec > 59) {
+			return -EINVAL;
+		}
+		reg |= (uint32_t)timeptr->tm_sec;
+		ctrl_bits |= RTC_G3_CTRL_ALARM_SEC;
+	}
+	if (mask & RTC_ALARM_TIME_MASK_MINUTE) {
+		if (timeptr->tm_min < 0 || timeptr->tm_min > 59) {
+			return -EINVAL;
+		}
+		reg |= (uint32_t)timeptr->tm_min << 8;
+		ctrl_bits |= RTC_G3_CTRL_ALARM_MIN;
+	}
+	if (mask & RTC_ALARM_TIME_MASK_HOUR) {
+		if (timeptr->tm_hour < 0 || timeptr->tm_hour > 23) {
+			return -EINVAL;
+		}
+		reg |= (uint32_t)timeptr->tm_hour << 16;
+		ctrl_bits |= RTC_G3_CTRL_ALARM_HOUR;
+	}
+
+	key = k_spin_lock(&data->lock);
+	if (mask != 0U) {
+		sys_write32(reg, cfg->base + RTC_G3_ALARM);
+	}
+	/* RMW CONTROL: replace the alarm-enable bits, preserve everything else
+	 * (notably ENABLE[0]); never write 1 back to the RESTART status bit[5].
+	 */
+	ctrl = sys_read32(cfg->base + RTC_G3_CONTROL);
+	ctrl = (ctrl & ~(RTC_G3_CTRL_ALARM_MASK | RTC_G3_CTRL_RESTART)) | ctrl_bits;
+	sys_write32(ctrl, cfg->base + RTC_G3_CONTROL);
+	data->alarm_pending = false; /* (dis)arming clears any stale pending */
+	k_spin_unlock(&data->lock, key);
+
+	return 0;
+}
+
+static int rtc_aspeed_g3_alarm_get_time(const struct device *dev, uint16_t id,
+					uint16_t *mask, struct rtc_time *timeptr)
+{
+	const struct rtc_aspeed_g3_config *cfg = dev->config;
+	uint32_t reg, ctrl;
+
+	if (id != RTC_G3_ALARM_ID || mask == NULL || timeptr == NULL) {
+		return -EINVAL;
+	}
+
+	reg = sys_read32(cfg->base + RTC_G3_ALARM);
+	ctrl = sys_read32(cfg->base + RTC_G3_CONTROL);
+
+	*timeptr = (struct rtc_time){0};
+	timeptr->tm_sec = (int)(reg & 0xFFU);
+	timeptr->tm_min = (int)((reg >> 8) & 0xFFU);
+	timeptr->tm_hour = (int)((reg >> 16) & 0xFFU);
+	timeptr->tm_wday = -1;
+	timeptr->tm_yday = -1;
+
+	*mask = 0U;
+	if (ctrl & RTC_G3_CTRL_ALARM_SEC) {
+		*mask |= RTC_ALARM_TIME_MASK_SECOND;
+	}
+	if (ctrl & RTC_G3_CTRL_ALARM_MIN) {
+		*mask |= RTC_ALARM_TIME_MASK_MINUTE;
+	}
+	if (ctrl & RTC_G3_CTRL_ALARM_HOUR) {
+		*mask |= RTC_ALARM_TIME_MASK_HOUR;
+	}
+	return 0;
+}
+
+static int rtc_aspeed_g3_alarm_is_pending(const struct device *dev, uint16_t id)
+{
+	struct rtc_aspeed_g3_data *data = dev->data;
+	k_spinlock_key_t key;
+	bool pending;
+
+	if (id != RTC_G3_ALARM_ID) {
+		return -EINVAL;
+	}
+	key = k_spin_lock(&data->lock);
+	pending = data->alarm_pending;
+	data->alarm_pending = false; /* is_pending clears the status */
+	k_spin_unlock(&data->lock, key);
+
+	return pending ? 1 : 0;
+}
+
+static int rtc_aspeed_g3_alarm_set_callback(const struct device *dev, uint16_t id,
+					    rtc_alarm_callback callback, void *user_data)
+{
+	struct rtc_aspeed_g3_data *data = dev->data;
+	k_spinlock_key_t key;
+
+	if (id != RTC_G3_ALARM_ID) {
+		return -EINVAL;
+	}
+	key = k_spin_lock(&data->lock);
+	data->alarm_cb = callback;
+	data->alarm_user_data = user_data;
+	k_spin_unlock(&data->lock, key);
+
+	return 0;
+}
+
+#endif /* CONFIG_RTC_ALARM */
+
 static const struct rtc_driver_api rtc_aspeed_g3_api = {
 	.set_time = rtc_aspeed_g3_set_time,
 	.get_time = rtc_aspeed_g3_get_time,
+#if defined(CONFIG_RTC_ALARM)
+	.alarm_get_supported_fields = rtc_aspeed_g3_alarm_get_supported_fields,
+	.alarm_set_time = rtc_aspeed_g3_alarm_set_time,
+	.alarm_get_time = rtc_aspeed_g3_alarm_get_time,
+	.alarm_is_pending = rtc_aspeed_g3_alarm_is_pending,
+	.alarm_set_callback = rtc_aspeed_g3_alarm_set_callback,
+#endif
 };
 
 static int rtc_aspeed_g3_init(const struct device *dev)
 {
 	uint32_t clk;
-
-	ARG_UNUSED(dev);
 
 	/* Point the RTC at the internal 24 MHz-derived clock (this board has no
 	 * external 32 kHz crystal — see the SCU08 comment above). Idempotent; unlock
@@ -198,6 +435,19 @@ static int rtc_aspeed_g3_init(const struct device *dev)
 	clk = sys_read32(SCU_G3_BASE + SCU_G3_CLK_SEL);
 	sys_write32(clk | SCU08_RTC_CLK_24M, SCU_G3_BASE + SCU_G3_CLK_SEL);
 
+#if defined(CONFIG_RTC_ALARM)
+	/* Connect + unmask the VIC-26 alarm line. The alarm only asserts once a
+	 * CONTROL[1:3] enable is set (alarm_set_time), so enabling it here is inert
+	 * until an alarm is armed. z_soc_irq_enable() clears any stale latched edge
+	 * for this source before unmasking.
+	 */
+	rtc_g3_isr_dev = dev;
+	IRQ_CONNECT(RTC_G3_IRQ, RTC_G3_IRQ_PRIO, rtc_aspeed_g3_isr, NULL, 0);
+	irq_enable(RTC_G3_IRQ);
+#else
+	ARG_UNUSED(dev);
+#endif
+
 	return 0;
 }
 
@@ -205,7 +455,9 @@ static int rtc_aspeed_g3_init(const struct device *dev)
 	static const struct rtc_aspeed_g3_config rtc_aspeed_g3_config_##inst = { \
 		.base = (mem_addr_t)DT_INST_REG_ADDR(inst),                    \
 	};                                                                     \
-	DEVICE_DT_INST_DEFINE(inst, rtc_aspeed_g3_init, NULL, NULL,             \
+	static struct rtc_aspeed_g3_data rtc_aspeed_g3_data_##inst;             \
+	DEVICE_DT_INST_DEFINE(inst, rtc_aspeed_g3_init, NULL,                   \
+			      &rtc_aspeed_g3_data_##inst,                      \
 			      &rtc_aspeed_g3_config_##inst, POST_KERNEL,       \
 			      CONFIG_RTC_INIT_PRIORITY, &rtc_aspeed_g3_api);
 

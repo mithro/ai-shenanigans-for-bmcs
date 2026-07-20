@@ -1,5 +1,35 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #187 Zephyr RTC alarm (RTC04 + VIC-26) IMPLEMENTED + QEMU-validated (row 39 ZQ)
+
+Closed the Zephyr QEMU half of the #187 RTC alarm. Added the Zephyr `rtc_driver_api` alarm ops to
+the existing counter-style set/get driver `zephyr/drivers/rtc/rtc_aspeed_g3.c`, consuming the same
+QE alarm model the Linux driver uses (RTC04 @0x04 byte-packed hour/min/sec + CONTROL[1:3] per-field
+enables + VIC source 26): alarm_get_supported_fields (sec/min/hour — the counter has no calendar,
+same as get_time and the Linux sibling), alarm_set_time (RTC04 + CONTROL RMW preserving ENABLE[0],
+never writing back the RESTART status bit[5]; mask=0 disables), alarm_get_time, alarm_is_pending,
+alarm_set_callback, and a VIC-26 ISR. The ISR follows the Zephyr contract — the alarm stays ARMED
+(recurring) until disabled, so it does NOT clear the enable bits (unlike the Linux one-shot); the
+framework z_soc_irq_eoi() clears the latched edge. A per-device k_spinlock guards the CONTROL RMW
+(shared with the ISR) + the callback/pending state; the callback is invoked outside the lock. Init
+does IRQ_CONNECT(26)+irq_enable(26) with a file-static device pointer set before enable (mirrors the
+GPIO driver). No VIC change needed — source 26 is already edge/falling in the RE'd G3 VIC map.
+
+The rtc_smoke sample gained CONFIG_RTC_ALARM=y and an alarm half that arms 12:00:05, registers a
+callback, and BUSY-POLLS (not k_msleep — the QEMU RTC counter advances on a QEMU-internal timer as
+virtual time passes, so a busy loop keeps the CPU running and virtual time advancing until VIC-26
+fires; this does NOT depend on the guest system tick, which may not sustain on this ARM926 port).
+
+Validated in QEMU (`-M kgpe-d16-bmc`, west build board kgpe_d16_bmc/ast2050, SDK 0.17.0):
+`RTC RESULT: PASS` (set/get) + `alarm supported-fields mask=0x07` + `alarm armed at 12:00:05
+mask=0x07` (get_time round-trip) + `alarm fires=1` + `RTC-ALARM RESULT: PASS`. Full path proven:
+rtc_alarm_set_time → RTC04/CONTROL → QEMU model counter advance (~732x) → COUNTER==RTC04 → VIC-26 →
+isr_wrapper → driver ISR → callback. Evidence `d14-zephyr/26-rtc-alarm-zephyr-qemu.txt`.
+
+Row 39: QE ✅ + LQ/LU ✅ + ZQ ✅ (now includes alarm, not just set/get). Remaining: LS (silicon
+Linux) + ZS (silicon Zephyr) — both gated on a JTAG rig run. An independent code review of the new
+alarm driver was dispatched (gate-(b) discipline); findings will be actioned when it returns.
+
 ## 2026-07-21 — #180 CLOSED: module-level scu_lock on the shared-SCU RMW in the Zephyr I2C driver
 
 Applied the same locking discipline as the RTC gate-(b) fix (above) to the analogous Zephyr site.

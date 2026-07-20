@@ -1,0 +1,65 @@
+#187 — Zephyr RTC alarm API (RTC04 + VIC-26) on the AST2050 G3 (2026-07-21)
+================================================================================
+DEVICE-MATRIX row 39 (AST2050 G3 RTC) — Zephyr alarm: implemented + QEMU-validated.
+This closes the Zephyr QEMU half (ZQ) of #187, on top of the already-validated
+Zephyr set/get driver and the QE alarm model + Linux (LQ/LU) alarm driver.
+
+DRIVER (zephyr/drivers/rtc/rtc_aspeed_g3.c) — added the Zephyr rtc_driver_api
+alarm ops to the existing counter-style set/get driver:
+  - alarm_get_supported_fields -> SECOND|MINUTE|HOUR (RTC04 has no day/mon/year;
+    the counter "day" is a free-running up-counter, not a calendar day — same
+    reasoning as get_time, and matching the Linux sibling driver which also
+    matches on hour:min:sec only).
+  - alarm_set_time: program RTC04 (0x04) byte-packed [23:16]=hour [15:8]=min
+    [7:0]=sec from ONLY the enabled fields, then RMW CONTROL (0x0C) to set the
+    per-field enable bits [1:3], preserving ENABLE[0] and never writing 1 back to
+    the RESTART status bit[5]. mask==0 disables (clears [1:3]).
+  - alarm_get_time: unpack RTC04 + rebuild the mask from CONTROL[1:3].
+  - alarm_is_pending / alarm_set_callback: per the Zephyr contract.
+  - ISR (VIC source 26): the Zephyr contract keeps the alarm ARMED (recurring)
+    until disabled, so — UNLIKE the Linux one-shot handler — the ISR does NOT
+    clear the CONTROL enable bits; it just delivers the event (callback, else
+    latch pending). The framework z_soc_irq_eoi() clears the latched VIC edge.
+  - init: IRQ_CONNECT(26)+irq_enable(26); a file-static rtc_g3_isr_dev (set
+    before irq_enable) lets the ISR recover the device (mirrors the GPIO driver).
+  - concurrency: a per-device k_spinlock guards the CONTROL RMW (shared with the
+    ISR) and the callback/pending state; the callback is invoked OUTSIDE the lock.
+  VIC source 26 is already edge/falling in the RE'd G3 VIC map
+  (soc/aspeed_g3/ast2050/vic.c: SENSE bit26=0, EVENT bit26=0), so no VIC change.
+
+SAMPLE (samples/rtc_smoke): CONFIG_RTC_ALARM=y; a second test half arms
+12:00:05, registers a callback, and BUSY-POLLS (not k_msleep — the QEMU RTC
+counter advances on a QEMU-internal timer as virtual time passes, so a busy loop
+keeps the CPU executing and virtual time advancing until VIC-26 fires; this does
+not depend on the guest system tick). Then disarms (mask 0).
+
+===== VALIDATION (QEMU, -M kgpe-d16-bmc, run-qemu.py boot) =====
+boot: qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -serial stdio -kernel zephyr.elf
+RTC set=12:45:30 day=7  get=12:45:30 day=7  (delta=0s)
+RTC RESULT: PASS
+alarm supported-fields mask=0x07
+alarm armed at 12:00:05 mask=0x07
+alarm fires=1
+RTC-ALARM RESULT: PASS
+boot: OK — saw 'RTC-ALARM RESULT'
+
+DECODE:
+  - set/get still PASS (12:45:30 round-trips; delta=0 because the immediate
+    readback is sub-second — the counter DOES advance, proven by the alarm below).
+  - supported-fields = 0x07 = SECOND|MINUTE|HOUR.
+  - "armed at 12:00:05 mask=0x07": alarm_get_time read RTC04 + CONTROL[1:3] back —
+    the arm round-tripped.
+  - "alarm fires=1": armed at base 12:00:00 -> alarm 12:00:05; the QEMU counter
+    (~732x) reached 12:00:05 during the busy-poll -> COUNTER==RTC04 match -> the
+    model raised VIC source 26 -> the SoC isr_wrapper dispatched the driver ISR ->
+    the callback ran exactly once (recurring alarm fires once per counter-day
+    ~= 118 real s, so exactly one fire during the short poll). Full path proven:
+    userspace (rtc_alarm_set_callback/set_time) -> rtc_aspeed_g3 alarm ops ->
+    RTC04/CONTROL -> QEMU G3 RTC model alarm compare -> VIC 26 -> ISR -> callback.
+
+RESULT: row 39 ZEPHYR ALARM now REAL — ZQ ⬜→✅ (alarm API binds + arm->fire->
+callback + get/disarm all functional in QEMU). ZS stays ⬜ (silicon Zephyr RTC
+alarm via JTAG not yet run). Combined with QE ✅ + LQ/LU ✅, the RTC alarm
+capability is now validated on QEMU across the QEMU-model, Linux, and Zephyr
+stacks; only the two silicon cells (LS Linux, ZS Zephyr) remain, both gated on a
+JTAG rig run.

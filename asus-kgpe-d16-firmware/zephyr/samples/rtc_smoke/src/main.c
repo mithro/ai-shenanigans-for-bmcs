@@ -20,6 +20,87 @@
 BUILD_ASSERT(DT_NODE_HAS_STATUS(RTC_SMOKE_NODE, okay),
 	     "rtc0 (aspeed,ast2050-rtc) must be enabled");
 
+#if defined(CONFIG_RTC_ALARM)
+static volatile uint32_t alarm_fires;
+
+static void rtc_alarm_cb(const struct device *dev, uint16_t id, void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(id);
+	ARG_UNUSED(user_data);
+	alarm_fires++;
+}
+
+/*
+ * Alarm half of the smoke (#187): set a base time, register a callback, arm the
+ * alarm a few seconds ahead, and confirm it fires. The QEMU G3 RTC model
+ * advances the COUNTER on its own (QEMU timer, ~732x on this crystal-less board,
+ * #158) and raises VIC source 26 on an RTC04 match — so we BUSY-POLL (keeping
+ * the CPU running so QEMU virtual time advances) rather than k_msleep, which
+ * would depend on the guest system tick. The +5 s alarm is reached in ~7 ms of
+ * counter time.
+ */
+static void rtc_alarm_test(const struct device *rtc)
+{
+	uint16_t sup = 0, gmask = 0;
+	struct rtc_time base = {
+		.tm_sec = 0, .tm_min = 0, .tm_hour = 12, .tm_mday = 7,
+	};
+	struct rtc_time alarm = base;
+	struct rtc_time galarm = {0};
+	int ret;
+
+	if (rtc_alarm_get_supported_fields(rtc, 0, &sup) != 0) {
+		printk("RTC-ALARM RESULT: FAIL (get_supported_fields)\n");
+		return;
+	}
+	printk("alarm supported-fields mask=0x%02x\n", sup);
+
+	/* Re-plant a known base time, then arm hour:min:sec = 12:00:05. */
+	if (rtc_set_time(rtc, &base) != 0) {
+		printk("RTC-ALARM RESULT: FAIL (set base time)\n");
+		return;
+	}
+	alarm.tm_sec = 5;
+	alarm_fires = 0;
+
+	ret = rtc_alarm_set_callback(rtc, 0, rtc_alarm_cb, NULL);
+	if (ret != 0) {
+		printk("RTC-ALARM RESULT: FAIL (set_callback %d)\n", ret);
+		return;
+	}
+	ret = rtc_alarm_set_time(rtc, 0,
+				 RTC_ALARM_TIME_MASK_SECOND |
+				 RTC_ALARM_TIME_MASK_MINUTE |
+				 RTC_ALARM_TIME_MASK_HOUR, &alarm);
+	if (ret != 0) {
+		printk("RTC-ALARM RESULT: FAIL (set_time %d)\n", ret);
+		return;
+	}
+
+	/* Confirm the arm read back. */
+	if (rtc_alarm_get_time(rtc, 0, &gmask, &galarm) == 0) {
+		printk("alarm armed at %02d:%02d:%02d mask=0x%02x\n",
+		       galarm.tm_hour, galarm.tm_min, galarm.tm_sec, gmask);
+	}
+
+	/* Busy-poll for the alarm (see the function comment for why not k_msleep). */
+	for (volatile uint32_t i = 0; i < 200000000U && alarm_fires == 0U; i++) {
+		__asm__ volatile("");
+	}
+
+	printk("alarm fires=%u\n", alarm_fires);
+	if (alarm_fires > 0U) {
+		printk("RTC-ALARM RESULT: PASS (armed -> IRQ26 -> callback)\n");
+	} else {
+		printk("RTC-ALARM RESULT: FAIL (no callback within busy-poll)\n");
+	}
+
+	/* Disarm (mask 0) — proves the disable path and stops further fires. */
+	rtc_alarm_set_time(rtc, 0, 0, NULL);
+}
+#endif /* CONFIG_RTC_ALARM */
+
 int main(void)
 {
 	const struct device *rtc = DEVICE_DT_GET(RTC_SMOKE_NODE);
@@ -71,6 +152,10 @@ int main(void)
 	} else {
 		printk("RTC RESULT: FAIL\n");
 	}
+
+#if defined(CONFIG_RTC_ALARM)
+	rtc_alarm_test(rtc);
+#endif
 
 	return 0;
 }
