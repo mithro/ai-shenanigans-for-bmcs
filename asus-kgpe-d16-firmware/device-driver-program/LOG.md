@@ -1,5 +1,36 @@
 # Device-driver program — running log
 
+## 2026-07-20 — gate-(b): 5 more bodies self-reviewed (4 Linux patches + U-Boot p2a-dram) — all CLEAN
+
+Continued the gate-(b) sweep over the small self-contained diffs (efficient to self-review honestly, as done
+for pmbus/console/soc/uboot-i2c; agents reserved for the larger QEMU subsystems). All 5 CLEAN:
+- **Linux `0005-i2c-aspeed-program-full-ac-timing` (#93):** replaces "preserve the undefined-on-G3
+  tBUF/tHDSTA/tACST" with explicit `FIELD_PREP(mask,0x7)` each (=0x777xxxxx), faithfully matching the Aspeed
+  vendor `select_i2c_clock()`. `<linux/bitfield.h>` added; fields ≥3b so 0x7 fits; G4 behaviour change is
+  irrelevant to the oracles (C2 uses this on G3; C4 is separate vendor fw). Correct.
+- **Linux `0002-ftgmac100-set-mac-speed-from-cur_speed` (the RX fix):** `maccr=0` then set FAST/GIGA from
+  `cur_speed` (vs preserve-only, which reads 0 on G3 since MAC SW_RST clears MACCR → 10M-on-100M → rx=0);
+  re-derived from cur_speed which adjust_link keeps current. Silicon-proven. Correct.
+- **Linux `0004-ipmi-kcs-bmc-aspeed-optional-lpc-clock`:** `devm_clk_get_optional_enabled()` holds the real
+  SCU0C[8] LPC LCLK for the KCS device lifetime (#94-sibling: without a refcount clk_disable_unused() kills
+  LPC on G3). IS_ERR→dev_err_probe; optional so no-clocks DTs unaffected; devm-managed (no leak). Correct.
+- **Linux `0008-pinctrl-aspeed-g3-strap-phantom-quirk`:** `aspeed_g4_expr_only_straps()` correct (ndescs>0
+  guards empty-expr); the skip is gated `!enable && g3_strap_phantoms` so only the DISABLE path for
+  strap-only exprs is short-circuited on G3 (unblocking GPIO requests like GPIOF5=QU5-mux-select), enable
+  path unchanged, g3_strap_phantoms only for ast2050-pinctrl (G4 unaffected). Faithful (real G3 pad fn is
+  SCU74/78, not the G4-misread straps). Correct.
+- **U-Boot `0001-ast2050-p2a-dram-boot`:** the no-flash-over-P2A `flash_get_size` default returns a benign
+  geometry immediately (avoiding the fall-through hang on uninitialised sector count + SPI-clock config);
+  MCR04=0x585 (4-bank/64MB, matches silicon DDR2-init); baud 1200 (rig-proven); INIT_SP at +16MB (clears the
+  U-Boot image at SDRAM_BASE for P2A boot); CONFIG_ENV_IS_NOWHERE (no flash → compiled-in default env →
+  prompt); a host-tool include-order build fix. All silicon-motivated + correct.
+
+**Gate-(b) status:** Zephyr stack (done) + these 5 + the prior rounds (i2c/w83795/fabric/pmbus, phantom-
+gating/vic/timer/sbtsi-qemu/w83601g-qemu/console/soc, clk/irqchip/wdt/rtc/uboot-i2c, GPIO-irq 2-bugs-fixed).
+Remaining un-reviewed: Linux `0003-hwmon-w83795` (already characterised via #184 — exposes only in/fan/temp),
+`0006-media-video` (307 lines) + `0007-usb-vhub`, QEMU `aspeed_peci`/LPC/SMC/SDMC/video models, and the DTS
+files. The faithfulness/boot-critical patches are now all confirmed clean.
+
 ## 2026-07-20 — gate-(b): the last 2 Zephyr DRIVERS reviewed (sbtsi + gpio_w83601g) — both CLEAN → ALL Zephyr code now reviewed
 
 Rotated off the heavy W83795 modeling (2 straight cycles) per the "work on another part" guidance, and closed
