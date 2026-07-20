@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Sub-agent code review of the RTC changes (gate b) — 2 real bugs found + fixed
+
+Ran an independent code-reviewer sub-agent over this session's RTC code (Linux driver + QEMU model),
+serving completion gate (b). It found TWO real bugs (both fixed — "trust the independent check over my
+own confidence"):
+1. **Linux set_time swallowed the CONTROL[5] timeout** (confidence 55): it logged a warn but `return 0`,
+   so if the RELOAD load never completed the time was NOT programmed yet the core saw success. Fix:
+   `dev_err` + `return ret` (fail loud, per CLAUDE.md). Behaviour-neutral in the normal case (ret=0);
+   only surfaces a genuine 4 s timeout. patch 0009 regenerated.
+2. **QEMU model: mid-run SCU08[16] change re-rated the whole elapsed interval** (confidence 70): the
+   rate was live-sampled but base_ns was only re-anchored on RTC-register events, so flipping bit16
+   while enabled (raw SCU poke) replayed all elapsed time at the new rate = spurious counter jump (and
+   could spuriously fire/skip an armed alarm). Fix: cache `last_src_hz`, re-anchor (freeze OLD-rate
+   ticks into COUNTER + reset base_ns) on a source change so it only affects time forward. vmstate v5.
+   Submodule 71f01cf948 (pushed).
+Both fixes RE-VALIDATED: all 3 RTC gates still PASS in QEMU (rtcrate delta=3 real-time / rtcalarm VIC22
+0->1 / rtclinux exact 12:45:30 + wakealarm 0->1). Reviewer also confirmed OK: readl_poll_timeout
+ordering (outside the irq lock, process context), address_space_ldl_le under BQL + SCU realized before
+RTC, frozen-RTC semantics, no overflow. The RTC code is now review-clean.
+
 ## 2026-07-21 — QEMU RTC model made FAITHFUL: tick-rate tracks SCU08[16] (#194 part 2 DONE)
 
 Closed the QEMU-side of the real-time correction. `hw/misc/aspeed_rtc_ast2050.c` used a fixed
