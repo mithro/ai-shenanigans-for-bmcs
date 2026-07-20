@@ -26,9 +26,15 @@
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/sys_io.h>
 
 #define WDT_NODE      DT_NODELABEL(wdt0) /* aspeed,ast2050-wdt @ 0x1E785000 */
 #define WDT_INTR_MS   200U               /* timeout window */
+
+/* Diagnostic: raw VIC status to confirm which source the WDT timeout-interrupt
+ * actually asserts on silicon (the assumed source is 27) — same method that
+ * found the RTC alarm was on VIC 22, not 26 (#192). Identity-mapped by the SoC. */
+#define G3VIC_RAW_STATUS 0x1E6C0008U
 
 BUILD_ASSERT(DT_NODE_HAS_STATUS(WDT_NODE, okay),
 	     "wdt0 (aspeed,ast2050-wdt) must be enabled");
@@ -84,6 +90,8 @@ int main(void)
 		irq_unlock(key);
 	}
 
+	printk("DIAG vic_raw=%08x (WDT timeout-int source; assumed 27=0x08000000)\n",
+	       sys_read32(G3VIC_RAW_STATUS));
 	printk("wdt intr fires=%u\n", wdt_intr_fires);
 	if (wdt_intr_fires > 0U) {
 		printk("WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)\n");

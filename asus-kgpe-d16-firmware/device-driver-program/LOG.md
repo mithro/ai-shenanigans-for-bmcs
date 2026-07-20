@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #189 WDT timeout-INTERRUPT mode SILICON-VALIDATED (VIC 27 confirmed correct)
+
+Booted wdt_intr_smoke over JTAG on the real AST2050 (row 38 ZS). Proactively added the same VIC
+raw-status register-dump diagnostic that found the RTC alarm's wrong source (#192), to CHECK the
+WDT timeout-interrupt source (assumed 27). Result: `wdt intr fires=1` → `WDT-INTR RESULT: PASS
+(timeout -> VIC-27 -> callback, no reset)` — the 200 ms WDT timed out in interrupt mode on silicon,
+raised VIC 27, ran the callback, and did NOT reset (console kept running past the timeout, vs the
+reset-mode smoke going silent). `DIAG vic_raw=00000000` = source 27 serviced+eoi'd, no
+latched-elsewhere surprise, so **VIC source 27 for the WDT timeout-interrupt is CORRECT on silicon**
+(not every model assumption is wrong — but now it's VERIFIED, not assumed). The gate-(b) disable-fix
+also holds on silicon (`after fire: disable=0 reinstall=0` → `WDT-INTR-REINSTALL: PASS`).
+
+So row 38 WDT interrupt mode is now silicon-proven (ZS ✅ for interrupt, on top of the already-proven
+reset mode). This is the same rigorous silicon-first method as the RTC alarm, applied to confirm a
+model assumption rather than disprove one. Evidence d14-zephyr/27. Zephyr-only (model was already
+correct — no submodule change). Rig: asus-bmc, JTAG free, board powered; no others disturbed.
+
 ## 2026-07-21 — SILICON caught a real bug: RTC04 alarm is FIELD-packed (fixed, #186 resolved for RTC04); alarm-IRQ-on-silicon still OPEN
 
 First silicon (JTAG) run of the Zephyr RTC alarm (row 39 ZS) FAILED — and honestly, that is the

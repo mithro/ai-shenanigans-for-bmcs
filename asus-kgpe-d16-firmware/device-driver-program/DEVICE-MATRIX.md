@@ -452,9 +452,15 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   (WDT_FLAG_RESET_NONE + callback → WDT_CTRL[2]=WDT_INTR → VIC-27 → callback, NO reset), consuming
   the QE WDT-interrupt model (submodule 46cee5fe6a). Validated in QEMU deterministically (3/3
   `WDT-INTR RESULT: PASS`, console ran past the timeout = no reset), reset-mode wdt_smoke unregressed
-  (8 boots). So Zephyr ZQ covers reset AND interrupt; the interrupt-mode silicon (ZS) run is not yet
-  done. Linux #189 stays scoped separately (mainline aspeed_wdt is a 2-stage pretimeout, a different
-  semantic than the G3 one-stage interrupt-instead-of-reset). D11.
+  (8 boots). So Zephyr ZQ covers reset AND interrupt.
+  **SILICON-VALIDATED (2026-07-21, #189, `d14-zephyr/27`):** the interrupt mode now fires on the real
+  AST2050 over JTAG — `wdt intr fires=1` → `WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no
+  reset)`; the console ran past the 200 ms timeout (no reset) and the gate-(b) disable+reinstall fix
+  also held (`disable=0 reinstall=0`). A proactive VIC raw-status diagnostic CONFIRMED **VIC source
+  27 is correct on silicon** for the WDT timeout-interrupt (unlike the RTC alarm's wrong source 26 —
+  each model IRQ assumption is now verified, not assumed). So row 38 ZS covers BOTH reset (already
+  proven) AND interrupt mode. Linux #189 stays scoped separately (mainline aspeed_wdt is a 2-stage
+  pretimeout, a different semantic than the G3 one-stage interrupt-instead-of-reset). D11.
 - **39** RTC (0x1E781000, counter-style, datasheet §24). **QE counter-ADVANCE now modeled
   (2026-07-21, #158, submodule f93addb7e0, `evidence/d14-zephyr/15-qemu-rtc-rate.txt`):** the model
   latched RELOAD→COUNTER but the counter never ticked (a frozen RTC, while silicon's counts). The

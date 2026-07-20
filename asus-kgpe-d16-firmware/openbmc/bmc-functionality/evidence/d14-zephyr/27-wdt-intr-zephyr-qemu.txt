@@ -73,3 +73,30 @@ wdt intr fires=1
 WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)
 after fire: disable=0 reinstall=0        <- both succeed (were -EFAULT/-ENOMEM)
 WDT-INTR-REINSTALL: PASS (disable+reinstall after fire)
+
+===== SILICON VALIDATED (real AST2050, JTAG, 2026-07-21, #189 ZS) =====
+Booted wdt_intr_smoke over JTAG on the real AST2050 (entry 0x40002504). A
+register-dump diagnostic was added (VIC raw-status) — the SAME method that found
+the RTC alarm was on VIC 22 not 26 (#192) — to CHECK whether the WDT
+timeout-interrupt source (assumed 27) is correct on silicon. It IS:
+  *** Booting Zephyr OS ... ***
+  WDT armed 200 ms in interrupt mode, NOT feeding
+  DIAG vic_raw=00000000 (WDT timeout-int source; assumed 27=0x08000000)
+  wdt intr fires=1
+  WDT-INTR RESULT: PASS (timeout -> VIC-27 -> callback, no reset)
+  after fire: disable=0 reinstall=0
+  WDT-INTR-REINSTALL: PASS (disable+reinstall after fire)
+
+DECODE: the 200 ms WDT timed out on real silicon in INTERRUPT mode (WDT_CTRL[2]),
+raised VIC source 27, the ISR ran the callback (fires=1), and the SoC did NOT
+reset — the console kept running past the timeout and printed PASS (a reset would
+have gone silent, cf. the reset-mode wdt_smoke). vic_raw=0 by DIAG time = the WDT
+source 27 was serviced+eoi'd (no latched-elsewhere surprise, so source 27 is
+CORRECT — unlike the RTC alarm's wrong source 26). The gate-(b) disable-fix also
+holds on silicon (disable=0, reinstall=0). Full path proven on hardware:
+wdt_install_timeout(RESET_NONE+cb)/wdt_setup -> WDT_CTRL[2] -> 200 ms expiry ->
+VIC 27 -> ISR -> callback, no reset.
+
+RESULT: row 38 WDT — the Zephyr timeout-INTERRUPT mode is now silicon-validated
+(ZS ✅ for interrupt mode, in addition to the already-silicon-proven reset mode).
+VIC source 27 for the WDT timeout-interrupt is CONFIRMED correct on silicon.
