@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-a/d completeness SWEEP (2 sub-agents): enumeration confirmed complete + 4 over-claims corrected
+
+Ran two independent completeness sub-agents for gates (a)+(d): one enumerating the authoritative schematic
+vs the matrix, one auditing ✅ cells for over-claims.
+GATE (a) ENUMERATION — CONFIRMED COMPLETE: the auditor independently re-enumerated every schematic
+device/net/ref-des (§§2-15 + pinmaps) and found **NO structural device missed** — every one maps to a
+matrix row or a justified Ⓝ. It surfaced 3 open IDENTITIES (not missed enumeration) now explicitly flagged
+in the matrix header: the 0x69 silicon responder (#160), GPIOE6/E7↔SP5100 (#161), AUX_CHASSIS# (#183).
+GATE (a) OVER-CLAIMS — 4 FIXED (honest downgrades, tally regenerated):
+- Row 19 (DIMM TSOD jc42) QE ✅→Ⓝ + ZQ ⬜→Ⓝ: the machine deliberately instantiates NO jc42; QE rested on
+  "the model file exists" — the EXACT defect already fixed for this row's LQ. All 8 cells now Ⓝ.
+- Row 9 (USB vhub) QE ✅→🔶 + LQ ✅→🔶: the vhub model is register+IRQ only (no USB datapath); the
+  "virtual-media in QEMU" evidence enumerates over Linux `dummy_hcd`, NOT the modeled vhub.
+- Row 5 (LPC port-80h snoop) QE ✅→🔶: the snoop-CAPTURE function isn't modeled (no SNPWADR/SNPWDR/port-80h
+  datapath), no host peer. KCS+vUART register model is real, but not "full emulation".
+Tally: QEMU 28→25 ✅ (+2 🔶, +1 Ⓝ), Linux@QEMU 22→21 ✅, Zephyr@QEMU row-19 ⬜→Ⓝ. Verified LEGITIMATE (not
+over-claims): the Zephyr-silicon ✅ cells (I2C/W83795/FRU/W83601G/SCU/VIC/timer/WDT/RTC) — all backed by
+genuine live-hardware transcripts.
+DOC INCONSISTENCIES reconciled: row-14 DDC "blocks on #176" flagged as an UNRESOLVED conflict with row-50
+(does CRB7 live behind A2P or a separate CRTC aperture? — settle before #178); row-12 "CRT/DAC modeled"
+corrected to "capture engine modeled; CRTC display block NOT" (resolves the row-12↔14 contradiction).
+New tasks the auditor identified (gate d) captured in #197 + being folded into FULL-TASK-LIST.
+
 ## 2026-07-21 — Gate-b QEMU VUART/LPC OR-gate FIXED + validated (#196) — sweep now fully clean (7/7)
 
 Fixed the last code-review finding from the sweep. Confirmed via the datasheet FIRST (don't guess the
