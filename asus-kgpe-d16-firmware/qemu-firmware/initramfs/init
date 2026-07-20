@@ -736,6 +736,30 @@ if grep -q rtclinux /proc/cmdline; then
 		*" 12:4"*|*" 12:5"*) echo "RTC-LINUX RESULT: PASS (set 12:45:30 -> read $R; hour:min round-tripped via /dev/rtc0)" ;;
 		*) echo "RTC-LINUX RESULT: FAIL (readback=$R)" ;;
 	esac
+	# --- wakealarm (#187 Linux alarm: RTC04 + IRQ26 via the new driver) ---
+	echo "--- wakealarm ---"
+	WAKE=/sys/class/rtc/rtc0/wakealarm
+	if [ -w "$WAKE" ]; then
+		I0=$(grep -aiE 'rtc|aspeed' /proc/interrupts 2>&1)
+		echo 0 > "$WAKE" 2>&1              # clear any pending
+		echo "+5" > "$WAKE" 2>&1           # alarm 5 RTC-seconds ahead
+		SET=$(cat "$WAKE" 2>&1)
+		echo "wakealarm set to (epoch)=$SET"
+		sleep 1                            # RTC advances ~732x, passes +5 in ~7ms
+		AFTER=$(cat "$WAKE" 2>&1)
+		I1=$(grep -aiE 'rtc|aspeed' /proc/interrupts 2>&1)
+		echo "wakealarm after sleep = '$AFTER' (empty = fired+cleared)"
+		echo "rtc irq line: $I1"
+		# PASS = the alarm was armed (SET non-empty) and then fired (AFTER empty,
+		# the rtc core clears a one-shot wakealarm once RTC_AF is delivered).
+		if [ -n "$SET" ] && [ -z "$AFTER" ]; then
+			echo "RTC-WAKEALARM RESULT: PASS (armed then fired -> IRQ26 -> RTC_AF cleared it)"
+		else
+			echo "RTC-WAKEALARM RESULT: FAIL (set='$SET' after='$AFTER')"
+		fi
+	else
+		echo "RTC-WAKEALARM RESULT: SKIP (wakealarm attr not present)"
+	fi
 	echo "=== RTC-LINUX-END ==="
 	poweroff -f 2>&1 || true
 fi

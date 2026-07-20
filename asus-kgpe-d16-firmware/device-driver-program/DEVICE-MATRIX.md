@@ -469,7 +469,11 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   year/month) + the `&rtc` dts override. Validated QEMU + userspace: `aspeed-rtc 1e781000.rtc: registered
   as rtc0`; `date -s 12:45:30` → `hwclock -w` → `hwclock -r` reads `12:45:40` (hour:min round-trip, sec
   advancing ~732x) + `/sys/class/rtc/rtc0/time` works. The over-claim is now genuine functionality.
-  **LS stays ⬜** (silicon RTC via JTAG not yet run).
+  **WAKEALARM also done (RTC04+IRQ26):** the driver gained read/set_alarm + alarm_irq_enable + an IRQ
+  handler + device_init_wakeup, and the dts `&rtc` gains `interrupts = <26>`; validated —
+  `echo +5 > /sys/class/rtc/rtc0/wakealarm` arms it, the fast counter reaches it, QEMU raises VIC-26, the
+  handler delivers RTC_AF and the core clears the one-shot (readback empty). Consumes the #187 QE alarm
+  model. **LS stays ⬜** (silicon RTC via JTAG not yet run).
   **ZS stays 🔶:** true real-time 1 Hz is physically impossible on this crystal-less
   board — the documented hardware constraint. Counter BIT-LAYOUT is byte-packed to match the
   silicon-validated Zephyr driver; datasheet §24 says field-packed — an unresolved conflict tracked

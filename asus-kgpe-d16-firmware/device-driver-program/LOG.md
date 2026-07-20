@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #187 Linux wakealarm (RTC04 + IRQ26) IMPLEMENTED + validated
+
+Extended the just-landed G3 counter-RTC Linux driver (patch 0009) with the wakealarm, consuming the #187
+QE alarm model (QEMU raises VIC-26 on an RTC04 match). Added counter-style alarm ops: read_alarm/set_alarm
+(program RTC04 = byte-packed hour/min/sec + RTC0C[1:3] enables) / alarm_irq_enable, an IRQ handler
+(one-shot disable + rtc_update_irq(RTC_AF)), and probe support (request the VIC-26 IRQ + device_init_wakeup
+so rtc_does_wakealarm() exposes the /sys attr). The board dts `&rtc` gains `interrupts = <26>`.
+
+Debug note (honest): first boot the wakealarm attr was ABSENT (SKIP) — root-caused to the rtc core gating
+/sys/class/rtc/rtc0/wakealarm on device_can_wakeup(parent) via rtc_does_wakealarm(); the driver hadn't
+called device_init_wakeup(). Added it (only when the IRQ is present+requestable), and it appeared. Not a
+hardware quirk — a driver omission I fixed.
+
+Validated (rtclinux gate): `echo +5 > /sys/class/rtc/rtc0/wakealarm` → armed (epoch 947940373) →
+sleep → readback '' (empty). The 732x-fast counter reaches the alarm in ~7 ms, the model raises IRQ 26, the
+handler delivers RTC_AF, and the core clears the one-shot. **RTC-WAKEALARM RESULT: PASS.** Full path proven:
+userspace(/sys wakealarm) → set_alarm → RTC04/RTC0C → QEMU alarm compare → VIC 26 → IRQ handler → RTC_AF.
+Regenerated patch 0009 (190 insertions, alarm ops included). Closes the Linux half of the #187 RTC-ALARM
+capability. Remaining #187: Zephyr rtc alarm API + silicon validation of the whole RTC + alarm.
+
 ## 2026-07-21 — #187 Linux: G3 counter-RTC driver IMPLEMENTED + validated — over-claim → real functionality
 
 Converted last turn's row-39 RTC over-claim (LQ ⬜, "no working Linux RTC") into a genuine, validated Linux
