@@ -1,0 +1,39 @@
+D14 Zephyr — PSU PMBus (row 24) QEMU validation (2026-07-20).
+    Tier-A breadth win: upgrades row 24 Zephyr ZQ ⬜→✅. (ZS stays ⬜ — rig-gated, #165.)
+
+Device: server PSU on connector PSUSMB1 (schematic §10.2, balls A15/B15 = SDA1/SCL1) — the BMC's
+I2C engine 0 = schematic I2C1. Modeled by hw/sensor/pmbus_psu.c (generic PMBus 1.2 supply) wired at
+7-bit address 0x58 (hw/arm/aspeed.c: i2c_slave_create_simple(get_bus(&soc->i2c, 0), "pmbus-psu", 0x58)).
+Sample: asus-kgpe-d16-firmware/zephyr/samples/pmbus_smoke  (new)
+Driver: drivers/i2c/i2c_aspeed_g3.c (the existing G3 I2C master) over the NEW i2c0 devicetree node
+        (dts/aspeed/ast2050.dtsi: i2c0 @0x1e78a040 = engine 0; driver channel 1 → no SCU74 pin-mux).
+Build:  -DCONFIG_SYS_CLOCK_EXISTS=y -DCONFIG_HW_STACK_PROTECTION=n
+Run:    qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -kernel build-pmb/zephyr/zephyr.elf
+
+PMBus registers read (each = SMBus write-command + repeated-START + read, via i2c_write_read):
+  VOUT_MODE (0x20)   read-byte -> 0x17  (linear mode, 5-bit signed exponent = -9)
+  READ_VOUT (0x8B)   read-word -> 0x1800 ULINEAR16 mantissa; value = 0x1800 * 2^-9 = 6144/512 = 12.000 V
+  PMBUS_REVISION (0x98) read-byte -> 0x22 (PMBus 1.2)
+The sample sign-extends the VOUT_MODE exponent and decodes READ_VOUT to millivolts, then PASSes if the
++12 V rail is in the 11.5-12.5 V window.
+
+===== CAPTURED CONSOLE (QEMU) =====
+*** Booting Zephyr OS build v4.4.0-8379-g0a6208b97bff ***
+PMBUS smoke: boot
+PMBUS VOUT_MODE=0x17 exp=-9 READ_VOUT raw=0x1800 -> 12000 mV; REVISION=0x22
+PMBUS RESULT: PASS (+12V rail = 12000 mV)
+
+Decode: VOUT_MODE=0x17 → exp=-9 (matches the model's PSU_VOUT_MODE); READ_VOUT raw=0x1800=6144 →
+6144/512 = 12.000 V = 12000 mV (matches PSU_VOUT_VOLTS=12); REVISION=0x22 (PMBus 1.2). All three reads
+match the model bit-for-bit.
+
+RESULT: PASS in QEMU. The Zephyr port drives PMBus over the G3 I2C master on a THIRD distinct engine
+(engine 0 = I2C1; the sensor smokes used engines 1/3/4), reading the PSU's mode + main-rail voltage +
+revision. Row 24 (PSU PMBus): ZQ ⬜→✅.
+
+Both-sides honesty: ZS (silicon) stays ⬜ — the far end of PSUSMB1 on the real bench is whatever supply
+is plugged in, and the rig does not currently present a PMBus PSU to the BMC (DEVICE-MATRIX #165, a
+rig-hardware gate, NOT a code gap). The i2c0 engine + driver path is the same one proven on silicon for
+the other engines (evidence 07/09/12), so only the PSU peripheral is missing on the bench. The model's
+readings are fixed nominal values (host-power gating is a noted future refinement in pmbus_psu.c, not
+implemented), so no power sequencing is needed and the result is deterministic. No step skipped or faked.

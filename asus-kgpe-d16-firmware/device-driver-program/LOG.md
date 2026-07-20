@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #170 DONE: Zephyr PSU PMBus smoke (row 24) — first Tier-A breadth driver, QEMU PASS 12.000 V
+
+Executed the first Tier-A item from the triage roadmap: a real new Zephyr driver for the PSU on I2C1.
+Added the `i2c0` engine node (0x1e78a040 = schematic I2C1 = QEMU bus 0; driver channel 1, no SCU74
+mux) to `dts/aspeed/ast2050.dtsi`, and wrote `samples/pmbus_smoke` reading the PSU (0x58) over the
+existing `i2c_aspeed_g3` master: VOUT_MODE (0x20)→0x17 (exp -9), READ_VOUT (0x8B)→0x1800 decoded to
+**12000 mV**, PMBUS_REVISION (0x98)→0x22. QEMU `PMBUS RESULT: PASS`. This exercises a THIRD distinct
+I2C engine from Zephyr (engine 0 = I2C1; the sensor smokes used engines 1/3/4), so the i2c driver's
+multi-engine + channel-recovery path is further proven. Read the QEMU model (`hw/sensor/pmbus_psu.c`)
+FIRST to get the decode right — readings are fixed nominal values (host-power gating is a documented
+future refinement, not implemented), so no power sequencing needed; the +12 V decode is deterministic.
+
+Row 24 (PSU PMBus): **ZQ ⬜→✅**. ZS stays ⬜ — the real bench presents no PMBus PSU on PSUSMB1
+(rig-hardware gate #165, NOT a code gap; the i2c0 engine+driver path is the same one silicon-proven for
+engines 1/3/4). Also reconciled FULL-TASK-LIST D10: added the missing Zephyr line AND fixed its QE line
+([ ]→[x], the QEMU model was already ✅ in the matrix). Evidence `d14-zephyr/21-pmbus-qemu.txt`. Tally:
+Zephyr@QEMU 14✅→15✅ (19⬜→18); embedded block updated. Roadmap remaining Tier A: rows 17/18/19/25/26.
+
 ## 2026-07-20 — Zephyr ⬜ triage: fixed 2 more UNDERSTATED rows (1 DDR2, 34 clock); confirmed the OTHER 19 QEMU-⬜ are GENUINE driver work (roadmap below)
 
 Enumerated all 21 Zephyr@QEMU ⬜ + 24 ZS ⬜ rows (parsed the matrix table) and gave EACH an honest

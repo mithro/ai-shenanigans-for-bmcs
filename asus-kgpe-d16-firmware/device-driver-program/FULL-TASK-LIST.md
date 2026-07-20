@@ -247,9 +247,10 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Zephyr: [x] QEMU (`sbtsi_smoke` platform-agnostic PASS, temp 45.5 C) · [ ] silicon (attempted 2026-07-20 — sample_fetch -EIO because the host CPU wasn't POSTed; host-power-gated, reliable path via kgpe-power.sh keep-on, #150)
 
 ### D10. PSU PMBus — PSUSMB1, I2C1 (§10.2)
-- [ ] QEMU: PMBus device model on I2C1 (task #135)
+- [x] QEMU: PMBus device model on I2C1 (`hw/sensor/pmbus_psu.c` @0x58, PMBus 1.2, `test_psu_pmbus_probe` passes; matrix QE=✅)
 - U-Boot: [N] (PSU monitoring is an OS function)
 - Linux: [ ] QEMU (`pmbus`) · [B] silicon (**needs a PMBus-capable PSU present + I2C1 engine enabled; PSU-hardware-dependent**) · [ ] userspace (hwmon)
+- Zephyr: [x] QEMU (`samples/pmbus_smoke` reads VOUT_MODE/READ_VOUT=12000 mV/REVISION @0x58 on i2c0 via `i2c_aspeed_g3` — evidence `d14-zephyr/21`) · [B] silicon (rig-gated — no PMBus PSU on PSUSMB1 on this bench, #165; matrix row 24 ZQ/ZS = ✅/⬜)
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### D11. SMBus ALERT — SALT1/2, I2C7 B12 (§10.2, §10.4)

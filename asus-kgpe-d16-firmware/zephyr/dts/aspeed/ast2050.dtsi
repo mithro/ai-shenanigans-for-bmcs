@@ -85,6 +85,18 @@
 		 * The block is 0x40 bytes; the driver de-asserts the SCU04[2] reset
 		 * hold that keeps all engines inert at power-on.
 		 */
+		i2c0: i2c@1e78a040 { /* engine 0 = schematic I2C1 (QEMU bus 0) */
+			compatible = "aspeed,ast2050-i2c";
+			reg = <0x1e78a040 0x40>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			clock-frequency = <100000>;
+			status = "okay";
+			/* Board-specific slave devices attach in the board dts
+			 * (kgpe_d16_bmc: PSU PMBus @0x58 on connector PSUSMB1,
+			 * schematic §10.2 SDA1/SCL1). No SCU74 pin-mux (chan 1). */
+		};
+
 		i2c1: i2c@1e78a080 { /* engine 1 = schematic I2C2 (QEMU bus 1) */
 			compatible = "aspeed,ast2050-i2c";
 			reg = <0x1e78a080 0x40>;
