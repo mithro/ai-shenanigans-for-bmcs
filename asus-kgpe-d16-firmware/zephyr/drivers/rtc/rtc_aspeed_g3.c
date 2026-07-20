@@ -166,7 +166,9 @@ static int rtc_aspeed_g3_set_time(const struct device *dev,
 				  const struct rtc_time *timeptr)
 {
 	const struct rtc_aspeed_g3_config *cfg = dev->config;
-	uint32_t counter;
+	struct rtc_aspeed_g3_data *data = dev->data;
+	k_spinlock_key_t key;
+	uint32_t counter, ctrl;
 
 	if (timeptr == NULL) {
 		return -EINVAL;
@@ -197,7 +199,20 @@ static int rtc_aspeed_g3_set_time(const struct device *dev,
 	 */
 	sys_write32(counter, cfg->base + RTC_G3_RELOAD);
 	sys_write32(RTC_G3_RESTART_MAGIC, cfg->base + RTC_G3_RESTART);
-	sys_write32(RTC_G3_CTRL_ENABLE, cfg->base + RTC_G3_CONTROL);
+	/*
+	 * RMW CONTROL: set ENABLE[0], preserve everything else — crucially the
+	 * alarm-enable bits [1:4], so setting the time does NOT silently disarm an
+	 * armed alarm (the Zephyr contract keeps an alarm armed until disabled via
+	 * rtc_alarm_set_time). Never write 1 back to the RESTART status bit[5].
+	 * Under data->lock: CONTROL is shared with the alarm ISR / alarm_set_time.
+	 * (With no alarm armed the result is exactly ENABLE, as before.) The poll
+	 * below stays outside the lock — it only reads.
+	 */
+	key = k_spin_lock(&data->lock);
+	ctrl = sys_read32(cfg->base + RTC_G3_CONTROL);
+	ctrl = (ctrl & ~RTC_G3_CTRL_RESTART) | RTC_G3_CTRL_ENABLE;
+	sys_write32(ctrl, cfg->base + RTC_G3_CONTROL);
+	k_spin_unlock(&data->lock, key);
 
 	for (uint32_t i = 0; i < RTC_G3_RESTART_POLL; i++) {
 		if ((sys_read32(cfg->base + RTC_G3_CONTROL) &

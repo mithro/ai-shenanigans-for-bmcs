@@ -63,3 +63,48 @@ alarm via JTAG not yet run). Combined with QE ✅ + LQ/LU ✅, the RTC alarm
 capability is now validated on QEMU across the QEMU-model, Linux, and Zephyr
 stacks; only the two silicon cells (LS Linux, ZS Zephyr) remain, both gated on a
 JTAG rig run.
+
+===== CODE-REVIEW FINDING + FAITHFULNESS + DETERMINISM FIXES (2026-07-21) =====
+An independent review of the new Zephyr alarm driver found ONE real defect
+(confidence 92) and validating it flushed out a QEMU-model faithfulness gap:
+
+1. DRIVER (rtc_aspeed_g3.c set_time): the counter-enable CONTROL write was a
+   plain, unlocked `write(ENABLE)` that unconditionally cleared CONTROL — so once
+   the alarm feature could set CONTROL[1:3], calling rtc_set_time() AFTER arming
+   silently DISARMED the alarm (a deterministic contract violation: the Zephyr
+   contract keeps an alarm armed until disabled via rtc_alarm_set_time). FIX: made
+   it an RMW under the driver's k_spinlock, preserving the alarm-enable bits and
+   never writing back the RESTART status bit. Regression-tested (below).
+
+2. QEMU MODEL (hw/misc/aspeed_rtc_ast2050.c, submodule) faithfulness: the
+   alarm-check timer compared only the single LIVE counter each tick. The counter
+   advances as calendar seconds, so a sec+min+hour alarm matches at exactly ONE
+   tick/day; if the timer ran late (a tight guest poll starving the QEMU main
+   loop) the live counter had already passed that one matching tick and the exact
+   `==` missed — next match a day away. On silicon the comparator is combinational
+   and the VIC latches the edge the instant the counter reaches the alarm; it
+   cannot be starved. FIX: a bounded rising-edge CATCH-UP SCAN checks every
+   counter value crossed since the last check, so no match tick is ever skipped
+   (new vmstate field alarm_last_abs, version 4). This was a REAL model bug the
+   Zephyr test exposed (the Linux wakealarm had passed by luck).
+
+3. SMOKE (rtc_smoke) determinism: the initial busy-poll used a tight asm spin
+   (never yields -> QEMU can't fire the virtual timer) then k_busy_wait (depends
+   on the unreliable guest tick/cycle-counter on this ARM926 port) — both flaky.
+   FIX: wait by HALTING the CPU (k_cpu_atomic_idle/WFI). When the guest halts,
+   QEMU warps virtual time to the next timer deadline, fires the alarm timer, and
+   wakes the CPU on VIC-26 — deterministic and tick-independent, exactly how a
+   real consumer waits.
+
+===== RE-VALIDATED (deterministic, 4/4 runs, -M kgpe-d16-bmc) =====
+alarm fires=1
+RTC-ALARM RESULT: PASS (armed -> IRQ26 -> callback)
+after set_time, alarm mask=0x07
+RTC-ALARM-PRESERVE: PASS (set_time kept the alarm armed)   <- #1 regression, fixed
+
+And the Linux consumer of the SAME model is unregressed:
+rtc alarm IRQ26 count: 0 -> 1
+RTC-WAKEALARM RESULT: PASS (armed -> IRQ26 fired (0->1) -> RTC_AF cleared it)
+
+So row 39 ZQ ✅ (alarm) is concurrency-correct (set_time preserve), faithful
+(model can't skip the match), and deterministically validated; LQ/LU unregressed.

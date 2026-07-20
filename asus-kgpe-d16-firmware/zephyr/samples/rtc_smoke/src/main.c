@@ -84,9 +84,28 @@ static void rtc_alarm_test(const struct device *rtc)
 		       galarm.tm_hour, galarm.tm_min, galarm.tm_sec, gmask);
 	}
 
-	/* Busy-poll for the alarm (see the function comment for why not k_msleep). */
-	for (volatile uint32_t i = 0; i < 200000000U && alarm_fires == 0U; i++) {
-		__asm__ volatile("");
+	/*
+	 * Wait for the alarm by HALTING the CPU (WFI), via k_cpu_atomic_idle(), not
+	 * a spin loop or k_busy_wait(). Rationale:
+	 *  - a tight spin never yields, so QEMU's main loop can't fire the virtual
+	 *    alarm timer -> VIC-26 may never arrive (a QEMU TCG scheduling artifact,
+	 *    not a silicon behaviour — the real comparator can't be starved);
+	 *  - k_busy_wait()/k_msleep() depend on the guest system tick / cycle
+	 *    counter, which is not reliable on this brand-new ARM926 port.
+	 * When the guest WFIs, QEMU (all CPUs halted) WARPS virtual time forward to
+	 * the next timer deadline, fires the alarm timer, and wakes the CPU on VIC-26
+	 * — deterministic. k_cpu_atomic_idle() atomically re-enables IRQs and WFIs,
+	 * closing the check-then-sleep lost-wakeup window. Bounded so a broken alarm
+	 * fails loudly rather than hanging.
+	 */
+	{
+		unsigned int key = irq_lock();
+
+		for (uint32_t i = 0; i < 1000U && alarm_fires == 0U; i++) {
+			k_cpu_atomic_idle(key);
+			key = irq_lock();
+		}
+		irq_unlock(key);
 	}
 
 	printk("alarm fires=%u\n", alarm_fires);
@@ -94,6 +113,28 @@ static void rtc_alarm_test(const struct device *rtc)
 		printk("RTC-ALARM RESULT: PASS (armed -> IRQ26 -> callback)\n");
 	} else {
 		printk("RTC-ALARM RESULT: FAIL (no callback within busy-poll)\n");
+	}
+
+	/*
+	 * Regression for the #187 review finding: rtc_set_time() must NOT silently
+	 * disarm an armed alarm (its CONTROL write is an RMW that preserves the
+	 * alarm-enable bits). Re-arm, plant a base time (12:00:00, so the 12:00:05
+	 * alarm has not matched yet), and confirm the arm survived.
+	 */
+	(void)rtc_alarm_set_time(rtc, 0,
+				 RTC_ALARM_TIME_MASK_SECOND |
+				 RTC_ALARM_TIME_MASK_MINUTE |
+				 RTC_ALARM_TIME_MASK_HOUR, &alarm);
+	(void)rtc_set_time(rtc, &base);
+	gmask = 0xFFFF;
+	if (rtc_alarm_get_time(rtc, 0, &gmask, &galarm) == 0) {
+		printk("after set_time, alarm mask=0x%02x\n", gmask);
+		if (gmask == (RTC_ALARM_TIME_MASK_SECOND | RTC_ALARM_TIME_MASK_MINUTE |
+			      RTC_ALARM_TIME_MASK_HOUR)) {
+			printk("RTC-ALARM-PRESERVE: PASS (set_time kept the alarm armed)\n");
+		} else {
+			printk("RTC-ALARM-PRESERVE: FAIL (set_time disarmed the alarm)\n");
+		}
 	}
 
 	/* Disarm (mask 0) — proves the disable path and stops further fires. */

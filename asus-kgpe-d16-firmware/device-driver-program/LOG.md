@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #187 Zephyr RTC alarm: review-finding fix + QEMU-model faithfulness + deterministic validation
+
+Follow-up to the Zephyr RTC alarm below. An independent code review found ONE real defect
+(confidence 92), and validating the fix exposed a QEMU-model faithfulness gap — three fixes:
+
+1. **Driver (rtc_aspeed_g3.c set_time) — review finding.** The counter-enable CONTROL write was a
+   plain, unlocked `write(ENABLE)` that cleared the whole register, so once the alarm feature could
+   set CONTROL[1:3], calling `rtc_set_time()` AFTER arming silently DISARMED the alarm — a
+   deterministic violation of the Zephyr contract (alarm stays armed until disabled via
+   rtc_alarm_set_time). Fixed: RMW under the driver k_spinlock, preserving the alarm-enable bits,
+   never writing back RESTART[5]. Regression-tested (RTC-ALARM-PRESERVE: PASS).
+
+2. **QEMU model (hw/misc/aspeed_rtc_ast2050.c, submodule) — REAL faithfulness bug the Zephyr test
+   exposed.** The alarm-check timer compared only the single LIVE counter each tick. The counter
+   advances as calendar seconds, so a sec+min+hour alarm matches at exactly ONE tick/day; when the
+   timer fired late (a tight guest poll starving the QEMU main loop) the live counter had already
+   passed that one matching tick and the exact `==` missed → next match a day away → the alarm
+   flaked (fired ~2/3 runs). On silicon the comparator is combinational and the VIC latches the edge
+   the instant the counter reaches the alarm — un-starvable. Fixed with a bounded rising-edge
+   CATCH-UP SCAN over every counter value crossed since the last check (new vmstate alarm_last_abs,
+   v4). The Linux wakealarm had passed only by luck; it still passes (unregressed).
+
+3. **Smoke determinism.** The busy-poll used a tight asm spin (never yields → QEMU can't fire the
+   virtual timer) then k_busy_wait (depends on the unreliable guest tick/cycle-counter on this
+   ARM926 port) — both flaky. Fixed by waiting via CPU halt (k_cpu_atomic_idle/WFI): when the guest
+   halts, QEMU warps virtual time to the next timer deadline, fires the alarm, and wakes on VIC-26 —
+   deterministic and tick-independent, exactly how a real consumer waits.
+
+Result: 4/4 deterministic PASS (RTC-ALARM + PRESERVE), Linux wakealarm unregressed (IRQ26 0→1).
+This is the "weird behaviour = my model/code, fix it proper" principle applied end-to-end: the
+review caught the driver clobber; the flakiness was a genuine model faithfulness gap (skip) plus an
+unrealistic tight-loop test, both fixed rather than worked around. Submodule commit 0bf951aef8.
+Evidence updated in d14-zephyr/26.
+
 ## 2026-07-21 — #187 Zephyr RTC alarm (RTC04 + VIC-26) IMPLEMENTED + QEMU-validated (row 39 ZQ)
 
 Closed the Zephyr QEMU half of the #187 RTC alarm. Added the Zephyr `rtc_driver_api` alarm ops to
