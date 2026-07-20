@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #188 verified + scoped: I²C SDA bus-lock recovery is a real (shared-code, error-path) gap
+
+Investigated gate-d #188 (I²C SDA bus-lock recovery, §31.5.11). Confirmed it's a GENUINE gap (unlike #190's
+buffer-pool mis-flag): the QEMU aspeed_i2c model HEADER defines all the recovery fields —
+I2CD_INTR_STS.BUS_RECOVER_DONE (bit13), engine state I2CD_RECOVER=0x3, FUN_CTRL.M_SDA_LOCK_EN/M_SCL_DRIVE_EN,
+SDA_OE/SCL_OE/SDA_LINE_STS/SCL_LINE_STS — but grep shows NONE are referenced in hw/i2c/aspeed_i2c.c. So the
+model never sets BUS_RECOVER_DONE; a driver running §31.5.11 SCL-toggle recovery after a stuck-SDA timeout
+would never see completion.
+
+Scoped precisely rather than rushed: this is (1) SHARED upstream code (aspeed_i2c.c used by AST2400/2500/
+2600 — must stay unaffected), (2) an I²C ERROR PATH (mainline i2c-aspeed calls recover_bus only on a bus
+timeout, which the clean QEMU bus never produces → firmware-rarely-exercised), and (3) validatable only
+SYNTHETICALLY (devmem-trigger the recovery + read BUS_RECOVER_DONE, since QEMU has no real stuck SDA). The
+implementation is small (set BUS_RECOVER_DONE + idle-high line status on a recovery trigger) but must first
+pin the exact trigger against the mainline recover_bus. Deferred from this extremely-long context-tail to a
+dedicated turn — rushing a shared-code error-path change here would risk a regression against the prime
+directive. Honest scoping is real progress: turned a vague flag into a precise, actionable, risk-assessed
+task (same treatment as #190's DMA half).
+
 ## 2026-07-21 — #189 QE: WDT timeout-INTERRUPT mode (WDT0C[2] -> VIC 27) modeled + validated
 
 Another gate-d sub-block turned into validated emulation. #189: datasheet §27 says the WDT generates

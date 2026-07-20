@@ -668,8 +668,16 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   evidence `d14-zephyr/16`):** modeled RTC04 + RTC0C[1:4] alarm-enables + a periodic match-check that pulses
   a dedicated alarm IRQ wired to VIC 26; validated (VIC raw bit26 latches when the counter reaches the
   alarm). Linux (rtc-aspeed wakealarm) + Zephyr (rtc alarm API) validation remain. Ties to #158/#186.
-- **#188 — I²C SDA bus-lock recovery (§31.5.11)** (row 15): SCL-toggle recovery on a stuck SDA, relevant to
-  the multi-master shared sensor bus; not modeled/validated.
+- **#188 — I²C SDA bus-lock recovery (§31.5.11)** (row 15): **verified real gap 2026-07-21.** The
+  recovery register FIELDS exist in the QEMU model header (`I2CD_INTR_STS.BUS_RECOVER_DONE` bit13, engine
+  state `I2CD_RECOVER=0x3`, `FUN_CTRL.M_SDA_LOCK_EN`/`M_SCL_DRIVE_EN`, `SDA_OE`/`SCL_OE`/`SDA_LINE_STS`/
+  `SCL_LINE_STS`) but are NEVER processed in `hw/i2c/aspeed_i2c.c` — nothing sets `BUS_RECOVER_DONE`, so a
+  driver that runs §31.5.11 SCL-toggle recovery (after a stuck-SDA timeout) would never see completion.
+  SCOPE: on a recovery trigger set `BUS_RECOVER_DONE` (QEMU has no real stuck SDA → recovery always
+  "succeeds") + drive `SDA/SCL_LINE_STS` idle-high. NOTE: shared upstream code (AST2400/2500/2600 must stay
+  unaffected) on an I²C ERROR PATH (mainline `i2c-aspeed` only calls recover_bus on a timeout, which the
+  clean QEMU bus never hits) — so firmware-rarely-exercised, validate SYNTHETICALLY via devmem (trigger
+  recover, read BUS_RECOVER_DONE). A careful standalone item, not a rushed context-tail change.
 - **#189 — WDT timeout-INTERRUPT mode (WDT0C[2]/WDT18)** (row 38): **QE DONE (2026-07-21, submodule
   46cee5fe6a, evidence `f-wdt-userspace/01`):** added an IRQ to the WDT model; at expiry, if WDT_CTRL[2]
   is set the WDT PULSES its IRQ (wired to VIC 27) instead of resetting; reset path UNCHANGED when the bit
