@@ -35,7 +35,13 @@ the ISR ALREADY masks alarm-enable (CONTROL[1:4]=0) yet the line keeps re-assert
 alarm-enable alone does NOT deassert the RTC alarm interrupt (needs a status-clear or it's a
 fast-clock re-match; investigate against datasheet §24 + reproduce in QEMU once #194 models the
 alarm-status). Fast-clock artifact (#158/#186), NOT a correctness bug — the wakealarm test PASSES
-(fires + one-shot cleared). QEMU rtclinux regression check building in parallel.
+(fires + one-shot cleared).
+
+**QEMU regression CONFIRMED (no regression):** rebuilt the QEMU kernel with the fixed driver and
+re-ran the rtclinux gate in QEMU — RTC-LINUX PASS (set 12:45:30 -> read 12:45:41) + RTC-WAKEALARM
+PASS. The bit16-clear is a no-op for the QEMU counter (advances on CONTROL[0]) and the CONTROL[5]
+poll returns immediately (QEMU loads synchronously). Row 39 now green QE/LQ/LS/LU/ZQ; ZS 🔶 (HW
+real-time). Commits fe32a32/0d66a5c/7594cdb + this log. QEMU rtclinux regression check building in parallel.
 
 ## 2026-07-21 — Row 39 LS: netboot UNBLOCKED (static IP) + RTC block PROVEN healthy on silicon; my SCU08[16] "fix" was the regression
 
