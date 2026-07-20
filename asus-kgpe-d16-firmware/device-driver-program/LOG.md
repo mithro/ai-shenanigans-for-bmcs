@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 39 LS (Linux RTC on silicon): silicon-ready kernel BUILT; netboot blocked (honest)
+
+Worked the audit's Tier-2 #7 (Linux RTC on silicon). Prepared everything for it:
+- Fixed the reference realhw dts RTC node (was stale ast2400-rtc → now ast2050-rtc + interrupts=<22>).
+- Confirmed build-realhw-kernel.py builds from the SAME kernel tree (patch 0009 field-packed RTC
+  applied) and ships the QEMU dts (already ast2050-rtc + interrupts=<22>) AS the realhw.dtb — so the
+  realhw kernel is silicon-ready for the RTC without further changes.
+- BUILT it: `tmp/uImage-kgpe-d16-realhw` (3.45 MB) + realhw.dtb, with the field-packed + VIC-22 RTC.
+
+BLOCKED on two things (honest — NOT a driver/hardware problem, and NOT claiming row 39 LS done):
+1. **TFTP-dir permissions:** `/srv/tftp-bmc` is world-writable but the existing
+   uImage-kgpe-d16-realhw / realhw.dtb / uInitrd-kgpe-d16 there are owned by ANOTHER user (`claude`,
+   dated Jul 8-9), so my scp can't OVERWRITE them (dest-open Permission denied). The netboot would run
+   the STALE kernel, not my field-packed/VIC22 one. Workaround = scp under new filenames + TFTP those.
+2. **Interactive netboot:** `boot-silicon-uboot.sh` only brings the board to a U-Boot `boot#` prompt;
+   the Linux TFTP-boot from there (setenv + tftp x3 + bootm with the `rtclinux` bootarg) is an
+   interactive serial workflow, not an automated script like the Zephyr `boot-zephyr-silicon-long.sh`.
+So row 39 LS stays ⬜ — a focused-effort next step (new-filename scp + drive U-Boot over serial +
+capture RTC-LINUX/WAKEALARM). Confidence this is purely a staging/workflow gap (not the driver): HIGH
+— the SAME RTC IRQ path (VIC 22, field-packed RTC04) is ALREADY silicon-proven for the Zephyr alarm
+(#192), and the Linux driver + dtb are QEMU-validated on VIC 22. The Zephyr bare-metal JTAG load is
+the easier silicon path (no U-Boot/netboot); Linux needs the netboot, which is the gap.
+
 ## 2026-07-21 — #176 A2P bridge (row 50 QE ⬜→🔶): datasheet-scoped + window modeled + oracle-safe
 
 Acted on the completeness audit's #1 Tier-1 target (A2P bridge, unblocks video/PCI). Read the
