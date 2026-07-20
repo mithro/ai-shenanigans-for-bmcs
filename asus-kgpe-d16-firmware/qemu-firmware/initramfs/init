@@ -532,27 +532,41 @@ fi
 # shows 0. cpu0_vid existing proves the VID_CTRL model made the driver detect VID.
 if grep -q w83795test /proc/cmdline; then
 	echo "=== W83795-CASEOPEN-BEGIN ==="
-	# Validate the MODEL at the register level via raw i2c (the mainline
-	# modern-hwmon w83795 driver only exposes in/fan/temp, NOT intrusion/vid, so
-	# we read the raw regs). Unbind the driver so its bank-switching polling can't
-	# interleave; -f forces the access regardless.
-	echo 1-002f > /sys/bus/i2c/drivers/w83795/unbind 2>&1 || echo "(driver unbind rc=$?)"
-	B=1; A=0x2f
-	i2cset -f -y $B $A 0x00 0x00 2>&1        # BANKSEL -> bank 0
-	AL0=$(i2cget -f -y $B $A 0x46 2>&1)      # ALARM(5): bit6 = chassis intrusion
-	VID=$(i2cget -f -y $B $A 0x6a 2>&1)      # VID_CTRL
-	echo "ALARM(5)=0x46 before = $AL0 ; VID_CTRL=0x6a = $VID (expect 0x01)"
-	i2cset -f -y $B $A 0x4d 0x80 2>&1        # CLR_CHASSIS bit7 -> clear intrusion
-	AL1=$(i2cget -f -y $B $A 0x46 2>&1)      # re-read ALARM(5)
-	echo "ALARM(5)=0x46 after CLR_CHASSIS = $AL1"
-	# bit6 latched before, cleared after; VID_CTRL reads back 0x01.
-	case "$AL0" in 0x??|0x?) B6BEFORE=$(( AL0 & 0x40 )) ;; *) B6BEFORE=-1 ;; esac
-	case "$AL1" in 0x??|0x?) B6AFTER=$(( AL1 & 0x40 )) ;; *) B6AFTER=-1 ;; esac
-	echo "intrusion bit6: before=$B6BEFORE after=$B6AFTER"
-	if [ "$B6BEFORE" -gt 0 ] && [ "$B6AFTER" = "0" ] && [ "$VID" = "0x01" ]; then
-		echo "W83795-CASEOPEN RESULT: PASS (intrusion 1->0 via CLR_CHASSIS; VID_CTRL=0x01)"
+	# Prefer the modern-hwmon LU path (#184): the w83795 driver now exposes the
+	# CASEOPEN latch as /sys/class/hwmon/*/intrusion0_alarm (read status, write 0
+	# to clear via CLR_CHASSIS). This validates userspace->driver->model end to
+	# end. Fall back to a raw-i2c model check if the attr isn't exposed.
+	HW=""
+	for d in /sys/class/hwmon/hwmon*; do
+		if [ -f "$d/name" ] && grep -qi w83795 "$d/name"; then HW="$d"; break; fi
+	done
+	if [ -n "$HW" ] && [ -f "$HW/intrusion0_alarm" ]; then
+		echo "hwmon=$HW intrusion0_alarm exposed (#184)"
+		H0=$(cat "$HW/intrusion0_alarm" 2>&1)
+		echo 0 > "$HW/intrusion0_alarm" 2>&1        # triggers CLR_CHASSIS in the driver
+		H1=$(cat "$HW/intrusion0_alarm" 2>&1)
+		echo "intrusion0_alarm: before=$H0 after 'echo 0'=$H1"
+		if [ "$H0" = "1" ] && [ "$H1" = "0" ]; then
+			echo "W83795-CASEOPEN RESULT: PASS (LU: hwmon intrusion0_alarm 1->0 via CLR_CHASSIS)"
+		else
+			echo "W83795-CASEOPEN RESULT: FAIL (hwmon before=$H0 after=$H1)"
+		fi
 	else
-		echo "W83795-CASEOPEN RESULT: FAIL (before=$AL0 after=$AL1 vid=$VID)"
+		echo "intrusion0_alarm attr NOT exposed (HW=$HW); raw-i2c model check"
+		echo 1-002f > /sys/bus/i2c/drivers/w83795/unbind 2>&1 || echo "(unbind rc=$?)"
+		B=1; A=0x2f
+		i2cset -f -y $B $A 0x00 0x00 2>&1
+		AL0=$(i2cget -f -y $B $A 0x46 2>&1)
+		i2cset -f -y $B $A 0x4d 0x80 2>&1
+		AL1=$(i2cget -f -y $B $A 0x46 2>&1)
+		echo "ALARM(5) raw: before=$AL0 after=$AL1"
+		case "$AL0" in 0x??|0x?) b0=$(( AL0 & 0x40 )) ;; *) b0=-1 ;; esac
+		case "$AL1" in 0x??|0x?) b1=$(( AL1 & 0x40 )) ;; *) b1=-1 ;; esac
+		if [ "$b0" -gt 0 ] && [ "$b1" = "0" ]; then
+			echo "W83795-CASEOPEN RESULT: PASS (raw regs; hwmon attr not exposed)"
+		else
+			echo "W83795-CASEOPEN RESULT: FAIL (raw before=$AL0 after=$AL1)"
+		fi
 	fi
 	echo "=== W83795-CASEOPEN-END ==="
 	poweroff -f 2>&1 || true

@@ -1,5 +1,5 @@
 diff --git a/drivers/hwmon/w83795.c b/drivers/hwmon/w83795.c
-index c446e00db..24c9c9d00 100644
+index c446e00db..0e50ed515 100644
 --- a/drivers/hwmon/w83795.c
 +++ b/drivers/hwmon/w83795.c
 @@ -319,6 +319,7 @@ enum chip_types {w83795g, w83795adg};
@@ -21,7 +21,7 @@ index c446e00db..24c9c9d00 100644
  	u16 tmp;
  	u8 intrusion;
  	int i;
-@@ -2134,6 +2135,102 @@ static void w83795_apply_temp_config(struct w83795_data *data, u8 config,
+@@ -2134,6 +2135,133 @@ static void w83795_apply_temp_config(struct w83795_data *data, u8 config,
  	}
  }
  
@@ -59,6 +59,8 @@ index c446e00db..24c9c9d00 100644
 +				return 0444;
 +		}
 +		break;
++	case hwmon_intrusion:
++		return 0644;	/* intrusion0_alarm: read CASEOPEN latch, write 0 clears */
 +	default:
 +		break;
 +	}
@@ -85,9 +87,35 @@ index c446e00db..24c9c9d00 100644
 +			*val = temp_from_reg(data->dts[channel - 6]) +
 +			       (data->dts_read_vrlsb[channel - 6] >> 6) * 250;
 +		return 0;
++	case hwmon_intrusion:
++		/* chassis-intrusion (CASEOPEN): ALARM(5) bit6, latched by update */
++		*val = !!(data->alarms[5] & (1 << 6));
++		return 0;
 +	default:
 +		return -EOPNOTSUPP;
 +	}
++}
++
++static int w83795_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
++			      u32 attr, int channel, long val)
++{
++	struct w83795_data *data = dev_get_drvdata(dev);
++	struct i2c_client *client = data->client;
++	u8 tmp;
++
++	if (type != hwmon_intrusion)
++		return -EOPNOTSUPP;
++	/* Only "echo 0 > intrusion0_alarm" (clear the CASEOPEN latch) is defined. */
++	if (val != 0)
++		return -EINVAL;
++
++	mutex_lock(&data->update_lock);
++	tmp = w83795_read(client, W83795_REG_CLR_CHASSIS);
++	w83795_write(client, W83795_REG_CLR_CHASSIS, tmp | 0x80);
++	w83795_read(client, W83795_REG_ALARM(5));	/* refresh the latch */
++	data->valid = false;
++	mutex_unlock(&data->update_lock);
++	return 0;
 +}
 +
 +static const struct hwmon_channel_info * const w83795_hwmon_info[] = {
@@ -108,12 +136,15 @@ index c446e00db..24c9c9d00 100644
 +		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
 +		HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT, HWMON_T_INPUT,
 +		HWMON_T_INPUT, HWMON_T_INPUT),
++	HWMON_CHANNEL_INFO(intrusion,
++		HWMON_INTRUSION_ALARM),
 +	NULL
 +};
 +
 +static const struct hwmon_ops w83795_hwmon_ops = {
 +	.is_visible = w83795_is_visible,
 +	.read = w83795_hwmon_read,
++	.write = w83795_hwmon_write,
 +};
 +
 +static const struct hwmon_chip_info w83795_chip_info = {
@@ -124,7 +155,7 @@ index c446e00db..24c9c9d00 100644
  static const struct i2c_device_id w83795_id[];
  
  static int w83795_probe(struct i2c_client *client)
-@@ -2149,6 +2246,7 @@ static int w83795_probe(struct i2c_client *client)
+@@ -2149,6 +2277,7 @@ static int w83795_probe(struct i2c_client *client)
  		return -ENOMEM;
  
  	i2c_set_clientdata(client, data);
@@ -132,7 +163,7 @@ index c446e00db..24c9c9d00 100644
  	data->chip_type = i2c_match_id(w83795_id, client)->driver_data;
  	data->bank = i2c_smbus_read_byte_data(client, W83795_REG_BANKSEL);
  	mutex_init(&data->update_lock);
-@@ -2222,7 +2320,8 @@ static int w83795_probe(struct i2c_client *client)
+@@ -2222,7 +2351,8 @@ static int w83795_probe(struct i2c_client *client)
  	if (data->chip_type == w83795g)
  		w83795_check_dynamic_in_limits(client);
  

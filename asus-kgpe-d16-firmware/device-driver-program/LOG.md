@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #184 DONE (rotated to implementation): W83795 CASEOPEN now userspace-visible + LU validated end-to-end
+
+Rotated from the review sweep to concrete device work — closed #184 (the Linux-driver gap found while
+validating the CASEOPEN model): the modern-hwmon w83795 patch (0003) exposed only in/fan/temp, so the
+CASEOPEN latch I modeled wasn't reachable from userspace. Fixed the DRIVER: added an intrusion channel to
+the modern hwmon interface — HWMON_CHANNEL_INFO(intrusion, HWMON_INTRUSION_ALARM), is_visible 0644,
+hwmon_read case (ALARM(5) bit6), a new w83795_hwmon_write (write 0 → CLR_CHASSIS[7], mirroring the legacy
+store_chassis_clear), and .write in the ops. Incrementally rebuilt the C2 kernel (`CC drivers/hwmon/
+w83795.o`, clean; uImage ready) and re-ran the w83795test gate through the STANDARD userspace path:
+**`intrusion0_alarm` before=1 → `echo 0` → after=0 → W83795-CASEOPEN RESULT: PASS (LU)`** (evidence
+`d08-w83795-caseopen/00`). So the FULL userspace path is proven: `/sys/class/hwmon` → w83795 hwmon driver →
+i2c-dev → aspeed I2C engine 1 → QU9/QU5 fabric → the W83795 CASEOPEN model. That is the goal's "validate
+proper user space interfacing with the hardware" deliverable for the CASEOPEN capability (row 16 LU).
+Persisted the driver change by regenerating the 0003 patch from `git diff` (verified it contains the
+intrusion additions; it's guaranteed to re-apply since it IS the diff from pristine mainline HEAD, which
+build-kernel.sh clones). Updated the w83795test gate to prefer the hwmon LU path (raw-i2c fallback kept).
+**#184 CLOSED** (cpu0_vid still not surfaced — modern hwmon has no VID channel type; a devattr for VID is a
+trivial low-value follow-on, the board's CPU VID isn't safety-critical). This is a full concrete cycle:
+Linux driver extension + incremental kernel rebuild + end-to-end userspace validation + patch persistence.
+
 ## 2026-07-20 — gate-(b) FINAL substantial batch (4 agents): SDMC + video-model CLEAN; 1 REAL vhub finding; 1 FALSE-POSITIVE caught by verification
 
 Dispatched the final substantial gate-(b) batch — 4 parallel agents on the last developed QEMU + Linux

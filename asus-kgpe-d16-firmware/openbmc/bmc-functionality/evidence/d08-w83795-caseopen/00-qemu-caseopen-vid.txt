@@ -52,3 +52,26 @@ deep W83795 datasheet RE; SMBALERT ties into the shared aspeed_i2c ALERT work
 #135/#157). Honest first attempt FAILED: the initial test read /sys/class/hwmon/
 */intrusion0_alarm, which the modern-hwmon driver patch does NOT expose — a
 test-path bug (+ a real Linux-driver gap), fixed by validating the raw registers.
+
+===== UPGRADE: CASEOPEN LU (userspace) VALIDATED via /sys/class/hwmon (#184, 2026-07-20) =====
+The Linux-driver gap above is now closed: extended the modern-hwmon w83795 driver
+patch (0003) to expose the chassis-intrusion latch as the standard hwmon
+intrusion0_alarm attribute — HWMON_CHANNEL_INFO(intrusion, HWMON_INTRUSION_ALARM),
+is_visible 0644, read = ALARM(5) bit6, write(0) = CLR_CHASSIS[7]. Incrementally
+rebuilt the C2 kernel (CC drivers/hwmon/w83795.o, clean) and re-ran the w83795test
+gate through the STANDARD userspace path:
+
+===== CAPTURED CONSOLE (QEMU) =====
+=== W83795-CASEOPEN-BEGIN ===
+hwmon=/sys/class/hwmon/hwmon0 intrusion0_alarm exposed (#184)
+intrusion0_alarm: before=1 after 'echo 0'=0
+W83795-CASEOPEN RESULT: PASS (LU: hwmon intrusion0_alarm 1->0 via CLR_CHASSIS)
+
+DECODE: `cat intrusion0_alarm` = 1 (the seeded CASEOPEN latch, read via the driver
+from the model's ALARM(5) bit6). `echo 0 > intrusion0_alarm` makes the driver write
+CLR_CHASSIS[7] to the model, clearing the latch; a re-read returns 0. So the FULL
+userspace path is validated: userspace (/sys/class/hwmon) -> w83795 hwmon driver ->
+i2c-dev -> aspeed I2C engine 1 -> QU9/QU5 fabric -> W83795 CASEOPEN model. This is
+the "validate proper user space interfacing with the hardware" deliverable for the
+CASEOPEN capability (row 16 LU). #184 CLOSED. (cpu0_vid is not exposed — modern
+hwmon has no VID channel type; a devattr for VID is a separate small follow-on.)
