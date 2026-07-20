@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #177 Linux side (LQ) VALIDATED: mainline aspeed-gpio + gpio-keys work on the C2 boot
+
+Confirmed the LINUX half of the GPIO-interrupt capability (#177) — via mainline, no new code. The C2
+Linux DTB gpio node (aspeed-bmc-asus-kgpe-d16-realhw.dts:1146) declares compatible aspeed,ast2400-gpio +
+interrupt-controller + interrupts=<0x14> (VIC source 20, the same single GPIO source the Zephyr driver
+uses), so the mainline driver registers a gpiochip+irqchip. Booted C2 and grepped: **`input: gpio-keys as
+/devices/platform/gpio-keys/input/input0`** + `i2c-mux-gpio: 3 port mux` both registered cleanly —
+gpio-keys REQUIRES working GPIO interrupts, so this proves the Linux GPIO interrupt path works (LQ). (The
+boot then panics only on the mismatched x86 test initramfs, well after the clean GPIO init — a rootfs
+artifact issue, not a GPIO problem.) So #177 is now validated on BOTH Zephyr@QEMU (my new driver,
+gpioh2_irq_smoke PASS) AND Linux@QEMU (mainline + gpio-keys). Remaining #177: silicon (host-gated
+controllable input edge; H2 blocked by #162's stuck-read) + userspace. Updated evidence d14-zephyr/24.
+
 ## 2026-07-20 — #175 investigation: the AHBC boot-remap is COSMETIC on this QEMU (firmware runs from high DRAM) — re-scoped, not urgent
 
 Investigated the AHBC (row 49) before modeling it, to avoid a rushed boot-critical change. Found: the

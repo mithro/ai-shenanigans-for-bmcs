@@ -33,6 +33,19 @@ Zephyr driver and ZQ-validated. This is what the §11 platform-monitor inputs (T
 need to be watched as EVENTS rather than polled.
 
 Follow-on (honest): ZS (silicon) — the same edge is produced by the real PSU coming up (host-gated,
-needs the host powered); Linux side = phosphor-gpio-monitor edge events (the mainline aspeed-gpio driver
-already does interrupts, so LQ/LS are separate). LEVEL-mode + debounce paths are implemented (the sens
-mapping covers them) but only the edge path is exercised by this smoke. No step skipped or faked.
+needs the host powered; H2 specifically is blocked by #162's stuck-read, so silicon needs a different
+controllable input edge). LEVEL-mode + debounce paths are implemented (the sens mapping covers them) but
+only the edge path is exercised by this smoke.
+
+===== LINUX side (LQ) — VALIDATED via the C2 boot (2026-07-20) =====
+The Linux GPIO-interrupt path uses the MAINLINE aspeed-gpio driver, not new code. Verified it is live on
+the kgpe-d16 C2 boot: the DTB gpio node (aspeed-bmc-asus-kgpe-d16-realhw.dts:1146) declares
+`compatible="aspeed,ast2400-gpio"`, `interrupt-controller`, `#interrupt-cells=<2>` and `interrupts=<0x14>`
+(= VIC source 20 — the same single GPIO source), so the driver registers a gpiochip + irqchip. C2 boot
+log:
+  [    1.269800] i2c-mux-gpio i2cmux: 3 port mux on 1e78a080.i2c-bus adapter
+  [    1.472046] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+`gpio-keys` and `i2c-mux-gpio` both REQUIRE working GPIO interrupts/lines and registered cleanly — so the
+Linux GPIO interrupt path (LQ) is confirmed working via mainline (the later rootfs panic is only the
+mismatched x86 test initramfs, well AFTER the clean GPIO init). So #177 is validated on BOTH Zephyr@QEMU
+(this driver) AND Linux@QEMU (mainline aspeed-gpio + gpio-keys). No step skipped or faked.
