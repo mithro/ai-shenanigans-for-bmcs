@@ -1,5 +1,39 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(c) integrity + Gate-(d) new-task discovery: trackers HONEST; 5 sub-block tasks added
+
+Ran the two remaining completion gates as independent sub-agent sweeps.
+
+**Gate-(c) weasel/over-claim audit — PASS (no dishonest/over-stated claims).** The auditor spot-checked the
+highest-risk class (Zephyr-silicon ✅) and confirmed EVERY one has a dedicated md5-verified JTAG transcript
+(rows 15/16 W83795 live-drift, 20 FRU, 21/22 W83601G, 35 SCU, 36/37 VIC/timer, 38 WDT), plus LS/LU ✅ (row
+3 KCS real host mc info, 23 SB-TSI, 32 LEDs, 8 video 28418-byte frame, 9 USB). `tally.py` reproduces the
+snapshot exactly. Ⓝ dispositions (40 PWM, 42 PECI, 41 ADC, 19 TSOD, 13 QU6) all hold against the schematic.
+Verdict: trackers are "unusually rigorous and self-critical" — replete with dated HONESTY CORRECTIONs that
+DOWNGRADE cells. Two low-severity doc-accuracy nits fixed: (1) row-3 KCS evidence citation pointed at
+`evidence/host-kcs/` but the real-silicon transcript is `real-hw-hwpass/host-kcs-mc-info-fru.txt` (claim
+backed, citation now precise); (2) row-8 video LS 🔶 (matrix) vs B3 `[x]` (FULL-TASK-LIST) — documented the
+aggregate↔split granularity mapping so the two docs demonstrably agree (matrix row folds B2+B3+B3b).
+
+**Gate-(d) new-task discovery — does NOT cleanly pass; 5 genuine tasks ADDED (#187-#191).** The device+stack
+enumeration is complete (gate-a), but an independent datasheet-level sweep found five register-level
+functional sub-blocks a "complete emulation of ALL functionality" demands, sitting UNTRACKED inside
+otherwise-✅ QE cells (previously only weakly noted as #177 "siblings", never rowed/scoped):
+- **#187 RTC alarm RTC04 + IRQ 26** (row 39) — §24 mandates a programmable alarm w/ interrupt; #158 modeled
+  only the free-running counter (the G3 RTC model doesn't handle reg 0x04 at all). Ties to #158/#186.
+- **#188 I²C SDA bus-lock recovery** (row 15, §31.5.11) — SCL-toggle recovery on a stuck SDA; board-relevant
+  on the multi-master shared sensor bus; unmodeled.
+- **#189 WDT timeout-INTERRUPT mode** (row 38, WDT0C[2]/WDT18) — only the reset path validated.
+- **#190 I²C buffer-pool/DMA-buffer transfer modes** (row 15, §31.5.2/3/9) — only byte-mode; needs a
+  model-or-Ⓝ disposition.
+- **#191 SCU freq-counter/int-ctrl/32.768kHz error-correction** (row 35) — un-enumerated; SCU1C ties to the
+  #158/#186 RTC-accuracy story.
+Recorded all five in the DEVICE-MATRIX completeness section (so a future audit sees them tracked, not
+silently absent) and as tracker tasks. These are register-level completeness items, NOT device-enumeration
+gaps — gate-a coverage is unaffected — but they mean rows 39/15/38/35 are not TRULY 100% QE until
+dispositioned. Honest consequence: gate-(d) is now "re-runnable" — the list grew, so completion is not
+declarable until #187-191 (and the other open ⬜/#-tasks) are closed and a fresh gate-(d) comes back empty.
+
 ## 2026-07-21 — Gate-(b): code review of this session's new code — both CLEAN (1 comment sync)
 
 Ran completion-gate (b) on the code developed THIS session (the prior gate-b sweep covered the older
