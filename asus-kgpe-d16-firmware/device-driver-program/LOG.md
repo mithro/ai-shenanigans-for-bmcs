@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(b) on the new RTC Linux driver + #189-Linux scope refined (WDT pretimeout mismatch)
+
+Two things:
+1. **Gate-(b) dispatched** on this session's substantial new code — the counter-RTC Linux driver + wakealarm
+   (patch 0009, drivers/rtc/rtc-aspeed.c). An independent adversarial code-reviewer is checking the
+   byte-packed read/set, the alarm ops (RTC04/RTC0C RMW, IRQ handler one-shot, no lock), probe (two ops
+   structs, device_init_wakeup gating, BCD-path non-regression). Findings will be actioned when it returns.
+   This is the right discipline: verify the new driver before building more on it (it already had one real
+   omission I caught empirically — device_init_wakeup).
+2. **#189-Linux scope refined (honest finding).** Investigated the Linux side of the WDT interrupt mode.
+   mainline aspeed_wdt.c HAS pretimeout+interrupt (aspeed_wdt_set_pretimeout, WDT_CTRL_WDT_INTR BIT(2),
+   of_irq/devm_request_irq) — BUT it's a 2-STAGE pretimeout (IRQ at timeout−pretimeout, reset at full
+   timeout), a DIFFERENT semantic than the datasheet-§27 "interrupt INSTEAD of reset" (WDT_CTRL_WDT_INTR)
+   that my #189 QE model implements; and the g4.dtsi ast2400-wdt node wires NO interrupt. So Linux #189 is
+   not a clean drop-in like the RTC was — it needs the pretimeout↔interrupt-mode mapping resolved + the dts
+   IRQ wired + (possibly) the model extended to the 2-stage pretimeout counter. Recorded on #189; low
+   priority (firmware-unexercised — mainline/Zephyr WDT use reset mode). Not attempted blind; scoped honestly.
+
 ## 2026-07-21 — #187 Linux wakealarm (RTC04 + IRQ26) IMPLEMENTED + validated
 
 Extended the just-landed G3 counter-RTC Linux driver (patch 0009) with the wakealarm, consuming the #187
