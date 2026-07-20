@@ -446,11 +446,14 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     faithful AHBC 0x8C model. **UQ/US=🔶** — the loader (Raptor/U-Boot) DOES use the AHBC8C boot-remap,
     but on the faked model. L/Z=Ⓝ (no runtime OS driver). Follow-on: faithfully model 0x8C/priority/IRQ
     (#175). This is boot-critical, so it is NOT a phantom to gate — it is a real block to MODEL.
-  - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=⬜** — NOT modeled; worse, QEMU currently maps
-    `ASPEED_DEV_SRAM` at 0x1E720000, but the memory-map §9 assigns that address to the A2P bridge on the
-    G3 (a G4-vs-G3 address discrepancy, #176 — SRAM was even in #144's phantom-removal scope). The A2P
-    forward bridge + the PCI-slave P2A backdoor (culvert path) are partly under row 8; a faithful A2P
-    model + resolving the SRAM placement is #176 (oracle-sensitive). All driver stacks Ⓝ (no runtime
+  - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=⬜** — not yet faithfully modeled. **SRAM/A2P
+    discrepancy RESOLVED (2026-07-20, submodule 4de9aa40c7):** QEMU used to map `ASPEED_DEV_SRAM` (a G4
+    RAM block) at 0x1E720000, but §9 assigns that address to the A2P bridge on the G3 — the SRAM phantom
+    is now GATED off the G3 (like xdma/sdhci #172), so 0x1E720000 falls back to the `ASPEED_DEV_IOMEM`
+    unimplemented catch-all (responds, no abort) instead of a wrong SRAM. Validated: mtree shows 0
+    aspeed.sram; spd/w83795 smokes PASS. The A2P forward bridge + the PCI-slave P2A backdoor (culvert)
+    are partly under row 8; a FAITHFUL A2P model there (QE ⬜→) + oracle re-validation of the SRAM gate
+    remain the open #176 follow-on (oracle-sensitive). All driver stacks Ⓝ (no runtime
     BMC A2P driver). **Consistency fix (2026-07-20):** row 44 MIC ZQ/ZS Ⓝ→⬜ to match its LQ/LS=⬜ (an
     error-reporter driver is equally plausible/absent on every runtime stack).
 

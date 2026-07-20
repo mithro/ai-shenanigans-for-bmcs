@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #176 partial: gated the phantom SRAM off the G3 (0x1E720000 = A2P, not SRAM) — SRAM/A2P discrepancy resolved
+
+Worked the #176 faithfulness bug. Verified the ground truth first (memory map §9): the AST2050 (G3) has
+NO on-chip SRAM — 0x1E720000 is the A2P (AHB→PCI) bridge (map:55/99), and the datasheet lists no SRAM
+block (only SCU/VGA scratch REGISTERS, not an SRAM). So QEMU mapping ASPEED_DEV_SRAM (a G4 RAM block) at
+0x1E720000 was a G4 phantom occupying the real A2P address (SRAM was even named in #144's phantom scope
+but never gated). Confirmed s->sram has NO other references (no boot-from-sram) and that the
+ASPEED_DEV_IOMEM unimplemented catch-all (0x1E600000 + 0x200000) covers 0x1E720000 — so gating the SRAM
+lets 0x1E720000 fall back to the catch-all (RESPONDS, no abort), which is the key safety property.
+FIX: gated the SRAM init_ram+map on silicon_rev != AST2050_A1_SILICON_REV (same pattern as xdma/sdhci
+#172). Submodule commit 4de9aa40c7. VALIDATED for the SoC: builds clean; mtree shows 0 aspeed.sram on
+kgpe-d16-bmc; spd_smoke + w83795_smoke still PASS (SoC intact). Updated the row-50 A2P note.
+HONESTY / #176 STAYS OPEN: this resolves the SRAM/A2P *placement* discrepancy (removes the wrong SRAM;
+0x1E720000 now unimplemented-not-wrong), but (a) a FAITHFUL A2P bridge model is still ⬜ (row 50 QE=⬜),
+and (b) per the "legacy firmware must ALWAYS keep booting" rule this oracle-sensitive change needs a
+C2/C4/C-UBOOT re-run as due-diligence before it's certified safe. Low-risk (faithful firmware can't rely
+on RAM at the A2P address; the smokes are unaffected) but NOT claimed done — #176 remains in_progress.
+
 ## 2026-07-20 — Gate-(b) new-code SEAL (CLEAN) + 2nd gate-(d) pass found MORE (AHBC/A2P/GPIO-irq → #175-177); rows 49-50 added
 
 Combined independent pass over THIS session's new code + a 2nd adversarial task-hunt.
