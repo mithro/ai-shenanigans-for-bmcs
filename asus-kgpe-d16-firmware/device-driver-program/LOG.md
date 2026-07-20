@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-b QEMU VUART/LPC OR-gate FIXED + validated (#196) — sweep now fully clean (7/7)
+
+Fixed the last code-review finding from the sweep. Confirmed via the datasheet FIRST (don't guess the
+fix): AST2050 Interrupt Source Table (§10, Table 36) has a SINGLE "LPC interrupt" at VIC source 8 and NO
+separate VUART source — VUART is an LPC sub-IRQ — so the irqmap (VUART=8, LPC=8) is CORRECT and the fix
+is to OR-combine, not re-number. Added a 2-input TYPE_OR_IRQ (`vuart_lpc_orgate` in Aspeed2400SoCState):
+VUART=input0, lpc_g3=input1, OR output -> VIC 8. Submodule 3b234b40c3.
+**Self-inflicted bug caught + fixed (it's your code):** the first draft segfaulted the machine (smoke:
+qemu exited -11) because I took `DEVICE(&a->vuart_lpc_orgate)` BEFORE object_initialize_child — the QOM
+`DEVICE()` cast dereferenced an uninitialised class pointer. The run-qemu.py SMOKE test caught it
+immediately; fix = take the DEVICE ptr AFTER init. VALIDATED after the fix: smoke instantiates OK,
+rtclinux boots + PASS, and lpc-test = `LPC_CORE_OK` (both `/dev/ipmi-kcs3` KCS and `ttyS5 ASPEED VUART`
+bind through the OR-gated line). So the KCS(IPMI) + VUART(SOL) IRQs can no longer clobber each other.
+**Gate-b sweep tally for the cycle: 7 real bugs found, 7 FIXED** (RTC ×2, RTC re-anchor, Zephyr ×4 [note:
+that's 6 across those], + this QEMU OR gate) — none catchable by the smoke tests alone; i2c/wdt/SCU/
+w83795/w83601g-model all cleared clean. Independent review earned its keep.
+
 ## 2026-07-21 — Gate-b code-review SWEEP across Zephyr + QEMU subsystems — 5 more real bugs found; Zephyr 4 FIXED
 
 Dispatched 3 independent code-reviewer sub-agents (max-5 rule respected) over the custom developed
