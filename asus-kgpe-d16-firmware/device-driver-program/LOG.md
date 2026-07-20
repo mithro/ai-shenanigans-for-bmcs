@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #181 RESOLVED (rotated to implementation): the MAC PHY "divergence" was a naming artifact — model is FAITHFUL (silicon-proven)
+
+Rotated from meta-work (4 review/audit cycles) to concrete implementation on a fresh tracked gap, per the
+"work on another part" guidance. Took #181 (gate-d faithfulness flag: model returns RTL8201CP PHY-ID, board
+U5 is RTL8201N). INVESTIGATED before "fixing" — and the fix turned out to be that there is NO divergence:
+- `hw/net/ftgmac100.c` returns the legacy Realtek RTL8201-family MDIO PHY-ID `0x0000_8201`; Linux `realtek.c`
+  names that id "RTL8201CP".
+- The REAL AST2050 reports the SAME id: `evidence/.../real-hw-g3clk/boot-noclkignore-console.log:137` (a
+  `boot#`-prompt TFTP-netbooted SILICON boot) shows Linux attaching "RTL8201CP" — IDENTICAL to the QEMU
+  boots (d07-ncsi/00, d08-spd/00, real-hw-hwpass/attempt10 all show "RTL8201CP Ethernet ... attached").
+- So the schematic's "RTL8201N-GR" part-label and the 0x8201-id "RTL8201CP" are the same legacy Realtek
+  RTL8201-family PHY / same 10/100 RMII register surface. The model reproduces exactly what the silicon puts
+  on MDIO → FAITHFUL. The gate-d flag was a naming inconsistency (code comment said CP, schematic says N),
+  NOT a behavioural divergence.
+Action: reconciled the ftgmac100.c comment to state the RTL8201N/CP naming + the silicon evidence (submodule
+65e7d9235e, comment-only, no behaviour change, pushed); updated the row-10 note RESOLVED; bumped the parent
+submodule pointer. **#181 CLOSED.** Discipline note: this is the goal's own thesis — a suspected faithfulness
+divergence, resolved by consulting what the HARDWARE actually does (MDIO readback), not by "fixing" a model
+that already matched it. (No QEMU rebuild / oracle re-boot needed: comment-only + the behaviour was already
+silicon-proven.)
+
 ## 2026-07-20 — gate-(a)/(c)/(d) audit pass (3 parallel independent sub-agents): completeness + honesty CONFIRMED; gate-d found 3 real new tasks (#181/#182/#183)
 
 Rotated from the gate-(b) code sweep to the completeness/faithfulness gates (a/c/d), which the feedback flagged
