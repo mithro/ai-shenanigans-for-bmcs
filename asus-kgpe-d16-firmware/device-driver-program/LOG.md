@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-20 — #182 re-scoped: the USB virtual-media "unvalidated" flag was a MIS-FLAG — mass-storage gadget IS validated QEMU + SILICON
+
+Investigated the 2nd gate-d task (#182, "iKVM virtual-media validated by no stack") before implementing —
+and, like #181, the flag was largely wrong. The virtual-MEDIA mass-storage gadget is already implemented AND
+validated across stacks; the audit only inspected the f8-kvm HID transcript and missed the f6-usb evidence:
+- **Implemented:** the initramfs `f6usb` init gate builds a `mass_storage.0` gadget via configfs (backing
+  image `/tmp/vmedia.img`) and binds it to the dummy_hcd software UDC so the in-guest host enumerates it.
+- **QEMU-validated:** `evidence/f6-usb/03-gadget-enumeration-demo.txt` — `Mass Storage Function, version:
+  2009/09/11`, the gadget enumerates as idVendor=1d6b/idProduct=0104 "AST2050 vKVM virtual-media" over
+  dummy_hcd (aspeed-vhub also probes its 7 ports). PASS.
+- **SILICON-validated:** `evidence/real-hw-usb/02-SILICON-USB-ENUMERATION-PASS.txt` — the REAL AST2050 (JTAG
+  bring-up → DDR2 train → TFTP-netboot the usbip kernel) presents the mass-storage gadget, and a SEPARATE
+  REAL Linux host (the RPi4 bridge over USB/IP) enumerates it (`usb-storage ... USB Mass Storage device
+  detected`) and reads `/dev/sda offset512 = [KGPE-D16-USBIP-VMEDIA-OK]` back. Real host, real read-back.
+So the virtual-media capability EXISTS and works both sides. The gate-d "un-validated" claim was a mis-flag
+(exactly the "incorrect claims about functionality not-existing" the program goal warns about). Corrected
+the row-9 note with the evidence citations.
+**The ONE genuine remaining delta:** §9 says "virtual ... CD", but the gadget today presents a removable
+DISK (`mass_storage lun.0`), not a SCSI CD-ROM (`lun.0/cdrom=1`). Re-scoped #182 to just that: add cdrom=1
+to the f6usb block + one USB-harness re-run to capture the CD-ROM (sr0) enumeration. Deferred the actual
+add+re-run this cycle to avoid a heavy USB-kernel rebuild (build-usbip.py) for a SCSI-type flag — and,
+importantly, to NOT commit an un-validated code change that would desync from the existing (disk) evidence.
+#182 stays OPEN for that small delta; the vhub-to-real-host EP-DMA path stays the row-9 LS 🔷 rig-block.
+Pattern note: 2 of the 3 gate-d tasks (#181, #182) turned out to be mis-flags resolved by finding the
+existing silicon evidence — a convergence signal (the audit surfaced things worth checking; checking proved
+them already-done). #183 (W83795 SmartFan/CASEOPEN/VID) remains genuine model work.
+
 ## 2026-07-20 — #181 RESOLVED (rotated to implementation): the MAC PHY "divergence" was a naming artifact — model is FAITHFUL (silicon-proven)
 
 Rotated from meta-work (4 review/audit cycles) to concrete implementation on a fresh tracked gap, per the
