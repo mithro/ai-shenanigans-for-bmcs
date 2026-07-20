@@ -1,8 +1,8 @@
 diff --git a/drivers/rtc/rtc-aspeed.c b/drivers/rtc/rtc-aspeed.c
-index 880b015ee..5d262e311 100644
+index 880b015ee..b4645a792 100644
 --- a/drivers/rtc/rtc-aspeed.c
 +++ b/drivers/rtc/rtc-aspeed.c
-@@ -1,17 +1,48 @@
+@@ -1,17 +1,49 @@
  // SPDX-License-Identifier: GPL-2.0+
  // Copyright 2015 IBM Corp.
  
@@ -13,6 +13,7 @@ index 880b015ee..5d262e311 100644
  #include <linux/platform_device.h>
  #include <linux/rtc.h>
  #include <linux/io.h>
++#include <linux/iopoll.h>
 +#include <linux/spinlock.h>
 +
 +/*
@@ -51,7 +52,7 @@ index 880b015ee..5d262e311 100644
  #define RTC_TIME	0x00
  #define RTC_YEAR	0x04
  #define RTC_CTRL	0x10
-@@ -19,12 +50,50 @@ struct aspeed_rtc {
+@@ -19,12 +51,51 @@ struct aspeed_rtc {
  #define RTC_UNLOCK	BIT(1)
  #define RTC_ENABLE	BIT(0)
  
@@ -61,6 +62,7 @@ index 880b015ee..5d262e311 100644
 +#define G3_RTC_CONTROL		0x0C	/* [0] enable */
 +#define G3_RTC_RESTART		0x10	/* write 0x5A -> COUNTER := RELOAD */
 +#define G3_RTC_CTRL_ENABLE	BIT(0)
++#define G3_RTC_CTRL_RESTART_BUSY BIT(5)	/* CONTROL[5]: 1 while a RESTART load is in progress */
 +#define G3_RTC_RESTART_MAGIC	0x5A
 +
  static int aspeed_rtc_read_time(struct device *dev, struct rtc_time *tm)
@@ -102,7 +104,7 @@ index 880b015ee..5d262e311 100644
  	if (!(readl(rtc->base + RTC_CTRL) & RTC_ENABLE)) {
  		dev_dbg(dev, "%s failing as rtc disabled\n", __func__);
  		return -EINVAL;
-@@ -53,9 +122,31 @@ static int aspeed_rtc_read_time(struct device *dev, struct rtc_time *tm)
+@@ -53,9 +124,58 @@ static int aspeed_rtc_read_time(struct device *dev, struct rtc_time *tm)
  static int aspeed_rtc_set_time(struct device *dev, struct rtc_time *tm)
  {
  	struct aspeed_rtc *rtc = dev_get_drvdata(dev);
@@ -111,6 +113,9 @@ index 880b015ee..5d262e311 100644
  	int year, cent;
  
 +	if (rtc->config->counter_style) {
++		u32 val;
++		int ret;
++
 +		/*
 +		 * Program the byte-packed time-of-day + day into RELOAD, pulse
 +		 * RESTART (0x5A) to latch it into the live COUNTER, then enable the
@@ -123,18 +128,42 @@ index 880b015ee..5d262e311 100644
 +
 +		writel(reg1, rtc->base + G3_RTC_RELOAD);
 +		writel(G3_RTC_RESTART_MAGIC, rtc->base + G3_RTC_RESTART);
-+		/* CONTROL RMW shared with the alarm IRQ handler — irq-safe lock. */
++		/*
++		 * CONTROL RMW: set ENABLE[0], clear the RESTART status bit[5] (never
++		 * write 1 back to it), and preserve the alarm-enable bits [1:4] so
++		 * set_time does not silently disarm an armed alarm.  Shared with the
++		 * alarm IRQ handler, so the RMW is irq-safe locked; the poll below is
++		 * read-only and stays outside the lock.
++		 */
 +		spin_lock_irqsave(&rtc->lock, flags);
 +		ctrl = readl(rtc->base + G3_RTC_CONTROL);
-+		writel(ctrl | G3_RTC_CTRL_ENABLE, rtc->base + G3_RTC_CONTROL);
++		ctrl = (ctrl & ~G3_RTC_CTRL_RESTART_BUSY) | G3_RTC_CTRL_ENABLE;
++		writel(ctrl, rtc->base + G3_RTC_CONTROL);
 +		spin_unlock_irqrestore(&rtc->lock, flags);
++
++		/*
++		 * The RELOAD->COUNTER load is ASYNCHRONOUS to the RTC clock and
++		 * "needs about 0~3 seconds" (datasheet §24.4.3); CONTROL[5] reads 1
++		 * until it completes.  WAIT for it, so a read_time immediately after
++		 * (e.g. hwclock -w then -r) returns the value we just set rather than a
++		 * stale/zero counter.  Silicon-proven need (#187 LS): without the wait
++		 * the set->get round-trip read back 00:00:0x on real hardware.  In QEMU
++		 * the load is modelled as instant (CONTROL[5] already 0) so this returns
++		 * immediately.
++		 */
++		ret = readl_poll_timeout(rtc->base + G3_RTC_CONTROL, val,
++					 !(val & G3_RTC_CTRL_RESTART_BUSY),
++					 1000, 4 * USEC_PER_SEC);
++		if (ret)
++			dev_warn(dev, "RTC restart load did not complete (CONTROL=%#x)\n",
++				 readl(rtc->base + G3_RTC_CONTROL));
 +		return 0;
 +	}
 +
  	cent = (tm->tm_year + 1900) / 100;
  	year = tm->tm_year % 100;
  
-@@ -77,11 +168,102 @@ static int aspeed_rtc_set_time(struct device *dev, struct rtc_time *tm)
+@@ -77,11 +197,102 @@ static int aspeed_rtc_set_time(struct device *dev, struct rtc_time *tm)
  	return 0;
  }
  
@@ -237,7 +266,7 @@ index 880b015ee..5d262e311 100644
  static int aspeed_rtc_probe(struct platform_device *pdev)
  {
  	struct aspeed_rtc *rtc;
-@@ -90,6 +272,12 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
+@@ -90,6 +301,12 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
  	if (!rtc)
  		return -ENOMEM;
  
@@ -250,13 +279,37 @@ index 880b015ee..5d262e311 100644
  	rtc->base = devm_platform_ioremap_resource(pdev, 0);
  	if (IS_ERR(rtc->base))
  		return PTR_ERR(rtc->base);
-@@ -100,17 +288,40 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
+@@ -100,17 +317,64 @@ static int aspeed_rtc_probe(struct platform_device *pdev)
  
  	platform_set_drvdata(pdev, rtc);
  
 -	rtc->rtc_dev->ops = &aspeed_rtc_ops;
 +	if (rtc->config->counter_style) {
 +		int irq = platform_get_irq_optional(pdev, 0);
++		void __iomem *scu;
++
++		/*
++		 * The AST2050 (G3) counter RTC clock source is selected by SCU08[16]:
++		 * 0 = 32.768 kHz source (SoC default, SCU08 Init = 0xE3F00070), 1 = the
++		 * 24 MHz "test only" tap (datasheet §24 / SCU08[16] "for test only").
++		 * On the KGPE-D16 the RTC must run with bit16 = 0: PROVEN on real
++		 * silicon (#187 LS) — under U-Boot's clock config the counter LOADS its
++		 * RELOAD and ADVANCES with bit16=0 (U-Boot md/mw: 0x000c2d1e ->
++		 * 0x000c2d26 -> ...), while forcing bit16=1 either freezes the counter
++		 * at 0x0 (Linux) or produces garbage (U-Boot). An earlier revision of
++		 * this driver forced bit16=1 (mis-generalised from the BARE-METAL Zephyr
++		 * boot, which sets up no 32 kHz path and so needs the 24 MHz tap); that
++		 * write was the actual silicon regression. Explicitly CLEAR bit16 here so
++		 * a stray bootloader value cannot break the RTC. SCU08 is protected, so
++		 * write the unlock key to SCU00 first. (QEMU advances the counter on
++		 * CONTROL[0] regardless of bit16, so this is behaviour-neutral there.)
++		 */
++		scu = ioremap(0x1e6e2000, 0x10);
++		if (scu) {
++			writel(0x1688a8a8, scu + 0x00);
++			writel(readl(scu + 0x08) & ~BIT(16), scu + 0x08);
++			iounmap(scu);
++		}
 +
 +		rtc->rtc_dev->ops = &aspeed_rtc_counter_ops;
 +		/*

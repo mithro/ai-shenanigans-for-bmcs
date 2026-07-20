@@ -729,6 +729,10 @@ if grep -q rtclinux /proc/cmdline; then
 	echo "=== RTC-LINUX-BEGIN ==="
 	ls -la /dev/rtc* 2>&1
 	echo "rtc0/name = $(cat /sys/class/rtc/rtc0/name 2>&1)"
+	# Read-only register snapshot: confirm the driver cleared SCU08[16] (RTC on the
+	# 32.768kHz source, the silicon-proven-good state — #187 LS). No devmem writes: the
+	# pure driver path is under test. (U-Boot leaves SCU08=0x61800070 / SCU0C=0x000c3e89.)
+	echo "DIAG scu@linux: SCU08=$(devmem 0x1e6e2008) SCU0C=$(devmem 0x1e6e200c)"
 	# Userspace set->get through the driver: set the system clock, write it to the
 	# RTC (drives set_time: RELOAD+RESTART+enable), read it back (read_time). The
 	# G3 RTC advances ~732x, so hour:min round-trips while sec runs ahead.
