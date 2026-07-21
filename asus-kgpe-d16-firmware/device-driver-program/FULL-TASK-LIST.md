@@ -79,11 +79,17 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
   the silicon-validated Zephyr `rtc_aspeed_g3.c`) + a G3 dts rtc node; tracked as the #187 Linux stack.
 - Zephyr: [x] QEMU (`rtc_smoke` set/load/read PASS via `rtc_aspeed_g3.c`) · [~] silicon (SCU08[16] clock makes the RTC LOAD+RUN on real AST2050, but the 24 MHz source runs it fast — not real-time 1 Hz; #158)
 
-### A8. AHB / P2A + LPC-to-AHB back-doors (§implied; datasheet)
+### A8. AHB back-doors (§implied; datasheet) — TWO distinct paths, do not conflate (audit slice-4 F2)
+**A8a — P2A (PCI-to-AHB, culvert `p2a`):** VALIDATED both sides.
 - [x] QEMU: P2A window (SCU7C readback == silicon)
 - U-Boot: [N] (debug back-door, not a boot driver) — used by culvert
 - Linux: [x] QEMU · [x] silicon (culvert in-band devmem bridge) · [x] userspace (culvert probe EXIT 0)
 - Zephyr: [N] (debug back-door)
+
+**A8b — iLPC2AHB (LPC-to-AHB bridge, HICR5[8] `ENL2H` + HICR6 HWMBASE/HWNCARE, culvert `ilpc`):** NOT validated (was falsely folded into A8a's [x]).
+- [ ] QEMU: `aspeed_lpc.c` stores HICR5/6 as bare TO_REG slots — no `ENL2H`/`HWMBASE`/`HWNCARE` decode → **#206**
+- U-Boot/Zephyr: [N] (debug back-door)
+- Linux/silicon: host-peer-gated — the LPC→AHB path needs a host LPC master (the SP5100) the BMC-only QEMU machine lacks; the culvert `ilpc` evidence covers **p2a** (in-band devmem), NOT this path. No silicon/userspace claim until modeled.
 
 ### A9. ADC — ABSENT on the AST2050 (G3): a G4 device NOT present on this SoC  [RESOLVED 2026-07-19, reconciled with DEVICE-MATRIX row 41 / #146]
 - **The AST2050 has NO ADC block.** Authoritative datasheet §9 memory map (p97): no ADC
@@ -181,7 +187,7 @@ userspace or Zephyr) — such rows are `[N]` for U-Boot with that reason.
 - Zephyr: [ ] QEMU · [ ] silicon
 
 ### C2. NC-SI sideband — RMII2 channel 2 → 2× 82574L (§7)
-- [x] QEMU: RMII2/NC-SI model + faithful responder (MAC2 channel discovery)
+- [~] QEMU: RMII2/NC-SI model + MAC2 channel discovery vs the **generic slirp** NC-SI responder (MFR-ID 0x0). The faithful **dual-82574L OEM-0x157** responder (2 packages LU1/LU2, GET_MAC/KEEP_PHY) is a Phase-2 TODO → **#204** (matrix row 11 QE = 🔶, not ✅; audit slice-3 F1/F2)
 - U-Boot: [N] (NC-SI sideband is an OS-level function)
 - Linux: [x] QEMU (ncsi channel discovery) · [ ] silicon (**not blocked externally — this is HARD, undone authoring work: "No channel found" is the deeper G3 RMII2 pinmux group divergence (strap 110 RMII2 routing differs from G4's SCU70[7]). Needs the AST2050 RMII2/GPIOE routing RE + a G3 pinctrl group written. My kernel patch 0008 fixed the strap-phantom class; this distinct, deeper pinmux gap is precisely diagnosed and is my code to write, not a hardware fault**) · [ ] userspace
 - Zephyr: [ ] QEMU · [ ] silicon
