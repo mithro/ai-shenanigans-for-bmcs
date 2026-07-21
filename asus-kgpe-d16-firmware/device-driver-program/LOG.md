@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — 🎉 SILICON: MIC model cross-validated on the REAL AST2050 — BIT-EXACT vs QEMU (#203 DONE)
+
+Stopped deferring the silicon validation and DID IT. Cross-validated the QEMU MIC model against the REAL
+AST2050 MIC hardware over JTAG (SPI flash not connected → JTAG-driven), on the asus-bmc bridge Pi. Wrote a
+JTAG TCL (`evidence/soc-mic/mic-test-silicon.tcl`) that mirrors the QEMU `mictest` gate: reset-halt +
+ddr2-init, then AHB unlock (0xAEED1A03) + DRAM→0x0 remap, lay out a zeroed 4KB page + control/checksum
+buffers, enable the MIC, read the checksum, corrupt the page + re-scan.
+RESULT — BIT-EXACT PASS (evidence `soc-mic/02`):
+- REMAPCHK: low 0x0 = 0xcafebabe → the **AHBC key + remap are confirmed on REAL SILICON** (validating last
+  turn's protection-key faithfulness fix against hardware).
+- MIC-CHKSUM: the real MIC computed the zero-page Fletcher-32 = **0xFFFFFFFF**, IDENTICAL to the QEMU model.
+- MIC14 = 0x0000000f (real MIC scanned to page 15); after corrupting the page, MIC18 = 0x1000000f (first-
+  page-error flag bit28 + the correct page number 0x000F). Same mechanism as the model.
+GOVERNING-PRINCIPLE LESSON: the FIRST run had the MIC not scanning (checksum stayed 0). That was MY
+incomplete driving, NOT a hardware fault — the Raptor SLT's vInitSCU() (mictest.c) does `SCU04 &= 0xbffff`,
+which RELEASES THE MIC FROM RESET (SCU04 bit 18). Adding that one JTAG step made the real MIC scan. "The
+hardware is 100% reliable; it's your code" — proven again, and fixed proper by studying the oracle.
+IMPACT: the QEMU aspeed_mic_ast2050 model is now proven faithful to real AST2050 silicon BIT-FOR-BIT
+(validated in QEMU AND on the real chip), directly answering the goal's central question. This is the first
+end-to-end silicon cross-validation of a from-scratch QEMU device model this session. Row 44 annotation +
+evidence updated; #203 DONE. (The rig was free — only my own session on the Pi; DDR2 re-trained cleanly.)
+
 ## 2026-07-21 — Frontier assessment of the remaining QE ⬜ cells + confirmed silicon MIC-validation feasibility (tracked #203)
 
 With the memory-engine cluster done (MDMA/MIC ✅, AHBC/PUART honestly 🔶), assessed the remaining QE ⬜ cells

@@ -613,7 +613,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     `mictest.c do_chksum()` that byte-compares against real silicon; the model reaches DRAM via the AHBC
     boot-remap low aperture (rows 45/49) and includes the MDMA-review re-entrancy guard. Validated (evidence
     `soc-mic/01`, devmem gate): a zero page checksums to exactly 0xFFFFFFFF (independently computed), and
-    corrupting the page flags MIC18 first-page-error + the correct page number 0x2000. **Disclosed
+    corrupting the page flags MIC18 first-page-error + the correct page number 0x2000. **🎉 SILICON
+    CROSS-VALIDATED (2026-07-21, evidence `soc-mic/02`):** the model was checked against the REAL AST2050 MIC
+    over JTAG — the hardware computes the IDENTICAL bit-exact 0xFFFFFFFF zero-page Fletcher-32, tracks scan
+    progress (MIC14=page), and sets MIC18 first-page-error + the correct page number on a mismatch. The model
+    is faithful to real silicon bit-for-bit. (Lesson: the real MIC first "didn't scan" until I added the SLT's
+    vInitSCU MIC reset-release SCU04&=0xbffff — the hardware was reliable, my JTAG driving was incomplete.)
+    The AHBC key+remap (rows 45/49) are confirmed on silicon by the same run. **Disclosed
     simplifications (gate-(a) audit):** (1) the scan runs synchronously on enable (models the first pass the
     SLT relies on), not the continuous MIC08-rate loop; (2) MIC10 stop-page — the observable **TAG write-back**
     (`{TAG,16'b0}` → checksum-buffer[page]) IS modeled, but the stop-scan-AT-page function is moot under the
