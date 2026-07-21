@@ -598,6 +598,47 @@ if grep -q mdmacopy /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- MIC memory-integrity-check (only when 'mictest' on the kernel cmdline) ---
+# DEVICE-MATRIX row 44 (MIC, 0x1E640000, §13): the memory-integrity-check engine
+# computes a per-page Fletcher-32 checksum into a DRAM checksum buffer and raises
+# a page-error on a mismatch. It ALWAYS scans from page 0 (= the running kernel in
+# a Linux gate), so we mark all low pages SKIP in the control buffer and check only
+# ONE high page (32 MB, clear of the kernel) that we can zero to a known value. The
+# expected checksum of an all-zero 4 KB page is 0xFFFFFFFF (bit-exact, matching the
+# Raptor SLT mictest.c algorithm). Then we corrupt that page and re-scan to prove a
+# mismatch flags the page-error status. All buffers live in aliased DRAM reached via
+# the AHBC boot-remap. IRQ mask left off (a level IRQ1 with no Linux handler would
+# be spurious); we validate the MIC18 status flag instead.
+if grep -q mictest /proc/cmdline; then
+	echo "=== MIC-BEGIN ==="
+	devmem 0x1E60008C 32 0x1                        # AHBC remap: SDRAM at 0x0
+	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=8192 2>&1   # scanned page 8192 (32MB) = 0
+	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=12288 2>&1  # control buf (48MB) = all SKIP
+	devmem 0x03000800 32 0x00000003                # page 8192 ctrl word = CHK3 (byte 8192/4=0x800)
+	dd if=/dev/zero of=/dev/mem bs=4096 count=8 seek=13312 2>&1  # checksum buf (52MB, 32KB) = 0
+	devmem 0x1E640000 32 0x03000000                # MIC00 control-buffer base
+	devmem 0x1E640004 32 0x03400000                # MIC04 checksum-buffer base
+	devmem 0x1E640008 32 0x00000000                # MIC08 rate
+	devmem 0x1E64000C 32 0x12000000                # MIC0C enable(0x10000000)|last-page 0x2000<<12
+	Z=$(devmem 0x03408000)                         # checksum-buf[8192] = 0x03400000 + 8192*4
+	devmem 0x02000000 32 0x0000BEEF                # corrupt page 8192 (word0=0xBEEF)
+	devmem 0x1E640018 32 0x10000000                # clear any prior first-page-error
+	devmem 0x1E64000C 32 0x12000000                # re-scan -> mismatch
+	E=$(devmem 0x1E640018)                          # MIC18: expect bit28 + err page 0x2000
+	echo "MIC zero-page-chksum=${Z} (expect 0xFFFFFFFF) ; MIC18-after-corrupt=${E} (expect bit28+page 0x2000)"
+	OK=1
+	[ "$((Z & 0xFFFFFFFF))" -eq "$((0xFFFFFFFF))" ] || OK=0     # bit-exact Fletcher-32 of a zero page
+	[ "$((E & 0x10000000))" -ne 0 ] || OK=0                     # first-page-error flag set on mismatch
+	[ "$((E & 0x0000FFFF))" -eq "$((0x2000))" ] || OK=0         # recorded error page number = 8192
+	if [ "$OK" -eq 1 ]; then
+		echo "MIC RESULT: PASS (bit-exact Fletcher-32 zero-page=0xFFFFFFFF; mismatch flags page 0x2000)"
+	else
+		echo "MIC RESULT: FAIL"
+	fi
+	echo "=== MIC-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we

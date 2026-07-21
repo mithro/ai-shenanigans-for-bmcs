@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — MIC (row 44) QE ⬜→✅: full §13 model + BIT-EXACT Fletcher-32, validated
+
+Implemented the MIC (Memory Integrity Check Engine, §13, 0x1E640000, IRQ1) — `hw/misc/aspeed_mic_ast2050.c`
+wired into the G3 SoC (VIC INT#1, ASPEED_DEV_MIC enum/memmap/irqmap). Full functionality: the 8-register
+block + the scanner semantics — per-page 2-bit control words (SKIP/ECC/DEBUG/MIC-mode), per-page Fletcher-32
+into the DRAM checksum buffer, first/secondary/lost page-error flags with W1C, and a level-high IRQ1 gated
+by the MIC14[17:16] mask. The Fletcher-32 reduction is BIT-EXACT — copied from the Raptor SLT
+`mictest.c do_chksum()` (blocks of ≤360 u16 words, fold after each + one final). Reads DRAM via the AHBC
+boot-remap low aperture (0x0-based scan). Proactively included the re-entrancy guard the MDMA gate-b review
+flagged (the scan DMAs to guest-programmed buffer addresses).
+VALIDATION (evidence `soc-mic/01`, devmem gate `mictest`): the scan always starts at page 0 (= the running
+kernel), so the control buffer marks all low pages SKIP and checks only ONE high page (8192, 32 MB, clear of
+the kernel) that we dd-zero. Result: checksum-buf[8192] = **0xFFFFFFFF**, exactly the Fletcher-32 of an all-
+zero 4 KB page I computed independently with the SLT algorithm → BIT-EXACT faithful to real silicon. Then
+corrupting the page (word0=0xBEEF) + re-scan → MIC18 = 0x10002000 (first-page-error flag + the correct
+recorded page number 0x2000). Machine boots normally. Simplification (documented): synchronous scan on
+enable rather than the continuous MIC08-rate loop — this models exactly the first scan pass the SLT relies
+on, so a real driver (the SLT) would find `chksum == goldensum`.
+Matrix row 44 QE ⬜→✅; tally QEMU ✅ 28→29, ⬜ 7→6. Driver stacks LQ/LS/ZQ/ZS kept ⬜ (an EDAC-style error
+reporter could exist — not downgraded to Ⓝ); UQ/US/LU Ⓝ. This was the last of the memory-reading SoC
+engines the AHBC aperture unblocked. #201 done. Submodule qemu next commit.
+
 ## 2026-07-21 — Gate-(b) code review of the new G3 models: 1 real bug found + FIXED (MDMA re-entrancy), rest clean
 
 The independent code-reviewer sub-agent (dispatched last entry) returned. It reviewed the three device-model

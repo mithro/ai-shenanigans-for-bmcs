@@ -1,0 +1,33 @@
+DEVICE-MATRIX row 44 (MIC — Memory Integrity Check Engine, 0x1E640000) — QE: PASS (bit-exact)
+=============================================================================================
+
+Device: AST2050 (G3) MICE, datasheet §13 p116-123, base 0x1E640000, IRQ1. A
+        continuous DRAM scanner: per-page Fletcher-32 checksum into a DRAM
+        checksum buffer, driven by a 2-bit-per-page control buffer, raising IRQ1
+        (level-high) + recording the page on a checksum MISMATCH.
+Model : hw/misc/aspeed_mic_ast2050.c, wired into the G3 SoC (VIC INT#1). The
+        Fletcher-32 reduction is copied EXACTLY from the Raptor SLT that drives
+        the real silicon (raptor .../ast2050/mictest.c do_chksum(), which byte-
+        compares software against the hardware output) -> bit-exact. Scans 0x0-
+        based, reachable via the AHBC boot-remap low aperture (rows 45/49).
+        Includes the re-entrancy guard the MDMA gate-b review flagged (the scan
+        DMAs to guest-programmed buffer addresses).
+
+Validation (devmem gate `mictest`, all buffers in aliased DRAM):
+  The scan always starts at page 0 (= the running kernel), so the control buffer
+  marks all low pages SKIP and checks only ONE high page (page 8192, 32 MB, clear
+  of the kernel) that we zero to a known value.
+  - Enable AHBC remap; zero page 8192 + control buffer (all SKIP) + checksum
+    buffer; set page 8192 control = CHK3 (MIC mode); program MIC00/04/08/0C
+    (enable | last-page 0x2000<<12); enable.
+  - checksum-buf[8192] reads back 0xFFFFFFFF == the exact Fletcher-32 of an all-
+    zero 4 KB page (independently computed with the SLT algorithm) -> BIT-EXACT.
+  - Corrupt page 8192 (word0=0xBEEF) + re-scan -> MIC18 = 0x10002000: the first-
+    page-error flag (bit28) set + the recorded error page number = 0x2000 (8192).
+
+Transcript (captured 2026-07-21)
+--------------------------------
+=== MIC-BEGIN ===
+MIC zero-page-chksum=0xFFFFFFFF (expect 0xFFFFFFFF) ; MIC18-after-corrupt=0x10002000 (expect bit28+page 0x2000)
+MIC RESULT: PASS (bit-exact Fletcher-32 zero-page=0xFFFFFFFF; mismatch flags page 0x2000)
+=== MIC-END ===

@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 28 | 13 | 0 | 7 | 3 |
+| QEMU emulation | 29 | 13 | 0 | 6 | 3 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 10 | 0 | 8 | 11 |
@@ -434,7 +434,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
+| 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -606,9 +606,17 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     AST2050 11-reg variant is unverified. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline
     `aspeed-hace` crypto driver exists but is NOT G3-validated; a full BMC secure-boot/TLS could use it).
     ZQ/ZS=⬜ (no Zephyr crypto driver). *Real work, honestly ⬜.*
-  - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=⬜** — real block, NOT modeled (reads unassigned
-    on the G3 machine; a faithfulness todo). Configured at DRAM init; LQ/LS=⬜ (an EDAC-style error
-    reporter could exist); UQ/US Ⓝ (init-time, no runtime U-Boot driver); LU/ZQ/ZS=Ⓝ.
+  - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mic_ast2050.c`
+    wired into the G3 SoC (VIC INT#1): the §13 register block + the continuous-scanner semantics (per-page
+    2-bit control words skip/ECC/debug/MIC-mode, checksum buffer, first/secondary/lost page-error flags +
+    W1C, level IRQ1 gated by MIC14[17:16]). The Fletcher-32 is **bit-exact** — copied from the Raptor SLT
+    `mictest.c do_chksum()` that byte-compares against real silicon; the model reaches DRAM via the AHBC
+    boot-remap low aperture (rows 45/49) and includes the MDMA-review re-entrancy guard. Validated (evidence
+    `soc-mic/01`, devmem gate): a zero page checksums to exactly 0xFFFFFFFF (independently computed), and
+    corrupting the page flags MIC18 first-page-error + the correct page number 0x2000. Simplification: the
+    scan runs synchronously on enable (models the first pass the SLT relies on), not the continuous MIC08-
+    rate loop. LQ/LS=⬜ (an EDAC-style error reporter could exist); UQ/US Ⓝ (init-time, no runtime U-Boot
+    driver — the SLT is a diagnostic, not the boot path); LU=Ⓝ; ZQ/ZS=⬜ (matching LQ/LS).
   - **45 MDMA** (memory-DMA, 0x1E740000/IRQ6): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mdma_ast2050.c` wired
     into the G3 SoC: register R/W with the faithful 28-bit src/dst address mask, MDMA0C-write-fires-command
     (copy/fill via address_space_memory with the raw 28-bit address — NO 0x40000000 fudge), per-ID done
