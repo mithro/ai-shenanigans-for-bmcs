@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #212 attempt 2 (silicon): alarm NOT on VIC 26 — REFUTES my own suspicion; deeper concern found
+
+Did the dedicated #212 pass properly this time. Found the Zephyr build env (west workspace `tmp/zws/`, SDK
+0.17.0, board kgpe_d16_bmc, build dir `build-rtc187` with CONFIG_RTC_ALARM). Added a #212 tight-loop to
+`rtc_smoke`: irq_disable(22) (so nothing clears a latched VIC line), re-arm a sec-only alarm at sec=30,
+CONFIRM the arm (dump rtc04/ctrl), then tight-loop VIC08 raw terminating on 4 counter-minutes (robust to
+CPU/MMIO speed). Built (ninja), JTAG-booted on real silicon, captured. Evidence `d14-zephyr/33`.
+
+RESULT (solid): `#212 re-armed sec=30: rtc04=0000001e ctrl=00000003` (armed: sec-field=30, RTC+sec-alarm
+enabled) and `bit26(alarm)=0 bit22(second)=0 OR=03000000 sec-range=19..59 mins=4` — the counter provably
+crossed sec=30 four times with the ISR off, yet **VIC bit 26 NEVER asserted**. => the RTC alarm does NOT
+drive VIC 26.
+
+HONEST CORRECTION: this **REFUTES my earlier C2 flag** (commit 674bec4) which said the alarm was "probably on
+26" and #192 was confounded. The cleaner silicon test says NOT on 26 — #192's "not on 26" is SUPPORTED, and
+MY armchair confound analysis was the wrong thing. Silicon is the oracle, and here the lesson applied to my
+OWN reasoning, not to prior work. Corrected the matrix flag (retracted "probably on 26").
+
+BUT #212 stays OPEN (redirected, not closed) because a DEEPER issue surfaced: the driver alarm ISR
+(`rtc_aspeed_g3.c:275`) has NO alarm-MATCH check — it fires the callback on ANY VIC-22 interrupt. So the
+existing "alarm PASS (armed→VIC22→callback)" only proves "VIC 22 fired once", NOT that the alarm matched — a
+possible FALSE PASS if 22 is the datasheet second-tick. And bit22=0 in polling (a latched second-tick would
+show, as bits 24/25 do), so 22 isn't a latched second-tick either. Net: neither "alarm on 26" (datasheet) nor
+"alarm functionally validated on 22" (#192) is established; the true alarm line + whether it fires at the
+armed time are UNRESOLVED. #212 redirected: add a match-checking ISR, then re-test 22 AND 26. Taking a break
+from RTC (deep RE — come back fresh) per the goal's "work on another part when stuck". Committed the rtc_smoke
+diagnostic (a reusable test tool) + evidence + matrix correction.
+
 ## 2026-07-21 — Gate-b review of #211 (I2C 7-engine): CLEAN — independently verified
 
 The independent gate-b code review of the #211 shared-code change (the new G3-only `aspeed.i2c-ast2050`

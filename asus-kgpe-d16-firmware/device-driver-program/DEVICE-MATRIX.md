@@ -573,8 +573,21 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   (datasheet), #192 saw the fast second-tick on 22 and misread it as the alarm — which would mean the alarm
   driver/model rewiring 26→22 is WRONG. NOT changing code on analysis alone (silicon could genuinely differ);
   **#212 = run an ISOLATED silicon JTAG test** that masks VIC 22/24/25 (or gates on a 0→1 *transition* of
-  bit 26 at the armed time, not a snapshot), so the alarm is observed free of the second-tick. Until #212
-  resolves it, treat the alarm-IRQ-source (and the ZS/QE/LS alarm PASSes that rest on VIC 22) as UNVERIFIED.
+  bit 26 at the armed time, not a snapshot), so the alarm is observed free of the second-tick.
+  **⚠️ #212 ATTEMPT-2 (silicon, `evidence/d14-zephyr/33`) REFUTED my "probably on 26" read above.** A clean
+  Zephyr test (irq_disable(22) so nothing clears a latched line; re-arm sec-only alarm, CONFIRMED rtc04=0x1e
+  ctrl=0x3; tight-loop VIC08 raw while the counter provably crosses sec=30 four times) found **VIC bit 26
+  NEVER asserts**. So the alarm does NOT drive VIC 26 — #192's "not on 26" is SUPPORTED, and MY armchair
+  confound analysis was the wrong thing (silicon is the oracle, applied to my own reasoning). **BUT #212 stays
+  OPEN (redirected):** the driver alarm ISR (`rtc_aspeed_g3.c:275`) has NO alarm-MATCH check (fires the
+  callback on ANY VIC-22 interrupt), so the "alarm PASS (armed->VIC22->callback)" only proves "VIC 22 fired
+  once", not that the alarm matched — a possible FALSE PASS if 22 is the second-tick. bit22 was also =0 in
+  polling (a latched second-tick would show, as bits 24/25 do), so 22 is not a latched second-tick either.
+  Net: neither "alarm on 26" (datasheet) NOR "alarm functionally validated on 22" (#192) is established — the
+  true alarm line AND whether it fires at the ARMED time are UNRESOLVED. **#212 redirected:** add a
+  match-checking ISR (read alarm pending/status or compare RTC04 vs COUNTER in-ISR) so a fire means a REAL
+  match, then re-test on 22 AND 26. Until then treat the ZS/QE/LS alarm PASSes (resting on the match-less
+  VIC-22 ISR) as UNVERIFIED.
   **LS ✅ + RATE-CLAIM CORRECTED (2026-07-21, `evidence/d14-zephyr/30`+`31`):** the Linux RTC now
   PASSES on real silicon — `set 12:45:30 → read 12:45:41` set/get + wakealarm (VIC22) both PASS —
   after fixing the driver to CLEAR SCU08[16] and poll CONTROL[5] restart-busy (an earlier driver

@@ -133,6 +133,60 @@ static void rtc_alarm_test(const struct device *rtc)
 	}
 
 	/*
+	 * #212 — resolve the alarm VIC-source (22 vs 26) FREE of the second-tick
+	 * confound. The #192 "alarm on 22" claim rests on a single vic_raw snapshot +
+	 * a callback on VIC 22, but VIC 22 is the second-tick line (fires ~continuously
+	 * at the ~732x rate), so it proves nothing. VIC bit 26, by contrast, is driven
+	 * ONLY by the alarm. Re-arm a SECOND-only alarm (matches every RTC-minute) and
+	 * TIGHT-LOOP sample VIC08 raw (ns-fast CPU reads — catches a pulse a snapshot,
+	 * or attempt-1's slow JTAG polling, misses). bit26 hits>0 while the counter
+	 * passes sec=30 => the alarm asserts VIC 26 (datasheet Table 36); bit26==0 with
+	 * the counter proven to pass 30 => the alarm does NOT drive 26.
+	 */
+	{
+		struct rtc_time a2 = { .tm_sec = 30 };
+		uint32_t or26 = 0, or22 = 0, orall = 0, cmin = 0x3fU, cmax = 0;
+		uint32_t prev_min, mins = 0;
+
+		/*
+		 * Disable the driver's alarm ISR (VIC 22) so it cannot service/clear the
+		 * line mid-sample: with no ISR, whichever VIC line the alarm drives stays
+		 * asserted (latched) once it matches, so a slow sampler still catches it.
+		 */
+		irq_disable(22);
+		(void)rtc_alarm_set_time(rtc, 0, RTC_ALARM_TIME_MASK_SECOND, &a2);
+		/* Confirm the sec-only re-arm actually took: rtc04 sec-field should be 30
+		 * (0x1e) and CONTROL[1] (sec-alarm-enable) set — else a bit26=0 below would
+		 * mean "not armed", not "not on 26". */
+		printk("#212 re-armed sec=30: rtc04=%08x ctrl=%08x\n",
+		       sys_read32(RTC_REG_ALARM), sys_read32(RTC_REG_CONTROL));
+		prev_min = (sys_read32(RTC_REG_COUNTER) >> 6) & 0x3fU;
+		/* Terminate by COUNTER minutes elapsed (4 sec-cycles => sec=30 crossed
+		 * >=3x), robust to CPU/MMIO speed; early-exit on bit26; hard cap for safety. */
+		for (uint32_t i = 0; i < 60000000U && or26 == 0U && mins < 4U; i++) {
+			uint32_t v = sys_read32(G3VIC_RAW_STATUS);
+			uint32_t c = sys_read32(RTC_REG_COUNTER);
+			uint32_t sec = c & 0x3fU, mn = (c >> 6) & 0x3fU;
+
+			orall |= v;
+			if (v & 0x04000000U) { or26++; }
+			if (v & 0x00400000U) { or22++; }
+			if (sec < cmin) { cmin = sec; }
+			if (sec > cmax) { cmax = sec; }
+			if (mn != prev_min) { mins++; prev_min = mn; }
+		}
+		printk("#212 tight-loop: bit26(alarm)=%u bit22(second)=%u OR=%08x sec-range=%u..%u mins=%u\n",
+		       or26, or22, orall, cmin, cmax, mins);
+		if (or26 > 0U) {
+			printk("#212 RESULT: alarm asserts VIC 26 (datasheet); #192 'on 22' was the second-tick confound\n");
+		} else if (cmin <= 30U && cmax >= 30U) {
+			printk("#212 RESULT: counter passed sec=30 but VIC26 never asserted -> alarm NOT on 26\n");
+		} else {
+			printk("#212 RESULT: INCONCLUSIVE (loop did not span sec=30: %u..%u)\n", cmin, cmax);
+		}
+	}
+
+	/*
 	 * Regression for the #187 review finding: rtc_set_time() must NOT silently
 	 * disarm an armed alarm (its CONTROL write is an RMW that preserves the
 	 * alarm-enable bits). Re-arm, plant a base time (12:00:00, so the 12:00:05

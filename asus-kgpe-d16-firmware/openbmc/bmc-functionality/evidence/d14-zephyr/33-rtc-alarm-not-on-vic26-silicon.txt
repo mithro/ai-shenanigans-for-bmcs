@@ -1,0 +1,58 @@
+#212 attempt 2 — RTC alarm VIC-source: SOLID "NOT on VIC 26"; deeper concern surfaced (2026-07-21)
+================================================================================
+Definitive silicon test via Zephyr interrupt-free polling (the reliable method
+attempt-1's bare-JTAG and #192's single snapshot both lacked). Modified
+zephyr/samples/rtc_smoke (build-rtc187, CONFIG_RTC_ALARM), booted over JTAG into
+trained DRAM on the real AST2050.
+
+METHOD (the #212 tight-loop, added to rtc_alarm_test):
+  1. irq_disable(22) — remove the driver's alarm ISR so nothing services/clears
+     any VIC line mid-sample (a matched alarm line stays latched, catchable).
+  2. Re-arm a SECOND-only alarm at sec=30 (rtc_alarm_set_time MASK_SECOND).
+  3. CONFIRM the arm took (dump RTC04 + CONTROL).
+  4. Tight-loop read VIC08 raw (0x1E6C0008), terminating on 4 COUNTER-minutes
+     elapsed (robust to CPU/MMIO speed => sec=30 crossed >=3x), early-exit on
+     bit26. bit26=0x04000000 (datasheet alarm), bit22=0x00400000 (datasheet sec).
+
+CAPTURED (real AST2050):
+  #212 re-armed sec=30: rtc04=0000001e ctrl=00000003
+  #212 tight-loop: bit26(alarm)=0 bit22(second)=0 OR=03000000 sec-range=19..59 mins=4
+  #212 RESULT: counter passed sec=30 but VIC26 never asserted -> alarm NOT on 26
+
+INTERPRETATION — what is SOLID:
+  * rtc04=0x1e (sec-field=30), ctrl=0x3 (RTC-enable + sec-alarm-enable) => the
+    alarm WAS armed to match sec==30.
+  * sec-range=19..59, mins=4 => the COUNTER provably passed sec=30 ~4 times.
+  * The ISR was disabled, so nothing could clear a latched alarm edge.
+  * Yet VIC bit 26 NEVER asserted. => The RTC alarm does NOT drive VIC source 26.
+  This REFUTES my earlier C2 "suspect, probably on 26" flag (commit 674bec4) and
+  SUPPORTS #192's core "not on 26". My armchair confound analysis was wrong; the
+  cleaner silicon test is the oracle. (Lesson, applied to my OWN reasoning.)
+
+BUT — a DEEPER concern surfaced, so #212 stays OPEN (redirected, not closed):
+  * The driver's alarm ISR rtc_aspeed_g3_isr (rtc_aspeed_g3.c:275) has NO
+    alarm-MATCH check — it blindly invokes the callback on ANY VIC-22 interrupt.
+    So the existing "RTC-ALARM RESULT: PASS (armed -> VIC22 -> callback)" only
+    proves "VIC 22 fired the ISR at least once", NOT that the alarm matched. If
+    VIC 22 is the datasheet's SECOND-tick, the callback would fire every second
+    regardless of the alarm => the #187/#192 "alarm works on 22" PASS is likely a
+    FALSE PASS.
+  * bit22 was NOT caught by polling (=0) — a level-latched second-tick on 22
+    would have been caught (bits 24/25 WERE, persistently: OR=0x03000000). So
+    VIC 22 is not a latched second-tick here either; whether 22 pulses (alarm or
+    second) can't be told by polling.
+  * Net: neither "alarm on 26" (datasheet) nor "alarm functionally validated on
+    22" (#192) is established. The RTC alarm's true VIC line AND whether it fires
+    at the ARMED time (vs the ISR firing on unrelated VIC-22 activity) are
+    genuinely UNRESOLVED and need deeper RE (e.g. an ISR that reads the alarm
+    match-status before counting a fire; or a per-source VIC probe).
+
+RIG: bridge Pi asus-bmc, JTAG free, board powered (DDR2 trained). No others
+disturbed (checked pgrep openocd / who before use). Build: build-rtc187 (ninja),
+SDK 0.17.0, board kgpe_d16_bmc/ast2050, entry 0x40002950.
+
+NEXT (#212 redirected): add a match-checking alarm ISR (read the RTC alarm
+pending/status, or compare RTC04 vs COUNTER in the ISR) so a "fire" means a REAL
+match, then re-test on 22 AND 26 to determine the true alarm line and confirm the
+alarm fires at the armed time. Taking a break from RTC first (deep RE; come back
+fresh) per the goal's "work on another part when stuck".
