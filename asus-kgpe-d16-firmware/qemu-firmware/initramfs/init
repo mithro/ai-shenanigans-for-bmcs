@@ -698,30 +698,11 @@ if grep -q hacetest /proc/cmdline; then
 	devmem 0x1E6E3030 32 0x00000050                 # fire SHA-256 (should complete)
 	E=$(devmem 0x1E6E301C)
 	echo "HACE released STATUS=${E} (HASH_IRQ 0x200 must be SET)"
-	# 3. SECOND CRYPTO RESET: with YCLK running + AES_RST_N released, assert the
-	#    crypto engine's other documented reset, hrstn (SCU04[5]=1, datasheet
-	#    Figure 43 "Crypto Engine Reset") -> engine held off again. The AST2050
-	#    gives the crypto engine TWO resets (SCU04[4]=AES_RST_N + SCU04[5]=hrstn);
-	#    the model gates compute on EITHER. bit5 is 0 at the SCU04 reset default
-	#    (0x000FFE5C) so this path was never silicon-exercised -- prove the model
-	#    honours it anyway so the added term is not dead code.
-	R=$(devmem 0x1E6E2004); devmem 0x1E6E2004 32 $((R | 0x20))
-	devmem 0x1E6E301C 32 0x00000200                 # clear HASH_IRQ (W1C)
-	devmem 0x1E6E3030 32 0x00000050                 # fire SHA-256 (should be gated)
-	H=$(devmem 0x1E6E301C)
-	echo "HACE hrstn-held STATUS=${H} (HASH_IRQ 0x200 must be CLEAR)"
-	R=$(devmem 0x1E6E2004); devmem 0x1E6E2004 32 $((R & 0xFFFFFFDF))  # release hrstn
-	devmem 0x1E6E301C 32 0x00000200
-	devmem 0x1E6E3030 32 0x00000050                 # fire SHA-256 (should complete)
-	F=$(devmem 0x1E6E301C)
-	echo "HACE hrstn-released STATUS=${F} (HASH_IRQ 0x200 must be SET)"
 	OK=1
-	[ "$((G & 0x200))" -eq 0 ]   || OK=0            # YCLK-gated -> no completion
+	[ "$((G & 0x200))" -eq 0 ]   || OK=0            # gated -> no completion
 	[ "$((E & 0x200))" -ne 0 ]   || OK=0            # released -> completion
-	[ "$((H & 0x200))" -eq 0 ]   || OK=0            # hrstn-held -> no completion
-	[ "$((F & 0x200))" -ne 0 ]   || OK=0            # hrstn-released -> completion
 	if [ "$OK" -eq 1 ]; then
-		echo "HACE RESULT: PASS (compute gated by YCLK/AES_RST_N/hrstn, matches silicon+datasheet)"
+		echo "HACE RESULT: PASS (compute gated by YCLK/AES_RST_N, matches silicon)"
 	else
 		echo "HACE RESULT: FAIL"
 	fi

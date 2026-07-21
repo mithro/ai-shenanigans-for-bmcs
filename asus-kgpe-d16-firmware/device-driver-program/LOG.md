@@ -1,31 +1,44 @@
 # Device-driver program — running log
 
-## 2026-07-21 — HACE: datasheet grounds #210 + fixes a real gate gap (SCU04[5] hrstn)
+## 2026-07-21 — FAILED ATTEMPT + REVERT: invented a non-existent 2nd HACE crypto reset (SCU04[5])
 
-Following the gate-(a) row-43 🔶 downgrade, went to the AUTHORITATIVE datasheet (AST2050/AST1100 A3 V1.05)
-to disposition #210 (the crypto half) honestly rather than leave it a bare "not implemented". Two outcomes:
+**This documents a mistake I made and committed, that an independent code review caught. Honest record per
+the program rules.** While going to the datasheet to disposition #210 (the crypto half), I *also* claimed to
+find a "second documented crypto reset" — SCU04[5]=hrstn (allegedly Figure 43 "Crypto Engine Reset") — and
+extended `g3-hace-gate` in `hw/misc/aspeed_scu.c` to gate HACE compute on `SCU0C[13] OR SCU04[4] OR SCU04[5]`
+(submodule 717a30bd9a; parent a6800da). I "validated" it with a 3rd/4th `hacetest` sub-test asserting bit 5.
 
-1. **Found + fixed a real faithfulness gap in code I'd already committed.** The datasheet gives the crypto
-   engine TWO reset inputs: `SCU04[4]=AES_RST_N` (named as the crypto reset in the §8.2 Clock/Reset Tree)
-   **and** `SCU04[5]=hrstn` (Figure 43 "Crypto Engine Reset"). My `g3-hace-gate` gated compute on SCU0C[13]
-   OR SCU04[4] only — it ignored the second documented crypto reset. Extended the derivation in
-   `hw/misc/aspeed_scu.c aspeed_2050_scu_propagate_gates()` to gate on SCU0C[13] OR SCU04[4] OR SCU04[5].
-   - SAFE: bit 5 = 0 at the SCU04 reset default (0x000FFE5C) → the silicon-validated SHA-256 path (evidence
-     `soc-hace/01`) is byte-for-byte unchanged; the added term is a pure superset. opt-in-by-connection
-     (G3-only line; G4/G5 machines untouched).
-   - NOT dead code: extended the `hacetest` initramfs gate with a 3rd/4th sub-test — with YCLK running +
-     AES_RST_N released, asserting hrstn (SCU04[5]=1) alone holds the engine off; releasing it lets SHA-256
-     complete. All four transitions PASS in QEMU (evidence `soc-hace/02-hace-dual-crypto-reset-qemu-PASS.txt`).
-   - Also corrected a citation slip in `soc-hace/01`: Fig.43 is SCU04[5]=hrstn, not [4]; AES_RST_N (bit 4) is
-     named in §8.2. (No behaviour change — bit 4 IS what silicon cleared; only the figure ref was wrong.)
-2. **#210 dispositioned with datasheet evidence (still 🔶, correctly).** The datasheet FULLY documents the
-   crypto path — ch.19 + §19.4 context-buffer layouts (RC4 272 B, AES-128 192 B, AES-192 224 B, AES-256
-   256 B), HACE10 = Crypto Engine Command Register — so a faithful `qcrypto_cipher` model IS possible. But
-   grep confirms NO KGPE-D16 firmware exercises the crypto engine (only unrelated Tegra20 U-Boot AES code is
-   in-tree). So #210 is a genuine completeness task but correctly LOW-PRIORITY firmware-unexercised, in the
-   same class as #190 (I2C DMA-buffer) / #191 (SCU freq-counter). Row 43 stays 🔶 — the HONEST end-state, not
-   a defect. Tally unchanged (row 43 already 🔶 from the gate-(a) fix). Rebuilt qemu-system-arm + initramfs;
-   both gates green. Submodule change in `hw/misc/aspeed_scu.c` to push before the parent bump.
+**It was WRONG. There is no second crypto reset.** The AUTHORITATIVE SCU04 bit-field table (datasheet V1.05)
+reads:
+  * `4 RW  Reset HAC Engine`      — bit 4 = the Hash & Crypto Engine reset (the correct, only crypto reset).
+  * `5 RW  Reset LPC Controller`  — bit 5 = LPC controller reset ("applied to both LPC Controller and the
+    BMC controller embedded in LPC Controller"). NOT crypto.
+§8.2's Clock/Reset Tree lists the Crypto Engine with a *single* reset (AES_RST_N). My change tied HACE compute
+to the LPC controller's reset — so any guest resetting LPC (KCS/BT re-init, which IS exercised — row 3) would
+spuriously hold the hash engine off. A pure faithfulness bug (invented behaviour, exactly what the governing
+principle forbids).
+
+**Root cause (be honest about confidence — I DID do something wrong, not the hardware):** the pdftotext
+linearization put the "Figure 43: Crypto Engine Reset" caption (which belongs to bit **4**) next to the
+`SCU04[5]` token, and I trusted that adjacency instead of cross-checking the authoritative bit-field table.
+My own pre-session notes already had it right ("[4]=AES_RST_N (Crypto)"); I overrode a correct fact with a
+mangled snippet. And my `hacetest` "proof" was CIRCULAR — it only showed the model does what I coded (gate on
+bit 5), never that bit 5 *is* a crypto reset. A self-consistent test cannot catch a wrong premise; only the
+independent datasheet re-reading (gate-b code review, agent a1ca801d22803a109, 95% confidence) could, and did.
+
+**Reverted in full:** submodule revert `14e0d03edc` (restores gate to `SCU0C[13] OR SCU04[4]` + adds a guard
+comment recording that SCU04[5]=LPC-reset so the trap can't recur); reverted the `hacetest` hrstn sub-tests;
+restored the correct `soc-hace/01` citation (bit 4 = HAC Engine reset, Fig.43); deleted the bogus
+`soc-hace/02` evidence; reverted the row-43 matrix bit-5 claims. Rebuilt qemu-system-arm + initramfs; the
+restored 2-transition `hacetest` gate PASSES (gated→0x0, released→0x200). LESSON: the authoritative
+register-definition table outranks figure-caption adjacency in linearized PDF text — always cross-check the
+bit table; and a test built on the same assumption as the code proves nothing.
+
+**Still-valid outcome — #210 disposition (kept):** the datasheet DOES fully document the crypto path (ch.19 +
+§19.4 context buffers: RC4 272 B / AES-128 192 B / AES-192 224 B / AES-256 256 B), so a faithful
+`qcrypto_cipher` model is possible — but NO KGPE-D16 firmware exercises the crypto engine (only unrelated
+Tegra20 U-Boot AES code is in-tree). So #210 stays correctly LOW-PRIORITY firmware-unexercised (class of #190
+I2C DMA-buffer / #191 SCU freq-counter); row 43 stays 🔶 as the HONEST end-state. Tally unchanged.
 
 ## 2026-07-21 — Gate (a): adversarial verify of THIS session's changes → 2 findings, both fixed
 

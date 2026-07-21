@@ -19,9 +19,10 @@ was MY incomplete driving — the HAC compute engine is clock-dead + in reset at
 power-on:
   * SCU0C[13] = "Stop YCLK (For HAC)" (datasheet §18 l.16040) — YCLK is the
     hash/crypto compute clock; it was STOPPED (SCU0C=0x000c3e8b, bit13=1).
-  * SCU04[4]  = AES_RST_N (datasheet §8.2 Clock/Reset Tree names AES_RST_N as
-    THE crypto-engine reset; NB the separate Fig.43 "Crypto Engine Reset" is a
-    second reset, hrstn = SCU04[5], which is 0 at the reset default) — held.
+  * SCU04[4]  = "Reset HAC Engine" (datasheet V1.05 SCU04 bit-field table;
+    Fig.43 "Crypto Engine Reset"; §8.2 Clock/Reset Tree names it AES_RST_N).
+    This is the ONLY crypto reset — SCU04[5] is "Reset LPC Controller", NOT a
+    second crypto reset. — held.
 Clearing SCU0C[13] (enable YCLK) + SCU04[4] (release AES_RST_N) made the engine
 compute. The register file responds even while clock-dead/held, which is why the
 earlier probe (which only read/wrote registers) saw the block "alive."

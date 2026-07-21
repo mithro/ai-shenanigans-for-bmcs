@@ -620,17 +620,17 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     `hace-hash-silicon.tcl`), so the G3 SRC/DEST/SRC_LEN/CMD register layout + the SHA-256 CMD encoding
     (0x50) match the model bit-for-bit. **Governing-principle lesson:** the engine first didn't fire (digest
     unchanged) — MY driving: the HAC compute engine is clock-dead + held in reset at power-on (SCU0C[13]
-    "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]=AES_RST_N, named as the crypto-engine reset in the
-    §8.2 Clock/Reset Tree); clearing both made it compute. The datasheet gives the crypto engine a SECOND
-    documented reset — SCU04[5]=hrstn (Fig.43 "Crypto Engine Reset"), 0 at the reset default so never silicon-
-    exercised — now ALSO modeled (2026-07-21). That exposed the same reset/clock-gating gap as MDMA/MIC —
-    **now MODELED (submodule 589f68f99a):** a `g3-hace-gate` SCU line (SCU0C[13] YCLK-stop OR SCU04[4] AES_RST_N
-    OR SCU04[5] hrstn) drives a HACE gpio-in; while asserted,
+    "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]="Reset HAC Engine", the crypto reset, Fig.43 /
+    §8.2 Clock/Reset Tree AES_RST_N); clearing both made it compute. NB SCU04[4] is the ONLY crypto reset —
+    SCU04[5] is "Reset LPC Controller", NOT a second crypto reset (an earlier 2026-07-21 change wrongly gated
+    HACE on SCU04[5] after misreading a mangled-PDF figure caption; independent code review caught it and it was
+    reverted — see LOG). That exposed the same reset/clock-gating gap as MDMA/MIC —
+    **now MODELED (submodule 589f68f99a):** a `g3-hace-gate` SCU line (SCU0C[13] YCLK-stop OR SCU04[4] AES_RST_N)
+    drives a HACE gpio-in; while asserted,
     a HASH_CMD write stores the register but skips `do_hash_operation` + sets no completion status (gates the
     COMPUTE, not the MMIO — silicon keeps the reg file live while clock-dead). Opt-in by connection (G4/G5
     unaffected). Validated by the `hacetest` initramfs gate (YCLK-stopped → no completion; released →
-    HASH_IRQ set) — now extended to prove BOTH crypto resets gate compute (evidence `soc-hace/02`: hrstn-held →
-    no completion; hrstn-released → HASH_IRQ set). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical).
+    HASH_IRQ set; evidence `soc-hace/01`). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical).
     LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
     is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed HONESTLY (gate-a verify fix): SHA-256 is the silicon-validated
     algo + the other hashes share the confirmed register layout (all real via QCryptoHashAlgo); but the
