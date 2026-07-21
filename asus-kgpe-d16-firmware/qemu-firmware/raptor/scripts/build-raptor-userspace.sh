@@ -42,11 +42,14 @@ mkdir -p "$TOOLS" "$OUT"
 #    the differing prefixes (arm-linux-musleabi- vs arm-unknown-linux-musleabi-)
 #    are handled transparently. Force IPv4 (-4): GitHub-hosted runners carry an
 #    IPv6 address but no working IPv6 *route*, so an AAAA connect fails hard with
-#    "Network is unreachable" (wget exit 4). Retry hard, show each attempt (no -q,
-#    per fail-loud); the `wget && tar` wrapper consumes the non-zero exit so
-#    `set -e` doesn't abort before the next source is tried. `tar xf` auto-detects
-#    gzip/xz. Fed by heredoc (not a pipe) so the loop runs in THIS shell and the
-#    winning musl_bin/CROSS_COMPILE survive.
+#    "Network is unreachable" (wget exit 4). Only a few tries per source (not a
+#    hard retry): the github source below is a reliable backstop, so a source that
+#    is down from the runner should fail THROUGH fast rather than burn ~6 min of
+#    doomed retries (the whole *.musl.cc family is currently unreachable from
+#    GitHub runners). Show each attempt (no -q, per fail-loud); the `wget && tar`
+#    wrapper consumes the non-zero exit so `set -e` doesn't abort before the next
+#    source is tried. `tar xf` auto-detects gzip/xz. Fed by heredoc (not a pipe)
+#    so the loop runs in THIS shell and the winning musl_bin/CROSS_COMPILE survive.
 musl_bin=""
 CROSS_COMPILE=""
 while read -r url topdir prefix; do
@@ -54,7 +57,7 @@ while read -r url topdir prefix; do
     tc_bin="$TOOLS/$topdir/bin"
     if [ ! -x "$tc_bin/${prefix}gcc" ]; then
         echo "fetching musl toolchain: $url"
-        if wget -4 -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
+        if wget -4 -nv --tries=3 --waitretry=15 --timeout=45 --retry-connrefused \
                 -O "$TOOLS/musl.tar" "$url" && tar xf "$TOOLS/musl.tar" -C "$TOOLS"; then
             rm -f "$TOOLS/musl.tar"
         else

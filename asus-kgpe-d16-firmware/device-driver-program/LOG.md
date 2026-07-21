@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-22 — CI: trim the doomed musl.cc retry budget (tries 8→3) now that github is a backstop
+
+Deliberate follow-on (from the confirmed-green entry below) to reclaim the ~13 min/run the two doomed
+*.musl.cc retry loops burn while the family is unreachable from GitHub runners. Reasoning that makes it safe:
+once a reliable fallback exists (the github source), a per-source retry budget is no longer a resilience
+mechanism — the build always succeeds via the backstop regardless — it is purely a latency knob deciding how
+long a dead source stalls before failing through. So --tries 8→3 (kept musl.cc primary — the conservative
+choice, least semantic change) cuts each down-source from ~6 min to ~2.3 min (~8 min reclaimed/run) with zero
+reliability cost. Already harness-proven: the earlier fetch-loop harness fell through correctly at tries=2.
+sh -n + dash -n clean. (Left the residual ~4.6 min rather than reorder github-first, which would zero the
+waste but change the primary toolchain everywhere to gcc16 — a bigger semantic change than a retry tweak;
+that reorder stays available if the branch owner wants zero waste.)
+
 ## 2026-07-22 — CI: musl fetch now falls back to a github-hosted toolchain (the mirror wasn't enough)
 
 Follow-up to the more.musl.cc mirror below: that fix did NOT turn C3 green — CI run 29862701322 showed the
