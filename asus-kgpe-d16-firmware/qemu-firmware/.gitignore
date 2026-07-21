@@ -28,3 +28,6 @@ tmp/
 # patches). 
 raptor/tools/
 raptor/out/
+
+# web-test.py / oracle-boot serial capture (regenerated scratch)
+c410x-serial.log
