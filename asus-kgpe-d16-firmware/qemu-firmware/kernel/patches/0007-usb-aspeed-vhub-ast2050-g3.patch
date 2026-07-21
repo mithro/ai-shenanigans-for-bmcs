@@ -1,8 +1,8 @@
 diff --git a/drivers/usb/gadget/udc/aspeed-vhub/core.c b/drivers/usb/gadget/udc/aspeed-vhub/core.c
-index f60a019bb..88e0cc3e5 100644
+index f60a019bb..b6cd076db 100644
 --- a/drivers/usb/gadget/udc/aspeed-vhub/core.c
 +++ b/drivers/usb/gadget/udc/aspeed-vhub/core.c
-@@ -160,6 +160,25 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
+@@ -160,6 +160,32 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
  			ast_vhub_hub_reset(vhub);
  	}
  
@@ -35,7 +35,7 @@ index f60a019bb..88e0cc3e5 100644
   bail:
  	spin_unlock(&vhub->lock);
  	return iret;
-@@ -198,6 +217,32 @@ void ast_vhub_init_hw(struct ast_vhub *vhub)
+@@ -198,6 +224,32 @@ void ast_vhub_init_hw(struct ast_vhub *vhub)
  	writel(ctrl, vhub->regs + AST_VHUB_CTRL);
  	udelay(1);
  
@@ -68,7 +68,7 @@ index f60a019bb..88e0cc3e5 100644
  	/* Set descriptor ring size */
  	if (AST_VHUB_DESCS_COUNT == 256) {
  		ctrl |= VHUB_CTRL_LONG_DESC;
-@@ -413,6 +458,16 @@ static int ast_vhub_probe(struct platform_device *pdev)
+@@ -413,6 +465,16 @@ static int ast_vhub_probe(struct platform_device *pdev)
  }
  
  static const struct of_device_id ast_vhub_dt_ids[] = {

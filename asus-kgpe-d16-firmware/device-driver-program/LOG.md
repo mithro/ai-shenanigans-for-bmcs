@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-21 — CI fix: corrupt kernel patch 0007 (vhub) — the kernel build was red
+
+Autonomous CI check found the "Build D16 kernel (uImage + dtb)" job FAILING: `error: corrupt patch at
+kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch:38`. (The C3 musl job also fails — that's the known
+#143 musl.cc-mirror issue, not this.) Root cause: commit b422e84 ("vhub comment fixed") EXPANDED the
+hunk-1 comment by 7 lines but left the stale `@@ -160,6 +160,25 @@` count (should be 32 = 6 context + 26
+added) AND the stale post-image `index` hash — so `git apply` rejected it, blocking the whole kernel
+build (and every downstream boot job). Regenerated a correct patch definitively: reset core.c to pristine
+(HEAD is unpatched; the tree only had it applied in the working copy), `git apply --recount` the body,
+`git diff` → correct headers (+160,32 / +224,32 / +465,16 — the +7 shift propagates to later hunks) +
+correct index; `git apply --check` PASSES on pristine. Only the @@ counts + index changed; the code body
+is unchanged. Unblocks the kernel/dtb build → the C2/spd-test/C4/etc. boot jobs.
+
 ## 2026-07-21 — Row 19 DIMM TSOD: modeled + validated the datapath (QE/LQ/LU ✅, #205)
 
 Acted on audit slice-2 F1 (TSOD is a real device the matrix under-claimed). Added an OPT-IN machine
