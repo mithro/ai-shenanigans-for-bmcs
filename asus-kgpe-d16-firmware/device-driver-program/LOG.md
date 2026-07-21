@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-21 — HACE: datasheet grounds #210 + fixes a real gate gap (SCU04[5] hrstn)
+
+Following the gate-(a) row-43 🔶 downgrade, went to the AUTHORITATIVE datasheet (AST2050/AST1100 A3 V1.05)
+to disposition #210 (the crypto half) honestly rather than leave it a bare "not implemented". Two outcomes:
+
+1. **Found + fixed a real faithfulness gap in code I'd already committed.** The datasheet gives the crypto
+   engine TWO reset inputs: `SCU04[4]=AES_RST_N` (named as the crypto reset in the §8.2 Clock/Reset Tree)
+   **and** `SCU04[5]=hrstn` (Figure 43 "Crypto Engine Reset"). My `g3-hace-gate` gated compute on SCU0C[13]
+   OR SCU04[4] only — it ignored the second documented crypto reset. Extended the derivation in
+   `hw/misc/aspeed_scu.c aspeed_2050_scu_propagate_gates()` to gate on SCU0C[13] OR SCU04[4] OR SCU04[5].
+   - SAFE: bit 5 = 0 at the SCU04 reset default (0x000FFE5C) → the silicon-validated SHA-256 path (evidence
+     `soc-hace/01`) is byte-for-byte unchanged; the added term is a pure superset. opt-in-by-connection
+     (G3-only line; G4/G5 machines untouched).
+   - NOT dead code: extended the `hacetest` initramfs gate with a 3rd/4th sub-test — with YCLK running +
+     AES_RST_N released, asserting hrstn (SCU04[5]=1) alone holds the engine off; releasing it lets SHA-256
+     complete. All four transitions PASS in QEMU (evidence `soc-hace/02-hace-dual-crypto-reset-qemu-PASS.txt`).
+   - Also corrected a citation slip in `soc-hace/01`: Fig.43 is SCU04[5]=hrstn, not [4]; AES_RST_N (bit 4) is
+     named in §8.2. (No behaviour change — bit 4 IS what silicon cleared; only the figure ref was wrong.)
+2. **#210 dispositioned with datasheet evidence (still 🔶, correctly).** The datasheet FULLY documents the
+   crypto path — ch.19 + §19.4 context-buffer layouts (RC4 272 B, AES-128 192 B, AES-192 224 B, AES-256
+   256 B), HACE10 = Crypto Engine Command Register — so a faithful `qcrypto_cipher` model IS possible. But
+   grep confirms NO KGPE-D16 firmware exercises the crypto engine (only unrelated Tegra20 U-Boot AES code is
+   in-tree). So #210 is a genuine completeness task but correctly LOW-PRIORITY firmware-unexercised, in the
+   same class as #190 (I2C DMA-buffer) / #191 (SCU freq-counter). Row 43 stays 🔶 — the HONEST end-state, not
+   a defect. Tally unchanged (row 43 already 🔶 from the gate-(a) fix). Rebuilt qemu-system-arm + initramfs;
+   both gates green. Submodule change in `hw/misc/aspeed_scu.c` to push before the parent bump.
+
 ## 2026-07-21 — Gate (a): adversarial verify of THIS session's changes → 2 findings, both fixed
 
 Dispatched an adversarial verifier over this session's matrix claims (rows 9/19/24/43/44/45 + #208). It

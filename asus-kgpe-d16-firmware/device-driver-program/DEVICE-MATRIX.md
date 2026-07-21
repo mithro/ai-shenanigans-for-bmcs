@@ -620,18 +620,29 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     `hace-hash-silicon.tcl`), so the G3 SRC/DEST/SRC_LEN/CMD register layout + the SHA-256 CMD encoding
     (0x50) match the model bit-for-bit. **Governing-principle lesson:** the engine first didn't fire (digest
     unchanged) — MY driving: the HAC compute engine is clock-dead + held in reset at power-on (SCU0C[13]
-    "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]=AES_RST_N Fig.43); clearing both made it compute.
-    That exposed the same reset/clock-gating gap as MDMA/MIC — **now MODELED (submodule 589f68f99a):** a
-    `g3-hace-gate` SCU line (SCU0C[13] YCLK-stop OR SCU04[4] AES_RST_N) drives a HACE gpio-in; while asserted,
+    "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]=AES_RST_N, named as the crypto-engine reset in the
+    §8.2 Clock/Reset Tree); clearing both made it compute. The datasheet gives the crypto engine a SECOND
+    documented reset — SCU04[5]=hrstn (Fig.43 "Crypto Engine Reset"), 0 at the reset default so never silicon-
+    exercised — now ALSO modeled (2026-07-21). That exposed the same reset/clock-gating gap as MDMA/MIC —
+    **now MODELED (submodule 589f68f99a):** a `g3-hace-gate` SCU line (SCU0C[13] YCLK-stop OR SCU04[4] AES_RST_N
+    OR SCU04[5] hrstn) drives a HACE gpio-in; while asserted,
     a HASH_CMD write stores the register but skips `do_hash_operation` + sets no completion status (gates the
     COMPUTE, not the MMIO — silicon keeps the reg file live while clock-dead). Opt-in by connection (G4/G5
     unaffected). Validated by the `hacetest` initramfs gate (YCLK-stopped → no completion; released →
-    HASH_IRQ set). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
+    HASH_IRQ set) — now extended to prove BOTH crypto resets gate compute (evidence `soc-hace/02`: hrstn-held →
+    no completion; hrstn-released → HASH_IRQ set). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical).
+    LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
     is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed HONESTLY (gate-a verify fix): SHA-256 is the silicon-validated
     algo + the other hashes share the confirmed register layout (all real via QCryptoHashAlgo); but the
-    **AES/RC4 CRYPTO commands are NOT IMPLEMENTED** — `hw/misc/aspeed_hace.c` R_CRYPT_CMD is a
-    `LOG_UNIMP "Crypt commands not implemented"` stub (NOT "modeled but silicon-unvalidated"). Completing the
-    crypto half → QE ✅ is tracked as **#210**.
+    **AES/RC4 CRYPTO commands are NOT IMPLEMENTED** — `hw/misc/aspeed_hace.c` R_CRYPT_CMD (=datasheet HACE10
+    "Crypto Engine Command Register") is a `LOG_UNIMP "Crypt commands not implemented"` stub (NOT "modeled but
+    silicon-unvalidated"). **#210 disposition (2026-07-21):** the datasheet DOES fully document the crypto path
+    (ch.19 + §19.4 context-buffer layouts: RC4 272 B / AES-128 192 B / AES-192 224 B / AES-256 256 B), so a
+    faithful `qcrypto_cipher`-based model IS possible — but NO KGPE-D16 firmware (Raptor U-Boot, Dell vendor,
+    our Linux) exercises the crypto engine (the only AES code in-tree is unrelated Tegra20 U-Boot). Like #190
+    (I2C DMA-buffer) / #191 (SCU freq-counter), #210 is a real completeness task but correctly LOW-PRIORITY
+    firmware-unexercised: the 🔶 (hash silicon-validated, crypto documented-as-stub) is the HONEST state, not a
+    defect. Completing the crypto half → QE ✅ remains tracked as **#210**.
   - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mic_ast2050.c`
     wired into the G3 SoC (VIC INT#1): the §13 register block + the continuous-scanner semantics (per-page
     2-bit control words skip/ECC/debug/MIC-mode, checksum buffer, first/secondary/lost page-error flags +

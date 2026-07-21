@@ -1,0 +1,201 @@
+DEVICE-MATRIX row 43 (HACE) — QEMU faithfulness: BOTH documented crypto resets gate compute
+=============================================================================================
+
+The AST2050/AST1100 A3 datasheet (V1.05) gives the Hash & Crypto Engine TWO
+reset inputs, not one:
+  * SCU04[4] = AES_RST_N — named as the crypto engine reset in the §8.2 "Clock
+    and Reset Tree Mapping Table" ("Crypto Engine  AES_RST_N  PCLK MCLK YCLK").
+  * SCU04[5] = hrstn      — the datasheet's Figure 43 "Crypto Engine Reset".
+Only SCU04[4] is held at the SCU04 power-on default (0x000FFE5C: bit4=1, bit5=0),
+so the silicon SHA-256 validation (evidence 01) only ever exercised bit 4. The
+QEMU g3-hace-gate previously gated compute on SCU0C[13] (YCLK) OR SCU04[4] only —
+it ignored the second documented crypto reset. Fixed in hw/misc/aspeed_scu.c
+aspeed_2050_scu_propagate_gates(): compute is now held when SCU0C[13] OR SCU04[4]
+OR SCU04[5] is asserted (opt-in-by-connection; G3-only, other SoCs untouched).
+
+This transcript proves all four transitions in QEMU (the 'hacetest' initramfs
+gate). The KEY new lines are 3 and 4 — with YCLK running and AES_RST_N released,
+asserting hrstn (SCU04[5]=1) alone holds the engine off, and releasing it lets
+SHA-256 complete again — proving the added bit-5 term is functional, not dead code:
+  1. YCLK stopped   (SCU0C[13]=1)          -> HASH_IRQ CLEAR (held)      PASS
+  2. all released                          -> HASH_IRQ SET   (computed)  PASS
+  3. hrstn held     (SCU04[5]=1)           -> HASH_IRQ CLEAR (held)  <-- NEW
+  4. hrstn released (SCU04[5]=0)           -> HASH_IRQ SET   (computed) <-- NEW
+No KGPE-D16 firmware exercises the crypto engine, so bit 5 could not be silicon-
+validated; the model is grounded in the datasheet + proven functional in QEMU.
+
+Captured 2026-07-21 against the freshly-built kgpe-d16-bmc qemu-system-arm.
+Full boot + gate transcript below.
+---------------------------------------------------------------------------------
+Running as unit: run-p3725426-i28884167.scope; invocation ID: f2dab285d62d4777af15a55753b11506
+boot: qemu/qemu/build/qemu-system-arm -M kgpe-d16-bmc -m 128 -nographic -monitor none -serial stdio -kernel kernel/out/uImage-kgpe-d16 -initrd initramfs/out/uInitrd-kgpe-d16 -dtb kernel/out/aspeed-bmc-asus-kgpe-d16.dtb -append console=ttyS4,115200n8 hacetest
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #33 Tue Jul 21 09:26:56 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=00093177
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] Reserved memory: created DMA memory pool at 0x43800000, size 8 MiB
+[    0.000000] OF: reserved mem: initialized node region@43800000, compatible id shared-dma-pool
+[    0.000000] OF: reserved mem: 0x43800000..0x43ffffff (8192 KiB) nomap non-reusable region@43800000
+[    0.000000] cma: Reserved 16 MiB at 0x47000000 on node -1
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000]   node   0: [mem 0x0000000043800000-0x0000000043ffffff]
+[    0.000000]   node   0: [mem 0x0000000044000000-0x0000000047ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x0000000047ffffff]
+[    0.000000] Kernel command line: console=ttyS4,115200n8 hacetest
+[    0.000000] Unknown kernel command line parameters "hacetest", will be passed to user space.
+[    0.000000] Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 32512
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 88592K/131072K available (8192K kernel code, 985K rwdata, 1996K rodata, 1024K init, 188K bss, 26096K reserved, 16384K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 31254 entries in 62 pages
+[    0.000000] ftrace: allocated 62 pages with 5 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] aspeed-g3-vic: SENSE=0x903897fe EVENT=0x983f97fe DUAL=0x7c00000 edge_sources=0x6fc76801
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 81547112397 ns
+[    0.000197] sched_clock: 32 bits at 23MHz, resolution 42ns, wraps every 91625968618ns
+[    0.001841] Switching to timer-based delay loop, resolution 42ns
+[    0.005456] Calibrating delay loop (skipped), value calculated using timer frequency.. 46.87 BogoMIPS (lpj=234375)
+[    0.005741] CPU: Testing write buffer coherency: ok
+[    0.006998] pid_max: default: 32768 minimum: 301
+[    0.019915] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.019974] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.053236] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.053747] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.054771] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.057875] ASPEED Unknown rev A0 (00000202)
+[    0.066012] devtmpfs: initialized
+[    0.090273] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.090395] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.092640] pinctrl core: initialized pinctrl subsystem
+[    0.103392] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.111754] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.175920] usbcore: registered new interface driver usbfs
+[    0.176281] usbcore: registered new interface driver hub
+[    0.176486] usbcore: registered new device driver usb
+[    0.177012] mc: Linux media interface: v0.10
+[    0.177281] videodev: Linux video capture interface: v2.00
+[    0.177460] pps_core: LinuxPPS API ver. 1 registered
+[    0.177482] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.177593] PTP clock support registered
+[    0.177699] EDAC MC: Ver: 3.0.0
+[    0.236482] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.278114] NET: Registered PF_INET protocol family
+[    0.280056] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.284301] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.284470] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.284571] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.284672] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.284798] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.286002] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.286225] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.288327] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.310459] RPC: Registered named UNIX socket transport module.
+[    0.310520] RPC: Registered udp transport module.
+[    0.310537] RPC: Registered tcp transport module.
+[    0.310550] RPC: Registered tcp-with-tls transport module.
+[    0.310564] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.320624] Unpacking initramfs...
+[    0.340180] workingset: timestamp_bits=30 max_order=15 bucket_order=0
+[    0.341392] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.359725] NFS: Registering the id_resolver key type
+[    0.360802] Key type id_resolver registered
+[    0.360842] Key type id_legacy registered
+[    0.361150] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.366798] NET: Registered PF_ALG protocol family
+[    0.367814] io scheduler bfq registered
+[    0.477170] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.520977] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1464843) is a ASPEED VUART
+[    0.559035] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 20, base_baud = 1500000) is a 16550A
+[    0.560418] printk: console [ttyS4] enabled
+[    0.658619] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.720326] loop: module loaded
+[    0.793316] random: crng init done
+[    0.932057] zram: Added device: zram0
+[    0.940537] ftgmac100 1e660000.ethernet: Read MAC address 52:54:00:12:34:56 from chip
+[    0.956715] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    0.957751] RTL8201CP Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    0.960756] ftgmac100 1e660000.ethernet eth0: irq 21, mapped at 8bc9b68e
+[    0.964325] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    0.964991] dummy_hcd dummy_hcd.0: Dummy host controller
+[    0.965407] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    1.027609] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    1.027936] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    1.028155] usb usb1: Product: Dummy host controller
+[    1.028314] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    1.028494] usb usb1: SerialNumber: dummy_hcd.0
+[    1.039998] hub 1-0:1.0: USB hub found
+[    1.040848] hub 1-0:1.0: 1 port detected
+[    1.122784] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+[    1.168144] aspeed-rtc 1e781000.rtc: registered as rtc0
+[    1.168476] aspeed-rtc 1e781000.rtc: hctosys: unable to read the hardware clock
+[    1.169330] i2c_dev: i2c /dev entries driver
+[    1.183372] aspeed-i2c-bus 1e78a040.i2c-bus: i2c bus 0 registered, irq 24
+[    1.199061] Freeing initrd memory: 3064K
+[    1.200477] aspeed-i2c-bus 1e78a080.i2c-bus: i2c bus 1 registered, irq 25
+[    1.211699] aspeed-i2c-bus 1e78a100.i2c-bus: i2c bus 3 registered, irq 26
+[    1.219119] at24 4-0054: 1024 byte 24c08 EEPROM, writable, 1 bytes/write
+[    1.219515] aspeed-i2c-bus 1e78a140.i2c-bus: i2c bus 4 registered, irq 27
+[    1.237887] i2c i2c-1: Added multiplexed i2c bus 14
+[    1.274524] i2c i2c-1: Added multiplexed i2c bus 15
+[    1.277274] i2c i2c-1: Added multiplexed i2c bus 16
+[    1.277514] i2c-mux-gpio i2cmux: 3 port mux on 1e78a080.i2c-bus adapter
+[    1.288189] aspeed-video 1e700000.video: irq 28
+[    1.289317] aspeed-video 1e700000.video: alloc mem size(24576) at 0x47048000 for jpeg header
+[    1.308795] Driver for 1-wire Dallas network protocol.
+/machine/unattached/device[19]: smbus: error: Unexpected stop during receive
+/machine/unattached/device[19]: smbus: error: Unexpected stop during receive
+/machine/unattached/device[19]: smbus: error: Unexpected stop during receive
+[    1.404504] usbcore: registered new interface driver usbhid
+[    1.404775] usbhid: USB HID core driver
+[    1.414541] NET: Registered PF_INET6 protocol family
+[    1.475249] Segment Routing with IPv6
+[    1.475819] In-situ OAM (IOAM) with IPv6
+[    1.478177] NET: Registered PF_PACKET protocol family
+[    1.479752] 8021q: 802.1Q VLAN Support v1.8
+[    1.480868] Key type dns_resolver registered
+[    1.536161] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    1.536654] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+[    1.538974] printk: console [netcon0] enabled
+[    1.539212] netconsole: network logging started
+[    1.543920] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    1.547860] clk: Disabling unused clocks
+[    1.585747] Freeing unused kernel image (initmem) memory: 1024K
+[    1.587494] Checked W+X mappings: passed, no W+X pages found
+[    1.587943] Run /init as init process
+
+ASUS KGPE-D16 BMC  —  Aspeed AST2050 (ARM926EJ-S)  —  6.6.70-dirty
+
+[    1.794805] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+eth0: 10.0.2.15
+Fingerprint: SHA256:TBr6W9MLIJF3QGg9Un8Acf7j0Gh6wsPqiecpOxAaY10
+[71] Jan 01 00:00:02 Running in background
+--- net diag ---
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast qlen 1000
+    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fec0::5054:ff:fe12:3456/64 scope site tentative dynamic flags 100 
+       valid_lft 86400sec preferred_lft 14400sec
+    inet6 fe80::5054:ff:fe12:3456/64 scope link 
+       valid_lft forever preferred_lft forever
+Active Internet connections (only servers)
+Proto Recv-Q Send-Q Local Address           Foreign Address         State       
+tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      
+tcp        0      0 :::22                   :::*                    LISTEN      
+dropbear: listening on :22 (ssh in via the QEMU hostfwd port)
+=== HACE-BEGIN ===
+HACE gated STATUS=0x00000000 (HASH_IRQ 0x200 must be CLEAR)
+HACE released STATUS=0x00000200 (HASH_IRQ 0x200 must be SET)
+HACE hrstn-held STATUS=0x00000000 (HASH_IRQ 0x200 must be CLEAR)
+HACE hrstn-released STATUS=0x00000200 (HASH_IRQ 0x200 must be SET)
+HACE RESULT: PASS (compute ga
+boot: OK — saw 'HACE RESULT: PASS'
