@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate (b): independent code review of the #208 reset-gating code = CLEAN
+
+Dispatched an independent code-reviewer on both #208 submodule commits (61615dba75 MDMA/MIC MMIO gating +
+589f68f99a HACE compute gating) + the initramfs gate changes. Verdict: **REVIEW CLEAN** (no findings ≥80
+confidence). Verified the subtle parts: (a) ORDERING — the SCU→engine reset GPIO lines are wired in the SoC
+realize BEFORE the machine-level reset that first fires propagate_gates, and the MDMA/MIC/HACE are already
+realized+mapped by then (no use-after-free / not-yet-realized); (b) both SCU04 reset tables (0xFFCFFEDC +
+0x000FFE5C) hold bits 16/18 set + SCU0C[13]/SCU04[4] set, so the engines start held/clock-stopped by default
+== silicon; (c) the HACE early-`break` is inside the switch so the common `regs[addr]=data` writeback still
+stores the CMD (reg file stays live, compute skipped) — intended; (d) opt-in-by-connection is provably inert
+on G4/G5 (g3_compute_gated defaults false, only driven by the G3-only-wired gpio); (e) all initramfs
+bitmasks (bit16=0x10000, bit18=0x40000, SCU0C[13]=0x2000, SCU04[4]=0x10) correct. ONE sub-threshold note
+(~50 conf, explicitly NOT a #208 defect): the SCU propagate_gates derived GPIO state isn't re-derived after
+loadvm — PRE-EXISTING (shared by g3_i2c_rst etc.), only matters if this fork ever supports migration (it
+doesn't). Folded into #202. Gate (b) is satisfied for the #208 reset-gating code.
+
 ## 2026-07-21 — #208 follow-up: HACE compute-gating modeled (YCLK/AES_RST_N), validated
 
 Closed the HACE half of the #208 gap the silicon validation exposed. Silicon holds the HAC COMPUTE engine
