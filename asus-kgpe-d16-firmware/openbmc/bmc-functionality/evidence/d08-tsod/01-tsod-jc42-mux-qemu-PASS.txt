@@ -1,0 +1,39 @@
+DEVICE-MATRIX row 19 (DIMM TSOD ×16) — QEMU TSOD datapath: PASS
+================================================================
+
+TSOD (JEDEC TS-on-DIMM / JC-42.4) is a REAL board device (schematic §10.2: temp
+sensors at 0x18-0x1F on both DIMM banks, reached via the QU9/QU5 mux). The prior
+matrix marked row 19 all-Ⓝ because THIS bench's A2 UDIMM (part RMR5030EF68F9W1600)
+has SPD byte32=0 (no thermal sensor) so its 0x19 NAKs. That conflated the bench's
+DIMM population with the device being n/a (audit slice-2 F1). QEMU controls its own
+modeled DIMM population, so the TSOD datapath is now validated end-to-end.
+
+MODEL (#205): opt-in machine property `-M kgpe-d16-bmc,ts-dimm=on` (default OFF =
+bench-faithful) populates a JC-42.4 TSOD (hw/sensor/jc42.c) at 0x19 on the QU5 Y2
+(I2C10, DIMM A-D) bank, temperature 42000 mC. The board DTS declares temp@19
+"jedec,jc-42.4-temp" (describing the board capability); the jc42 driver NAKs+skips
+when the DIMM lacks a sensor (rig) and binds when one is present.
+
+VALIDATION (scripts/spd-test.py, full Linux stack, QU9/QU5 mux driven by the real
+i2c-mux-gpio + power-sequencer GPIO recipe):
+
+--- ts-dimm=on (TSOD present) -> row 19 QE + LQ + LU ---
+  SPD_GATED_OFF_OK               (host off: mux electrically absent, 0x19 absent)
+  SPD_HDR=[92 11 0b 02]          (host on: real A2 SPD read through QU5 Y2)
+  SPD_PN=[RMR5030EF68F9W1600]
+  TSOD_TEMP=[42000]              (jc42 bound at 0x19 through the mux; hwmon
+  TSOD_PRESENT_OK                 temp1_input = 42000 mC via Linux jc42 + sysfs)
+  SPD_GATED_OFF_AGAIN_OK         (host off again: live gating, TSOD gone)
+  SPD RESULT: PASS
+
+--- default (ts-dimm off, bench-faithful) -> no regression ---
+  SPD_GATED_OFF_OK
+  SPD_HDR=[92 11 0b 02] / SPD_PN=[RMR5030EF68F9W1600]
+  TSOD_ABSENT_OK                 (DT temp@19 exists but 0x19 NAKs -> jc42 does
+                                  not bind -> no hwmon, matching the rig)
+  SPD RESULT: PASS
+
+CONCLUSION: row 19 QE=✅ (TSOD device + datapath modeled), LQ=✅ (Linux jc42 binds
+through the mux), LU=✅ (userspace hwmon temp1_input read). UQ/US=Ⓝ (U-Boot does
+not read TSOD). LS/ZS=Ⓝ (the physical bench's TS-less DIMM — a hardware-DIMM
+property, cited). ZQ=⬜ (Zephyr jc42 driver via the mux, remaining).

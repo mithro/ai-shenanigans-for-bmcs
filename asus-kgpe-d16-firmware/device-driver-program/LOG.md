@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 19 DIMM TSOD: modeled + validated the datapath (QE/LQ/LU ✅, #205)
+
+Acted on audit slice-2 F1 (TSOD is a real device the matrix under-claimed). Added an OPT-IN machine
+property `-M kgpe-d16-bmc,ts-dimm=on` (default off = bench-faithful, where the rig's TS-less A2 UDIMM
+NAKs at 0x19) that populates a JEDEC JC-42.4 TSOD (`hw/sensor/jc42.c`) at 0x19 on the QU5 Y2 (DIMM A-D)
+bank @42000 mC — QEMU submodule f3b9a9bd34, following the existing `execute-in-place` machine-bool
+pattern. Declared `temp@19 "jedec,jc-42.4-temp"` in the board DTS (describes the board capability; the
+jc42 driver NAKs+skips on the TS-less rig, binds when a sensor is present). Extended `scripts/spd-test.py`
+with `--ts-dimm` (swaps the TSOD-absent assertion for a TSOD-present one).
+
+**BOTH modes PASS on the faithful machine:**
+- `--ts-dimm`: SPD read through QU9/QU5-Y2, then the Linux jc42 binds at 0x19 and userspace reads hwmon
+  `temp1_input=42000` THROUGH the mux → row 19 QE=✅, LQ=✅, LU=✅ (evidence d08-tsod/01).
+- default: `temp@19` exists but 0x19 NAKs → jc42 does not bind → TSOD absent → NO regression.
+
+Gotcha caught: first run read 42000 while the test expected 35000 — I'd edited the source to use the
+jc42 default (35000) AFTER building the 42000 binary and not rebuilt (source/binary diverged). Kept the
+distinctive 42000 (stronger evidence than the model default), made source match, rebuilt. Also: the
+canonical DTS is `dts/aspeed-bmc-asus-kgpe-d16.dts` (build-kernel.sh copies it INTO the gitignored kernel
+tree) — edited the real source, not the copy. Row 19 UQ/US/LS/ZS=Ⓝ (U-Boot n/a; bench TS-less DIMM);
+ZQ=⬜ (Zephyr jc42, remaining). Tally: Linux@QEMU 22→23✅, userspace 15→16✅, QE Ⓝ 2 (row 19 left Ⓝ set).
+
 ## 2026-07-21 — Integrated the 4-slice adversarial audit (gates a + d)
 
 All four independent audit sub-agents reported. **Enumeration CONFIRMED complete** (no missed BMC-side

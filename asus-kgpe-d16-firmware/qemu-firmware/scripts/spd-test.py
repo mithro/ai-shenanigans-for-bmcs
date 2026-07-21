@@ -76,10 +76,7 @@ echo "SPD_HDR=[$HDR]"
 PN=$(hexdump -v -e '/1 "%c"' -s 128 -n 18 /sys/bus/i2c/devices/$CH2-0051/eeprom)
 echo "SPD_PN=[$PN]"
 [ "$PN" = "RMR5030EF68F9W1600" ] || { echo SPD_FAIL_bad_partnumber; exit 1; }
-# This UDIMM has no thermal sensor (SPD byte32=0) -> 0x19 must NOT bind.
-echo $CH2-0019 > /sys/bus/i2c/drivers_probe 2>&1 || true
-[ -e /sys/bus/i2c/devices/$CH2-0019/hwmon ] && { echo SPD_FAIL_unexpected_tsod; exit 1; }
-echo TSOD_ABSENT_OK
+#@TSOD_CHECK@#
 
 # --- power off: a FRESH read must fail (live gating) ---
 val $F0 0; sleep 1; val $F0 1
@@ -93,6 +90,26 @@ echo $CH2-0051 > /sys/bus/i2c/drivers_probe
 echo SPD_GATED_OFF_AGAIN_OK
 echo SPD_ALL_OK
 """
+
+
+# --- the DIMM at slot A2 has NO thermal sensor (rig UDIMM, SPD byte32=0) ---
+# The DT declares temp@19 to describe the board capability, but the jc42 driver
+# fails to probe (0x19 NAKs) -> no hwmon. This asserts the rig-faithful default.
+TSOD_ABSENT = r"""echo $CH2-0019 > /sys/bus/i2c/drivers_probe 2>&1 || true
+[ -e /sys/bus/i2c/devices/$CH2-0019/hwmon ] && { echo SPD_FAIL_unexpected_tsod; exit 1; }
+echo TSOD_ABSENT_OK"""
+
+# --- with `ts-dimm=on` a TS-equipped DIMM presents a JC-42.4 TSOD at 0x19 ---
+# The same DT temp@19 node now binds (device responds through the QU9/QU5-Y2
+# mux) and exposes hwmon temp1_input = 42000 mC (42 C, the modeled jc42 temp).
+TSOD_PRESENT = r"""echo $CH2-0019 > /sys/bus/i2c/drivers_probe
+sleep 1
+HW=$(echo /sys/bus/i2c/devices/$CH2-0019/hwmon/hwmon*)
+[ -e "$HW/temp1_input" ] || { echo SPD_FAIL_no_tsod; exit 1; }
+T=$(cat "$HW/temp1_input")
+echo "TSOD_TEMP=[$T]"
+[ "$T" = "42000" ] || { echo SPD_FAIL_bad_tsod_temp; exit 1; }
+echo TSOD_PRESENT_OK"""
 
 
 def wait_for(proc, marker, timeout):
@@ -123,9 +140,16 @@ def main():
     ap.add_argument("--key", required=True)
     ap.add_argument("--port", type=int, default=2224)
     ap.add_argument("--boot-timeout", type=int, default=180)
+    ap.add_argument("--ts-dimm", action="store_true",
+                    help="boot with -M kgpe-d16-bmc,ts-dimm=on and assert the "
+                         "JC-42.4 TSOD at 0x19 binds + reads temp (row 19)")
     args = ap.parse_args()
 
-    cmd = [args.qemu, "-M", "kgpe-d16-bmc", "-m", "128", "-nographic",
+    machine = "kgpe-d16-bmc,ts-dimm=on" if args.ts_dimm else "kgpe-d16-bmc"
+    guest = GUEST_SCRIPT.replace(
+        "#@TSOD_CHECK@#", TSOD_PRESENT if args.ts_dimm else TSOD_ABSENT)
+
+    cmd = [args.qemu, "-M", machine, "-m", "128", "-nographic",
            "-monitor", "none", "-serial", "stdio",
            "-nic", f"user,model=ftgmac100,hostfwd=tcp::{args.port}-:22",
            "-kernel", args.kernel, "-initrd", args.initrd,
@@ -149,7 +173,7 @@ def main():
         for attempt in range(1, 7):
             time.sleep(8)
             print(f"--- ssh attempt {attempt} ---")
-            r = subprocess.run(ssh, input=GUEST_SCRIPT, capture_output=True,
+            r = subprocess.run(ssh, input=guest, capture_output=True,
                                text=True, timeout=300)
             print(r.stdout)
             if r.stderr.strip():

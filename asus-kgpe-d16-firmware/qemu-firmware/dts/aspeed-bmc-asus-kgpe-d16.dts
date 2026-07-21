@@ -396,13 +396,22 @@
 			 * Rig population: slot A2 (SA-strap map §5b). The real
 			 * A2 module (part RMR5030EF68F9W1600, read on silicon)
 			 * is a UDIMM with SPD byte32=0 = no thermal sensor, so
-			 * there is NO jc42 TSOD node here (0x19 NAKs on silicon).
-			 * A TS-equipped DIMM would add temp@19 "jedec,jc-42.4-temp".
+			 * on the physical rig 0x19 NAKs and temp@19 does not bind.
+			 * The board itself DOES support a TSOD at 0x18+slot (§10.2),
+			 * so the node is declared to describe the board capability;
+			 * the jc42 driver simply fails to probe when the DIMM lacks
+			 * a sensor (rig), and binds when one is present (QEMU
+			 * `-M kgpe-d16-bmc,ts-dimm=on`, or a TS-equipped DIMM). #205.
 			 */
 			spd@51 {
 				compatible = "atmel,24c02";
 				reg = <0x51>;
 				read-only;
+			};
+
+			temp@19 {
+				compatible = "jedec,jc-42.4-temp";
+				reg = <0x19>;
 			};
 		};
 
