@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #198 PSU pmbus phantom sensors: REPRODUCED + fully root-caused (fix = SMBus-layer cycle)
+
+Stopped scoping and actually reproduced #198. Booted Linux (scripts/psu-hwmon-test.py, new reusable
+harness) and dumped the PSU pmbus hwmon (i2c0/0x58): the real sensors are all correct (vin 230V, vout
+12V, temp1 30C, iin/iout, pin/pout), but THREE phantom sensors read -500: **in2(vcap), temp2, temp3**
+(evidence d09-psu-pmbus/01). COMPLETE root cause traced through QEMU + Linux: pmbus_psu.c doesn't set
+PB_HAS_VCAP/TEMP2/TEMP3, so hw/i2c/pmbus_device.c gates those reads off → `goto passthough` → returns
+PMBUS_ERR_BYTE=0xFF/byte → word 0xFFFF → LINEAR11 decode = mantissa -1 × 2^-1 = **-0.5 = -500** milli-units
+(exactly the observed value). Linux's `pmbus_check_word_register` treats any `rv>=0` (0xFFFF=65535) as
+sensor-PRESENT, so it creates the phantom attrs; a real PSU NAKs the unsupported command byte so the read
+returns <0 and Linux skips it.
+
+WHY THE FIX IS A DEDICATED SMBUS-INFRA CYCLE (honest, not a dodge): QEMU's SMBus slave layer CANNOT NAK a
+read on the command byte — `hw/i2c/smbus_slave.c:62-63` calls `write_data` and DISCARDS its return, and the
+per-byte send just buffers. So no pmbus-model change can signal the NAK. The faithful fix must teach
+smbus_slave.c to honor a write_data NAK (or a per-device opt-in) — a change touching EVERY SMBus device
+(tmp105, at24 EEPROMs, the other pmbus VR/PSU models), so it needs the full pmbus/SMBus qtest suite to
+prove no cross-device regression. A careless "honor any non-zero return" would break legitimate paths that
+already return PMBUS_ERR_BYTE. Deferred to a dedicated cycle WITH qtest validation rather than risk
+regressing the many validated I2C/SMBus cells. Row 24 real-sensor cells stay ✅; the phantom gap is now
+reproduced + root-caused with the fix path pinned.
+
 ## 2026-07-21 — CI fix: corrupt kernel patch 0007 (vhub) — the kernel build was red
 
 Autonomous CI check found the "Build D16 kernel (uImage + dtb)" job FAILING: `error: corrupt patch at

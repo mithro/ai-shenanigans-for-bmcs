@@ -1,0 +1,48 @@
+DEVICE-MATRIX row 24 (PSU PMBus) / #198 — phantom hwmon sensors: REPRODUCED + root-caused
+==========================================================================================
+
+SYMPTOM (reproduced 2026-07-21 on a real Linux boot, scripts/psu-hwmon-test.py):
+the PSU pmbus device (i2c0/0x58) exposes THREE phantom hwmon sensors reading -500
+alongside the real ones. Full dump of /sys/class/hwmon/hwmon3 (name=pmbus, 0-0058):
+
+  in1_input   = 230000  label=vin      <- real (230 V)
+  in2_input   = -500    label=vcap     <- PHANTOM (READ_VCAP 0x8A unsupported)
+  in3_input   = 12000   label=vout1    <- real (12 V)
+  temp1_input = 30000   label=(temp1)  <- real (30 C)
+  temp2_input = -500    label=         <- PHANTOM (READ_TEMPERATURE_2 0x8E)
+  temp3_input = -500    label=         <- PHANTOM (READ_TEMPERATURE_3 0x8F)
+  curr1_input = 1000    label=iin      <- real
+  curr2_input = 8000    label=iout1    <- real
+  power1_input= 110000000 label=pin    <- real
+  power2_input= 96000000  label=pout1  <- real
+
+COMPLETE ROOT CAUSE (traced through QEMU + Linux):
+  1. hw/sensor/pmbus_psu.c sets page_flags = VIN|VOUT|IIN|IOUT|PIN|POUT|TEMPERATURE|
+     FAN|MFR_INFO|VOUT_MODE. It does NOT set PB_HAS_VCAP / PB_HAS_TEMP2 / PB_HAS_TEMP3.
+  2. In hw/i2c/pmbus_device.c the READ switch gates READ_VCAP on PB_HAS_VCAP (l.909),
+     READ_TEMPERATURE_2 on PB_HAS_TEMP2 (l.941), READ_TEMPERATURE_3 on PB_HAS_TEMP3
+     (l.949) — all unset here -> `goto passthough` -> pmbus_receive_byte returns
+     PMBUS_ERR_BYTE = 0xFF for each byte -> the word read returns 0xFFFF.
+  3. 0xFFFF decoded as LINEAR11 = mantissa (bits[10:0]) 0x7FF = -1 (11-bit signed),
+     exponent (bits[15:11]) 0x1F = -1 (5-bit signed) -> -1 * 2^-1 = -0.5 -> -500 in
+     hwmon milli-units. That is exactly the -500 seen.
+  4. Linux's pmbus core detects sensor presence with pmbus_check_word_register(), which
+     returns "present" when the read `rv >= 0`. 0xFFFF (65535) >= 0 -> Linux ADDS the
+     phantom in2/temp2/temp3. A real PSU NAKs the unsupported command byte so
+     i2c_smbus_read_word_data() returns < 0 -> Linux SKIPS the sensor.
+
+WHY THE FIX IS AN SMBUS-INFRASTRUCTURE CHANGE (not a contained model fix):
+  QEMU's SMBus slave layer CANNOT currently NAK a read based on the command byte:
+  hw/i2c/smbus_slave.c:62-63 calls `sc->write_data(...)` and IGNORES its return value,
+  and the per-byte send path just buffers. So neither pmbus_device.c nor pmbus_psu.c
+  can signal "unsupported command -> NAK" to the master. Making the model faithful
+  requires teaching smbus_slave.c to honor a write_data NAK return (or an equivalent
+  per-device opt-in) -- a change that affects EVERY SMBus device (tmp105, at24/smbus
+  EEPROMs, the other pmbus VR/PSU models, etc.), so it must be validated against the
+  full pmbus/SMBus qtest suite for cross-device regressions. Tracked in #198 as a
+  dedicated cycle; NOT rushed here (a careless shared-SMBus change would regress the
+  many already-validated I2C/SMBus cells).
+
+STATUS: row 24 remains QE=✅ / LQ=✅ / LU=✅ for the REAL sensors (vin/vout/iin/iout/
+pin/pout/temp1/fan all correct); the phantom-sensor faithfulness gap is now
+reproduced + fully root-caused with the fix path identified.
