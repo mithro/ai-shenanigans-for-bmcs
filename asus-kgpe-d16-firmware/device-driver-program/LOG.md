@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(b) MIC code review: CLEAN (line-by-line diff vs the SLT oracle), no actionable defects
+
+The independent code review of `hw/misc/aspeed_mic_ast2050.c` returned with **no high-confidence issues** —
+the model is clean. Notably the reviewer located the vendored oracle (`raptor .../ast2050/mictest.c` + `.h`)
+and diffed the model against it LINE BY LINE, confirming bit-for-bit: the Fletcher-32 fold cadence (block
+360, seed 0xffff, fold-after-each-block-incl-tail + one final fold — and the block-360 constant is exactly
+what the real ARM926 32-bit SLT uses, so it is proven overflow-safe, not just coincidentally-passing on the
+zero page); every register constant (MIC_ENABLE/MAXPAGE_MASK=last-page-index/error-flag bits/INTMASK/
+ERRPAGE) vs mictest.h; the 4-pages/byte control packing; the checksum "initiative" write-vs-compare
+semantics; the in_scan re-entrancy guard (no stuck-true path); the first/secondary/lost error escalation +
+level-IRQ recompute on every mutating path; MIC14 RO-field preservation + MIC18/1C W1C keeping the page
+number; LE endianness; and large-page-count integer safety (page<<12 via a uint64_t cast). QEMU API (OOB
+checks, access sizes, reset clearing in_scan + deasserting IRQ, meson/struct/wiring order vs the AHBC alias
+dependency) all correct.
+ONE sub-threshold note (conf ~40, NOT actionable): no vmstate `.post_load` hook to re-run
+aspeed_mic_update_irq() after a loadvm — a restored VM with a latched unmasked error wouldn't re-assert the
+IRQ until the next MIC write. But this is a REPO-WIDE pattern (none of the sibling mdma/ahbc/rtc/lpc/p2a/smc/
+pwm/udc/video ast2050 models define post_load either) and this project never exercises QEMU migration/
+snapshots, so I am NOT diverging MIC alone from the repo pattern for an unexercised path. Recorded as a known
+minor item (a future repo-wide post_load sweep across the level-IRQ models could add it uniformly). So MIC is
+gate-(b) CLEAN — combined with the MDMA review (1 real bug found+fixed), 2 of the new models are now
+independently reviewed. Gate-(a) faithfulness audit of the 4 ✅ cells still in flight.
+
 ## 2026-07-21 — Gates (a)+(b): dispatched independent reviews of this session's new work (in flight)
 
 To satisfy completion gates (a) completeness/faithfulness and (b) code review on the fresh work — and because
