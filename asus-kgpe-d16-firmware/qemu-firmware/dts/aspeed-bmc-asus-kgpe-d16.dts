@@ -311,6 +311,31 @@
 	};
 };
 
+/*
+ * BMC I2C1 engine (DT i2c0) — schematic §10.2 / I2C-SMBUS-TOPOLOGY §3.1: the
+ * dedicated PSU SMBus (connector PSUSMB1, BMC balls A15/B15 = SDA1/SCL1). The
+ * schematic numbers I2C buses 1-based, so schematic "I2C1" is QEMU engine 0 =
+ * DT i2c0 (w83795 sits on schematic I2C2 = engine 1 = DT i2c1, confirming the
+ * N->N-1 mapping). The QEMU machine attaches the modeled server PSU here
+ * (hw/arm/aspeed.c: aspeed_i2c_get_bus(&soc->i2c, 0) -> "pmbus-psu" @0x58).
+ * This bus is direct (not behind the QU9/QU5 mux on i2c1), so it is reachable
+ * regardless of host power.
+ */
+&i2c0 {
+	status = "okay";
+
+	/*
+	 * Generic server-PSU PMBus @0x58. Binds the Linux generic `pmbus` hwmon
+	 * driver (CONFIG_SENSORS_PMBUS), which identifies the device via
+	 * STATUS_WORD/CAPABILITY and auto-detects VIN/VOUT/IOUT/TEMP/FAN from the
+	 * modeled PMBus 1.2 device (hw/sensor/pmbus_psu.c). Row 24 LQ.
+	 */
+	psu@58 {
+		compatible = "pmbus";
+		reg = <0x58>;
+	};
+};
+
 &i2c1 {
 	status = "okay";
 

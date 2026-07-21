@@ -1,5 +1,25 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Row 24 LQ+LU (Linux pmbus @0x58): RESOLVED ✅ — root cause was my DT mis-nesting, not the model
+
+Came back to the pmbus blocker with the "it's your code, the hardware is 100% reliable" lens and READ the
+whole path instead of guessing. Static analysis said the model was correct (STATUS_WORD 0x79 → seeded
+`status_word=0` via pmbus_send16, popped byte-by-byte; pmbus_psu.c seeds it; device on engine 0 = schematic
+I2C1, faithful placement) — so a NAK was the only way to get `-ENXIO` → "status register not found".
+THE BUG (mine): the first attempt nested `psu@58` under the node textually written `i2c@0` that is a
+**mux child** of the engine-1 PCA954x (`i2c-parent=<&i2c1>`, QU5 Y0), NOT the engine-0 controller. An
+Aspeed dts can contain two different `i2c@0` nodes — the SoC controller (label `&i2c0`) and a mux child
+(`reg=<0>`). The client bound on the mux child (Linux bus 14 = a mux adapter) where nothing answers at
+0x58 → every identify read NAK'd.
+FIX: attach the node to the controller by its label `&i2c0` (new top-level block), matching QEMU's
+`aspeed_i2c_get_bus(&soc->i2c,0)`. Result — PASS: `hwmon3 name=pmbus dev=0-0058`, the generic pmbus
+driver identifies + binds and userspace reads live telemetry (VIN 230 V, VOUT 12 V, temp 30 C, IIN 1 A,
+IOUT 8 A). Evidence `openbmc/bmc-functionality/evidence/d08-pmbus/01-pmbus-linux-qemu-PASS.txt`.
+Matrix row 24: **LQ ⬜→✅** (driver identify+bind in QEMU) and **LU ⬜→✅** (userspace hwmon sysfs read of
+live values — same basis as row-254 w83795 CASEOPEN LU). LS stays ⬜ (rig-hardware gate #165, no PMBus PSU
+on this bench's PSUSMB1). Tally: Linux@QEMU 21→22 ✅, Linux userspace 14→15 ✅. Lesson reinforced: when a
+faithful model "misbehaves", suspect my wiring first — here a one-node dts move closed the row.
+
 ## 2026-07-21 — Row 24 LQ (Linux pmbus @0x58): attempted, REVERTED the DT node — model STATUS-read must be fixed first (honest, tracked #165)
 
 Executed the auditor's flagged "easy win" (row 24 LQ = Linux generic `pmbus` hwmon vs the QEMU-modeled

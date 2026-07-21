@@ -1,0 +1,50 @@
+DEVICE-MATRIX row 24 (PSU PMBus) — LQ (Linux driver @ QEMU): PASS
+==================================================================
+
+Stack : Linux (mainline generic `pmbus` hwmon, CONFIG_SENSORS_PMBUS)
+Target: kgpe-d16-bmc QEMU machine, modeled server PSU (hw/sensor/pmbus_psu.c)
+        attached at hw/arm/aspeed.c: aspeed_i2c_get_bus(&soc->i2c, 0) -> 0x58
+Bus   : BMC I2C engine 0 == schematic "I2C1" (1-indexed) == DT &i2c0
+        (PSUSMB1, balls A15/B15 = SDA1/SCL1; I2C-SMBUS-TOPOLOGY.md §3.1)
+Cmd   : qemu-system-arm -M kgpe-d16-bmc ... -append "... pmbustest"
+
+Root cause of the earlier "PMBus status register not found" failure
+-------------------------------------------------------------------
+Self-inflicted device-tree mis-nesting, NOT a model or hardware fault.
+The first attempt placed `psu@58` under the node textually written `i2c@0`
+that is a CHILD of the engine-1 PCA954x mux (`i2c-parent = <&i2c1>`, QU5
+channel Y0) — a mux child bus, not the engine-0 controller. The QEMU PSU
+lives on the engine-0 DIRECT bus, so on the mux child every read NAK'd and
+the generic driver's STATUS_WORD/STATUS_BYTE identify (pmbus_core.c
+pmbus_init_common) returned -ENXIO -> "status register not found".
+Fix: attach the node to the controller by its label `&i2c0` (a new top-level
+block), matching the QEMU engine-0 placement. Trap avoided: an Aspeed board
+dts can have two different `i2c@0` nodes — the SoC controller (label &i2c0)
+and a mux child (reg = <0> under a mux). They are different buses.
+
+Result: the generic pmbus driver identifies + binds and reads live model
+telemetry (VIN 230 V, VOUT 12 V, temp 30 C, IIN 1 A, IOUT 8 A). The -500
+entries are absent channels (VCAP/temp2/temp3) the driver probes but the
+PSU model does not populate — harmless.
+
+Transcript (captured 2026-07-21)
+--------------------------------
+=== PMBUS-BEGIN ===
+[    0.000000] Kernel command line: console=ttyS4,115200n8 earlyprintk pmbustest
+[    0.000000] Unknown kernel command line parameters "earlyprintk pmbustest", will be passed to user space.
+[    1.568485]     pmbustest
+hwmon hwmon0 name=w83795 dev=1-002f
+hwmon hwmon1 name=sbtsi dev=3-004c
+hwmon hwmon2 name=sbtsi dev=3-004d
+hwmon hwmon3 name=pmbus dev=0-0058
+pmbus hwmon = /sys/class/hwmon/hwmon3 (name=pmbus)
+  in1_input=230000
+  in2_input=-500
+  in3_input=12000
+  temp1_input=30000
+  temp2_input=-500
+  temp3_input=-500
+  curr1_input=1000
+  curr2_input=8000
+PMBUS RESULT: PASS (generic pmbus hwmon bound @0-0058, VOUT/VIN=230000 mV)
+=== PMBUS-END ===

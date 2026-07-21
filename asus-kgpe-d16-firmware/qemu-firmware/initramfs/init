@@ -460,6 +460,42 @@ if grep -q ledtest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- PMBus PSU validation (only when 'pmbustest' on the kernel cmdline) ---
+# DEVICE-MATRIX row 24 (PSU PMBus) LQ: prove the Linux GENERIC pmbus hwmon driver
+# (CONFIG_SENSORS_PMBUS) binds to the modeled server PSU @0x58 on the i2c0 engine
+# (dts &i2c0 psu@58 compatible="pmbus" — schematic I2C1 = QEMU engine 0) and reads
+# telemetry from hw/sensor/pmbus_psu.c. The generic driver identifies via
+# STATUS_WORD/CAPABILITY then auto-detects VIN/VOUT/IOUT/TEMP/FAN; a non-zero
+# voltage input proves userspace->hwmon->pmbus->QEMU model end to end.
+if grep -q pmbustest /proc/cmdline; then
+	echo "=== PMBUS-BEGIN ==="
+	dmesg 2>&1 | grep -iE "pmbus" | head
+	PH=""
+	for h in /sys/class/hwmon/hwmon*; do
+		[ -e "$h/name" ] || continue
+		echo "hwmon $(basename "$h") name=$(cat "$h/name" 2>&1) dev=$(readlink -f "$h/device" 2>&1 | sed 's#.*/##')"
+		if readlink -f "$h/device" 2>&1 | grep -q "0-0058"; then PH="$h"; fi
+		case "$(cat "$h/name" 2>&1)" in *pmbus*) [ -z "$PH" ] && PH="$h";; esac
+	done
+	if [ -n "$PH" ]; then
+		echo "pmbus hwmon = $PH (name=$(cat "$PH/name" 2>&1))"
+		for f in "$PH"/in*_input "$PH"/temp*_input "$PH"/fan*_input "$PH"/curr*_input; do
+			[ -e "$f" ] && echo "  $(basename "$f")=$(cat "$f" 2>&1)"
+		done
+		V=""
+		for f in "$PH"/in*_input; do [ -e "$f" ] && V=$(cat "$f" 2>&1) && break; done
+		if [ -n "$V" ] && [ "$V" -gt 0 ] 2>&1; then
+			echo "PMBUS RESULT: PASS (generic pmbus hwmon bound @0-0058, VOUT/VIN=${V} mV)"
+		else
+			echo "PMBUS RESULT: FAIL (hwmon bound but no voltage input read)"
+		fi
+	else
+		echo "PMBUS RESULT: FAIL (no pmbus hwmon @0-0058 — driver did not bind)"
+	fi
+	echo "=== PMBUS-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we
