@@ -82,10 +82,10 @@ faithful — the errors live only in summary prose / memory):
 
 | Prior claim | Schematic reality | Status |
 |---|---|---|
-| "true NC-SI **impossible**" | §7: `AST_RMII2*` bus wired to **both** 82574L NICs (LU1/LU2); MAC pin-mux runs ch1 MII **and** ch2 RMII2/NC-SI at once | **FALSE** — NC-SI is wired. Row 11 QE✅/LQ✅; remaining = US/LS/Zephyr + a QEMU NC-SI responder. #132 (D07) is the faithful line of work. |
-| "DIMM inventory **impossible**" | §10: DIMM SPD ×16 reachable via `QU9` FET switch + `QU5` 74HC4052 (Y2=A–D, Y3=E–H) with the exact select sequence documented | **FALSE** — DIMM SPD is wired + modeled. Row 18 QE✅/LQ✅/ZQ✅; remaining = ZS + TSOD (row 19). |
-| "USB-host impossible" | §9: the BMC USB is a **device** port (virtual KB/mouse/CD) to SU1 — the BMC is a USB *device*, not a host | **MISLEADING** — USB-host is genuinely not a BMC role, but the real capability (USB device / vhub) exists and is row 9. |
-| "host-BIOS-flash impossible" | §5: BMC is an LPC peripheral on SU1's bus; whether it can issue LPC firmware cycles to the host BIOS flash is unproven, not disproven | **UNSETTLED** — tracked by #134 (D03), not "impossible". |
+| "true NC-SI **impossible**" | §7: `AST_RMII2*` bus wired to **both** 82574L NICs (LU1/LU2); MAC pin-mux runs ch1 MII **and** ch2 RMII2/NC-SI at once | **FALSE** — NC-SI is wired. Row 11 QE🔶/LQ✅. QE is 🔶 (not ✅) because Linux discovery runs vs libslirp's GENERIC responder (MFR-0x0); remaining = the faithful dual-82574L OEM-0x157 responder (**#204**, QE→✅) + LS silicon RMII2-pinctrl RE + Zephyr. U-Boot/userspace = **Ⓝ** (NC-SI is OS-level; U-Boot nets via MAC1/row 10). #132 (D07). |
+| "DIMM inventory **impossible**" | §10: DIMM SPD ×16 reachable via `QU9` FET switch + `QU5` 74HC4052 (Y2=A–D, Y3=E–H) with the exact select sequence documented | **FALSE** — DIMM SPD is wired + modeled. Row 18 QE✅/LQ✅/ZQ✅/LS✅ (real 256-byte silicon SPD read). Remaining = row-18 ZS; and DIMM **TSOD** (row 19) — a real device (§10.2, 16 sensors) that needs a modeled `jc42` on QU5 Y2/Y3 (**#205**), previously mis-marked all-Ⓝ. |
+| "USB-host impossible" | §9: the BMC USB is a **device** port (virtual KB/mouse/CD) to SU1 — the BMC is a USB *device*, not a host | **MISLEADING** — USB-host is genuinely not a BMC role, but the real capability (USB device / vhub) exists and is row 9 (virtual-media validated both sides, #182). |
+| "host-BIOS-flash impossible" | §5: BMC is an LPC peripheral on SU1's bus. Datasheet §2.20 documents an LPC-Master/FWH host-BIOS-update engine (HICR5[10] `ENFWH`) + an AHB→LPC window @0x5000_0000 | **SoC-CAPABLE but board-N/A** (slice-4 F1): "impossible" is FALSE — the SoC *has* the engine. But it needs host-off + an external LPC isolation switch (§2.20) the KGPE-D16 lacks (§5 wires LPC directly to SP5100), and this board's BIOS is **SPI-behind-FCH, not an LPC/FWH target**. So it is board-N/A-with-citation, not "unsettled". Close #134 accordingly; the SoC HICR5/6 LPC→AHB decode is separately modeled under **#206**. |
 
 ## 3. Coverage state (per the 8-stack matrix) and the remaining task list
 
@@ -113,3 +113,30 @@ These map to the existing per-row tasks in [`FULL-TASK-LIST.md`](FULL-TASK-LIST.
 and the tracker (#132/#133/#134/#137/#138/#178/#198/etc.). No *device* is
 missing; the remaining work is **driver breadth + silicon/userspace validation**,
 not undiscovered hardware.
+
+## 4. Independent adversarial audit (2026-07-21) — gates (a) + (d)
+
+Four independent sub-agents each took a schematic slice and tried to FALSIFY §1–§3
+(find a missed device, a false absent/unconnected/impossible claim, a coverage gap,
+or a new task). Outcome:
+
+- **Enumeration CONFIRMED complete** — no agent found a BMC-side schematic device
+  without a matrix row. Slice-4 additionally confirmed engines 42–50 are
+  phantom-free (the G3 memory map marks PECI/HACE/MIC/MDMA/PUART/PCI-arb/AHBC/A2P
+  all present; only ADC/eSPI/SDHCI/XDMA are correctly gated off).
+- **Both false-"impossible" corrections CONFIRMED** (NC-SI §7, DIMM-SPD §10) — the
+  schematic wins, with silicon evidence (256-byte SPD read; strap 0x00819582
+  bits[8:6]=110 = MAC1+MAC2 RMII).
+- **Findings integrated** (see DEVICE-MATRIX + this doc §2): row 11 NC-SI QE ✅→🔶
+  (generic-slirp responder, not faithful 82574L) + UQ/US/LU→Ⓝ; row 19 DIMM-TSOD
+  all-Ⓝ→mixed (real device, model a jc42); row 40 PWM note clarified (QE cell was
+  always ✅); host-BIOS-flash reclassified SoC-capable/board-N/A.
+- **New tasks created** (gate d): **#204** faithful dual-82574L NC-SI responder;
+  **#205** model a TS-equipped DIMM (jc42) for the TSOD datapath; **#206** iLPC2AHB
+  (HICR5[8] ENL2H + HICR6 decode) matrix row + functional model + split A8's
+  P2A-vs-iLPC2AHB over-claim; **#207** explicit I2C3/I2C6 disposition + confirm the
+  SP5100 exposes no BMC-addressable I²C slave there.
+
+Two additional small dispositions to fold in when their tasks run: SPI `AST_SPICS#2`
+recovery/2nd-CS (row 2; slice-1 F2 — unpopulated by design → Ⓝ, or model a 2nd CS),
+and the deferred PWM tach-RPM synthesis (row 40; low value, board unused).
