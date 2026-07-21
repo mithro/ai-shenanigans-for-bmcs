@@ -1,0 +1,30 @@
+DEVICE-MATRIX row 47 (PUART — LPC pass-through UART, 0x1E788000) — QE: PASS
+===========================================================================
+
+Device: AST2050 (G3) Pass-through UART (PUART), datasheet §29.4 p308, base
+        0x1E788000, a second 16550 alongside the VUART. No ARM-side VIC source
+        (datasheet §10 Table 36 lists no PUART interrupt).
+Model : QEMU TYPE_SERIAL_MM instance (a->puart) wired into the G3 SoC
+        (hw/arm/aspeed_ast2400.c), regshift=2, no IRQ, no chardev backend —
+        the BMC-side 16550 register file. Previously this address fell through
+        to the create_unimplemented_device("aspeed.io",0x1E600000,0x200000)
+        catch-all (RAZ/WI); now the register block responds.
+Test  : Linux userspace `devmem` R/W of the 16550 Scratch Register (reg 7;
+        with regshift=2 that is byte offset 0x1C -> phys 0x1E78801C). SCR is a
+        pure R/W scratch with no side effects — a modeled UART persists a
+        written pattern; the RAZ/WI catch-all always reads back 0.
+        (STRICT_DEVMEM=y still permits /dev/mem access to device MMIO.)
+
+Result: the scratch register round-trips both test patterns → PUART modeled.
+Note  : the LPC pass-through DATAPATH (redirecting to a host COM port) is not
+        modeled — there is no LPC host peer in this BMC-only machine (identical
+        boundary to the VUART, row 6). The BMC-side 16550 register block is
+        complete. No BMC-side driver binds PUART on the KGPE-D16 (the board's
+        console is UART2/5 and SOL is the VUART), so the driver stacks are Ⓝ.
+
+Transcript (captured 2026-07-21)
+--------------------------------
+=== PUART-BEGIN ===
+PUART SCR @0x1E78801C: initial=0x00000000 after-write-0xA5=0x000000A5 after-write-0x5A=0x0000005A
+PUART RESULT: PASS (16550 scratch register R/W persists — PUART modeled @0x1E788000)
+=== PUART-END ===

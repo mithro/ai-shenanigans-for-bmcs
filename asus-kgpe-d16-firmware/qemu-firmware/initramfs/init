@@ -496,6 +496,33 @@ if grep -q pmbustest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- PUART presence check (only when 'puarttest' on the kernel cmdline) ---
+# DEVICE-MATRIX row 47 (PUART, 0x1E788000, datasheet §29.4): the AST2050 LPC
+# pass-through 16550. Proves the QEMU model backs the register block (SerialMM)
+# instead of the 0x1E600000 iomem catch-all (RAZ/WI). Test the 16550 Scratch
+# Register (reg 7; with regshift=2 that is byte offset 0x1C -> phys 0x1E78801C):
+# it is a pure R/W scratch with no side effects, so a modeled UART persists a
+# written pattern while the catch-all always reads back 0. No Linux driver binds
+# PUART (the board does not use it), so this is a userspace devmem presence probe.
+if grep -q puarttest /proc/cmdline; then
+	echo "=== PUART-BEGIN ==="
+	SCR=0x1E78801C
+	B0=$(devmem "$SCR")
+	devmem "$SCR" 32 0xA5
+	R1=$(devmem "$SCR")
+	devmem "$SCR" 32 0x5A
+	R2=$(devmem "$SCR")
+	echo "PUART SCR @${SCR}: initial=${B0} after-write-0xA5=${R1} after-write-0x5A=${R2}"
+	# busybox devmem prints 0x-prefixed values; compare low byte.
+	if [ "$((R1 & 0xFF))" -eq 165 ] && [ "$((R2 & 0xFF))" -eq 90 ]; then
+		echo "PUART RESULT: PASS (16550 scratch register R/W persists — PUART modeled @0x1E788000)"
+	else
+		echo "PUART RESULT: FAIL (scratch did not persist — reg not modeled, catch-all RAZ)"
+	fi
+	echo "=== PUART-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we

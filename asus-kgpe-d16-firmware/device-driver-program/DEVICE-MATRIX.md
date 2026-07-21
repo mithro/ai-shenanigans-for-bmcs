@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 25 | 14 | 0 | 9 | 3 |
+| QEMU emulation | 26 | 14 | 0 | 8 | 3 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 10 | 0 | 8 | 11 |
@@ -437,7 +437,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 49 | AHBC AHB-bus controller (0x1E600000, IRQ31) | AHBC | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 50 | A2P AHB→PCI bridge (0x1E720000) | A2P | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -613,9 +613,13 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     phantom used to squat on). Autonomous DMA accel; no BMC runtime driver need → drivers Ⓝ.
   - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
     accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
-  - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=⬜** (real, unmodeled). Routes the host UART
-    through the BMC (SOL-adjacent, row 31); LQ/LS/LU + ZQ/ZS=⬜ (a pass-through driver is real BMC work);
-    UQ/US Ⓝ.
+  - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=✅ (2026-07-21)** — modeled as a `TYPE_SERIAL_MM`
+    16550 in the G3 SoC (hw/arm/aspeed_ast2400.c, no IRQ per datasheet §10, no chardev — the BMC-side
+    register file), replacing the iomem catch-all fall-through. Validated by a Linux `devmem` R/W of the
+    16550 scratch register (0x1E78801C): the pattern round-trips (evidence `soc-puart/01-puart-qemu-PASS.txt`).
+    The LPC pass-through DATAPATH needs an LPC host peer (absent in the BMC-only machine — same boundary as
+    the VUART row 6). LQ/LS/LU + ZQ/ZS=⬜ (a pass-through driver is real BMC work, conservatively kept open
+    pending confirmation of whether the KGPE-D16 firmware actually uses PUART); UQ/US Ⓝ.
   - **48 PCI arbiter** (0x1E78C000): **QE=⬜** (real, unmodeled). Autonomous bus arbiter, init-configured,
     no runtime driver → all Ⓝ.
   These are first-pass dispositions to CLOSE the completeness gap (they were silently missing); the QE=⬜

@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — PUART (row 47) QE ⬜→✅: modeled the LPC pass-through 16550 @0x1E788000, validated by devmem
+
+Picked PUART as a CLEAN, self-contained device to close (no memory coupling, unlike MDMA/MIC/HACE). It is a
+real G3 block (datasheet §29.4 p308, base 0x1E788000, a second 16550 alongside the VUART; independent-agent
+confirmed). Modeled it as a `TYPE_SERIAL_MM` instance wired into the G3 SoC, mirroring the VUART but with NO
+IRQ (datasheet §10 Table 36 lists no PUART VIC source) and NO chardev backend (host-less BMC machine):
+- include/hw/arm/aspeed_soc.h: `SerialMM puart;` + `ASPEED_DEV_PUART` enum.
+- hw/arm/aspeed_ast2400.c: memmap `[ASPEED_DEV_PUART]=0x1E788000` (both arrays); _init creates it (G3-gated
+  on AST2050_A1_SILICON_REV); realize configures regshift=2/baudbase/endianness + maps it, no IRQ.
+Previously 0x1E788000 fell through to the `create_unimplemented_device("aspeed.io",0x1E600000,0x200000)`
+catch-all (RAZ/WI). VALIDATION: rebuilt qemu-system-arm (clean), booted, and a Linux userspace `devmem` R/W
+of the 16550 Scratch Register (reg 7; regshift=2 → byte offset 0x1C → phys 0x1E78801C) round-trips both test
+patterns: initial=0x00000000, write 0xA5 → 0x000000A5, write 0x5A → 0x0000005A → `PUART RESULT: PASS`
+(evidence `soc-puart/01-puart-qemu-PASS.txt`). The machine booted normally to userspace, so the null-chardev
+SerialMM realized cleanly (no serial-loop perturbation). Faithfulness note: the SCR is a pure R/W scratch
+with no side effects, so it cleanly distinguishes a modeled UART (persists) from the catch-all (reads 0);
+STRICT_DEVMEM=y still permits /dev/mem to device MMIO (existing video/RTC gates prove this). The LPC
+pass-through DATAPATH (host COM redirect) needs an LPC host peer, absent here — same boundary as the VUART
+(row 6). Matrix row 47 **QE ⬜→✅**; tally QEMU 25→26 ✅. Driver stacks LQ/LS/LU/ZQ/ZS kept ⬜ (a pass-through
+driver is real BMC work; NOT downgraded to Ⓝ without proof the KGPE-D16 firmware doesn't use PUART — no
+weaseling). UQ/US already Ⓝ.
+
 ## 2026-07-21 — SoC-internal engines (rows 44–48) faithfulness scoping: addresses CONFIRMED real, irqmap CLEAN, current state = catch-all only
 
 Turned to the QE ⬜ SoC-internal engine rows (44 MIC, 45 MDMA, 46 2D, 47 PUART, 48 PCI-arb) to convert
