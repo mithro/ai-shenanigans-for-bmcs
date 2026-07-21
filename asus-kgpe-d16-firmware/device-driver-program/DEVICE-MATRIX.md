@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 28 | 15 | 0 | 6 | 2 |
+| QEMU emulation | 27 | 16 | 0 | 6 | 2 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 2 | 35 |
 | U-Boot @ silicon | 8 | 5 | 1 | 2 | 35 |
 | Linux @ QEMU | 23 | 10 | 0 | 8 | 10 |
@@ -441,7 +441,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -609,8 +609,11 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   the schematic-scoped completeness audits (external wiring §§2–15) STRUCTURALLY could not reach SoC
   engines with no external pins. A gate-d pass found 6 real ones (all "**Yes**" in `AST2050-MEMORY-MAP.md`
   §9) that the matrix had omitted. Honest first-pass dispositions:
-  - **43 HACE** (hash/crypto, 0x1E6E3000/IRQ4, 11 regs MD5/SHA/AES/RC4): **QE=✅ (2026-07-21 — 🎉 SILICON
-    hash-validated, #209 DONE).** `aspeed.hace` is modeled+mapped+IRQ-wired (aspeed_ast2400.c:355/862) and
+  - **43 HACE** (hash/crypto, 0x1E6E3000/IRQ4, 11 regs MD5/SHA/AES/RC4): **QE=🔶 — the HASH half is
+    silicon-validated + complete, but the CRYPTO half (AES/RC4) is unmodeled (see the disclosure below), so
+    under "QE = full emulation of ALL functionality" the hash/crypto engine is 🔶 not ✅ (2026-07-21
+    gate-a adversarial-verify finding, consistent with rows 42/47 and this session's 8/9/11/16 downgrades).
+    🎉 The HASH sub-function is SILICON-validated (#209 DONE):** `aspeed.hace` is modeled+mapped+IRQ-wired (aspeed_ast2400.c:355/862) and
     computes REAL hashes via QCryptoHashAlgo. The 🔶 concern ("does the generic G4 model match the AST2050
     11-reg variant?") is RESOLVED on silicon: a JTAG SHA-256 of 64 zero bytes on the real HACE returned the
     digest **f5a5fd42 d16a2030 … 2759fb4b = the exact known sha256(64·0x00)** (evidence `soc-hace/01` +
@@ -624,8 +627,11 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     COMPUTE, not the MMIO — silicon keeps the reg file live while clock-dead). Opt-in by connection (G4/G5
     unaffected). Validated by the `hacetest` initramfs gate (YCLK-stopped → no completion; released →
     HASH_IRQ set). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
-    is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed: SHA-256 is the silicon-validated
-    algo; the other hashes share the confirmed layout; AES/RC4 crypto is not separately silicon-validated.
+    is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed HONESTLY (gate-a verify fix): SHA-256 is the silicon-validated
+    algo + the other hashes share the confirmed register layout (all real via QCryptoHashAlgo); but the
+    **AES/RC4 CRYPTO commands are NOT IMPLEMENTED** — `hw/misc/aspeed_hace.c` R_CRYPT_CMD is a
+    `LOG_UNIMP "Crypt commands not implemented"` stub (NOT "modeled but silicon-unvalidated"). Completing the
+    crypto half → QE ✅ is tracked as **#210**.
   - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mic_ast2050.c`
     wired into the G3 SoC (VIC INT#1): the §13 register block + the continuous-scanner semantics (per-page
     2-bit control words skip/ECC/debug/MIC-mode, checksum buffer, first/secondary/lost page-error flags +

@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate (a): adversarial verify of THIS session's changes → 2 findings, both fixed
+
+Dispatched an adversarial verifier over this session's matrix claims (rows 9/19/24/43/44/45 + #208). It
+CONFIRMED rows 19 (TSOD), 24 (PSU #198), 44/45 (MDMA/MIC #208 — incl. the honest "bit-exact checksum, page
+differs by scan size" scoping and the A2P no-action disposition), and the #182 honest scoping (row 9 NOT
+bumped to ✅). It found **2 real defects — both the "assertion-only / partial-marked-✅" pattern this
+session's own audits corrected elsewhere — now fixed:**
+
+1. **Row 43 HACE QE ✅→🔶 (over-claim).** The model computes real HASHES (silicon-validated #209) but the
+   CRYPTO half is a `LOG_UNIMP "Crypt commands not implemented"` stub — AES/RC4 UNMODELED. Under "QE = full
+   emulation of ALL functionality" (the same standard that downgraded rows 8/9/11/16 this session, and keeps
+   42/47 at 🔶) the hash/crypto engine is 🔶 not ✅. Corrected the cell + the too-soft disclosure ("not
+   separately silicon-validated" → "NOT IMPLEMENTED"); opened **#210** for the crypto path. Tally QEMU 28→27✅.
+2. **#182 evidence gap.** The matrix asserted `F6-VMEDIA-CDROM: PASS` but no transcript was committed (the
+   #182 commit touched only matrix/LOG/init). Re-ran f6usb + committed the transcript to
+   `evidence/f6-usb/04-vmedia-cdrom-qemu-PASS.txt` (idProduct 0104 enumerates, lun.0/cdrom=1, PASS).
+
+The verifier earning two corrections is exactly why gate (a) needs INDEPENDENT eyes — I'd applied the
+partial-vs-✅ standard to 8/9/11/16 but missed applying it to my own HACE ✅, and I asserted a PASS without
+saving its transcript. Both are the traps the session-long honesty discipline exists to catch.
+
 ## 2026-07-21 — #182 DONE: virtual media presents as a CD-ROM (§9 "CD"), not a removable disk
 
 Closed the last genuine §9 delta for row 9: the USB virtual-media gadget presented a removable

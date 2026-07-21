@@ -1,0 +1,30 @@
+DEVICE-MATRIX row 9 (USB virtual media) / #182 — virtual media as a CD-ROM: QEMU PASS
+===================================================================================
+
+The USB virtual-media mass_storage gadget now sets lun.0/cdrom=1 (SCSI type 5,
+read-only), so it presents as a CD-ROM (§9 'virtual keyboard/mouse/CD') instead of a
+removable Direct-Access disk. Validated in QEMU via the f6usb gate (dummy_hcd loopback).
+The host-side /dev/sr0 node needs usb-storage+sr_mod on the host (not loaded by the
+minimal-initramfs loopback) -> that host-side CD-ROM view is the USB/IP-to-a-real-host
+silicon path (row 9 LS 🔷), same transport that proved the disk variant on silicon.
+
+Transcript (captured 2026-07-21, kgpe-d16-bmc QEMU, 'f6usb' cmdline):
+-------------------------------------------------------------------
+[    0.970748] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    0.971048] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+=== F6-USB-DEMO-BEGIN ===
+binding vmedia gadget -> UDC 'dummy_udc.0'
+[    4.650141] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.847049] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.848214] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    0.970748] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    0.971048] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    4.650141] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    4.847049] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    4.848214] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+/sys/bus/usb/devices/1-1/product = AST2050 vKVM virtual-media (F6 groundwork)
+/sys/bus/usb/devices/usb1/product = Dummy host controller
+vmedia lun.0/cdrom = 1
+F6-VMEDIA-CDROM: PASS (gadget lun.0/cdrom=1 + USB device enumerated, #182)
+=== F6-USB-DEMO-END ===
+boot: OK — saw 'F6-USB-DEMO-END'
