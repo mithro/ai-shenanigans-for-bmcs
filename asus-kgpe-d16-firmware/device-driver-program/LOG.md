@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — MIC (row 44) ORACLE FOUND: Raptor SLT `mictest.c` gives the EXACT Fletcher-32 → bit-exact ✅ now achievable
+
+Big upgrade to the MIC disposition (was "🔶 at best, checksum under-specified"). The Raptor U-Boot SLT source
+IS in-repo: `raptor/tools/raptor-uboot/board/aspeed/ast2050/mictest.c` (+ `.h`). Its `do_chksum()` computes
+the expected per-page checksum in SOFTWARE and byte-compares it against the value the MIC HARDWARE wrote to
+the checksum buffer (`if (chksum != goldensum) FAIL`) — so the hardware MUST compute exactly this, i.e. this
+is the bit-exact oracle the datasheet lacked. The algorithm is classic **Fletcher-32**:
+  per 4 KB page: sum1=sum2=0xffff; read 2048 × u16 words; sum1+=word; sum2+=sum1; reduce (sum=(sum&0xffff)+
+  (sum>>16)) every 360 words + once more at the end; result = (sum2<<16)|sum1.
+`mictest.h` gives the exact register map + constants: MIC_BASE 0x1e640000; MIC00 ctrlbuf / MIC04 chksumbuf /
+MIC08 rate / MIC0C engine-ctrl (MIC_ENABLE_MIC=0x10000000=bit28, MIC_MAXPAGE_MASK=0x0FFFF000=[27:12] =
+last-page-index=count-1, written as `MIC_ENABLE_MIC | (DRAMSIZE-0x1000)`) / MIC10 stop-page / MIC14 status
+(MIC_PAGEERROR 0x40000000 lost, MIC_PAGE1ERROR 0x10000000 first, MIC_PAGE2ERROR 0x20000000 secondary,
+MIC_INTMASK 0x00060000 = [17:16], errpage [15:0]) / MIC18 first-err / MIC1C secondary-err. Control words are
+2 bits/page (SKIP 0, CHK1 1, CHK2 2, CHK3 3 = MIC mode; DEFAULT_CTRL 0xFF = all-CHK3). Checksum init value 0.
+The MIC scans from address 0x0 (low aperture) — reachable via the AHBC remap I just built (the SLT reads
+0x40000000 in software = same DRAM as 0x0 post-remap, which is why they match). So a BIT-EXACT FAITHFUL MIC
+model is now FULLY specified — QE ✅ (not 🔶) is achievable, and a real driver (this SLT) could verify it.
+#201 updated. Model deferred to a dedicated turn (it's the most complex engine — Fletcher-32 + control/
+checksum-buffer parsing + scan loop + error flags + IRQ1 + a buffer-layout validation gate) so I can first
+address the in-flight gate-(b) code-review findings on the shipped mdma/ahbc models.
+
 ## 2026-07-21 — MIC (row 44) §13 spec obtained + honest disposition; gate-(b) code review of the new models dispatched
 
 Got the authoritative §13 MIC spec (datasheet agent, p116-123). PIVOTAL: MIC (MICE) is NOT a one-shot
