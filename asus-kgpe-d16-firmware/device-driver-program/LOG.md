@@ -1,5 +1,17 @@
 # Device-driver program — running log
 
+## 2026-07-21 — HACE (row 43) bounded silicon probe → #209 (feasibility confirmed, full validation scoped)
+
+Bounded JTAG probe of the HACE @0x1E6E3000 (tmp/hace-probe.tcl) to scope row 43's 🔶 ("G3 11-reg variant vs
+the generic G4 model — unverified"). Finding: the HACE register file RESPONDS on real silicon — R_HASH_SRC
+(0x20) stored my write 0x02001000 and R_HASH_SRC_LEN (0x2c) stored 0x40; so, unlike MDMA/MIC, the HACE is
+NOT reset-gated (register file alive by default), and the model's offsets match. A full silicon hash-digest
+validation (program a SHA-256 of a known buffer, compare the digest) is therefore feasible and is the clean
+path to row 43 QE 🔶→✅ + silicon cross-validation — captured as **#209** with the precise sequence.
+Deliberately NOT started as a half-cycle here (multi-step JTAG session); the aspeed_hace.c model already
+computes real hashes via QCryptoHashAlgo, so a QEMU-side devmem hash gate can be built in parallel to
+cross-check. Honest scoping, not a dodge — the probe confirmed feasibility + the register match.
+
 ## 2026-07-21 — #208 DONE: model the MDMA/MIC SCU04 reset-hold (silicon-faithful)
 
 Fixed the faithfulness gap the MDMA silicon validation exposed. The AST2050 holds the MDMA (SCU04[16]=
