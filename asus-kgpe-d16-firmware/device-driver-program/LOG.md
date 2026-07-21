@@ -1,6 +1,28 @@
 # Device-driver program — running log
 
-## 2026-07-21 — Gate-(a) faithfulness audit: caught a REAL faithfulness bug (AHBC key) + 3 honest over-claims — all addressed
+## 2026-07-21 — Frontier assessment of the remaining QE ⬜ cells + confirmed silicon MIC-validation feasibility (tracked #203)
+
+With the memory-engine cluster done (MDMA/MIC ✅, AHBC/PUART honestly 🔶), assessed the remaining QE ⬜ cells
+for the next unit — being honest that they are all genuinely hard, not quick wins:
+- **Row 25 SMBus-ALERT: NOT a bounded cell.** Investigated: `aspeed_i2c.c` only DEFINES the SMBUS_ALERT
+  intr bit (header) — it does NOT implement the alert MECHANISM (no slave-assert → master-intr → ARA path);
+  the W83795 model explicitly lists SMBALERT# assertion as future work; and QEMU's i2c core has no ALERT/ARA
+  plumbing. A faithful model is a multi-part effort (i2c-core alert + aspeed_i2c handling + W83795 assert +
+  ARA read), not a quick add.
+- **Row 48 PCI-arb:** no register chapter (§9-only) → a named RAZ/WI region is the only faithful model, and
+  it overlaps the 0x1E600000 iomem catch-all at equal (create_unimplemented) priority → not a clean overlay;
+  low value (register-less arbiter, no PCI bus to arbitrate). 🔶-capped.
+- **Row 4 LPC-mailbox** (register block, no host peer) + **Row 14 DDC/EDID** (VGA CRTC §34 space + bit-bang
+  I2C + EDID) + **Row 46 2D BitBLT** (PCI/VGA graphics accel): real but each substantial; DDC/EDID and 2D
+  live in the PCI/VGA register space (not a 0x1Exx AHB base), a different modeling surface.
+HIGHEST-VALUE NEXT STEP (tracked #203): SILICON cross-validation of the MIC model against the real AST2050.
+CONFIRMED FEASIBLE at config level — the Raptor SLT that my MIC Fletcher-32 was copied from
+(`board/aspeed/ast2050/slt.c` do_slt + mictest.c) is enabled in `include/configs/asus.h` (CONFIG_SLT +
+CFG_CMD_MICTEST), so the real chip can run `slt` and byte-compare its MIC hardware output — directly
+answering "the hardware is 100% reliable; is my model faithful?". It's a heavier rig workflow (netboot the
+Raptor U-Boot on the SHARED real board, must not disturb others), so specced for a dedicated session rather
+than rushed here. Expected bit-exact values recorded in #203 (zero page = 0xFFFFFFFF; 0xBEEF-word =
+0x7DF7BEEF). No new QE cell closed this turn — an honest frontier-assessment + tracking step.
 
 The independent gate-(a) faithfulness audit of the 4 cells I marked ✅ this session did its job — it found a
 genuine faithfulness VIOLATION plus several honest over-claims. Addressed every one:
