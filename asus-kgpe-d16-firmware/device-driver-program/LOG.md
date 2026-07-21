@@ -1,5 +1,34 @@
 # Device-driver program — running log
 
+## 2026-07-21 — FIX #211: remove 7 phantom I²C engines from the G3 model (14→7, datasheet-faithful)
+
+An independent gate-a/d enumeration sub-agent (dispatched last commit) returned strong results: **A (missed
+devices) and B (orphan rows) both EMPTY** — positive gate evidence that the matrix is complete at the device
+level (it verified every SoC-internal register base + IRQ against the datasheet §9 memory map + Table 36) —
+and it CONFIRMED my row-4 fix. It found 3 concrete items (C1 I²C engine count, C2 RTC alarm IRQ, C3 QE
+✅/🔶 consistency). Acted on **C1**, which turned out to be a real model bug, not just a label:
+
+- Datasheet V1.05 says **7** I²C/SMBus controllers (verified 3×: "Integrate 7 sets…", "7 sets of device
+  registers", SDA7/SCL7 highest). Row 15's label said "8 engines"; the schematic's "I2C8" is a muxed
+  segment off I2C7 (QU9/QU5), not a SoC engine.
+- The G3 machine reused `aspeed.i2c-ast2400` (`num_busses=14`) → the model had **7 phantom engines**
+  (0x1E78A300+) the silicon lacks — same class as the removed phantom SRAM/ADC.
+- CAREFUL SCOPING (last commit's lesson): first checked whether reducing to 7 would break anything. My
+  initial grep was polluted by OTHER machines (fby35/ast2600_evb/yosemitev2 use buses 7/8/11); the ACTUAL
+  kgpe-d16 machine uses only buses 0/1/3/4 (schematic I2C1/2/4/5, per the code comments). And the shared
+  ast2400 class MUST stay 14 (real AST2400 boards use the upper buses). So the fix is a G3-ONLY subclass.
+- FIX: new `aspeed.i2c-ast2050` type (inherits TYPE_ASPEED_2400_I2C, overrides only `num_busses=7`; verified
+  the region math `offset = i<gap?1:5` maps 7 engines to 0x1E78A040..0x1E78A1C0 = silicon), wired on
+  `silicon_rev==AST2050_A1_SILICON_REV`. opt-in-by-connection; other SoCs untouched.
+- VALIDATED: rebuilt qemu-system-arm; full boot test — buses 0/1/3/4 register at the right offsets, FRU
+  EEPROM (at24 4-0054) binds, GPIO mux (buses 14/15/16) works, sensors enumerate, boot reaches login, no
+  faults. Identical behaviour to before, minus the phantoms (the benign `smbus: Unexpected stop` probe
+  artifact's QOM device index shifted [19]→[12] = exactly the 7 removed buses).
+- Row 15 label 8→7; QE stays ✅ (removed a defect; only #190 DMA-buffer optional mode remains). Tracked as
+  **#211 (DONE)**. C2 (RTC alarm IRQ 22-vs-26) and C3 (consistency) deferred to a focused next pass — C2
+  especially needs careful silicon-vs-datasheet reconciliation (possible A3 erratum vs a fast-second-tick
+  misdiagnosis), and I will NOT rush it.
+
 ## 2026-07-21 — Matrix accuracy: reconcile row 4 "LPC mailbox" to the datasheet (no MBX block)
 
 Applied last commit's lesson (authoritative datasheet feature/register text, not assumptions) to a
