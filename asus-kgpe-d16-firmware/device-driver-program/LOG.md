@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-22 — CI: musl fetch now falls back to a github-hosted toolchain (the mirror wasn't enough)
+
+Follow-up to the more.musl.cc mirror below: that fix did NOT turn C3 green — CI run 29862701322 showed the
+loop working exactly as designed (musl.cc 8-retry timeout → more.musl.cc 8-retry timeout → fail-loud exit 1),
+which PROVED the real problem: the whole *.musl.cc family (apex AND the more.musl.cc mirror, same operator) is
+unreachable from GitHub-hosted runners, not just the apex. The mirror was the wrong host; worse, it doubled
+the wasted CI time (two doomed retry loops).
+
+Real fix: add a github.com-hosted toolchain as the final source — cross-tools/musl-cross release 20260515,
+asset arm-unknown-linux-musleabi.tar.xz, served from release-assets.githubusercontent.com which runners
+ALWAYS reach. Verified before trusting it (this is a DIFFERENT toolchain, so correctness matters more than
+the mirror did): downloaded + ran its gcc → `__ARM_ARCH 5` + `__ARM_ARCH_5T__` + `__SOFTFP__` (ARMv5T
+soft-float — runs on the ARM926EJ-S/ARMv5TE; won't just move the failure to the C3-boot job). build.py pins
+no -march, so this default-arch check was the critical gate.
+
+Because that source has a different prefix (arm-unknown-linux-musleabi- vs arm-linux-musleabi-), dir, and
+compression (.tar.xz vs .tgz), rewrote the fetch as a source-aware loop over "url topdir prefix" triples
+(MUSL_SOURCES): tries each in order, reuses an already-extracted toolchain (cache), `tar xf` auto-detects
+gz/xz, and exports CROSS_COMPILE from whichever source wins so the build step is prefix-agnostic. Fed by a
+heredoc (not a pipe) so the loop runs in-shell and the winning vars persist. Verified the logic with an
+HTTP-served harness: fresh fetch (404 → advance → fetch+extract → correct prefix), cache-hit re-run (no
+re-fetch), and all-fail (exit 1 fail-loud) all pass. sh -n + dash -n clean. CI validates the real fetch next.
+
 ## 2026-07-22 — CI: musl toolchain fetch now falls back to a mirror (C3 job was red on external outage)
 
 Autonomous CI-maintenance tick. The only red CI job on the branch — "Build Raptor userspace (musl BusyBox +

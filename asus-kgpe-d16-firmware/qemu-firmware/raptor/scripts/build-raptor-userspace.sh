@@ -18,44 +18,68 @@ here=$(cd "$(dirname "$0")" && pwd)
 qf="$here/../.."                       # qemu-firmware/
 : "${TOOLS:=$qf/raptor/tools}"
 : "${OUT:=$qf/raptor/out}"
-: "${MUSL_URL:=https://musl.cc/arm-linux-musleabi-cross.tgz}"
-# Fallback mirror: the musl.cc apex is periodically unreachable from GitHub-hosted
-# runners (plain IPv4 "Connection timed out" persisting for hours -- C3 failure
-# signature 2026-07-21). more.musl.cc is a separately-hosted mirror that serves a
-# toolchain with the SAME internal layout (arm-linux-musleabi-cross/bin/... --
-# verified 2026-07-22; a different gcc build, harmless for a static BusyBox/dropbear
-# that the C3 boot then validates end-to-end) and stays up when the apex flakes.
-: "${MUSL_URL_FALLBACK:=https://more.musl.cc/10/x86_64-linux-musl/arm-linux-musleabi-cross.tgz}"
+# musl cross-toolchain sources, tried in order -- one "url topdir prefix" per line
+# (MUSL_SOURCES overridable). The ARM926EJ-S is ARMv5TE soft-float, so every source
+# is a soft-float EABI (non-hf) musl gcc:
+#   * musl.cc apex + more.musl.cc mirror -- but the whole musl.cc family is
+#     periodically unreachable from GitHub-hosted runners (IPv4 "Connection timed
+#     out" for hours; BOTH timed out on CI run 29862701322, 2026-07-22).
+#   * cross-tools/musl-cross github release -- served from
+#     release-assets.githubusercontent.com, which runners ALWAYS reach, so this is
+#     the reliable fallback. Verified 2026-07-22: __ARM_ARCH 5 + __SOFTFP__ (runs
+#     on the ARM926EJ-S); its prefix (arm-unknown-linux-musleabi-) and dir differ
+#     from musl.cc's, hence the per-source topdir + prefix columns below.
+: "${MUSL_SOURCES:=$(cat <<'SRCS'
+https://musl.cc/arm-linux-musleabi-cross.tgz arm-linux-musleabi-cross arm-linux-musleabi-
+https://more.musl.cc/10/x86_64-linux-musl/arm-linux-musleabi-cross.tgz arm-linux-musleabi-cross arm-linux-musleabi-
+https://github.com/cross-tools/musl-cross/releases/download/20260515/arm-unknown-linux-musleabi.tar.xz arm-unknown-linux-musleabi arm-unknown-linux-musleabi-
+SRCS
+)}"
 mkdir -p "$TOOLS" "$OUT"
 
-# 1. musl cross toolchain (soft-float EABI, matches the ARM926EJ-S target).
-musl_bin="$TOOLS/arm-linux-musleabi-cross/bin"
-if [ ! -x "$musl_bin/arm-linux-musleabi-gcc" ]; then
-    # Try the primary (musl.cc) then the fallback mirror (more.musl.cc), stopping
-    # at the first that downloads. Force IPv4 (-4): GitHub-hosted runners carry an
-    # IPv6 address but no working IPv6 *route*, so resolving an AAAA record and
-    # connecting over IPv6 fails hard with "Network is unreachable" (wget exit 4)
-    # -- the 2026-07-18 C3 failure signature. Retry hard and show each attempt (no
-    # -q, per fail-loud). The `if wget` wrapper consumes wget's non-zero exit so
-    # `set -e` doesn't abort before we can try the next mirror.
-    fetched=""
-    for url in "$MUSL_URL" "$MUSL_URL_FALLBACK"; do
+# 1. Fetch a musl cross toolchain from the first working source (or reuse an
+#    already-extracted one). CROSS_COMPILE is set from whichever source wins, so
+#    the differing prefixes (arm-linux-musleabi- vs arm-unknown-linux-musleabi-)
+#    are handled transparently. Force IPv4 (-4): GitHub-hosted runners carry an
+#    IPv6 address but no working IPv6 *route*, so an AAAA connect fails hard with
+#    "Network is unreachable" (wget exit 4). Retry hard, show each attempt (no -q,
+#    per fail-loud); the `wget && tar` wrapper consumes the non-zero exit so
+#    `set -e` doesn't abort before the next source is tried. `tar xf` auto-detects
+#    gzip/xz. Fed by heredoc (not a pipe) so the loop runs in THIS shell and the
+#    winning musl_bin/CROSS_COMPILE survive.
+musl_bin=""
+CROSS_COMPILE=""
+while read -r url topdir prefix; do
+    [ -n "$url" ] || continue
+    tc_bin="$TOOLS/$topdir/bin"
+    if [ ! -x "$tc_bin/${prefix}gcc" ]; then
         echo "fetching musl toolchain: $url"
         if wget -4 -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
-                -O "$TOOLS/musl.tgz" "$url"; then
-            fetched="$url"
-            break
+                -O "$TOOLS/musl.tar" "$url" && tar xf "$TOOLS/musl.tar" -C "$TOOLS"; then
+            rm -f "$TOOLS/musl.tar"
+        else
+            rm -f "$TOOLS/musl.tar"
+            echo "musl toolchain fetch/extract failed from $url; trying next source" >&2
+            continue
         fi
-        echo "musl toolchain fetch failed from $url; trying next mirror" >&2
-    done
-    [ -n "$fetched" ] || { echo "ERROR: all musl toolchain mirrors failed" >&2; exit 1; }
-    tar xzf "$TOOLS/musl.tgz" -C "$TOOLS"
-    rm -f "$TOOLS/musl.tgz"
-fi
+    fi
+    if [ -x "$tc_bin/${prefix}gcc" ]; then
+        musl_bin="$tc_bin"
+        CROSS_COMPILE="$prefix"
+        break
+    fi
+    echo "fetched $url but ${prefix}gcc missing after extract; trying next source" >&2
+done <<END
+$MUSL_SOURCES
+END
+[ -n "$CROSS_COMPILE" ] || { echo "ERROR: all musl toolchain sources failed" >&2; exit 1; }
 export PATH="$musl_bin:$PATH"
+export CROSS_COMPILE
+echo "using musl toolchain: ${CROSS_COMPILE}gcc  ($musl_bin)"
 
 # 2. Build the rootfs (BusyBox + dropbear + test key) with the musl toolchain.
-CROSS_COMPILE=arm-linux-musleabi- uv run "$qf/initramfs/build.py" \
+#    CROSS_COMPILE was exported above from the source that won.
+uv run "$qf/initramfs/build.py" \
     --output-dir "$OUT" --build-dir "$qf/initramfs/build"
 
 # 3. Repack that rootfs into a uInitrd WITH static /dev nodes (console/null/
