@@ -211,6 +211,14 @@ jobs:
             --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240 --ts-dimm
+      - name: PSU pmbus has no phantom sensors (row 24, #198)
+        run: |
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/psu-hwmon-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test
 
   boot-w83601g:
     name: D08 — W83601G DIMM-LED GPIO expanders on I2C5
