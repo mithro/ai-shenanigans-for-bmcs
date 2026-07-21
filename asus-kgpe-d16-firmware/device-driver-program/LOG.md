@@ -1,5 +1,34 @@
 # Device-driver program — running log
 
+## 2026-07-21 — C2: the RTC "alarm on VIC 22" silicon claim is SUSPECT (confounded); opened #212
+
+Acted on the enumeration audit's finding C2 (RTC alarm IRQ 22 vs 26). Also confirmed the CI "failure" on the
+row-4 commit is FLAKY, not a regression: the only failed job is C3 "Build musl userspace" at
+`fetching musl toolchain https://musl.cc/... failed: Connection timed out` (8 retries) — a transient external
+host outage; every functional job (QEMU build, C2, C4, C-UBOOT, D07/D08/D09, all F-tests) passed. The #211
+commit's run is already re-attempting the fetch; no action needed beyond noting it.
+
+C2 investigation (datasheet + evidence, no code change yet):
+- Datasheet Table 36 is unambiguous: **22=RTC second, 23=day, 24=hour, 25=minute, 26=RTC alarm** — the RTC
+  has FIVE VIC sources. §24.2 features "Programmable alarm with interrupt generation".
+- The matrix (#192, `evidence/d14-zephyr/28`) claims silicon PROVED the alarm fires on VIC **22** (not 26)
+  and rewired the driver/model/dts 26→22. Re-reading the evidence, the diagnostic is **confounded**:
+  - "source-22 serviced it → fires=1" is exactly what the ~732×/s *second*-tick on VIC 22 yields regardless
+    of the alarm (a circular, self-consistent signal — the same trap as last session's HACE SCU04[5]).
+  - The source-26 snapshot `vic_raw=03400000` has bits 22/24/25 SET = the datasheet's second/hour/minute RTC
+    interrupts (the note dismissed them as "background"); bit 26 CLEAR in a single snapshot can't distinguish
+    "alarm never asserted 26" from "asserted-and-already-serviced".
+  - The note's premise "RTC0C has only alarm-enable bits → the RTC's sole interrupt is the alarm" is wrong:
+    RTC0C[1:4] are the alarm's second/min/hour/day *sub-field* compare-enables (datasheet: "Enable second
+    alarm"…), NOT periodic masks; the periodic ticks (22/24/25) assert regardless.
+- Most likely conclusion: the alarm IS on 26 (datasheet), #192 misread the fast second-tick on 22 — meaning
+  the 26→22 rewiring is probably WRONG. But per last session's lesson I will NOT rewire on analysis alone
+  when silicon might genuinely differ.
+- Action: flagged the matrix #192 claim ⚠️ SUSPECT/REOPENED, marked the alarm-IRQ-source PASSes as UNVERIFIED
+  pending **#212 = an ISOLATED silicon JTAG test** (mask VIC 22/24/25, or gate on a 0→1 *transition* of bit
+  26 at the armed time rather than a snapshot, so the alarm is observed free of the second-tick). Next pass
+  runs #212 on the rig to definitively resolve 22-vs-26 and then correct whichever side is wrong.
+
 ## 2026-07-21 — FIX #211: remove 7 phantom I²C engines from the G3 model (14→7, datasheet-faithful)
 
 An independent gate-a/d enumeration sub-agent (dispatched last commit) returned strong results: **A (missed

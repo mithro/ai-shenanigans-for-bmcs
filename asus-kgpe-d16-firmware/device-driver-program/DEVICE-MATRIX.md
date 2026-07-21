@@ -558,6 +558,23 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   in QEMU too. RE-VALIDATED: SILICON Zephyr alarm `fires=1` PASS; QEMU Zephyr alarm + Linux wakealarm
   + dev/mem rtcalarm all PASS on VIC 22. **So the RTC alarm now fires end-to-end on real silicon —
   the Zephyr-alarm ZS deliverable is DONE**.
+  **⚠️ REOPENED — the "alarm is VIC 22" claim is SUSPECT (confounded diagnostic); #212 (2026-07-21).**
+  A gate-a/d enumeration audit + datasheet re-check flagged this against Table 36, which is unambiguous:
+  **22 = RTC *second* interrupt, 26 = RTC *alarm* interrupt** (also 23=day, 24=hour, 25=minute — the RTC
+  has FIVE VIC sources, not "one"). The #192 differential does NOT actually prove the alarm is on 22, for
+  two reasons its own data exposes: (1) the "source-22 serviced it → fires=1" is exactly what the ~732×/s
+  *second*-tick on VIC 22 produces regardless of the alarm — a self-consistent-but-circular signal; (2) the
+  source-26 snapshot `vic_raw=03400000` has bits 22/24/25 SET — those ARE the datasheet's second/hour/minute
+  RTC interrupts (dismissed as "background", but they are periodic RTC ticks), and bit 26 CLEAR in a single
+  snapshot cannot distinguish "alarm never asserted 26" from "asserted-and-already-serviced". The #192 note's
+  premise "RTC0C has only alarm-enable bits, so the RTC's sole interrupt is the alarm" is contradicted by
+  Table 36 + by its own dump (RTC0C[1:4] are the alarm's second/min/hour/day *sub-field* compare-enables, NOT
+  periodic-interrupt masks; the periodic ticks 22/24/25 assert regardless). Most likely: the alarm IS on 26
+  (datasheet), #192 saw the fast second-tick on 22 and misread it as the alarm — which would mean the alarm
+  driver/model rewiring 26→22 is WRONG. NOT changing code on analysis alone (silicon could genuinely differ);
+  **#212 = run an ISOLATED silicon JTAG test** that masks VIC 22/24/25 (or gates on a 0→1 *transition* of
+  bit 26 at the armed time, not a snapshot), so the alarm is observed free of the second-tick. Until #212
+  resolves it, treat the alarm-IRQ-source (and the ZS/QE/LS alarm PASSes that rest on VIC 22) as UNVERIFIED.
   **LS ✅ + RATE-CLAIM CORRECTED (2026-07-21, `evidence/d14-zephyr/30`+`31`):** the Linux RTC now
   PASSES on real silicon — `set 12:45:30 → read 12:45:41` set/get + wakealarm (VIC22) both PASS —
   after fixing the driver to CLEAR SCU08[16] and poll CONTROL[5] restart-busy (an earlier driver
