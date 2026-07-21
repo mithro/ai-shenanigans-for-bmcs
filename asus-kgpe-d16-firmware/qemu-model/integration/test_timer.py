@@ -47,3 +47,23 @@ def test_counts_down(timer):
     # The functional check must have passed (timer decrements when enabled).
     c = next((c for c in timer.checks if c[0] == "counts_down"), None)
     assert c is not None and c[1], f"timer did not count down:\n{timer.raw}"
+
+
+def test_pclk_rate(timer):
+    """#142: PCLK-timer vs 1 MHz-external-timer ratio == PCLK/1MHz.
+
+    timer1 runs off PCLK, timer2 off the 1 MHz external clock; both advance with
+    virtual time so d1/d2 is exactly PCLK/1MHz, independent of the spin length.
+    Expect ~10.375 (166 MHz H-PLL / (PCLK_DIV=7 + 1) / apb_divider=2 = 10.375 MHz).
+    The old mis-decoded 25 MHz-CLKIN / bits[9:8] H-PLL (~375 MHz) would give ~23,
+    so this pins the G3 clkin/calc_hpll fix (#142) against regression.
+    """
+    d1 = timer.kvs.get("rate.d1_pclk")
+    d2 = timer.kvs.get("rate.d2_1mhz")
+    assert d1 is not None and d2 is not None, f"rate deltas missing:\n{timer.raw}"
+    assert d2 > 0, f"1 MHz reference timer did not advance (d2={d2}):\n{timer.raw}"
+    ratio = d1 / d2
+    assert 8.0 <= ratio <= 13.0, (
+        f"PCLK/1MHz ratio {ratio:.2f} (d1={d1} d2={d2}) is not ~10.375 — the G3 "
+        f"H-PLL rate is wrong (would be ~23 with the old 25MHz/[9:8] decode):\n{timer.raw}"
+    )
