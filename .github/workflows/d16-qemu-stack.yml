@@ -202,6 +202,15 @@ jobs:
             --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
             --key initramfs-out/id_kgpe_d16_test \
             --boot-timeout 240
+      - name: TSOD datapath with a TS-equipped DIMM (jc42 via the mux, row 19)
+        run: |
+          uv run asus-kgpe-d16-firmware/qemu-firmware/scripts/spd-test.py \
+            --qemu asus-kgpe-d16-firmware/qemu-firmware/qemu/build/qemu-system-arm \
+            --kernel kernel-out/zImage-kgpe-d16 \
+            --initrd initramfs-out/initramfs.cpio.gz \
+            --dtb kernel-out/aspeed-bmc-asus-kgpe-d16.dtb \
+            --key initramfs-out/id_kgpe_d16_test \
+            --boot-timeout 240 --ts-dimm
 
   boot-w83601g:
     name: D08 — W83601G DIMM-LED GPIO expanders on I2C5
