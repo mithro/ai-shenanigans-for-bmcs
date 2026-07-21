@@ -683,15 +683,22 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     (2026-07-21):** read the datasheet §21.2 — A2P is NOT a config-register block but a one-way
     passthrough WINDOW forwarding ARM(AHB) accesses to P-Bus/PCI space (+0x00000..7F relocated I/O,
     +0x10000..0x1FFFF MMIO), auto-enabled by SCU70[4]. In the standalone BMC machine there is NO host/PCI
-    on the P-Bus, so the faithful behaviour is a window that reads back 0 / drops writes (forwarding to an
-    empty P-Bus). Replaced the accidental IOMEM fall-through with an explicit named
-    `aspeed.a2p-pbus-window` unimplemented region (128 KB @0x1E720000), so accesses are logged and the
-    address is a correctly-labelled A2P device. **Oracle-revalidated: C2 Linux still boots to userspace
-    (rtc0 registered, RTC-LINUX + wakealarm PASS) — no regression.** QE is **🔶 not ✅** because (a) the
-    SCU70[4] auto-enable gating is not modelled (window is always present) and (b) forwarding to real
-    P-Bus/PCI targets is not exercised (none exist in the BMC-only machine — that would need a modelled
-    host). Full ✅ would require the SCU70[4] gate + a P-Bus target for the video-capture read path.
-    (C4/C-UBOOT oracles NOT re-run this session — honest limitation; the change is RAZ/WI, minimal risk.)
+    on the P-Bus, so the faithful behaviour is a window that IGNORES writes and reads back a fixed idle
+    pattern (forwarding to an empty P-Bus). **SILICON-EXACT readback (2026-07-21, #176):** a JTAG probe of
+    the real AST2050 shows 0x1E720000 is NOT RAM — every write is dropped and every word across the whole
+    0x20000 window reads a constant **0x04000008** (adjacent blocks 0x1E740000/SCU00 read 0, so the value
+    is A2P-specific; evidence/soc-a2p/01 + a2p-sram-probe/sweep .tcl). The model now returns that exact
+    constant (aspeed_a2p_ops) instead of the earlier placeholder 0; QEMU-monitor `xp` of 0x1E720000 /
+    0x1E724000 / 0x1E727FFC all read 0x04000008 == silicon (both-sides validated). **ALL oracles
+    re-verified on the faithful (SRAM-removed) machine, 2026-07-21:** C2-full (U-Boot→Linux→SSH) PASS and
+    C4 (Dell vendor→appweb) PASS — after root-causing + fixing a regression the SRAM removal exposed: the
+    evb-ast2400 shim U-Boot put its init stack (top of SRAM = 0x1E728000) + pre-console buffer (0x1E720000)
+    in the now-correctly-absent SRAM and hung before console init. Fixed by relocating both to DRAM
+    (uboot-patches 0004/0005 — a QEMU-only shim change; the SoC model is unchanged; real silicon boots via
+    Raptor's G3 U-Boot over JTAG, never this shim). The strap (4ff6a74504) and AHBC alias were bisected out
+    as innocent. QE stays **🔶 not ✅** because (a) the SCU70[4] auto-enable gating is not modelled (window
+    always present) and (b) forwarding to real P-Bus/PCI targets (the internal-VGA CRTC read path, row 14)
+    is not exercised — full ✅ needs the SCU70[4] gate + a P-Bus target.
     **DDC/EDID (row 14) does NOT depend on this** — that is CRTC/VGACRB7 bit-bang in the video register
     space, a separate aperture; the earlier "#178 blocks on #176" note conflated the two. All driver
     stacks Ⓝ (no runtime BMC A2P driver — it is an aperture, not a device with a driver). **Consistency fix (2026-07-20):** row 44 MIC ZQ/ZS Ⓝ→⬜ to match its LQ/LS=⬜ (an

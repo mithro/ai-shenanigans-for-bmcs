@@ -1,5 +1,42 @@
 # Device-driver program — running log
 
+## 2026-07-21 — C4/C2-full legacy-boot regression: root-caused to #176 SRAM removal, fixed faithfully (#200)
+
+Set out to close #200 ("re-verify the C4 Dell-vendor oracle still boots with the AHBC boot-remap alias").
+Ran the C4 web-test on the current build → **FAIL, 0 bytes of serial** (U-Boot hung before its banner). This
+matched the open memory flag "C4/C2-full legacy boots now FAIL (leading suspect: measured-strap 4ff6a74504)".
+Per the governing principle a broken legacy boot is MY bug, so I bisected instead of assuming.
+
+**Bisect (all on the kgpe-d16-bmc machine, one rebuild each):**
+- Reverted SCU70 to the pre-4ff6a74504 G4-constructed strap → **still 0 bytes**. Strap INNOCENT (the memory
+  flag's suspicion was wrong — this is exactly why you bisect).
+- AHBC alias is disabled at reset → innocent by construction.
+- Re-enabled SRAM at 0x1E720000 on the G3 (`if (1)`) → **U-Boot boots instantly** (banner, SoC detect, kernel
+  load). ROOT CAUSE = **#176 removing the phantom SRAM**. The evb-ast2400 (G4) shim U-Boot sets its init
+  stack to the top of on-chip SRAM (CONFIG_SYS_INIT_SP_ADDR = ASPEED_SRAM_BASE+SIZE = 0x1E728000) and its
+  pre-console buffer to 0x1E720000; the G3 has no SRAM there, so on the faithful machine both land in the
+  write-discard A2P window → stack corrupts → hang before console.
+
+**Silicon decides #176 (JTAG on the real AST2050, evidence soc-a2p/):** write/read 0x1E720000 → every write
+(0xA5A5F00D/0x5A5A0FF0/0xDEADBEEF/0xCAFEBABE) IGNORED, every read a constant **0x04000008** across the whole
+0x20000 window; adjacent blocks (0x1E740000, SCU00) read 0. So 0x1E720000 is DEFINITIVELY not RAM → **#176 is
+faithful, must NOT be reverted**. The shim is the artifact (a G4 U-Boot can't run on a real AST2050 anyway —
+no SRAM for stack; silicon boots via Raptor's G3 U-Boot over JTAG).
+
+**Fix (faithful — SoC model unchanged; QEMU-only shim adapted):** committed `uboot-patches/0004` (init stack
+→ DRAM, ASPEED_DRAM_BASE+0x200000) + `0005` (pre-console → DRAM, 0x40100000). Also discovered the local
+u-boot tree had UNCOMMITTED half-fixes (pre-con removal + #168 SCTLR.A) that CI never had — hence CI's C4/
+C2-full were broken too; my patches make the fix reach CI. Rebuilt U-Boot from a clean tree + all patches.
+
+**Result on the FAITHFUL (SRAM-removed) QEMU:** C4 (Dell vendor→appweb) **PASS**, C2-full (U-Boot→Linux→SSH)
+**PASS** (evidence soc-a2p/02). #200 done; the C4/C2-full regression flag is resolved.
+
+**Bonus faithfulness refinement (#176):** modeled the A2P window's silicon-exact readback — QEMU submodule
+14be3eed1e replaces the create_unimplemented_device (read 0) with aspeed_a2p_ops returning 0x04000008 and
+dropping writes. Both-sides validated: QEMU-monitor `xp` 0x1E720000/24000/27FFC all = 0x04000008 == silicon.
+Oracles re-verified PASS with the model present. Row 50 QE stays 🔶 (SCU70[4] gate + P-Bus-target forwarding
+to the internal-VGA CRTC still unmodeled — row 14).
+
 ## 2026-07-21 — 🎉 SILICON: MIC model cross-validated on the REAL AST2050 — BIT-EXACT vs QEMU (#203 DONE)
 
 Stopped deferring the silicon validation and DID IT. Cross-validated the QEMU MIC model against the REAL
