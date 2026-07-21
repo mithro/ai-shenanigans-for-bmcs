@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 27 | 16 | 0 | 6 | 2 |
+| QEMU emulation | 28 | 15 | 0 | 6 | 2 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 2 | 35 |
 | U-Boot @ silicon | 8 | 5 | 1 | 2 | 35 |
 | Linux @ QEMU | 23 | 10 | 0 | 8 | 10 |
@@ -441,7 +441,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 40 | PWM / tach block | pwm | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 41 | ADC — **ABSENT on G3** (phantom REMOVED ✅) | adc | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -609,11 +609,19 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   the schematic-scoped completeness audits (external wiring §§2–15) STRUCTURALLY could not reach SoC
   engines with no external pins. A gate-d pass found 6 real ones (all "**Yes**" in `AST2050-MEMORY-MAP.md`
   §9) that the matrix had omitted. Honest first-pass dispositions:
-  - **43 HACE** (hash/crypto, 0x1E6E3000/IRQ4, 11 regs MD5/SHA/AES/RC4): **QE=🔶** — `aspeed.hace` IS
-    modeled+mapped+IRQ-wired (aspeed_ast2400.c:355/862), but whether the generic G4 model matches the
-    AST2050 11-reg variant is unverified. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline
-    `aspeed-hace` crypto driver exists but is NOT G3-validated; a full BMC secure-boot/TLS could use it).
-    ZQ/ZS=⬜ (no Zephyr crypto driver). *Real work, honestly ⬜.*
+  - **43 HACE** (hash/crypto, 0x1E6E3000/IRQ4, 11 regs MD5/SHA/AES/RC4): **QE=✅ (2026-07-21 — 🎉 SILICON
+    hash-validated, #209 DONE).** `aspeed.hace` is modeled+mapped+IRQ-wired (aspeed_ast2400.c:355/862) and
+    computes REAL hashes via QCryptoHashAlgo. The 🔶 concern ("does the generic G4 model match the AST2050
+    11-reg variant?") is RESOLVED on silicon: a JTAG SHA-256 of 64 zero bytes on the real HACE returned the
+    digest **f5a5fd42 d16a2030 … 2759fb4b = the exact known sha256(64·0x00)** (evidence `soc-hace/01` +
+    `hace-hash-silicon.tcl`), so the G3 SRC/DEST/SRC_LEN/CMD register layout + the SHA-256 CMD encoding
+    (0x50) match the model bit-for-bit. **Governing-principle lesson:** the engine first didn't fire (digest
+    unchanged) — MY driving: the HAC compute engine is clock-dead + held in reset at power-on (SCU0C[13]
+    "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]=AES_RST_N Fig.43); clearing both made it compute.
+    That exposed the same reset/clock-gating gap as MDMA/MIC (the QEMU model responds without the release) →
+    extends #208. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
+    is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed: SHA-256 is the silicon-validated
+    algo; the other hashes share the confirmed layout; AES/RC4 crypto is not separately silicon-validated.
   - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mic_ast2050.c`
     wired into the G3 SoC (VIC INT#1): the §13 register block + the continuous-scanner semantics (per-page
     2-bit control words skip/ECC/debug/MIC-mode, checksum buffer, first/secondary/lost page-error flags +

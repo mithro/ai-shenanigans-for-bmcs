@@ -1,0 +1,44 @@
+DEVICE-MATRIX row 43 (HACE) — REAL-SILICON hash validation: PASS (SHA-256 bit-exact)
+====================================================================================
+
+Row 43 was QE=🔶 because "whether the generic G4 aspeed.hace model matches the
+AST2050 11-reg variant is unverified." Resolved by computing a SHA-256 on the REAL
+AST2050 HACE over JTAG and comparing to the known digest: the G3 register layout
+(SRC/DEST/SRC_LEN/CMD offsets) AND the SHA-256 command encoding MATCH the model.
+
+Method (evidence hace-hash-silicon.tcl): reset halt + ddr2-init; the HACE SRC is a
+full 32-bit AHB address, so it reads native DRAM (0x40000000) directly (no AHBC
+remap needed). Lay a 64-byte zero source buffer @0x40001000 + a sentinel digest
+buffer @0x40002000; program HASH_SRC/HASH_DEST/HASH_SRC_LEN + write HASH_CMD=0x50
+(SHA-256 = BIT4|BIT6, single-buffer, no SG/ACCUM) to fire; read back the 32-byte
+digest.
+
+FAITHFULNESS LESSON (governing principle in action): the first run left the digest
+UNCHANGED (compute engine did not fire) though the register file responded. That
+was MY incomplete driving — the HAC compute engine is clock-dead + in reset at
+power-on:
+  * SCU0C[13] = "Stop YCLK (For HAC)" (datasheet §18 l.16040) — YCLK is the
+    hash/crypto compute clock; it was STOPPED (SCU0C=0x000c3e8b, bit13=1).
+  * SCU04[4]  = AES_RST_N (datasheet Fig.43 "Crypto Engine Reset") — held.
+Clearing SCU0C[13] (enable YCLK) + SCU04[4] (release AES_RST_N) made the engine
+compute. The register file responds even while clock-dead/held, which is why the
+earlier probe (which only read/wrote registers) saw the block "alive."
+
+Transcript (captured 2026-07-21, real AST2050 over JTAG)
+-------------------------------------------------------
+SCU0C 0x000c3e8b -> 0x000c1e8b (YCLK on) ; SCU04 0x000ffe5c -> 0x000ffe4c (AES_RST_N off)
+PRE: src0=0x00000000 digest0=0xeeeeeeee (0xEEEEEEEE sentinel)
+STATUS 0x1E6E301C = 0x00000000
+DIGEST = f5a5fd42 d16a2030 2798ef6e d309979b 43003d23 20d9f0e8 ea9831a9 2759fb4b
+
+known sha256(64 zero bytes) = f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b
+The DIGEST reads back byte-for-byte identical to the known SHA-256 -> the real
+AST2050 HACE computes the correct SHA-256, and the model's register offsets +
+SHA-256 CMD encoding are faithful. (Byte order: the HACE writes the digest MSB-first
+so read_memory shows the words in natural digest order.)
+
+Conclusion: row 43 HACE QE 🔶→✅ — the G3 HACE is silicon-cross-validated for
+SHA-256; the generic aspeed_hace model's register layout + algo encoding match the
+AST2050. FAITHFULNESS FOLLOW-UP: like MDMA/MIC (#208), the QEMU HACE model responds
+without requiring the SCU0C[13] YCLK-enable + SCU04[4] AES_RST_N release that
+silicon needs -> gate the HACE MMIO/compute on those bits (tracked, extends #208).

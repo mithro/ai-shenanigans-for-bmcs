@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — 🎉 SILICON: HACE SHA-256 validated on the REAL AST2050 (row 43 QE 🔶→✅, #209 DONE)
+
+Went ahead and did the full HACE silicon hash validation (didn't stop at "feasible"). Hashed 64 zero bytes
+with SHA-256 on the real AST2050 HACE over JTAG (evidence soc-hace/01 + hace-hash-silicon.tcl): the digest
+read back **f5a5fd42 d16a2030 … 2759fb4b = the exact known sha256(64·0x00)**, byte-for-byte. So the G3
+HACE register layout (SRC/DEST/SRC_LEN/CMD) + SHA-256 CMD encoding (0x50) MATCH the generic aspeed_hace
+model — resolving row 43's 🔶 ("G4 model vs AST2050 11-reg variant unverified"). QE 🔶→✅; tally QEMU 27→28✅.
+
+GOVERNING-PRINCIPLE LESSON (third time this session): the engine first didn't fire (digest unchanged, the
+0xEEEEEEEE sentinel intact). Not the hardware — MY driving: the HAC COMPUTE engine is clock-dead + held in
+reset at power-on even though the register FILE responds. Datasheet: SCU0C[13]="Stop YCLK (For HAC)" (§18
+l.16040, YCLK is the hash/crypto clock) + SCU04[4]=AES_RST_N (Fig.43 Crypto Engine Reset). Clearing BOTH
+made it compute. This is why the earlier register-only probe saw the block "alive" but the hash didn't run.
+Same reset/clock-gating faithfulness gap as MDMA/MIC (#208) — the QEMU HACE responds without the release →
+follow-up on #208 (subtler here: gate the compute, not the whole MMIO, since the reg file responds while
+clock-off). TCL gotcha again: `src[0]` in an echo string = command substitution (fixed to src0).
+
 ## 2026-07-21 — HACE (row 43) bounded silicon probe → #209 (feasibility confirmed, full validation scoped)
 
 Bounded JTAG probe of the HACE @0x1E6E3000 (tmp/hace-probe.tcl) to scope row 43's 🔶 ("G3 11-reg variant vs
