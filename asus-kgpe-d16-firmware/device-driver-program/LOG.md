@@ -1,6 +1,28 @@
 # Device-driver program — running log
 
-## 2026-07-21 — FAILED ATTEMPT + REVERT: invented a non-existent 2nd HACE crypto reset (SCU04[5])
+## 2026-07-21 — Matrix accuracy: reconcile row 4 "LPC mailbox" to the datasheet (no MBX block)
+
+Applied last commit's lesson (authoritative datasheet feature/register text, not assumptions) to a
+matrix-accuracy pass on the QE ⬜ frontier. Row 4 was "LPC mailbox (§5)" with a note saying it "needs a
+separate `aspeed-lpc-mbox` node + a host peer" — subtly wrong for the AST2050.
+
+Verified against the datasheet V1.05 (authoritative feature list + memory map):
+- **No dedicated mailbox (MBX) controller on the AST2050.** No "mailbox" block; nothing at 0x1E789200
+  (the AST2400 MBX base). LPC base is 0x1E789000; its BMC controller has 3 KCS/BT register sets + VUART/PUART.
+- The schematic §5 (authoritative wiring) line 207 groups "KCS/IPMI, **mailbox** and virtual-UART" — so the
+  "mailbox" IS traceable to the schematic, but it means the **BT (Block-Transfer) mode of LPC Channel #3**
+  ("Channel #3 supports KCS or BT interface"; `BTENBL`; "channel #3 BT mode: PCLK > 0.5*LCLK"), the IPMI
+  alternative to KCS on the same channel — NOT an AST2400-style MBX device.
+- QEMU `hw/misc/aspeed_lpc.c` models KCS only (channels 1–4, no BT datapath), so BT-mode is genuinely QE ⬜.
+
+Fix: renamed row 4 → "LPC Ch#3 BT interface (§5 'mailbox')"; rewrote the note with the datasheet grounding
+(BT-mode of Ch#3, not a separate MBX node; firmware-unexercised — KGPE/C410X use KCS; host-peer-gated for a
+data transaction, like snoop/vUART); updated the §5 schematic-coverage-map row and corrected a stale header
+summary ("4 QEMU ⬜" → the accurate 6: LPC-BT[4], TPM-passthru[7], DDC/EDID[14], SMBus-ALERT[25],
+2D-BitBLT[46], PCI-arbiter[48]). No status flips (row 4 stays QE ⬜ — correct); this is a label+grounding
+correction so the ⬜ means the right thing (BT datapath unmodeled), not a nonexistent MBX block. Dispatched an
+independent enumeration sub-agent to check the rest of the schematic ↔ matrix mapping for similar mislabels
+(gate a/d).
 
 **This documents a mistake I made and committed, that an independent code review caught. Honest record per
 the program rules.** While going to the datasheet to disposition #210 (the crypto half), I *also* claimed to
