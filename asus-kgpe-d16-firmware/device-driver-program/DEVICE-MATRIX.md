@@ -941,8 +941,16 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   are register-level BACKING STORE (read-only EVAL returns the reset seed); their FUNCTIONAL behaviour
   (a live clock-measurement count; SCU interrupt generation) is unmodeled but FIRMWARE-UNEXERCISED — the
   freq counter is a PLL-lock diagnostic and SCU interrupts are unused at boot by U-Boot/Linux/Zephyr on
-  this board. Dispositioned like PECI/HACE (present, modeled-but-unused-fn → reasoned): the boot-exercised
-  SCU functionality (clock/reset/pinmux/PLL/silicon-rev/strap, row 35 QE/ZS ✅) is complete; functional
-  freq-counter/SCU-IRQ modelling is an OPTIONAL low-value "all-functionality" follow-on, not a boot gap.
+  this board. The boot-exercised SCU functionality (clock/reset/pinmux/PLL/silicon-rev/strap, row 35 QE/ZS
+  ✅) is complete; functional freq-counter/SCU-IRQ modelling is an OPTIONAL low-value follow-on, not a boot
+  gap. **Grading standard (2026-07-21, resolves the gate-a/d "C3" consistency concern): QE ✅ vs 🔶 is a
+  gap-SIGNIFICANCE gradient, made explicit here so it is principled, not arbitrary** — ✅ = the device's
+  primary function AND all firmware-exercised functionality is modeled + validated, with only a MINOR
+  optional/diagnostic sub-mode unmodeled (row 15 I²C DMA-buffer = one optional transfer mode, byte+pool
+  done; row 35 SCU freq-counter = a diagnostic). 🔶 = a MAJOR function or half the device is stubbed/partial
+  (row 43 HACE = the entire AES/RC4 crypto half; row 42 PECI = the engine itself partial; row 5 = the
+  port-80h snoop datapath absent). Under this line rows 15/35 = ✅ IS consistent with 42/43 = 🔶: the gaps
+  differ in kind, not just been graded differently. (Not a weasel — every such gap is disclosed in its note;
+  the point is that "one optional I²C mode" ≠ "no crypto engine".)
 These are register-level completeness items, not device-enumeration gaps; the schematic→device coverage
 above is unaffected.

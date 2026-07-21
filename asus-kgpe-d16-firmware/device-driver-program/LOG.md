@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-21 — C3 resolved: articulate the QE ✅/🔶 grading standard (gap significance, not arbitrary)
+
+Took the goal's "take a break when stuck" advice — parked the RTC #212 rat-hole (honestly flagged, attempt-2
+plan documented) and closed the LAST open enumeration-audit finding, C3 (rows 15/35 kept ✅ while 42/43 went
+🔶 — flagged as possibly inconsistent). Resolution: the split is a principled gap-SIGNIFICANCE gradient, now
+made explicit in the row-35 note:
+- ✅ = primary + all firmware-exercised functionality modeled + validated, only a MINOR optional/diagnostic
+  sub-mode unmodeled (row 15 = one optional I²C DMA-buffer transfer mode, byte+pool done; row 35 = the SCU
+  freq-counter PLL-lock diagnostic).
+- 🔶 = a MAJOR function or half the device stubbed/partial (row 43 = the whole AES/RC4 crypto half; row 42 =
+  the PECI engine partial; row 5 = the port-80h snoop datapath absent).
+Under this line 15/35 = ✅ is consistent with 42/43 = 🔶 — the gaps differ in kind ("one optional I²C mode" ≠
+"no crypto engine"), and every gap is disclosed in its note (not a weasel). Fixed the misleading "dispositioned
+like PECI/HACE" phrasing (which implied same-status). All three gate-a/d findings now closed: C1 #211 (fixed),
+C2 #212 (flagged + attempt-1 done, attempt-2 planned), C3 (resolved here). Also dispatched an independent
+gate-b code review of the #211 shared-code change (a subclass in aspeed_i2c.c) — the HACE precedent shows I
+can be confidently wrong about shared code, so verify it rather than let it stand review-less.
+
 ## 2026-07-21 — #212 attempt 1: isolated silicon RTC-VIC test — INCONCLUSIVE (my setup), honest record
 
 Ran the isolated silicon JTAG test to resolve the RTC alarm VIC-source (22 vs 26). Confirmed the rig was
