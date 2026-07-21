@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-22 — #142: G3-faithful H-PLL/CLKIN clock rate — FIXED + 3-oracle validated
+
+Fixed a real, well-diagnosed core-clock faithfulness bug (#142). The G3 SCU reused aspeed_2400_scu_calc_hpll,
+which mis-derived the AST2050 clock: CLKIN strap-decoded as 25 MHz (SCU70 bit23 is SCU_HW_STRAP_CLK_25M_IN on
+the AST2400 but the LPC-reset pin on the G3) and H-PLL read from bits[9:8] instead of the G3's [11:9]. At
+reset (strap fallback) the timer/PCLK ran off ~375 MHz instead of the strap's 166 MHz.
+
+DATASHEET-GROUNDED (verified 2 sources): "Get the H-PLL frequency, SCU70[11:9]" table = {266,233,200,166,133,
+100,300,24} MHz; CLKIN = 24 MHz (baud formula 24MHz/(16*divisor)); the actual G3 strap 0x00819582 -> [11:9]=
+011 = 166 MHz.
+
+FIX (submodule af16ca701e): new aspeed_2050_scu_calc_hpll — fixed 24 MHz CLKIN + the SCU70[11:9] table;
+programmed path keeps the shared (2-OD)*(N+2)/(D+1) off 24 MHz. Wired in aspeed_2050_scu_class_init (G3-only;
+other SoCs keep aspeed_2400_scu_calc_hpll — contained, no shared-code risk).
+
+HIGH BLAST RADIUS (reset rate changes ~375->166 MHz, ~2.26x), so validated across ALL THREE legacy oracles
+(governing principle): C2 (our Linux -> dropbear), C-UBOOT (Raptor G3 U-Boot + g3-resets -> boot#, the most
+SCU-sensitive — reads SCU clock values), C4 (Dell vendor -> Mbedthis-Appweb). All PASS. Also updated the
+integration/test_timer.py docstring (the "rate is currently wrong" note is now stale — rate fixed). REMAINING
+(small follow-on): a DETERMINISTIC absolute-rate unit assertion (needs an independent time reference in the
+bare-metal fwtest to divide against) — the rate is already validated by the 3 oracles + the counts-down check.
+
 ## 2026-07-22 — #144 UART phantoms: dispositioned DEFERRED (high-risk shared-code for latent value)
 
 Investigated the last #144 part — the phantom UART3-4 (model uart[1,2,3] at 0x1E78D000/E000/F000; datasheet

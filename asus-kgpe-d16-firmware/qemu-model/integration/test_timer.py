@@ -1,17 +1,19 @@
 """Integration test: Timer (FTTMR010) faithfulness on the QEMU model.
 
 Boots `peripherals/timer/fwtest.c` under `-M kgpe-d16-bmc`: control + count reset
-to 0, and enabling timer1 from PCLK loads from reload and counts down. The absolute
-PCLK rate is deferred to the SCU post-divider work (task #55); here we assert
-correct reset + functional counting. See peripherals/timer/DOC.md. No hardware here.
+to 0, and enabling timer1 from PCLK loads from reload and counts down. Here we
+assert correct reset + functional counting. See peripherals/timer/DOC.md.
 
-Task #55 scope note (gate-b review 2026-07-18): the G3 SCU currently reuses the
-AST2400 clkin/calc_hpll, which mis-decode the G3 strap -- get_clkin returns 25 MHz
-because the G3 strap's bit23 (LPC-reset-pin) collides with SCU_HW_STRAP_CLK_25M_IN,
-and calc_hpll reads H-PLL from bits[9:8] not the G3's [11:9]. So the rate this test
-defers is not merely un-asserted, it is currently wrong; #55 must add a G3-specific
-calc_hpll/clkin (bit23=LPC-reset, CLKIN fixed 24 MHz, H-PLL bits[11:9] + G3 freq
-table) AND a rate-validation assertion. See device-driver-program/LOG.md 2026-07-18.
+H-PLL/CLKIN RATE (#142, FIXED 2026-07-22): the G3 SCU no longer reuses the AST2400
+clkin/calc_hpll (which mis-decoded the G3 strap -- CLKIN as 25 MHz because bit23 is
+the LPC-reset pin not SCU_HW_STRAP_CLK_25M_IN, and H-PLL from bits[9:8] not the G3's
+[11:9]). aspeed_2050_scu_calc_hpll now uses a fixed 24 MHz CLKIN + the SCU70[11:9]
+strap table {266,233,200,166,133,100,300,24} MHz -- the G3 strap 0x00819582 ->
+[11:9]=011=166 MHz. The corrected rate is validated by all three legacy oracles
+booting (C2 Linux, C-UBOOT Raptor U-Boot->boot#, C4 vendor->appweb) plus the
+functional counts-down check below. A DETERMINISTIC absolute-rate assertion (count
+timer ticks over an independent reference interval) remains a small follow-on --
+the bare-metal fwtest has no independent time reference to divide against yet.
 
 Run:  uv run --with pytest python -m pytest integration/test_timer.py -q
 """
