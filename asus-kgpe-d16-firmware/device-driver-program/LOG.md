@@ -1,5 +1,35 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Grounding pass: full schematic read-through + schematic↔matrix reconciliation + false-claim corrections
+
+Re-grounded in the AUTHORITATIVE source (`schematic-wiring/AST2050-BMC-WIRING.md`, all 597 lines,
+§1-§16) and cross-checked every device it describes against all 50 DEVICE-MATRIX rows. Wrote
+`SCHEMATIC-RECONCILIATION.md` (committed): a §-by-§ device→row map proving **every BMC-side schematic
+device (§3-§13) has exactly one matrix row — none missing** — plus the schematic items that legitimately
+have no row (power LDOs, glue buffers, host-side peer chips SP5100/SR5690/Super-I/O).
+
+**Corrected false "not-existing / impossible" claims** (the hook's central concern — "incorrect claims
+have been made about functionality not-existing or features being unconnected; the schematic is
+authoritative; the hardware is reliable, it's my driving that's the issue"):
+- **NC-SI**: memory said "true NC-SI impossible / dedicated PHY not NC-SI". Schematic §7 is authoritative:
+  the MAC pin-mux runs ch1 MII→RTL8201N (mgmt PHY) AND ch2 RMII2/NC-SI→both 82574L NICs AT ONCE. NC-SI
+  IS wired (row 11 QE✅/LQ✅). Corrected in [[bmc-functionality-program]] + [[ncsi-sideband-exists-schematic]].
+- **DIMM inventory**: memory said "impossible — i2cdetect shows SPDs on the HOST SMBus not a BMC bus".
+  Schematic §10 is authoritative: the BMC reaches all 16 DIMM SPDs via QU9(FET-enable)→QU5(S1:S0 select).
+  Matrix row 18 is now LS✅ (silicon-Linux validated). The old i2cdetect "absence" was MY mux-sequencing
+  error (governing-principle trap), not proof. Corrected in the memory.
+- **USB**: "USB-host impossible" is a misleading framing — the BMC is a USB *device* (§9); that capability
+  (vhub, row 9) is covered. **host-BIOS-flash**: UNSETTLED (#134), not "impossible".
+
+**Remaining work is driver breadth + silicon/userspace validation, NOT undiscovered hardware.** The
+open cells are the U-Boot-silicon (US), Linux-silicon (LS), and Zephyr (ZQ/ZS) columns across many rows,
+plus a handful of QE 🔶/⬜ (rows 4/8/12/14/25/26/28/29/31/42/43/46/47/48/49/50).
+
+**Dispatched 4 independent adversarial audit sub-agents** (schematic slices: memory/GPIO/SoC-core;
+I²C fabric; net/video/USB; LPC/serial/SoC-engines) to FALSIFY the reconciliation — find any missed
+device, false absent/unconnected claim, coverage gap, or new task (completion gates a + d). Integrating
+their findings next.
+
 ## 2026-07-21 — C4/C2-full legacy-boot regression: root-caused to #176 SRAM removal, fixed faithfully (#200)
 
 Set out to close #200 ("re-verify the C4 Dell-vendor oracle still boots with the AHBC boot-remap alias").
