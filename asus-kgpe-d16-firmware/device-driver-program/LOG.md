@@ -1,5 +1,28 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(b) code review of the new G3 models: 1 real bug found + FIXED (MDMA re-entrancy), rest clean
+
+The independent code-reviewer sub-agent (dispatched last entry) returned. It reviewed the three device-model
+components shipped this session — `hw/misc/aspeed_mdma_ast2050.c`, `hw/misc/aspeed_ahbc_ast2050.c`, and the
+G3 wiring in `hw/arm/aspeed_ast2400.c`. ONE real, high-confidence (80) defect found + FIXED:
+- **MDMA re-entrant recursion → stack overflow (memory-safety, guest-triggerable).** `aspeed_mdma_do_command()`
+  runs synchronously in the MMIO write callback and `address_space_write()`s to a guest-controlled `dst`
+  masked only to 28 bits (not range-checked). A guest that points MDMA_DST at the MDMA's OWN register window
+  (0x1E74000C = MDMA_CMD) makes the write re-enter `aspeed_mdma_write()` → `do_command()`; a crafted self-
+  referential fill recurses until the native stack overflows → QEMU crash. FIX (submodule 9408957805): an
+  `in_command` re-entrancy guard (checked/set at the top of do_command, cleared on every exit + on reset)
+  drops nested invocations with a LOG_GUEST_ERROR. Rebuilt + re-validated: the `mdmacopy` gate still PASSes
+  (normal single-command operation is unaffected — the flag is set/cleared within one synchronous call).
+Everything ELSE in the review was confirmed CORRECT (not just asserted): MDMA IRQ6 level-recompute on every
+mutating path (no stuck/missed assertion), MDMA14 W1C vs RO-field isolation, the 28-bit mask on both read +
+do-command paths, the bounce-buffer chunking (no overflow given the 24-bit length), reserved-type/zero-len
+short-circuit, reset values (0x100 = queue-len 16), wiring/memmap/irqmap, and — the one the review was told
+to scrutinise hardest — the **AHBC boot-remap DEFAULT-OFF invariant, verified end-to-end** (alias is a true
+alias, added overlap-priority-1 above the priority-0 spi_boot_container, explicitly disabled at wiring time
+AND unconditionally re-disabled on every reset; dram_mr sized before realize; remap_mr NULL-checked). So the
+rows-45/49 ✅ stand, now with an independent gate-(b) confirmation. This is exactly the "it's your code" value
+of the review — a real fuzzer-class bug caught + fixed before it compounded.
+
 ## 2026-07-21 — MIC (row 44) ORACLE FOUND: Raptor SLT `mictest.c` gives the EXACT Fletcher-32 → bit-exact ✅ now achievable
 
 Big upgrade to the MIC disposition (was "🔶 at best, checksum under-specified"). The Raptor U-Boot SLT source
