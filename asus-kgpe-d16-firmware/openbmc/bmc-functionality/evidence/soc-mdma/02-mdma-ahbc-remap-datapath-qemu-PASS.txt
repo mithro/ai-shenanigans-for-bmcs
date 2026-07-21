@@ -2,6 +2,9 @@ DEVICE-MATRIX rows 45 (MDMA) + 49 (AHBC) — end-to-end data path: PASS
 =====================================================================
 
 Proves the FULL MDMA data movement path via the AHBC boot-remap aperture:
+  0. §12.3 unlock: devmem 0x1E600000 32 0xAEED1A03 (the AHBC protection key —
+     0x80-0x8C are write-protected until this is written; real silicon rejects a
+     bare remap-enable, so the gate writes the key first — gate-(a) audit fix).
   1. AHBC8C[0]=1 (devmem 0x1E60008C 32 1) enables the boot-remap: the modeled
      AHBC (hw/misc/aspeed_ahbc_ast2050.c) toggles the SoC's dram_low_alias so
      SDRAM appears at 0x0.. (the low 256 MB aperture).

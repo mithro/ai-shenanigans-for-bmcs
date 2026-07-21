@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 29 | 13 | 0 | 6 | 3 |
+| QEMU emulation | 27 | 15 | 0 | 6 | 3 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 10 | 0 | 8 | 11 |
@@ -437,9 +437,9 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
 | 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ✅ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 47 | PUART LPC pass-through UART (0x1E788000) | PUART | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
-| 49 | AHBC AHB-bus controller (0x1E600000, IRQ31) | AHBC | ✅ | 🔶 | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 49 | AHBC AHB-bus controller (0x1E600000, IRQ31) | AHBC | 🔶 | 🔶 | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 50 | A2P AHB→PCI bridge (0x1E720000) | A2P | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 
 - **35** SCU: exercised by every stack's init (QE/UQ/US/LQ/LS ✅). **Zephyr ZQ+ZS ✅ now
@@ -613,10 +613,14 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     `mictest.c do_chksum()` that byte-compares against real silicon; the model reaches DRAM via the AHBC
     boot-remap low aperture (rows 45/49) and includes the MDMA-review re-entrancy guard. Validated (evidence
     `soc-mic/01`, devmem gate): a zero page checksums to exactly 0xFFFFFFFF (independently computed), and
-    corrupting the page flags MIC18 first-page-error + the correct page number 0x2000. Simplification: the
-    scan runs synchronously on enable (models the first pass the SLT relies on), not the continuous MIC08-
-    rate loop. LQ/LS=⬜ (an EDAC-style error reporter could exist); UQ/US Ⓝ (init-time, no runtime U-Boot
-    driver — the SLT is a diagnostic, not the boot path); LU=Ⓝ; ZQ/ZS=⬜ (matching LQ/LS).
+    corrupting the page flags MIC18 first-page-error + the correct page number 0x2000. **Disclosed
+    simplifications (gate-(a) audit):** (1) the scan runs synchronously on enable (models the first pass the
+    SLT relies on), not the continuous MIC08-rate loop; (2) MIC10 stop-page — the observable **TAG write-back**
+    (`{TAG,16'b0}` → checksum-buffer[page]) IS modeled, but the stop-scan-AT-page function is moot under the
+    synchronous scan (a scan completes atomically). Neither is exercised by any firmware here; the core
+    integrity-check (bit-exact checksum → mismatch → error → IRQ1) is complete, so ✅ holds. LQ/LS=⬜ (an
+    EDAC-style error reporter could exist); UQ/US Ⓝ (init-time; the SLT is a diagnostic, not the boot path);
+    LU=Ⓝ; ZQ/ZS=⬜ (matching LQ/LS).
   - **45 MDMA** (memory-DMA, 0x1E740000/IRQ6): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mdma_ast2050.c` wired
     into the G3 SoC: register R/W with the faithful 28-bit src/dst address mask, MDMA0C-write-fires-command
     (copy/fill via address_space_memory with the raw 28-bit address — NO 0x40000000 fudge), per-ID done
@@ -627,16 +631,24 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     modeled (level) + wired to VIC-6 + its status-set is validated; observing IRQ6-delivery-to-a-handler would
     need a bare-metal handler (Linux binds none — it would be spurious), a test-harness limit not a model gap.
     Oracle-safe: C2 + C-UBOOT boot with the AHBC/MDMA present. #172 SDHCI phantom used to squat here.
-    Autonomous DMA; no BMC runtime driver → driver stacks Ⓝ.
+    Autonomous DMA; no BMC runtime driver → driver stacks Ⓝ. **Disclosed simplification (gate-(a) audit):**
+    copy+fill+per-ID-done+IRQ6 are the modeled functionality; the 16-deep command QUEUE and the dynamic
+    MDMA14 IDLE[3]/busy[0]/overflow[1] status progression are NOT dynamically asserted (the constants exist
+    for W1C only) — moot in practice because execution is synchronous (queue stays empty/idle steady-state)
+    and the datasheet's "poll IDLE" is conditional on odd MCLK/H-PLL ratios that this model does not stress;
+    ✅ holds on the driven data-path functionality.
   - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
     accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
-  - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=✅ (2026-07-21)** — modeled as a `TYPE_SERIAL_MM`
-    16550 in the G3 SoC (hw/arm/aspeed_ast2400.c, no IRQ per datasheet §10, no chardev — the BMC-side
-    register file), replacing the iomem catch-all fall-through. Validated by a Linux `devmem` R/W of the
-    16550 scratch register (0x1E78801C): the pattern round-trips (evidence `soc-puart/01-puart-qemu-PASS.txt`).
-    The LPC pass-through DATAPATH needs an LPC host peer (absent in the BMC-only machine — same boundary as
-    the VUART row 6). LQ/LS/LU + ZQ/ZS=⬜ (a pass-through driver is real BMC work, conservatively kept open
-    pending confirmation of whether the KGPE-D16 firmware actually uses PUART); UQ/US Ⓝ.
+  - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=🔶 (2026-07-21; corrected ✅→🔶 by a gate-(a)
+    faithfulness audit).** Modeled as a `TYPE_SERIAL_MM` 16550 in the G3 SoC (hw/arm/aspeed_ast2400.c, no IRQ
+    per datasheet §10), replacing the iomem catch-all — the 16550 register file responds (scratch-register
+    round-trip, evidence `soc-puart/01`). **Why 🔶 not ✅ (honest, per the audit):** it is a register-presence
+    model, not full functionality — it has **no chardev backend** (so it cannot move a byte on either side,
+    unlike the VUART which bridges to SOL via serial_hd(1)), and the **8 extended LPC-control registers
+    PUART20–PUART3C** (§29.4: enable / SerIRQ / address-decode / UART1-2-select) sit outside the 0x20 SerialMM
+    window and fall through to RAZ/WI, undecoded. Defensible only because no KGPE-D16 firmware drives PUART
+    (drivers ⬜, not a runtime need). Completing it = decode PUART20–3C + a chardev/pass-through datapath (needs
+    an LPC host peer, absent). UQ/US Ⓝ.
   - **48 PCI arbiter** (0x1E78C000): **QE=⬜** (real, unmodeled). Autonomous bus arbiter, init-configured,
     no runtime driver → all Ⓝ.
   These are first-pass dispositions to CLOSE the completeness gap (they were silently missing); the QE=⬜
@@ -644,19 +656,20 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   + the ⬜ driver cells are tracked follow-on work under #173.
 - **49–50 (ADDED 2026-07-20, #175/#176 — a 2ND gate-d pass caught the 1st enumeration itself missed these):**
   - **49 AHBC** (AHB Bus Controller, 0x1E600000/IRQ31; regs 0x00 key/0x80 priority/0x88 IRQ/**0x8C
-    Address-Remap** = boot remap of 0x0→SDRAM): **QE=✅ (2026-07-21)** — modeled as `hw/misc/
-    aspeed_ahbc_ast2050.c` (register block) + the boot-remap: an AHBC8C write toggles a SoC-created SDRAM
-    alias (`dram_low_alias`, alias of `s->dram_mr`) mapped at 0x0 with priority above the spi_boot_container,
-    **DEFAULT-DISABLED** (reset = boot from static memory, §12.3). Enabling AHBC8C[0] makes the low 256 MB
-    aperture SDRAM — the path the 28-bit MDMA engine (row 45) uses to reach DRAM. Validated (evidence
-    `soc-mdma/02`): AHBC8C[0]=1 makes SDRAM readable at 0x02xxxxxx and an MDMA copy round-trips through it.
-    **Oracle-safe (the key faithfulness gate):** because the alias is default-off, both C2 (our Linux) and
-    **C-UBOOT (Raptor U-Boot: DRAM Init-DDR → DRAM 64 MiB → boot# prompt)** still boot cleanly with the AHBC
-    modeled — verified this session. This RESOLVES the #175 "high-risk remap" concern: done safely, default
-    off. Remaining minor: priority-arbitration is a no-op in QEMU's flat memory model and the bus-error IRQ31
-    is register-stored-only (firmware-unexercised); UQ/US=🔶 (the loader drives the remap during DRAM init +
-    boots); L/Z=Ⓝ (no discrete BMC AHBC driver). C4 (Dell vendor) oracle re-verify tracked (heavier to
-    build; C-UBOOT already proves the U-Boot DRAM-init-with-AHBC path).
+    Address-Remap** = boot remap of 0x0→SDRAM): **QE=🔶 (2026-07-21; corrected ✅→🔶 by a gate-(a)
+    faithfulness audit).** Modeled as `hw/misc/aspeed_ahbc_ast2050.c`: the **AHBC00 write-protection key** is
+    now modeled (§12.3: writes to 0x80–0x8C are dropped until `0xAEED1A03` is written to 0x00; read 0x00 = 1
+    when unlocked) — the audit correctly flagged that the earlier model let a bare `devmem 0x8C` enable the
+    remap without the key, which real silicon rejects; both the model AND the mdmacopy/mictest gates now write
+    the key first (still PASS). The AHBC8C[0] **boot-remap** toggles a SoC-created SDRAM alias
+    (`dram_low_alias`) at 0x0, **DEFAULT-DISABLED** (reset = static memory), priority above the
+    spi_boot_container — this is the path the 28-bit MDMA/MIC engines use to reach DRAM (evidence
+    `soc-mdma/02`). Oracle-safe: C2 + C-UBOOT (DRAM Init-DDR → 64 MiB → boot#) both still boot (alias default
+    off). **Why 🔶 not ✅ (honest, per the audit):** of the 4 registers, only key + boot-remap are functional;
+    AHBC80 priority-arbitration is a no-op in QEMU's flat memory, AHBC88 bus-error IRQ31 is storage-only
+    (QEMU emits no AHB bus errors), and AHBC8C[4:5] PCI-host-window remap is stored-only (no PCI host in this
+    BMC-only machine) — so it is a partial (boot-remap-focused) model, not full functionality. UQ/US=🔶 (the
+    loader drives the remap during DRAM init + boots); L/Z=Ⓝ. C4 vendor oracle re-verify tracked (#200).
   - **50 A2P** (AHB→PCI bridge, 0x1E720000): **QE=🔶 (2026-07-21, #176 — A2P window now modeled).**
     **SRAM/A2P discrepancy RESOLVED (2026-07-20, submodule 4de9aa40c7):** QEMU used to map
     `ASPEED_DEV_SRAM` (a G4 RAM block) at 0x1E720000, but §9 assigns that address to the A2P bridge on the

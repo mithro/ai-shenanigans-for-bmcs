@@ -575,6 +575,9 @@ fi
 if grep -q mdmacopy /proc/cmdline; then
 	echo "=== MDMACOPY-BEGIN ==="
 	# 1. enable the AHBC boot-remap (AHBC8C[0]=1): SDRAM appears at 0x0..
+	#    §12.3: AHBC 0x80-0x8C are write-protected until the 0xAEED1A03 key is
+	#    written to AHBC00 — real silicon rejects a bare remap-enable.
+	devmem 0x1E600000 32 0xAEED1A03
 	devmem 0x1E60008C 32 0x1
 	# 2. write a source pattern through the aliased DRAM (offset 32 MB).
 	devmem 0x02002000 32 0xDEADC0DE
@@ -611,6 +614,7 @@ fi
 # be spurious); we validate the MIC18 status flag instead.
 if grep -q mictest /proc/cmdline; then
 	echo "=== MIC-BEGIN ==="
+	devmem 0x1E600000 32 0xAEED1A03                 # §12.3 unlock AHBC 0x80-0x8C first
 	devmem 0x1E60008C 32 0x1                        # AHBC remap: SDRAM at 0x0
 	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=8192 2>&1   # scanned page 8192 (32MB) = 0
 	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=12288 2>&1  # control buf (48MB) = all SKIP

@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-(a) faithfulness audit: caught a REAL faithfulness bug (AHBC key) + 3 honest over-claims — all addressed
+
+The independent gate-(a) faithfulness audit of the 4 cells I marked ✅ this session did its job — it found a
+genuine faithfulness VIOLATION plus several honest over-claims. Addressed every one:
+1. **AHBC (row 49) — REAL BUG (fixed).** The datasheet §12.3 protection key was NOT modeled: my AHBC let any
+   write to 0x80-0x8C through, and my own evidence (`soc-mdma/02`, and transitively the MIC/MDMA data tests)
+   enabled the remap with a bare `devmem 0x1E60008C 1` WITHOUT writing the 0xAEED1A03 key to AHBC00 — a
+   sequence REAL SILICON REJECTS (key locked → remap stays off). This directly violated the "QEMU must model
+   real silicon" rule and my tests were passing on a NON-faithful permissiveness. FIX: modeled the AHBC00
+   key (writes to 0x80-0x8C dropped while locked; read 0x00 = 1 when unlocked; reset locked; vmstate v2), and
+   updated the mdmacopy + mictest gates to write the key first. Rebuilt + re-ran BOTH: still PASS (MDMA copy
+   round-trips 0xDEADC0DE, MIC zero-page = 0xFFFFFFFF) — now via the FAITHFUL key path. Row 49 ✅→🔶
+   (honest: only key + boot-remap are functional; priority-arbitration is a flat-memory no-op, bus-error
+   IRQ31 is storage-only, AHBC8C[4:5] PCI-window remap is stored-only with no PCI host here).
+2. **PUART (row 47) — over-claim → 🔶.** It is a register-presence 16550 (scratch responds) but has no
+   chardev (can't move a byte) and the 8 extended LPC-control regs PUART20-3C are undecoded (RAZ/WI). Honest
+   🔶 (defensible only because no firmware drives PUART).
+3. **MIC (row 44) — undisclosed MIC10, addressed → stays ✅.** MIC10 stop-page was unmodeled+undisclosed. FIX:
+   modeled the observable MIC10 TAG write-back ({TAG,0}→checksum-buffer[page]); disclosed that the stop-scan-
+   at-page is moot under the synchronous scan. Rebuilt + re-ran mictest: still PASS. Core integrity-check
+   (bit-exact checksum → mismatch → error → IRQ1) is complete → ✅ holds with the fuller caveat.
+4. **MDMA (row 45) — ✅ holds, disclosure added.** The 16-deep queue + MDMA14 idle/busy/overflow dynamic
+   status aren't asserted (constants for W1C only) — moot under synchronous execution; disclosed in the note.
+Tally: QEMU ✅ 29→27, 🔶 13→15 (the honest AHBC+PUART downgrades). This is the gates working as intended —
+an adversarial second opinion caught a faithfulness bug my own passing tests hid, exactly the "it's your
+code, model real silicon" principle. Submodule (AHBC key + MIC10 TAG) + parent (gates + matrix) committed.
+
 ## 2026-07-21 — Gate-(b) MIC code review: CLEAN (line-by-line diff vs the SLT oracle), no actionable defects
 
 The independent code review of `hw/misc/aspeed_mic_ast2050.c` returned with **no high-confidence issues** —
