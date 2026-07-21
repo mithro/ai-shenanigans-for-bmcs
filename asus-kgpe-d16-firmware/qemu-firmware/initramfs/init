@@ -81,6 +81,9 @@ if grep -q f6usb /proc/cmdline; then
 	# small backing image = the "remote media" the BMC would export to the host
 	dd if=/dev/zero of=/tmp/vmedia.img bs=4096 count=256 2>&1
 	mkdir -p "$G/functions/mass_storage.0"
+	# §9 "virtual keyboard/mouse/CD": present the virtual media as a CD-ROM
+	# (SCSI type 5, read-only) rather than a removable Direct-Access disk (#182).
+	echo 1 > "$G/functions/mass_storage.0/lun.0/cdrom"
 	echo /tmp/vmedia.img > "$G/functions/mass_storage.0/lun.0/file"
 	ln -s "$G/functions/mass_storage.0" "$G/configs/c.1/"
 	# Bind to the software dummy UDC so the paired dummy HOST enumerates it in-guest.
@@ -89,11 +92,23 @@ if grep -q f6usb /proc/cmdline; then
 	echo "$UDC" > "$G/UDC"
 	sleep 3
 	echo "--- enumeration result (dmesg) ---"
-	dmesg | grep -iE 'new .*USB device|Mass Storage|Product: AST2050|Direct-Access|scsi' | tail -15
+	dmesg | grep -iE 'new .*USB device|Mass Storage|Product: AST2050|CD-ROM|Direct-Access|scsi' | tail -15
 	echo "--- enumerated USB devices (product strings) ---"
 	for p in /sys/bus/usb/devices/*/product; do
 		[ -f "$p" ] && echo "$p = $(cat "$p")"
 	done 2>&1
+	# Assert the gadget presents a CD-ROM: the configfs lun.0/cdrom reads 1 (SCSI
+	# type 5, read-only) AND the dummy_hcd host enumerated the USB device. The
+	# host-side SCSI CD-ROM node (/dev/sr0) needs usb-storage+sr_mod on the host,
+	# which this minimal-initramfs loopback does not load — that host-side view is
+	# validated over USB/IP to a REAL host on silicon (row 9 LS), not here.
+	CDROM_SET=$(cat "$G/functions/mass_storage.0/lun.0/cdrom" 2>&1)
+	echo "vmedia lun.0/cdrom = ${CDROM_SET}"
+	if [ "$CDROM_SET" = "1" ] && dmesg | grep -qiE 'new .*USB device.*dummy_hcd'; then
+		echo "F6-VMEDIA-CDROM: PASS (gadget lun.0/cdrom=1 + USB device enumerated, #182)"
+	else
+		echo "F6-VMEDIA-CDROM: FAIL (cdrom=${CDROM_SET}, or no enumeration)"
+	fi
 	echo "=== F6-USB-DEMO-END ==="
 fi
 
@@ -361,6 +376,7 @@ if grep -q usbiphost /proc/cmdline; then
 	dd if=/dev/zero of=/tmp/vmedia.img bs=4096 count=256 2>&1
 	printf '%s' "$USBIP_MAGIC" | dd of=/tmp/vmedia.img bs=1 seek=512 conv=notrunc 2>&1
 	mkdir -p "$G/functions/mass_storage.0"
+	echo 1 > "$G/functions/mass_storage.0/lun.0/cdrom"   # §9 virtual CD (#182)
 	echo /tmp/vmedia.img > "$G/functions/mass_storage.0/lun.0/file"
 
 	ln -s "$G/functions/hid.usb0"       "$G/configs/c.1/"

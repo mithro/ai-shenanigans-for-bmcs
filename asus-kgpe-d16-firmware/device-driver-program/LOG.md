@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #182 DONE: virtual media presents as a CD-ROM (§9 "CD"), not a removable disk
+
+Closed the last genuine §9 delta for row 9: the USB virtual-media gadget presented a removable
+Direct-Access DISK, but §9 says "virtual keyboard/mouse/CD". Set `lun.0/cdrom=1` (SCSI type 5, read-only)
+in BOTH gadget paths in initramfs/init — the `f6usb` dummy_hcd loopback and the USB/IP export. Validated in
+QEMU (`f6usb` gate): `vmedia lun.0/cdrom = 1` + the dummy_hcd host enumerates the USB device → F6-VMEDIA-
+CDROM PASS. HONEST scope: the host-side /dev/sr0 CD-ROM node needs usb-storage+sr_mod on the host, which the
+minimal-initramfs dummy_hcd loopback does NOT load (the host enumerates the USB device but not the SCSI
+layer) — so the host-side CD-ROM view is the USB/IP-to-a-real-host path (row 9 LS 🔷, rig-blocked, same
+transport that proved the disk variant on silicon). First attempt asserted dmesg "CD-ROM" (host SCSI line) →
+FAIL (no usb-storage on the loopback host); corrected the assertion to the achievable QEMU proof (gadget
+config + USB enumeration) rather than assert something the minimal initramfs can't show.
+
 ## 2026-07-21 — Gate (b): independent code review of the #208 reset-gating code = CLEAN
 
 Dispatched an independent code-reviewer on both #208 submodule commits (61615dba75 MDMA/MIC MMIO gating +
