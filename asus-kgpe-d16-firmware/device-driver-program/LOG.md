@@ -1,5 +1,24 @@
 # Device-driver program — running log
 
+## 2026-07-22 — CI: musl toolchain fetch now falls back to a mirror (C3 job was red on external outage)
+
+Autonomous CI-maintenance tick. The only red CI job on the branch — "Build Raptor userspace (musl BusyBox +
+dropbear) (C3)" — was failing on EVERY recent commit including two pure-docs commits (dee1e6c, 0e8c0e9),
+which proves it is NOT a regression: `https://musl.cc/arm-linux-musleabi-cross.tgz` times out (8+ retries,
+"Connection timed out") from GitHub-hosted runners. Diagnosed: musl.cc is reachable from the dev box here
+(curl -I → 200, 102 MB) but has been unreachable from GitHub runners for 2.5+ h across 5+ commits — a durable
+runner→musl.cc egress problem, not a blip a re-run clears. All functional oracles (C2/C4/C-UBOOT) and the
+whole F/D matrix stay green; only C3's userspace build + its (skipped) boot are affected.
+
+Fix (build-raptor-userspace.sh): try musl.cc first, then fall back to more.musl.cc (a separately-hosted
+mirror). Verified before trusting it: (1) streamed the mirror tarball's listing → SAME internal layout
+`arm-linux-musleabi-cross/bin/arm-linux-musleabi-gcc` so the script's `musl_bin` path resolves unchanged
+(different gcc build, harmless for a static BusyBox/dropbear the C3 boot validates end-to-end); (2)
+control-flow harness proved the `if wget` wrapper stops `set -e` aborting on the primary's failure, the loop
+advances to the mirror, and the all-fail path still exits 1 (fail-loud). Strictly additive: when musl.cc
+works, behaviour is byte-identical to before. Both URLs stay overridable (MUSL_URL / MUSL_URL_FALLBACK).
+CI will validate the real fetch on the next run.
+
 ## 2026-07-22 — aspeed_soc_ast2050 class-values audit CLOSED (no new phantom counts)
 
 Following the WDT2-review finding (the G3 SoC class had wdts_num=1 correct but spis_num=1 wrong), audited ALL

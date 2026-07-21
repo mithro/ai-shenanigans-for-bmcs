@@ -19,21 +19,36 @@ qf="$here/../.."                       # qemu-firmware/
 : "${TOOLS:=$qf/raptor/tools}"
 : "${OUT:=$qf/raptor/out}"
 : "${MUSL_URL:=https://musl.cc/arm-linux-musleabi-cross.tgz}"
+# Fallback mirror: the musl.cc apex is periodically unreachable from GitHub-hosted
+# runners (plain IPv4 "Connection timed out" persisting for hours -- C3 failure
+# signature 2026-07-21). more.musl.cc is a separately-hosted mirror that serves a
+# toolchain with the SAME internal layout (arm-linux-musleabi-cross/bin/... --
+# verified 2026-07-22; a different gcc build, harmless for a static BusyBox/dropbear
+# that the C3 boot then validates end-to-end) and stays up when the apex flakes.
+: "${MUSL_URL_FALLBACK:=https://more.musl.cc/10/x86_64-linux-musl/arm-linux-musleabi-cross.tgz}"
 mkdir -p "$TOOLS" "$OUT"
 
 # 1. musl cross toolchain (soft-float EABI, matches the ARM926EJ-S target).
 musl_bin="$TOOLS/arm-linux-musleabi-cross/bin"
 if [ ! -x "$musl_bin/arm-linux-musleabi-gcc" ]; then
-    echo "fetching musl toolchain: $MUSL_URL"
-    # Force IPv4 (-4): GitHub-hosted runners carry an IPv6 address but no working
-    # IPv6 *route*, so resolving musl.cc's AAAA record and connecting over IPv6
-    # fails hard with "Network is unreachable" (wget exit 4) -- the C3 failure
-    # signature (2026-07-18), distinct from a plain 5xx. musl.cc has an A record
-    # and serves fine over IPv4 (verified: the 102 MB tarball downloads cleanly
-    # over IPv4). Retry hard and show each attempt (no -q, per fail-loud); wget
-    # still errors out loudly if it ultimately can't fetch.
-    wget -4 -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
-        -O "$TOOLS/musl.tgz" "$MUSL_URL"
+    # Try the primary (musl.cc) then the fallback mirror (more.musl.cc), stopping
+    # at the first that downloads. Force IPv4 (-4): GitHub-hosted runners carry an
+    # IPv6 address but no working IPv6 *route*, so resolving an AAAA record and
+    # connecting over IPv6 fails hard with "Network is unreachable" (wget exit 4)
+    # -- the 2026-07-18 C3 failure signature. Retry hard and show each attempt (no
+    # -q, per fail-loud). The `if wget` wrapper consumes wget's non-zero exit so
+    # `set -e` doesn't abort before we can try the next mirror.
+    fetched=""
+    for url in "$MUSL_URL" "$MUSL_URL_FALLBACK"; do
+        echo "fetching musl toolchain: $url"
+        if wget -4 -nv --tries=8 --waitretry=15 --timeout=45 --retry-connrefused \
+                -O "$TOOLS/musl.tgz" "$url"; then
+            fetched="$url"
+            break
+        fi
+        echo "musl toolchain fetch failed from $url; trying next mirror" >&2
+    done
+    [ -n "$fetched" ] || { echo "ERROR: all musl toolchain mirrors failed" >&2; exit 1; }
     tar xzf "$TOOLS/musl.tgz" -C "$TOOLS"
     rm -f "$TOOLS/musl.tgz"
 fi
