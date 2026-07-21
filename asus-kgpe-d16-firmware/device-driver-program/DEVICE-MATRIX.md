@@ -464,8 +464,14 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   silicon-revision register `SCU7C` via the flat-mapped SCU page — `0x00000202` on BOTH QEMU and
   real silicon, matching the value independently confirmed via culvert-P2A and JTAG-AHB (four access
   paths agree). `SCU70` hw-strap also matches bit-for-bit (`0x00819582`), confirming the QEMU
-  machine's strapping was modeled from the board. Read-only cross-check; the SCU clock-rate program
-  (H-PLL/CLKIN) validation is tracked separately as #142. D11.
+  machine's strapping was modeled from the board. Read-only cross-check. **SCU clock-rate faithfulness
+  (#142, DONE 2026-07-22):** the G3 reused the AST2400 calc_hpll/get_clkin which mis-decoded the strap
+  (CLKIN 25 MHz via bit23=LPC-reset, H-PLL from [9:8] not [11:9]) → timer/PCLK ran ~375 MHz at reset
+  instead of the strap's 166 MHz. Fixed with a G3 `aspeed_2050_scu_calc_hpll` (fixed 24 MHz CLKIN +
+  SCU70[11:9] datasheet table {266,233,200,166,133,100,300,24}); validated by all 3 legacy oracles booting
+  (C2/C-UBOOT/C4) + a deterministic `test_timer.py` rate assertion (PCLK/1MHz-ext ratio ~10, fails at ~23
+  on the old rate). NB the M-PLL/D-PLL still use the shared get_clkin (25 MHz for G3) — cosmetic (QEMU has
+  no cycle-accurate DRAM/video timing that consumes those rates), noted not fixed. D11.
 - **36–37** VIC (keystone G3 fix `irq-aspeed-g3-vic`, HW-verified) + Timers: the Zephyr port's
   Milestone-1 `vic.c`/`aspeed_timer.c` drive these blocks. **ZS ✅ now EVIDENCE-BACKED
   (2026-07-20, `evidence/d14-zephyr/17-heartbeat-vic-timer-silicon.txt`):** the `heartbeat_smoke`
