@@ -650,7 +650,14 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     MDMA14 IDLE[3]/busy[0]/overflow[1] status progression are NOT dynamically asserted (the constants exist
     for W1C only) — moot in practice because execution is synchronous (queue stays empty/idle steady-state)
     and the datasheet's "poll IDLE" is conditional on odd MCLK/H-PLL ratios that this model does not stress;
-    ✅ holds on the driven data-path functionality.
+    ✅ holds on the driven data-path functionality. **🎉 SILICON CROSS-VALIDATED (2026-07-21, evidence
+    `soc-mdma/04` + `mdma-test-silicon.tcl`):** the REAL AST2050 MDMA performs the IDENTICAL copy + fill and
+    sets the same per-ID done status over JTAG — after AHBC remap, a 16-byte COPY round-trips
+    `deadbeef 12345678 a5a5a5a5 5a5a5a5a` src→dst, a FILL writes `f00df00d`, and `MDMA14 = 0x00010100`
+    (idle + ID-0 done bit). **Governing-principle lesson:** the block first read 0 / ignored writes — MY
+    driving, not the hardware: datasheet Fig.54 shows **SCU04[16] = DMA_RST_N** holds the MDMA in reset at
+    power-on; my mask cleared bit 18 (MIC) but not bit 16. Clearing SCU04[16] brought it alive. This exposed
+    a faithfulness gap (QEMU MDMA/MIC respond without their SCU04 reset-release) → **#208**.
   - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
     accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
   - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=🔶 (2026-07-21; corrected ✅→🔶 by a gate-(a)

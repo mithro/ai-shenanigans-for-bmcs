@@ -1,0 +1,48 @@
+DEVICE-MATRIX row 45 (MDMA) — REAL-SILICON cross-validation: PASS
+================================================================
+
+The QEMU aspeed_mdma_ast2050 model was cross-validated against the REAL AST2050
+MDMA (memory-DMA) engine over JTAG (SPI flash not connected → JTAG-driven). The
+real chip performs the IDENTICAL memory copy + memory fill the model does, and
+sets the same per-ID done status bit.
+
+Method (evidence file mdma-test-silicon.tcl in this dir): reset halt + ddr2-init,
+then AHBC unlock (0xAEED1A03) + DRAM→0x0 remap (the 28-bit MDMA only reaches
+0x0..0x0FFFFFFF, so DRAM must be remapped low — same aperture the QEMU mdmacopy
+gate uses), release DMA_RST_N (see lesson below), lay out a source pattern +
+zeroed dest, program the MDMA (base 0x1E740000: SRC@00, DST@04, FILL@08, a write
+to CMD@0C fires: [31]UPDATE|[30:28]ID|[25:24]TYPE|[23:0]LEN; TYPE 0=COPY 2=FILL),
+and verify.
+
+FAITHFULNESS LESSON (governing principle in action): the first run had the MDMA
+registers reading 0 and ignoring writes (block dead). That was MY incomplete
+driving, not a hardware fault — datasheet Figure 54 shows **SCU04[16] = DMA_RST_N
+(MDMA Engine Reset)**, default 1 = HELD IN RESET at power-on. My initial mask
+`SCU04 &= 0xBFFFF` cleared bit 18 (MIC) but KEPT bit 16 set, so the MDMA stayed in
+reset. Clearing bit 16 (SCU04 0x000ffe5c → 0x000afe5c) brought the block alive.
+
+Transcript (captured 2026-07-21, real AST2050 over JTAG)
+-------------------------------------------------------
+REMAPCHK: low 0x0 = 0xcafebabe (expect 0xcafebabe)     <- AHBC key+remap on silicon
+SCU04: 0x000ffe5c -> 0x000afe5c (cleared DMA_RST_N bit16)
+PRE : src=deadbeef 12345678 a5a5a5a5 5a5a5a5a  dst=00000000 00000000 00000000 00000000
+MDMA-STS 0x1E740014 = 0x00010100     <- idle(0x100) + ID-0 done bit (STS[16])
+POST: dst=deadbeef 12345678 a5a5a5a5 5a5a5a5a   <- COPY: dst == src (bit-exact)
+FILL: dst=f00df00d f00df00d                     <- FILL: pattern written
+
+Result vs the QEMU model (evidence 01/02):
+  - COPY: silicon dst == src, identical to the model's src→dst copy.
+  - FILL: silicon writes the FILL pattern, identical to the model.
+  - STATUS: silicon sets MDMA14[23:16] per-ID done bit (0x00010100 = idle + ID-0
+    done), identical to the model's MDMA_CMD_UPDATE→done-bit semantics.
+
+Conclusion: the QEMU MDMA model (28-bit copy/fill via the AHBC-remap low aperture,
+per-ID done status) is faithful to real AST2050 silicon — validated in QEMU (01/02)
+AND on the real chip (this file). It also re-confirms the AHBC key+remap (rows
+45/49) on silicon.
+
+FOLLOW-UP FAITHFULNESS GAP (noted, tracked): the QEMU MDMA model responds
+immediately, but silicon holds it in reset until SCU04[16] (DMA_RST_N) is cleared.
+To be fully faithful the model (and the sibling MIC, SCU04[18]) should gate their
+register response on the SCU04 engine-reset bit — a broader SCU-reset-modeling
+improvement.

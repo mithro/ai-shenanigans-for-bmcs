@@ -1,5 +1,23 @@
 # Device-driver program — running log
 
+## 2026-07-21 — 🎉 SILICON: MDMA model cross-validated on the REAL AST2050 via JTAG (row 45)
+
+Cross-validated the QEMU aspeed_mdma_ast2050 model against the real AST2050 MDMA over JTAG (evidence
+soc-mdma/04 + mdma-test-silicon.tcl). After AHBC unlock+remap (DRAM→0x0, so the 28-bit engine reaches DRAM),
+a 16-byte COPY round-trips `deadbeef 12345678 a5a5a5a5 5a5a5a5a` src→dst, a FILL writes `f00df00d`, and
+`MDMA14 = 0x00010100` (idle + ID-0 done) — IDENTICAL to the QEMU model's copy/fill/per-ID-done semantics.
+
+GOVERNING-PRINCIPLE LESSON (again): the block first read 0 / ignored writes — I assumed nothing, probed, and
+found it was MY driving: datasheet Fig.54 shows **SCU04[16] = DMA_RST_N** holds the MDMA in reset at
+power-on. My initial vInitSCU mask `SCU04 &= 0xBFFFF` cleared bit 18 (MIC) but KEPT bit 16 set → MDMA dead.
+Clearing SCU04[16] (0x000ffe5c → 0x000afe5c) brought it alive and the copy/fill worked. Confirmed the address
+is right (datasheet §22.3 p257 = MDMA @0x1E740000), so this was reset-driving, not a wrong-address model bug.
+
+FAITHFULNESS GAP FOUND → #208: the QEMU MDMA/MIC models respond immediately, but silicon holds them in reset
+(SCU04[16]/[18]) until released. To be fully faithful the models should gate their MMIO on the SCU04 reset
+bit. Tracked as a broader SCU-reset-modeling task. Two TCL gotchas fixed en route (chained openocd vs
+separate invocations since ddr2-init ends in `shutdown`; `[16]` in a TCL echo string = command substitution).
+
 ## 2026-07-21 — #198 FIXED: PSU phantom sensors eliminated via an opt-in SMBus command-NACK
 
 Went ahead and did the SMBus-layer fix — SAFELY, as an OPT-IN, so it did NOT need the full qtest suite to
