@@ -1,5 +1,27 @@
 # Device-driver program — running log
 
+## 2026-07-21 — MDMA (row 45) QE ⬜→🔶: modeled the §22 register+command CONTROL path, validated by devmem
+
+Modeled the AST2050 MDMA memory-copy/fill engine (0x1E740000, IRQ6, §22) — a real G3 block previously
+swallowed by the iomem catch-all. New files: `hw/misc/aspeed_mdma_ast2050.c` (+ `.h`), registered in
+`hw/misc/meson.build`, wired into the G3 SoC (`ASPEED_DEV_MDMA` enum + memmap 0x1E740000 + irqmap 6 [free
+since XDMA is gated off] + struct member + G3-gated _init/realize with the VIC-6 connection). The model:
+- MDMA00/04 src/dst masked to [27:0] (faithful 28-bit reach); MDMA08 fill pattern.
+- MDMA0C: the WRITE fires the command (no start bit, §22 note) — copy (type 00) or fill (type 10) via
+  `address_space_memory` with the raw 28-bit address; on done, if MDMA0C[31] set, sets the per-ID done bit
+  in MDMA14[23:16]; level-high IRQ6 asserted when (MDMA14 status & MDMA10 mask) is non-zero.
+- MDMA14: reset 0x100 (queue-len 16), done/idle/overflow are write-1-to-clear, queue/busy RO.
+VALIDATION (devmem gate `mdmatest`, evidence `soc-mdma/01`): src 0x12345678 reads back 0x02345678 (28-bit
+mask applied), fill persists, sts_reset=0x100, a command write sets MDMA14[16] (0x00010100), and W1C clears
+it (back to 0x100). `MDMA RESULT: PASS`. The gate deliberately does NOT enable the IRQ mask (a level IRQ6
+with no Linux handler would be spurious) and fills an unmapped low address (harmless no-op).
+WHY 🔶 NOT ✅ (honest): the register + command/status CONTROL path is modeled + validated, but the actual
+DATA MOVEMENT + IRQ6 delivery need the AHBC boot-remap low-SDRAM aperture (MDMA is 28-bit; DRAM is at
+0x40000000 — unreachable). Completing that (bare-metal fwtest: enable AHBC remap → RAM-to-RAM MDMA copy →
+verify dst==src + IRQ6) is coupled with the AHBC aperture and tracked in #199 + #175. The model uses the
+raw 28-bit address (NO 0x40000000 fudge) so it stays faithful. Matrix row 45 QE ⬜→🔶; tally QEMU 🔶 14→15,
+⬜ 8→7. Driver stacks Ⓝ (autonomous DMA, no BMC runtime driver). Submodule + parent committed.
+
 ## 2026-07-21 — PUART (row 47) QE ⬜→✅: modeled the LPC pass-through 16550 @0x1E788000, validated by devmem
 
 Picked PUART as a CLEAN, self-contained device to close (no memory coupling, unlike MDMA/MIC/HACE). It is a

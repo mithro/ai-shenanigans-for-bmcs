@@ -63,7 +63,7 @@ grid is 51 × 8 = 408 explicit per-device-per-stack tasks. Machine-counted statu
 
 | Stack × env | ✅ done | 🔶 partial | 🔷 blocked | ⬜ todo | Ⓝ n/a (justified) |
 |---|---|---|---|---|---|
-| QEMU emulation | 26 | 14 | 0 | 8 | 3 |
+| QEMU emulation | 26 | 15 | 0 | 7 | 3 |
 | U-Boot @ QEMU | 10 | 4 | 0 | 3 | 34 |
 | U-Boot @ silicon | 8 | 5 | 1 | 3 | 34 |
 | Linux @ QEMU | 22 | 10 | 0 | 8 | 11 |
@@ -435,7 +435,7 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
 | 42 | PECI engine (0x1E78B000, IRQ15; balls A9/B9) | peci | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 43 | HACE hash/crypto engine (0x1E6E3000, IRQ4) | HACE | 🔶 | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 44 | MIC memory-integrity check (0x1E640000, IRQ1) | MIC | ⬜ | Ⓝ | Ⓝ | ⬜ | ⬜ | Ⓝ | ⬜ | ⬜ |
-| 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
+| 45 | MDMA memory-DMA engine (0x1E740000, IRQ6) | MDMA | 🔶 | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 46 | 2D BitBLT graphics accel (§35, via PCI/VGA) | 2D | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
 | 47 | PUART LPC pass-through UART (0x1E788000) | PUART | ✅ | Ⓝ | Ⓝ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | 48 | PCI arbiter (0x1E78C000) | PCI-arb | ⬜ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ | Ⓝ |
@@ -609,8 +609,15 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
   - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=⬜** — real block, NOT modeled (reads unassigned
     on the G3 machine; a faithfulness todo). Configured at DRAM init; LQ/LS=⬜ (an EDAC-style error
     reporter could exist); UQ/US Ⓝ (init-time, no runtime U-Boot driver); LU/ZQ/ZS=Ⓝ.
-  - **45 MDMA** (memory-DMA, 0x1E740000/IRQ6): **QE=⬜** (real, unmodeled — the address the #172 SDHCI
-    phantom used to squat on). Autonomous DMA accel; no BMC runtime driver need → drivers Ⓝ.
+  - **45 MDMA** (memory-DMA, 0x1E740000/IRQ6): **QE=🔶 (2026-07-21)** — modeled the §22 register block +
+    command/status CONTROL path (`hw/misc/aspeed_mdma_ast2050.c`, wired into the G3 SoC): register R/W with
+    the faithful 28-bit src/dst address mask, MDMA0C-write-fires-command (copy/fill via address_space_memory),
+    per-ID done status + level-high IRQ6 gated by MDMA10 mask, W1C status. Validated by a Linux `devmem` gate
+    (evidence `soc-mdma/01`): src 0x12345678→0x02345678 (28-bit mask), command sets MDMA14[16], W1C clears it.
+    **Still 🔶 not ✅:** the actual DATA MOVEMENT + IRQ6 delivery need the AHBC boot-remap low-SDRAM aperture
+    (MDMA is 28-bit; DRAM is at 0x40000000, unreachable) — a bare-metal fwtest RAM-to-RAM copy + IRQ6, coupled
+    with the AHBC aperture (#199 + #175). The model uses the raw 28-bit address (NO 0x40000000 fudge). #172
+    SDHCI phantom used to squat on this address. Autonomous DMA accel; no BMC runtime driver → driver stacks Ⓝ.
   - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
     accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
   - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=✅ (2026-07-21)** — modeled as a `TYPE_SERIAL_MM`

@@ -523,6 +523,47 @@ if grep -q puarttest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- MDMA control-path check (only when 'mdmatest' on the kernel cmdline) ---
+# DEVICE-MATRIX row 45 (MDMA, 0x1E740000, §22): the AST2050 memory-copy/fill DMA
+# engine. This proves the QEMU model backs the register block + command/status
+# CONTROL path (register R/W incl. the 28-bit source/dest address mask; a command
+# write to MDMA0C with update-status sets the per-ID done bit in MDMA14; the done
+# bit is write-1-to-clear). The actual data MOVEMENT needs the AHBC low-SDRAM
+# aperture (MDMA is 28-bit; DRAM is at 0x40000000) and is validated separately by
+# a bare-metal fwtest — so this gate deliberately does NOT enable the IRQ mask (a
+# level IRQ6 with no Linux handler would be spurious) and fills an unmapped low
+# address (harmless no-op).
+if grep -q mdmatest /proc/cmdline; then
+	echo "=== MDMA-BEGIN ==="
+	# 1. register R/W persistence (MDMA00/04 mask to [27:0]).
+	devmem 0x1E740000 32 0x12345678       # src: 28-bit mask -> 0x02345678
+	SRC=$(devmem 0x1E740000)
+	devmem 0x1E740008 32 0xDEADBEEF       # fill pattern
+	FILL=$(devmem 0x1E740008)
+	STS0=$(devmem 0x1E740014)             # status reset value: expect 0x00000100
+	# 2. fire a FILL command (type=10) to an unmapped low addr, ID#0, update-status.
+	devmem 0x1E740004 32 0x08000000       # dst = 128 MB (unmapped -> harmless no-op)
+	devmem 0x1E74000C 32 0x82000004       # [31]=update [30:28]=ID0 [25:24]=10 fill  len=4
+	STS1=$(devmem 0x1E740014)             # expect bit16 set: 0x00010100
+	# 3. write-1-to-clear the ID#0 done bit.
+	devmem 0x1E740014 32 0x00010000
+	STS2=$(devmem 0x1E740014)             # expect bit16 cleared: back to 0x00000100
+	echo "MDMA src(28b-masked)=${SRC} fill=${FILL} sts_reset=${STS0} sts_after_cmd=${STS1} sts_after_w1c=${STS2}"
+	OK=1
+	[ "$((SRC & 0xFFFFFFFF))" -eq "$((0x02345678))" ] || OK=0    # 28-bit mask applied
+	[ "$((FILL & 0xFFFFFFFF))" -eq "$((0xDEADBEEF))" ] || OK=0   # fill persists
+	[ "$((STS0 & 0xFFFFFFFF))" -eq "$((0x00000100))" ] || OK=0   # reset value
+	[ "$((STS1 & 0x10000))" -ne 0 ] || OK=0                      # done bit set on command
+	[ "$((STS2 & 0x10000))" -eq 0 ] || OK=0                      # done bit W1C-cleared
+	if [ "$OK" -eq 1 ]; then
+		echo "MDMA RESULT: PASS (register + command->status control path modelled; 28-bit addr mask + W1C ok)"
+	else
+		echo "MDMA RESULT: FAIL (control path not modelled as expected)"
+	fi
+	echo "=== MDMA-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we

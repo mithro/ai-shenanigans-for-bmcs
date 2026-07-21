@@ -1,0 +1,30 @@
+DEVICE-MATRIX row 45 (MDMA memory-copy/fill engine, 0x1E740000) — QE: 🔶 (control path)
+=======================================================================================
+
+Device: AST2050 (G3) MDMA engine, datasheet §22 p257-261, base 0x1E740000, IRQ6
+        (§10 Table 36). 6 registers: src/dst (28-bit), fill, command, irq-ctrl,
+        irq-status. Independent-agent confirmed address + IRQ.
+Model : hw/misc/aspeed_mdma_ast2050.c (register file + copy/fill via
+        address_space_memory with the raw 28-bit address + level-high IRQ6 gated
+        by MDMA14 status & MDMA10 mask + W1C status). Wired into the G3 SoC
+        (hw/arm/aspeed_ast2400.c), replacing the iomem catch-all at 0x1E740000.
+Test  : Linux userspace devmem exercises the CONTROL path:
+        - register R/W persistence incl. the 28-bit src/dst address mask [27:0]
+        - a command write to MDMA0C (update-status, ID#0, fill) sets MDMA14[16]
+        - the done bit is write-1-to-clear
+        The IRQ mask is deliberately NOT enabled (a level IRQ6 with no Linux
+        handler would be spurious) and the fill targets an unmapped low address.
+
+SCOPE: this validates the register + command/status CONTROL path (QE 🔶). The
+       actual DATA MOVEMENT + IRQ6 delivery need the AHBC boot-remap low-SDRAM
+       aperture (MDMA is 28-bit; DRAM is at 0x40000000 — unreachable by 28 bits)
+       and are validated separately by a bare-metal fwtest (row 45 -> ✅, coupled
+       with the AHBC aperture, tracked #199 + #175). Faithful: the model uses the
+       raw 28-bit address (no 0x40000000 fudge).
+
+Transcript (captured 2026-07-21)
+--------------------------------
+=== MDMA-BEGIN ===
+MDMA src(28b-masked)=0x02345678 fill=0xDEADBEEF sts_reset=0x00000100 sts_after_cmd=0x00010100 sts_after_w1c=0x00000100
+MDMA RESULT: PASS (register + command->status control path modelled; 28-bit addr mask + W1C ok)
+=== MDMA-END ===
