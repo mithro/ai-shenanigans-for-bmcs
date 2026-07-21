@@ -39,6 +39,32 @@ FINDINGS:
   PCI-arb (no register chapter) can at most become a NAMED region (🔶, per the A2P precedent). NO code
   written yet for these — this entry records the scoping + verification only.
 
+## 2026-07-21 — MDMA (row 45) full register spec extracted + a memory-map COUPLING discovered (model set up, #199)
+
+Got the complete MDMA bit-level spec (independent datasheet agent, §22 p257–261, citation-anchored) and set
+up task #199 to model it. Register file (6 regs, base 0x1E740000):
+- MDMA00 [27:0] source addr; MDMA04 [27:0] dest addr — **28-bit → 256 MB max, byte-aligned**.
+- MDMA08 [31:0] 32-bit fill pattern (double-word-aligned ranges for fill).
+- MDMA0C COMMAND: **the WRITE ITSELF fires the command** (no start bit — §22 note p259). [31]=update-status-
+  on-done, [30:28]=command ID #0-7, [25:24]=type (00=copy, 10=fill), [23:0]=length in BYTES (0 invalid,
+  max 16M-1). Fill issues writes only (ECC-init).
+- MDMA10 IRQ control (Init 0): [23:16]=per-ID irq mask (bit16=ID0..bit23=ID7), [3]=irq-when-idle, [1]=irq-
+  on-overflow.
+- MDMA14 IRQ status (Init 0x00000100): [23:16]=per-ID done (W1C), [8:4]=RO queue length (reset=16), [3]=idle
+  (W1C), [1]=overflow (W1C), [0]=RO busy. IRQ6 is the single aggregate VIC line; per-ID via status/mask.
+COUPLING DISCOVERED (why MDMA is not a standalone win): MDMA addresses are 28-bit (max 0x0FFFFFFF), but this
+machine's SDRAM is at 0x40000000 (64 MB, unreachable by 28 bits). On silicon MDMA reaches DRAM through the
+AHBC boot-remap LOW aperture (0x0–0x0FFFFFFF → SDRAM when AHBC8C[0]=1; datasheet §12.3 p115 / memory-map
+doc §1b), which QEMU does NOT model (AHBC 0x1E600000 is currently the `aspeed.io` RAZ/WI catch-all, row 49).
+So a FULLY-validated (data-moving) MDMA needs the low-SDRAM aperture too → **row 45 (MDMA) is coupled to row
+49 (AHBC remap)**. A faithful MDMA model must use address_space_memory with the raw 28-bit address (real AHB
+decode) — NOT a `+0x40000000` fudge (that would be unfaithful to the silicon). Plan for the next iteration
+(#199 + a new AHBC-remap task): model MDMA (register+command+copy/fill+IRQ6) AND the AHBC8C[0]-gated low
+aperture together, then fwtest a real low-aperture RAM-to-RAM copy + IRQ6. NO model code written yet — this
+entry records the spec + the coupling so the build is done right, not rushed. Templates identified:
+`hw/misc/aspeed_pwm_ast2050.c` (+.h) house pattern; SoC wiring mirror at aspeed_ast2400.c:532-542 (PWM),
+meson.build:136, ASPEED_DEV_* enum in aspeed_soc.h. IRQ6 is free in the irqmap (XDMA=6 is gated off on G3).
+
 ## 2026-07-21 — Row 24 LQ+LU (Linux pmbus @0x58): RESOLVED ✅ — root cause was my DT mis-nesting, not the model
 
 Came back to the pmbus blocker with the "it's your code, the hardware is 100% reliable" lens and READ the
