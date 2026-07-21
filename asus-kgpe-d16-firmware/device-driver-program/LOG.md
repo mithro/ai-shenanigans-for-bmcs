@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-22 — #144 (part): remove the phantom SPI1 from the G3 — DUAL-ORACLE validated (C2 + C4)
+
+Continued #144. Datasheet-grounded the two remaining phantoms precisely: SPI = 1 flash controller (§2.8 SMC,
+singular; the AST2400's second SPI1 @0x1E630000 is absent on the G3); UART = 2 (§26.3 "Base Address of UART1 =
+0x1E783000, UART2 = 0x1E784000"; 0x1E78D000/E000/F000 do NOT exist). So in the model, uart[0]=0x1E783000 and
+uart[4]=0x1E784000 (the console) are real; uart[1,2,3] (0x1E78D000/E000/F000) are phantoms.
+
+Executed the SPI1 removal (submodule e92dbb3ddc):
+- aspeed_ast2400.c: gate the SPI _init + realize loops on silicon_rev==AST2050 → G3 creates no spi[] (only
+  the always-present FMC); AST2400/2500 unchanged.
+- aspeed.c: guard `aspeed_board_init_flashes(&soc->spi[0], ...)` on the G3 — spi[0] is no longer instantiated,
+  so attaching a flash would dereference an uninitialised child (this was the real crash risk).
+- DUAL-ORACLE validation (governing principle — legacy must keep booting): C2 (our Linux) → dropbear PASS;
+  **C4 (Dell vendor firmware) → appweb web service (Mbedthis-Appweb 2.4.2, 301→login.html) PASS** via
+  `proprietary/web-test.py` on the local `tmp/c4out/flash-c4.img`. The vendor firmware does NOT depend on the
+  phantom SPI1 (there is none on real silicon), so removing it is faithful AND keeps C4 booting.
+
+#144 status: WDT2 ✅ + SPI1 ✅ done. REMAINING: UART3-4 phantoms (uart[1,2,3]) — DELICATE (non-contiguous
+indices; the console is uart[4]=0x1E784000 and SOL is uart[0]=0x1E783000, both must survive; plus the
+serial_hd() mapping) — a careful focused follow-on with its own dual-oracle boot test.
+
 ## 2026-07-22 — #144 (part): remove the phantom WDT2 from the G3 model + DTS (datasheet: 1 watchdog)
 
 Consulted the formal task tracker (TaskList) — which corrected a wrong "nothing to do, stop the loop"
