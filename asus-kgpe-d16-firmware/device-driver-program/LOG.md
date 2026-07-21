@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-22 — #144 UART phantoms: dispositioned DEFERRED (high-risk shared-code for latent value)
+
+Investigated the last #144 part — the phantom UART3-4 (model uart[1,2,3] at 0x1E78D000/E000/F000; datasheet
+has only UART1=0x1E783000 + UART2=0x1E784000). Concluded it is appropriately DEFERRED, not skipped, on an
+honest risk/value basis:
+- HIGH risk + broad shared-code: the UART realize is in `hw/arm/aspeed_soc_common.c` (shared by ALL Aspeed
+  SoCs — ast10x0/2600/2400/27x0); removing the phantoms means G3-gating that + `connect_serial_hds_to_uarts`
+  + the non-contiguous skip (the real UARTs are uart[0]=SOL-capable + uart[4]=the CONSOLE; the phantoms sit
+  BETWEEN them at indices 1-3). A mistake breaks the console → every oracle fails.
+- LATENT value: uart[1,2,3] get NULL chardevs and are mapped at addresses no KGPE-D16 firmware ever touches
+  (console=0x1E784000, SOL=VUART 0x1E787000, the other physical UART=0x1E783000). Unlike WDT2/SPI1 (clean,
+  contiguous, dual-oracle-validated), the UART phantom removal is console-critical surgery for no observable
+  benefit.
+Disposition: #144 is substantively COMPLETE (WDT2 ✅ + SPI1 ✅, both dual-oracle validated). The UART-phantom
+removal stays a low-priority follow-on (if ever) — best done as a dedicated effort with C2+C4 boot validation,
+below the other tracker tasks in priority. Recorded so it is a reasoned deferral, not a silent skip.
+
 ## 2026-07-22 — #144 (part): remove the phantom SPI1 from the G3 — DUAL-ORACLE validated (C2 + C4)
 
 Continued #144. Datasheet-grounded the two remaining phantoms precisely: SPI = 1 flash controller (§2.8 SMC,
