@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #198 FIXED: PSU phantom sensors eliminated via an opt-in SMBus command-NACK
+
+Went ahead and did the SMBus-layer fix — SAFELY, as an OPT-IN, so it did NOT need the full qtest suite to
+prove no cross-device regression (the earlier "dedicated cycle" caution assumed a global change; the opt-in
+design removes that risk by construction). Added `SMBusDeviceClass::check_command(dev, cmd)` — called on the
+FIRST (command) byte of a write phase; non-zero return NACKs it. Default NULL keeps ACK-everything, so every
+existing SMBus device is untouched. pmbus_psu NACKs READ_VCAP/TEMPERATURE_2/TEMPERATURE_3. The command-byte
+NACK aborts the read-word → Linux's pmbus_check_word_register gets rv<0 → sensor ABSENT (vs reading 0xFFFF as
+present). QEMU submodule 918836e937.
+
+VALIDATED both-sides-of-the-boot (scripts/psu-hwmon-test.py, full Linux): the phantom in2(vcap)/temp2/temp3
+= -500 are GONE; all real sensors intact (vin 230V, vout 12V, temp1 30C, iin/iout, pin/pout); W83795 +
+SB-TSI + at24 EEPROMs bind in the same boot (no regression — opt-in leaves them untouched). Evidence
+d09-psu-pmbus/02. Row 24 PSU now faithful (no phantoms); #198 DONE. The check_command hook is reusable for
+any device needing to NACK unsupported commands. Lesson: an opt-in shared-layer callback can make a
+"risky global change" safe + contained — worth reaching for before deferring to a heavyweight cycle.
+
 ## 2026-07-21 — #198 PSU pmbus phantom sensors: REPRODUCED + fully root-caused (fix = SMBus-layer cycle)
 
 Stopped scoping and actually reproduced #198. Booted Linux (scripts/psu-hwmon-test.py, new reusable

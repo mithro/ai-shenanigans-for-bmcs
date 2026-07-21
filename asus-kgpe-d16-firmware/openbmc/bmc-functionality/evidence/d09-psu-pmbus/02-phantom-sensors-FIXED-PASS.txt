@@ -1,0 +1,34 @@
+DEVICE-MATRIX row 24 (PSU PMBus) / #198 — phantom sensors FIXED: PASS
+=====================================================================
+
+The phantom in2(vcap)/temp2/temp3 = -500 sensors (reproduced + root-caused in
+01-phantom-sensors-REPRODUCED.txt) are ELIMINATED. QEMU submodule 918836e937.
+
+FIX: a real PSU NACKs unsupported command codes, but QEMU's SMBus slave could not
+(smbus_slave.c discarded write_data's return; the per-byte send always ACKed).
+Added an OPTIONAL SMBusDeviceClass::check_command(dev, cmd) hook, called on the
+first (command) byte of a write phase — return non-zero to NACK. Default NULL =
+historical ACK-everything, so every existing SMBus device is unaffected (opt-in,
+contained). pmbus_psu.c NACKs READ_VCAP / READ_TEMPERATURE_2 / READ_TEMPERATURE_3.
+The NACK on the command byte aborts the read-word, so Linux's pmbus_check_word_
+register() gets rv<0 and treats the sensor as ABSENT (instead of reading 0xFFFF as
+present).
+
+VALIDATION (scripts/psu-hwmon-test.py, full Linux boot, PSU @ i2c0/0x58):
+
+  BEFORE (submodule pre-918836e937):        AFTER (918836e937):
+    in1_input  = 230000  vin                  in1_input  = 230000  vin
+    in2_input  = -500    vcap   <- PHANTOM    in2_input  = 12000   vout1
+    in3_input  = 12000   vout1                temp1_input= 30000
+    temp1_input= 30000                        curr1_input= 1000    iin
+    temp2_input= -500    <- PHANTOM           curr2_input= 8000    iout1
+    temp3_input= -500    <- PHANTOM           power1_input=110000000 pin
+    curr1/2, power1/2 (real)                  power2_input= 96000000 pout1
+
+  -> in2(vcap), temp2, temp3 phantoms are GONE; all real sensors intact.
+
+NO REGRESSION: the same boot binds hwmon0=w83795, hwmon1/2=sbtsi, hwmon3=pmbus and
+the at24 EEPROMs — the opt-in check_command leaves every non-PSU SMBus/I2C device
+untouched (NULL callback). Row 24 PSU now models the PSU faithfully (no phantom
+sensors); QE/LQ/LU ✅. The check_command hook is reusable for any device that needs
+to NACK unsupported commands.

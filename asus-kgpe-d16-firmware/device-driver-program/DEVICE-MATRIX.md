@@ -308,6 +308,14 @@ of the engine-0 controller `&i2c0`, so the client landed on a mux child where no
 identify read NAK'd. Fixed by attaching to the controller label `&i2c0` (matching QEMU
 `aspeed_i2c_get_bus(&soc->i2c,0)`). The model + hardware model were faithful throughout — it was my
 wiring ("the hardware is 100% reliable; it's your code"). LS stays ⬜ (same rig-hardware gate #165 as ZS).
+**PHANTOM-SENSOR FAITHFULNESS FIX (2026-07-21, #198, submodule 918836e937):** Linux exposed phantom
+`in2(vcap)/temp2/temp3 = -500` hwmon attrs — the generic pmbus handler returned `PMBUS_ERR_BYTE` 0xFF for
+un-flagged reads → word 0xFFFF → LINEAR11 −0.5 = −500, which Linux (rv≥0) reads as present. Root cause +
+reproduction: evidence `d09-psu-pmbus/01`. FIX: a new OPTIONAL `SMBusDeviceClass::check_command()` hook
+(NULL-default, so all other SMBus devices are untouched — opt-in, contained) lets `pmbus_psu` NACK the
+command bytes for READ_VCAP/TEMPERATURE_2/TEMPERATURE_3, so the read-word aborts and Linux treats the
+sensor as ABSENT (like real HW). Validated on a full Linux boot: the phantoms are GONE, all real sensors
+intact, W83795/SB-TSI/EEPROMs bind unchanged (evidence `d09-psu-pmbus/02`). Row 24 QE/LQ/LU now faithful.
 **25** SMBus-ALERT (SALT1/2): **scoped 2026-07-19** — the aspeed I2C register header
 (`include/hw/i2c/aspeed_i2c.h:101`) DEFINES `SMBUS_ALERT` (intr-status bit 12, "Bus
 [0-3] only") but `hw/i2c/aspeed_i2c.c` never DRIVES it; no bus device asserts SMBALERT#
