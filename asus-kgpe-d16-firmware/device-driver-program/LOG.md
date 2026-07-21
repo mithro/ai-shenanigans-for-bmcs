@@ -1,5 +1,44 @@
 # Device-driver program — running log
 
+## 2026-07-21 — SoC-internal engines (rows 44–48) faithfulness scoping: addresses CONFIRMED real, irqmap CLEAN, current state = catch-all only
+
+Turned to the QE ⬜ SoC-internal engine rows (44 MIC, 45 MDMA, 46 2D, 47 PUART, 48 PCI-arb) to convert
+"skipped" ⬜ cells into either a real model or a substantiated disposition (the goal rejects bare ⬜).
+Cross-checked three sources: (1) authoritative `qemu-model/AST2050-MEMORY-MAP.md` (datasheet §9 p97 +
+per-chapter, cited), (2) the QEMU SoC memmap/irqmap in `hw/arm/aspeed_ast2400.c`, (3) dispatched an
+INDEPENDENT datasheet-PDF re-derivation sub-agent (reads AST2050 A3 V1.05 fresh) for verification.
+INDEPENDENT AGENT VERDICT (received, gate-a evidence): **every claimed address + IRQ CONFIRMED against the
+master §9 ARM Address Space Mapping (p97) + §10 Interrupt Source Table / Table 36 (p99) + per-chapter
+base-address headers — NONE refuted; all eight blocks genuinely present on the G3; none are phantoms.**
+The agent also settled the collision with two verbatim citations (§9 p97 row "1E74:0000–1E75:FFFF | 128K |
+MDMA Controller"; §22 p257 "Base address of MDMA = 0x1E74_0000", regs MDMA00 src / 04 dst / 08 fill-data /
+0C command / 10 irq-ctrl / 14 irq-status) — 0x1E740000 is MDMA (IRQ6), there is NO SD/eMMC anywhere in the
+AST2050 map, and IRQ26 = RTC alarm (not storage). Key scoping note from the agent: the datasheet settles
+PRESENCE/base/IRQ, but MODEL-fully vs register-model-only (NO-DRIVER) hinges on whether the firmware
+oracles actually DRIVE each block — a firmware-audit question. Likely dispositions: MIC/PCI-arb/2D/A2P/
+PUART = register-model-faithful (firmware-unexercised); MDMA/HACE = model fully IF fw offloads; AHBC =
+boot-used (remap/priority) so at least a register model incl. remap.
+FINDINGS:
+- All four addresses are REAL G3 blocks per datasheet §9: MIC 0x1E640000 (§13.3 p116, IRQ1), MDMA
+  0x1E740000 (§22.3 p257, IRQ6), PUART 0x1E788000 (§29.4 p308, 16550), PCI-arb 0x1E78C000 (§9-only, no
+  register chapter). 2D BitBLT is §35, reached via the PCI/VGA path (not an AHB base). So these are
+  MODEL-needed (QE), NOT Ⓝ-absent. Driver stacks (UQ..ZS) for MDMA/2D/PCI-arb are already Ⓝ (firmware
+  never drives them) — the meaningful open cell is QE.
+- The 0x1E740000 "collision" (MDMA vs the gated phantom SDHCI IRQ26) is ALREADY resolved in code: the G3
+  machine skips SDHCI because "on the G3 0x1E740000 is the MDMA engine" (#172), and skips SRAM because
+  "0x1E720000 is the A2P bridge" (#176). Confirmed, not a live bug.
+- IRQMAP CROSS-CHECK (clean): every G3-relevant entry in `aspeed_soc_ast2400_irqmap[]` matches datasheet
+  §10 (MAC1=2/MAC2=3/HACE=4/USB=5/Video=7/LPC=8/I2C=12/PECI=15/Timer1-3=16-18/GPIO=20/SCU=21/RTC=22/
+  WDT=27/Tacho=28). The divergent entries (UART2=32, TIMER4-8=35-39, SDHCI=26, ADC=31, XDMA=6) are all
+  for blocks absent/gated on the G3, so they don't mis-fire. IRQ1 (MIC) and IRQ6 (MDMA) are unassigned →
+  free to wire when those engines are modeled. No mis-wiring found.
+- CURRENT QE STATE of 44/45/47/48: their register windows fall through to the 2 MB `create_unimplemented_
+  device("aspeed.io", 0x1E600000, 0x200000)` catch-all (RAZ/WI, logged) — i.e. covered-but-not-modeled,
+  which is exactly why they are QE ⬜. Next step (pending the independent agent's register-level detail):
+  model the tractable ones — MIC (8 regs + IRQ1-on-completion) is the cleanest "complete" candidate;
+  PCI-arb (no register chapter) can at most become a NAMED region (🔶, per the A2P precedent). NO code
+  written yet for these — this entry records the scoping + verification only.
+
 ## 2026-07-21 — Row 24 LQ+LU (Linux pmbus @0x58): RESOLVED ✅ — root cause was my DT mis-nesting, not the model
 
 Came back to the pmbus blocker with the "it's your code, the hardware is 100% reliable" lens and READ the
