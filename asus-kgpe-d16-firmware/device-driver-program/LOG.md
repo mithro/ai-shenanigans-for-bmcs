@@ -1,5 +1,15 @@
 # Device-driver program — running log
 
+## 2026-07-22 — aspeed_soc_ast2050 class-values audit CLOSED (no new phantom counts)
+
+Following the WDT2-review finding (the G3 SoC class had wdts_num=1 correct but spis_num=1 wrong), audited ALL
+the class's device counts against the datasheet: wdts_num=1 ✓ (§2.13 one WDT), macs_num=2 ✓ (datasheet
+"two MAC modules are totally identical", "Integrate dual MAC"), spis_num=1 = phantom SPI1 (should be 0; the G3
+has one flash controller — handled by my SPI gate), ehcis_num=1 = phantom EHCI (the G3 has no EHCI — handled
+by the pre-existing EHCI gate), uarts_num=5 = phantom UART3-4 (G3 has 2 physical — deferred, delicate:
+console is uart[4]). So no NEW faithfulness gap: the two remaining wrong counts (spis/uarts) are already
+gated/deferred, and wdts/macs/ehcis are correct or handled. Class-values audit closed.
+
 ## 2026-07-22 — Gate-b batch review of WDT2/SPI1/H-PLL: CLEAN — but caught my WDT2 premise was wrong
 
 Dispatched an independent gate-b review over the recent three shared-QEMU-code fixes. It returned NO
