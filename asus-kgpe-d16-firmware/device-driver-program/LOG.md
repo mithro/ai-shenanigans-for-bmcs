@@ -21,7 +21,16 @@ compression (.tar.xz vs .tgz), rewrote the fetch as a source-aware loop over "ur
 gz/xz, and exports CROSS_COMPILE from whichever source wins so the build step is prefix-agnostic. Fed by a
 heredoc (not a pipe) so the loop runs in-shell and the winning vars persist. Verified the logic with an
 HTTP-served harness: fresh fetch (404 → advance → fetch+extract → correct prefix), cache-hit re-run (no
-re-fetch), and all-fail (exit 1 fail-loud) all pass. sh -n + dash -n clean. CI validates the real fetch next.
+re-fetch), and all-fail (exit 1 fail-loud) all pass. sh -n + dash -n clean.
+
+CONFIRMED GREEN in CI (run 29864691318, commit 0b7281a): the C3 build log shows musl.cc (8 retries) →
+more.musl.cc (8 retries) → `fetching ...github.com/cross-tools/...` → `using musl toolchain:
+arm-unknown-linux-musleabi-gcc`, then dropbear/busybox compiled with that gcc16 toolchain and the job passed.
+The unblocked C3 boot job (U-Boot → 2.6.28 Linux → SSH) also passed, proving the ARMv5T binaries boot on
+QEMU AST2050. BOTH branch workflows (D16 QEMU firmware stack + KVM-over-IP) are now green on the head commit
+— the first fully-green "D16 QEMU firmware stack" run since the musl.cc outage began. (Follow-on optimisation
+left for later: the two doomed musl.cc retry loops cost ~13 min per run while the apex is down; reordering the
+github source first, or trimming the musl.cc retry budget, would reclaim that — deferred, correctness first.)
 
 ## 2026-07-22 — CI: musl toolchain fetch now falls back to a mirror (C3 job was red on external outage)
 
