@@ -932,7 +932,11 @@ absent — these keep the affected rows from being TRULY 100% until dispositione
   probe artifact's QOM index shifted [19]→[12], = the 7 removed phantom buses). Row 15 label corrected
   8→7. QE stays ✅ (this REMOVED a faithfulness defect; only the unexercised #190 DMA-buffer optional mode
   remains a gap — a minor optional transfer mode, not a major stubbed function like row 43 crypto, so ✅
-  rather than 🔶 is the consistent line).
+  rather than 🔶 is the consistent line). **Gate-b independent code review: CLEAN (2026-07-21)** — verified
+  the datasheet 7-engine count (3 citations), the QOM inheritance (parent `class_init` runs to completion
+  then the child overrides only `num_busses` — no half-init), the 0x40..0x1C0 region layout, G3-only
+  containment (AST2500/2600/2700 untouched; the buses-7/8/11 users are non-G3 machines), and that the
+  kgpe machine uses only buses 0/1/3/4. No issues ≥80 confidence. #211 is review-verified faithful.
 - **#191 — SCU freq-counter (SCU10/14/28) + int ctrl/status (SCU18) + 32.768 kHz error-correction (SCU1C)**
   (row 35): **verified + dispositioned 2026-07-21.** SCU1C is ALREADY MODELED (the gate-d flag was a
   header-name mis-read): the G3 SCU reset table `ast2050_a3_resets` (hw/misc/aspeed_scu.c:228) seeds it

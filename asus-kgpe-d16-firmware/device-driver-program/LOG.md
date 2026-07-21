@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gate-b review of #211 (I2C 7-engine): CLEAN — independently verified
+
+The independent gate-b code review of the #211 shared-code change (the new G3-only `aspeed.i2c-ast2050`
+subclass) returned with **no issues ≥80 confidence** — a clean pass. It verified all six points I asked it
+to adversarially check: the datasheet 7-engine count (3 citations: datasheet lines 1606/2459/1931), the QOM
+inheritance semantics (read `qom/object.c` `type_initialize` directly — the parent `aspeed_2400_i2c_class_init`
+runs to completion and is memcpy'd into the child before the child's `class_init` overrides only `num_busses`;
+no field is zeroed/half-init), the region layout (all 7 buses take the `i<gap` branch → 0x40..0x1C0, matching
+silicon), G3-only containment (AST2500/2600/2700 untouched; the hw/arm/aspeed.c boards using buses 7/8/11 are
+non-G3 machines), the VMState fixed-16 serialization (pre-existing + harmless, not new), and that the kgpe
+machine uses only buses 0/1/3/4. Recorded the gate-b PASS in the row-15/#211 note.
+
+Meaningful contrast with the HACE gate-b review (which caught the SCU04[5] bug and forced a revert): this
+time the careful scoping — subclass-and-override + boot validation + datasheet triple-check BEFORE landing —
+produced correct shared-code, and the independent review confirms it. The gate-b mechanism is doing its job
+in BOTH directions (catch when wrong, confirm when right). #211 is now a genuine both-checks-pass unit.
+
 ## 2026-07-21 — C3 resolved: articulate the QE ✅/🔶 grading standard (gap significance, not arbitrary)
 
 Took the goal's "take a break when stuck" advice — parked the RTC #212 rat-hole (honestly flagged, attempt-2
