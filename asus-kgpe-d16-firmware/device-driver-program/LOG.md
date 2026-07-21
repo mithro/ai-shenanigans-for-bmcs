@@ -1,5 +1,22 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #208 DONE: model the MDMA/MIC SCU04 reset-hold (silicon-faithful)
+
+Fixed the faithfulness gap the MDMA silicon validation exposed. The AST2050 holds the MDMA (SCU04[16]=
+DMA_RST_N, Fig.54) and MIC (SCU04[18]=MIC_RST_N, Fig.55) in reset at power-on — their register files are
+inert until firmware clears the bit. QEMU responded immediately. Extended the EXISTING G3 SCU side-effect
+mechanism (which already gates the I2C controller on SCU04[2] via memory_region_set_enabled) with two more
+lines: g3-mdma-rst + g3-mic-rst. The SoC disables the MDMA/MIC MMIO window while the reset bit is held —
+the models themselves needed NO change (elegant: the reset-hold is a MMIO-enable toggle). QEMU submodule
+61615dba75. Both SCU04 reset tables already default bits 16/18=1, so the engines start held (== silicon).
+
+VALIDATED: (1) mdmacopy first showed dst=0 (MDMA correctly inert while held) — proof the gating works;
+(2) added the SCU04 reset-release to the mdmacopy + mictest initramfs gates (unlock SCU key, clear bit
+16/18) — this makes the gates MORE faithful (real firmware must release the engine, as the JTAG tests do);
+(3) mdmacopy PASS (dst=0xDEADC0DE) + mictest PASS (0xFFFFFFFF / 0x10002000) after the release; (4) C2 direct
+boot + SSH works (no oracle regression) and #198 still passes on this build. Applying the #198 lesson again:
+a contained extension of an existing mechanism, not a risky rewrite.
+
 ## 2026-07-21 — 🎉 SILICON: MDMA model cross-validated on the REAL AST2050 via JTAG (row 45)
 
 Cross-validated the QEMU aspeed_mdma_ast2050 model against the real AST2050 MDMA over JTAG (evidence

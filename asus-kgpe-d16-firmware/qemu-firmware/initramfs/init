@@ -579,6 +579,13 @@ if grep -q mdmacopy /proc/cmdline; then
 	#    written to AHBC00 — real silicon rejects a bare remap-enable.
 	devmem 0x1E600000 32 0xAEED1A03
 	devmem 0x1E60008C 32 0x1
+	# 1b. release the MDMA from reset. SCU04[16]=DMA_RST_N (datasheet Fig.54) is
+	#     held (=1) at power-on, so the engine's register file is inert until
+	#     firmware clears it — real silicon requires this (evidence soc-mdma/04),
+	#     and QEMU now models it (#208). Unlock the SCU key, then clear bit 16.
+	devmem 0x1E6E2000 32 0x1688A8A8
+	S4=$(devmem 0x1E6E2004)
+	devmem 0x1E6E2004 32 $((S4 & 0xFFFEFFFF))
 	# 2. write a source pattern through the aliased DRAM (offset 32 MB).
 	devmem 0x02002000 32 0xDEADC0DE
 	SRC=$(devmem 0x02002000)              # proves the alias is writable DRAM
@@ -616,6 +623,12 @@ if grep -q mictest /proc/cmdline; then
 	echo "=== MIC-BEGIN ==="
 	devmem 0x1E600000 32 0xAEED1A03                 # §12.3 unlock AHBC 0x80-0x8C first
 	devmem 0x1E60008C 32 0x1                        # AHBC remap: SDRAM at 0x0
+	# release the MIC from reset. SCU04[18]=MIC_RST_N (datasheet Fig.55) is held
+	# at power-on -> the MIC register file is inert until cleared (#208; the
+	# JTAG mictest needs the same, evidence soc-mic/02). Unlock SCU, clear bit18.
+	devmem 0x1E6E2000 32 0x1688A8A8
+	S4=$(devmem 0x1E6E2004)
+	devmem 0x1E6E2004 32 $((S4 & 0xFFFBFFFF))
 	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=8192 2>&1   # scanned page 8192 (32MB) = 0
 	dd if=/dev/zero of=/dev/mem bs=4096 count=1 seek=12288 2>&1  # control buf (48MB) = all SKIP
 	devmem 0x03000800 32 0x00000003                # page 8192 ctrl word = CHK3 (byte 8192/4=0x800)

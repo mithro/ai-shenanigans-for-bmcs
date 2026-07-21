@@ -657,7 +657,11 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     (idle + ID-0 done bit). **Governing-principle lesson:** the block first read 0 / ignored writes — MY
     driving, not the hardware: datasheet Fig.54 shows **SCU04[16] = DMA_RST_N** holds the MDMA in reset at
     power-on; my mask cleared bit 18 (MIC) but not bit 16. Clearing SCU04[16] brought it alive. This exposed
-    a faithfulness gap (QEMU MDMA/MIC respond without their SCU04 reset-release) → **#208**.
+    a faithfulness gap (QEMU MDMA/MIC respond without their SCU04 reset-release) → **#208 DONE (submodule
+    61615dba75):** the SoC now disables the MDMA (SCU04[16]) + MIC (SCU04[18]) MMIO windows while held in
+    reset — matching silicon — via the same g3-*-rst mechanism that already gates the I2C controller
+    (SCU04[2]); the mdmacopy/mictest gates now release the engine first (as real firmware + the JTAG tests
+    do), both still PASS, C2 boot unaffected.
   - **46 2D BitBLT** (§35, graphics accel via PCI/VGA): **QE=⬜** (real, unmodeled). Host-side display
     accel reached via the PCI/VGA path (parallel to the VGA-DAC row 12) → drivers Ⓝ.
   - **47 PUART** (LPC pass-through UART, 0x1E788000): **QE=🔶 (2026-07-21; corrected ✅→🔶 by a gate-(a)
