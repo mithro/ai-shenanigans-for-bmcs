@@ -1,5 +1,26 @@
 # Device-driver program — running log
 
+## 2026-07-21 — MIC (row 44) §13 spec obtained + honest disposition; gate-(b) code review of the new models dispatched
+
+Got the authoritative §13 MIC spec (datasheet agent, p116-123). PIVOTAL: MIC (MICE) is NOT a one-shot
+checksum engine like MDMA — it is a CONTINUOUS BACKGROUND DRAM SCANNER (reads 4 KB pages from address 0x0,
+computes a per-page Fletcher checksum into a DRAM checksum-buffer at MIC04, driven by a 2-bit-per-page
+control buffer at MIC00, raises IRQ1 level-high on a checksum MISMATCH). 8 registers captured (see #201).
+It is heavily memory-coupled (scanned pages + both metadata buffers in DRAM) — reachable now via the AHBC
+low aperture (rows 45/49). FAITHFULNESS LIMIT (honest, not a weasel): §13 NAMES "Fletcher's checksum" but
+does NOT specify the variant/modulus/word-size/endianness, so a BIT-EXACT checksum a real driver could
+byte-verify is NOT derivable from the datasheet; the only oracle for the exact reduction is the factory-SLT
+`MICTEST` code (CFG_CMD_MICTEST in ast2050.h / Raptor U-Boot). No firmware on this board drives MIC. So MIC
+is realistically a MECHANISM-faithful model (Fletcher-32 default, documented) = QE 🔶 at best without RE-ing
+the SLT checksum; reaching bit-exact ✅ is a tracked sub-task. Model plan recorded in #201 (mirror the MDMA
+pattern; scan on enable; validate via a devmem gate laying out the buffers in aliased DRAM). NOT coded this
+turn — the register spec + honest disposition are the deliverable; the continuous-scanner model is a
+dedicated future turn.
+Also dispatched an INDEPENDENT gate-(b) code review (feature-dev:code-reviewer) of the new G3 device models
+shipped this session — hw/misc/aspeed_mdma_ast2050.c, hw/misc/aspeed_ahbc_ast2050.c, and the SoC wiring
+(PUART/MDMA/AHBC + dram_low_alias) — to catch real bugs (stuck-IRQ, W1C clobber, address-mask, reset-default
+remap, alias priority) before they compound. Findings to be addressed next; running in the background.
+
 ## 2026-07-21 — AHBC boot-remap + MDMA data path COMPLETE: rows 45 & 49 QE →✅ (oracle-verified)
 
 Closed the MDMA↔AHBC coupling identified earlier. Modeled the AHB Bus Controller (§12, 0x1E600000) as
