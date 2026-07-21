@@ -1,5 +1,32 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Integrated the 4-slice adversarial audit (gates a + d)
+
+All four independent audit sub-agents reported. **Enumeration CONFIRMED complete** (no missed BMC-side
+device; engines 42–50 phantom-free) and **both false-"impossible" corrections CONFIRMED** (NC-SI §7,
+DIMM-SPD §10, with silicon evidence). Each slice also caught real defects — integrated all:
+
+- **Row 11 NC-SI QE ✅→🔶** (slice-3 F2): rested on libslirp's generic responder (MFR-0x0); faithful
+  dual-82574L OEM-0x157 responder unmodeled → **#204**. UQ/US/LU ⬜→Ⓝ (NC-SI is OS-level; U-Boot nets
+  via MAC1). FULL-TASK-LIST C2 "faithful responder [x]"→[~].
+- **Row 19 DIMM-TSOD all-Ⓝ→mixed** (slice-2 F1): TSOD is a real device (§10.2, 16 sensors); prior all-Ⓝ
+  conflated THIS bench's TS-less DIMM with device-absence. QE/LQ/LU/ZQ ⬜ (model a jc42 → **#205**);
+  LS/ZS Ⓝ (bench-gated). This was the SAME class as the NC-SI/DIMM memory false-claims, one level down.
+- **Row 40 PWM note clarified** (slice-1 F1): the QE table cell was ALWAYS ✅ (register-accurate model);
+  the agent misread the "→ Ⓝ" note (which describes the driver-stack disposition). Verified against the
+  file BEFORE editing — did not apply a wrong "flip QE" change. Note reworded.
+- **host-BIOS-flash SETTLED** (slice-4 F1, #134 closed): NOT impossible — datasheet §2.20 has the
+  LPC-Master/FWH engine (HICR5[10] ENFWH) — but board-N/A (no LPC isolation switch; BIOS is SPI-behind-FCH).
+- **iLPC2AHB over-claim split** (slice-4 F2): FULL-TASK-LIST A8 folded the LPC→AHB bridge (culvert `ilpc`)
+  into P2A's [x] silicon; split into A8a (P2A validated) vs A8b (iLPC2AHB unmodeled → **#206**).
+- **New tasks** (gate d): #204 (82574L responder), #205 (TS DIMM jc42), #206 (iLPC2AHB HICR5/6 model),
+  #207 (I2C3/I2C6 disposition). Tally regenerated (QE 26✅/16🔶/0/7⬜/2Ⓝ).
+
+Honest note: two of the fixed contradictions (TSOD "remaining", NC-SI "US remaining") were ones **I**
+introduced in the reconciliation doc — the adversarial pass caught my own errors, which is the point.
+The remaining program work is driver breadth × silicon/userspace/Zephyr validation depth, not missing
+hardware.
+
 ## 2026-07-21 — Grounding pass: full schematic read-through + schematic↔matrix reconciliation + false-claim corrections
 
 Re-grounded in the AUTHORITATIVE source (`schematic-wiring/AST2050-BMC-WIRING.md`, all 597 lines,
