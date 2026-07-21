@@ -1,0 +1,31 @@
+C4/C2-full oracle regression — root cause + fix (row 50 / #176 / #200)
+=======================================================================
+
+SYMPTOM: C4 (Dell vendor fw -> appweb) and C2-full (U-Boot->Linux->SSH)
+stopped booting — 0 bytes of serial output; U-Boot hung before its banner.
+
+BISECT (all on the kgpe-d16-bmc QEMU machine):
+  - NOT the measured-strap commit 4ff6a74504: reverting SCU70 to the old
+    G4-constructed value -> still 0 bytes. Strap innocent.
+  - NOT the AHBC boot-remap alias (#199): alias is disabled at reset.
+  - IS #176 (SRAM removed on G3): re-enabling SRAM at 0x1E720000 in QEMU ->
+    U-Boot boots instantly (banner + kernel load). Root cause proven.
+
+WHY: the evb-ast2400 (G4) shim U-Boot sets its pre-relocation init stack to
+the TOP of on-chip SRAM (CONFIG_SYS_INIT_SP_ADDR = ASPEED_SRAM_BASE +
+ASPEED_SRAM_SIZE = 0x1E728000) and its pre-console buffer to 0x1E720000.
+The AST2050 (G3) has NO SRAM there (silicon-confirmed, 01-a2p-not-sram...);
+on the faithful machine those are a write-discard A2P window, so the stack
+corrupts and U-Boot hangs before console init.
+
+FIX (faithful — the SoC model is unchanged; the QEMU-only shim is adapted):
+  uboot-patches/0004 -> init stack to DRAM (ASPEED_DRAM_BASE + 0x200000)
+  uboot-patches/0005 -> pre-console buffer to DRAM (0x40100000)
+The real AST2050 boots via Raptor's G3 U-Boot over JTAG, never this shim.
+
+RESULT on the FAITHFUL QEMU (SRAM removed, AHBC alias present):
+  U-Boot 2019.04 banner prints; SOC AST1100/AST2050-A2,3 detected; env +
+  flash + eth up; bootm loads the C410X kernel + wrapper initramfs; and:
+
+Location: https://127.0.0.1/login.html
+C4 RESULT: PASS — proprietary firmware booted to a running BMC web service

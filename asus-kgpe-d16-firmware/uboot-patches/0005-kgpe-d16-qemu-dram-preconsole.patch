@@ -1,0 +1,20 @@
+kgpe-d16 QEMU shim: relocate the pre-console buffer off the nonexistent
+G3 SRAM (0x1E720000, the A2P/PCI window) into low DRAM.
+
+Companion to 0004: the AST2050 has no SRAM at 0x1E720000 (writes there
+forward to the empty PCI bus), so the pre-console log buffer must not live
+there. QEMU-only shim; DRAM is present from reset.
+
+diff --git a/configs/evb-ast2400_defconfig b/configs/evb-ast2400_defconfig
+index 0706c384..8ebeae8d 100644
+--- a/configs/evb-ast2400_defconfig
++++ b/configs/evb-ast2400_defconfig
+@@ -12,7 +12,7 @@ CONFIG_BOOTARGS="console=ttyS4,115200n8 root=/dev/ram rw"
+ CONFIG_USE_BOOTCOMMAND=y
+ CONFIG_BOOTCOMMAND="bootm 20100000"
+ CONFIG_PRE_CONSOLE_BUFFER=y
+-CONFIG_PRE_CON_BUF_ADDR=0x1e720000
++CONFIG_PRE_CON_BUF_ADDR=0x40100000
+ CONFIG_SYS_CONSOLE_ENV_OVERWRITE=y
+ CONFIG_HUSH_PARSER=y
+ # CONFIG_AUTO_COMPLETE is not set

@@ -1,0 +1,50 @@
+DEVICE-MATRIX row 50 (A2P) / #176 — SILICON ground-truth: 0x1E720000 is NOT SRAM
+================================================================================
+
+Question: the generic QEMU ast2400 model mapped on-chip SRAM at 0x1E720000, but
+the AST2050 (G3) memory map (AST2050-MEMORY-MAP.md, datasheet §9 p97 / §21.2)
+says 0x1E720000 is the A2P (AHB->PCI) bridge window on the G3, not SRAM. #176
+gated the phantom SRAM off the G3 machine on that basis. This is the faithfulness
+decider — resolved by asking the real chip directly over JTAG (SPI flash is not
+connected, so all silicon access is JTAG/netboot).
+
+METHOD (evidence file a2p-sram-probe-silicon.tcl in this dir): on the bridge Pi
+(rpi4-asus-aspeed2050-dev), reset-halt the AST2050 and write/read 0x1E720000. On-
+chip SRAM would store and return each written pattern; the A2P/PCI window would
+ignore writes and return a fixed value. 0x1E7xxxxx is fixed SoC space, unaffected
+by the DRAM boot-remap, so no DDR2 init is needed.
+
+RESULT (captured 2026-07-21, real AST2050 over JTAG)
+----------------------------------------------------
+=== CONTROL: JTAG AHB read sanity ===
+SCU7C (silicon rev) = 0x00000202  (expect ~0x0202)          <- AHB reads work
+=== PROBE 0x1E720000 : write-read (RAM?) ===
+ORIG            0x1E720000 = 0x04000008
+WROTE 0xA5A5F00D -> reads   0x04000008                       <- write IGNORED
+WROTE 0x5A5A0FF0 -> reads   0x04000008                       <- write IGNORED
+=== PROBE offset 0x1E724000 (mid-window) ===
+WROTE 0xDEADBEEF -> reads   0x04000008                       <- write IGNORED
+WROTE 0xCAFEBABE @0x1E727FFC -> reads 0x04000008             <- write IGNORED
+=== CONTROL: SCU00 ===
+SCU00 = 0x00000000
+
+CONCLUSION: 0x1E720000 on the real AST2050 is DEFINITIVELY NOT RAM — every write
+(0xA5A5F00D, 0x5A5A0FF0, 0xDEADBEEF, 0xCAFEBABE) is dropped and every read returns
+the SAME constant 0x04000008 across the whole 0x1E720000..0x1E727FFC window. This
+CONFIRMS #176: the G3 has no on-chip SRAM there; the region is the A2P (AHB->PCI)
+window. QEMU's kgpe-d16-bmc machine is FAITHFUL to drop the phantom SRAM.
+
+Two consequences captured elsewhere:
+  1. The evb-ast2400 U-Boot shim used in C4/C2-full put its init stack + pre-
+     console buffer at the top of that (now-correctly-absent) SRAM, so it hung
+     before console init on the faithful machine. Fixed by relocating both to
+     DRAM (uboot-patches/0004 + 0005) — a QEMU-only shim change; the faithful
+     SoC model is unchanged. C4 re-verified booting to the vendor web service.
+  2. FAITHFULNESS REFINEMENT for the QEMU A2P model: the real window reads back
+     the constant 0x04000008 (not 0). The current create_unimplemented_device
+     returns 0; modelling 0x04000008 would match silicon exactly (row 50 / #176
+     follow-up).
+
+This also demonstrates the governing principle: a "broken legacy boot" (C4) was
+NOT a signal to revert the faithful model — the silicon confirmed the model is
+right and the shim was the artifact.

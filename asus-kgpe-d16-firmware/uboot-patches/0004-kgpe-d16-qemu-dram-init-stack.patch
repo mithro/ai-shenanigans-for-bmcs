@@ -1,0 +1,42 @@
+kgpe-d16 QEMU shim: relocate the pre-relocation init stack off the
+(silicon-confirmed) nonexistent G3 SRAM at 0x1E720000 into low DRAM.
+
+The real AST2050 has no on-chip SRAM: a JTAG probe of 0x1E720000 on the
+real chip returns a constant 0x04000008 and ignores writes (it is the A2P
+AHB->PCI window). QEMU's kgpe-d16-bmc machine models this faithfully (#176),
+so the stock aspeed init stack (top of ASPEED_SRAM_BASE) hangs U-Boot before
+console init. This shim is QEMU-only (silicon boots via Raptor's G3 U-Boot
+over JTAG) and QEMU has SDRAM from reset, so the init stack goes in DRAM.
+
+diff --git a/include/configs/aspeed-common.h b/include/configs/aspeed-common.h
+index 62570cea..f3392bad 100644
+--- a/include/configs/aspeed-common.h
++++ b/include/configs/aspeed-common.h
+@@ -27,13 +27,20 @@
+ 
+ #define CONFIG_SYS_SDRAM_BASE		(ASPEED_DRAM_BASE + CONFIG_ASPEED_SSP_RERV_MEM)
+ 
+-#ifdef CONFIG_PRE_CON_BUF_SZ
+-#define CONFIG_SYS_INIT_RAM_ADDR	(ASPEED_SRAM_BASE + CONFIG_PRE_CON_BUF_SZ)
+-#define CONFIG_SYS_INIT_RAM_SIZE	(ASPEED_SRAM_SIZE - CONFIG_PRE_CON_BUF_SZ)
+-#else
+-#define CONFIG_SYS_INIT_RAM_ADDR	(ASPEED_SRAM_BASE)
+-#define CONFIG_SYS_INIT_RAM_SIZE	(ASPEED_SRAM_SIZE)
+-#endif
++/*
++ * KGPE-D16 (AST2050/G3) QEMU-shim override — see uboot-patches/0004.
++ * The real AST2050 (G3) has NO on-chip SRAM at ASPEED_SRAM_BASE (0x1E720000):
++ * JTAG on the real chip shows writes ignored and reads a constant 0x04000008 —
++ * it is the A2P (AHB->PCI) window, not RAM (QEMU models this faithfully; the
++ * kgpe-d16-bmc machine drops the phantom SRAM, device-driver-program #176). The
++ * stock aspeed init stack (top of ASPEED_SRAM_BASE) therefore lands in a
++ * write-discard region and U-Boot hangs before console init. This U-Boot is a
++ * QEMU-only kernel loader (real silicon boots via Raptor's G3 U-Boot over
++ * JTAG); QEMU's SDRAM is present from reset, so put the pre-relocation init
++ * stack in a low, otherwise-unused DRAM window instead of the nonexistent SRAM.
++ */
++#define CONFIG_SYS_INIT_RAM_ADDR	(ASPEED_DRAM_BASE + 0x00200000)
++#define CONFIG_SYS_INIT_RAM_SIZE	0x00008000
+ 
+ #define SYS_INIT_RAM_END \
+ 	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_RAM_SIZE)
