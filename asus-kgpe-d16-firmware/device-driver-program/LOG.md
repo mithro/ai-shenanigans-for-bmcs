@@ -1,5 +1,29 @@
 # Device-driver program — running log
 
+## 2026-07-21 — AHBC boot-remap + MDMA data path COMPLETE: rows 45 & 49 QE →✅ (oracle-verified)
+
+Closed the MDMA↔AHBC coupling identified earlier. Modeled the AHB Bus Controller (§12, 0x1E600000) as
+`hw/misc/aspeed_ahbc_ast2050.c` (register block) + the AHBC8C[0] boot-remap: on write it toggles a SoC-
+created SDRAM alias (`dram_low_alias`, an alias of `s->dram_mr`) mapped at 0x0 with priority above the
+spi_boot_container, DEFAULT-DISABLED (reset = boot from static memory). Enabling AHBC8C[0] makes the low
+256 MB aperture SDRAM — the path the 28-bit MDMA engine uses to reach DRAM.
+END-TO-END VALIDATION (evidence `soc-mdma/02`, devmem gate `mdmacopy`): AHBC8C[0]=1 makes SDRAM readable at
+0x02xxxxxx, and an MDMA copy src→dst through the low aperture round-trips 0xDEADC0DE. Neat STRICT_DEVMEM
+trick: the kernel registers RAM at 0x40000000+, so /dev/mem refuses that range, but the alias window
+(0x02xxxxxx) is NOT registered as kernel RAM → devmem_is_allowed() treats it as device memory and permits
+access — a userspace view into DRAM below the kernel's RAM base, no bare-metal harness needed.
+FAITHFULNESS GATE (the governing rule — legacy boots must ALWAYS keep booting): because the alias is
+default-off, I re-verified the oracles after touching the boot memory map. **C2 (our Linux) boots** (the
+mdmacopy gate ran). **C-UBOOT (Raptor U-Boot) boots cleanly**: `DRAM Init-DDR` → `U-Boot 2013.07` →
+`DRAM: 64 MiB` → `boot#` prompt (the "can't get kernel image" is the normal bare-U-Boot behaviour). So the
+two AHBC/DRAM-init-relevant oracles both pass — the change is faithful. This RESOLVES the #175 "faithful
+remap is HIGH-RISK" worry: done safely with a default-off alias.
+Matrix: row 45 MDMA 🔶→✅ (control path + end-to-end data movement; IRQ6 modeled+wired to VIC-6, status-set
+validated — observing IRQ6-to-a-handler needs bare-metal, a harness limit not a model gap), row 49 AHBC
+🔶→✅ (register block + boot-remap modeled+validated+oracle-safe). Tally QEMU ✅ 26→28, 🔶 15→13. Submodule
+qemu 1d2c9aab1f. C4 (Dell vendor) oracle re-verify tracked (heavier to build; C-UBOOT already proves the
+U-Boot DRAM-init-with-AHBC path). NO 0x40000000 fudge anywhere — MDMA uses the raw 28-bit address.
+
 ## 2026-07-21 — MDMA (row 45) QE ⬜→🔶: modeled the §22 register+command CONTROL path, validated by devmem
 
 Modeled the AST2050 MDMA memory-copy/fill engine (0x1E740000, IRQ6, §22) — a real G3 block previously

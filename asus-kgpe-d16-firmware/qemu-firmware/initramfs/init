@@ -564,6 +564,40 @@ if grep -q mdmatest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- MDMA end-to-end data copy via the AHBC boot-remap aperture (only 'mdmacopy') ---
+# DEVICE-MATRIX rows 45 (MDMA) + 49 (AHBC): prove the FULL MDMA data path — the
+# AHBC8C[0] boot-remap aliases SDRAM into the low 256 MB (0x0..), and the 28-bit
+# MDMA engine copies within that low aperture. STRICT_DEVMEM blocks /dev/mem on the
+# kernel's RAM banks (0x40000000+), but the alias window (0x0x..) is NOT registered
+# as kernel RAM, so devmem can read/write it — a device-classified view into the
+# aliased DRAM. Addresses use a 32 MB DRAM offset (0x02xxxxxx), well clear of the
+# kernel+initramfs; poweroff follows immediately.
+if grep -q mdmacopy /proc/cmdline; then
+	echo "=== MDMACOPY-BEGIN ==="
+	# 1. enable the AHBC boot-remap (AHBC8C[0]=1): SDRAM appears at 0x0..
+	devmem 0x1E60008C 32 0x1
+	# 2. write a source pattern through the aliased DRAM (offset 32 MB).
+	devmem 0x02002000 32 0xDEADC0DE
+	SRC=$(devmem 0x02002000)              # proves the alias is writable DRAM
+	devmem 0x02004000 32 0x00000000       # clear dest
+	# 3. MDMA copy src->dst (4 bytes) through the low aperture.
+	devmem 0x1E740000 32 0x02002000       # MDMA src
+	devmem 0x1E740004 32 0x02004000       # MDMA dst
+	devmem 0x1E74000C 32 0x00000004       # command: copy (type 00), ID0, len=4 -> fires
+	DST=$(devmem 0x02004000)              # dest should now hold the copied pattern
+	echo "AHBC-remap src(alias write-back)=${SRC} ; MDMA-copied dst=${DST}"
+	OK=1
+	[ "$((SRC & 0xFFFFFFFF))" -eq "$((0xDEADC0DE))" ] || OK=0   # alias-backed DRAM writable
+	[ "$((DST & 0xFFFFFFFF))" -eq "$((0xDEADC0DE))" ] || OK=0   # MDMA moved the data
+	if [ "$OK" -eq 1 ]; then
+		echo "MDMACOPY RESULT: PASS (AHBC remap -> SDRAM@0x0; MDMA copied src->dst via the low aperture)"
+	else
+		echo "MDMACOPY RESULT: FAIL (remap or MDMA data movement not working)"
+	fi
+	echo "=== MDMACOPY-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we
