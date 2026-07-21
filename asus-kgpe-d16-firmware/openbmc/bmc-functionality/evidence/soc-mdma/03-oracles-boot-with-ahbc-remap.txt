@@ -1,0 +1,20 @@
+AHBC boot-remap faithfulness gate — legacy oracles still boot (2026-07-21)
+==========================================================================
+After adding the AHBC + default-off SDRAM-low alias (rows 45/49), the two
+AHBC/DRAM-init-relevant boot oracles were re-verified. Governing rule: the
+legacy firmware must ALWAYS keep booting. Alias is default-off, so nothing
+changes until firmware writes AHBC8C[0]=1 (faithful HW behaviour).
+
+--- C-UBOOT (Raptor U-Boot 2013.07) via run-qemu.py --flash + g3-resets ---
+DRAM Init-DDR
+U-Boot 2013.07 (Jul 18 2026 - 10:20:22)
+DRAM:  64 MiB
+16 MiB
+boot# 
+boot: OK — saw 'boot#'
+
+--- C2 (our Linux) — booted to userspace in the same session (mdmacopy gate ran) ---
+See 02-mdma-ahbc-remap-datapath-qemu-PASS.txt (the gate reached userspace + ran).
+
+C4 (Dell vendor) oracle re-verify tracked (#200) — heavier flash build; C-UBOOT
+already proves the U-Boot DRAM-init-with-AHBC path is unbroken.
