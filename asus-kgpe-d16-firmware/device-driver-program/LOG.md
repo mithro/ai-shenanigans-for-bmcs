@@ -1,5 +1,33 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #212 attempt 1: isolated silicon RTC-VIC test — INCONCLUSIVE (my setup), honest record
+
+Ran the isolated silicon JTAG test to resolve the RTC alarm VIC-source (22 vs 26). Confirmed the rig was
+free (no openocd, single sshd = mine, no tmux/coord locks), board powered (JTAG halt OK). Wrote a pure-JTAG
+TCL (`tmp/rtc-vic-isolate.tcl`) that free-runs the RTC while the CPU is halted (OpenOCD `sleep`) and polls
+VIC08 raw (0x1E6C0008; bit26=alarm, bit22=second). Fixed one API bug (`ocd_mdw`→`read_memory`). Evidence:
+`d14-zephyr/32-rtc-vic-isolate-attempt1-inconclusive.txt`.
+
+RESULT — INCONCLUSIVE, and I'm confident it's MY test setup, not the hardware (the goal's honesty mandate):
+- GOOD: the counter free-runs while JTAG-halted (PHASE2 counter advances every poll, cycling sec through 30
+  many times), so the RTC clock+counter path works. And `SCU08[16]=1` clearly runs the counter fast (matches
+  the driver comment, contradicts the LS "clear bit16" note — but the RATE is confounded, see below).
+- NULL alarm result: bit26=0/60 AND bit22=0/60 — neither the alarm nor the second-tick appeared in vic_raw.
+  But #192 (Zephyr) saw vic_raw=0x03400000 (bits 22/24/25), so the RTC CAN drive the VIC — my minimal
+  bare-JTAG config just doesn't reproduce the interrupt generation. Two concrete defects: (1) NO CONTROL[5]
+  restart-busy poll after the async 0x5A load (datasheet §24.4; my 50 ms sleep too short → counter never
+  cleanly reset, RTC likely mid-load when I wrote RTC04/RTC0C); (2) minimal RTC0C[0]|[1] config vs the fuller
+  set_time + sec/min/hour-mask alarm the Zephyr path uses.
+- So this run neither confirms nor refutes 22-vs-26; it proves the counter free-runs and my setup is
+  incomplete. Also surfaced that SCU08[16] semantics are themselves disputed (a THIRD tangled RTC claim
+  alongside the alarm-IRQ and the 732x rate) — all must be pinned in the refined test.
+
+REFINED PLAN (#212 attempt 2, next pass): reuse the PROVEN interrupt path — modify the Zephyr rtc_smoke to
+MASK VIC 22/24/25 (leave only 26), arm the alarm, and report whether the callback fires via 26 + dump
+vic_raw. Callback-on-26-only firing = alarm truly on 26; no fire = not on 26. Rebuild + JTAG-boot. (This is
+the clean isolation: once VIC 22 is masked, the fast second-tick can't reach the handler, killing the
+confound.) Not rushing a code change to the driver/model until attempt 2 gives a clean answer.
+
 ## 2026-07-21 — C2: the RTC "alarm on VIC 22" silicon claim is SUSPECT (confounded); opened #212
 
 Acted on the enumeration audit's finding C2 (RTC alarm IRQ 22 vs 26). Also confirmed the CI "failure" on the

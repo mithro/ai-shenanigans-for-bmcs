@@ -1,0 +1,64 @@
+#212 — RTC alarm VIC-source isolation (22 vs 26): ATTEMPT 1 — INCONCLUSIVE (2026-07-21)
+================================================================================
+Goal: resolve whether the RTC ALARM asserts VIC source 26 (datasheet Table 36)
+or 22 (matrix #192 claim), free of the ~fast second-tick confound on VIC 22.
+Method: pure-JTAG (no DRAM) — RTC + VIC are free-running peripherals; OpenOCD
+`sleep` lets them advance while the CPU is halted. Read VIC08 raw status
+(0x1E6C0008; bit26=0x04000000 alarm, bit22=0x00400000 second).
+
+RIG: bridge Pi asus-bmc, JTAG free (no openocd running, single sshd session =
+mine, no tmux/coord locks). Board powered (JTAG halt OK, IDCODE read). No others
+disturbed.
+
+===== CAPTURED (real AST2050, tmp/rtc-vic-isolate.tcl) =====
+PHASE1 SCU08(16)=1 : counter 000e972c -> 009a7b50  (secfield 44 -> 16)
+PHASE1 SCU08(16)=0 : counter 009c9750 -> 009c976c  (secfield 16 -> 44)
+PHASE2 armed sec-alarm=30 (RTC0C=0x3); polling VIC08 raw
+  i=00 vic_raw=00000000 bit26=0 bit22=0 counter=00115906 sec=6
+  i=10 vic_raw=00000000 bit26=0 bit22=0 counter=005c5ee2 sec=34
+  i=20 vic_raw=00000000 bit26=0 bit22=0 counter=00a6e806 sec=6
+  i=30 vic_raw=00000000 bit26=0 bit22=0 counter=00f16cf2 sec=50
+  i=40 vic_raw=00000000 bit26=0 bit22=0 counter=013c756a sec=42
+  i=50 vic_raw=00000000 bit26=0 bit22=0 counter=0186f45a sec=26
+PHASE2 RESULT: bit26(alarm) seen=0/60  bit22(second) seen=0/60
+
+===== WHY INCONCLUSIVE (high confidence it is MY test setup, not the hardware) =====
+The counter DOES free-run while the CPU is JTAG-halted (PHASE2 counter advances
+every poll, cycling the sec field through all values incl. 30), so the RTC clock
++ counter path work. But BOTH VIC bits read 0/60 — yet #192 (evidence 28), under
+the full Zephyr driver, saw vic_raw=0x03400000 (bits 22/24/25 SET). So the RTC
+CAN drive the VIC; my minimal bare-JTAG config simply does NOT reproduce the
+interrupt generation. Two concrete setup defects:
+  1. NO CONTROL[5] restart-busy poll after the async 0x5A RESTART load (the
+     driver REQUIRES this — datasheet §24.4; the load is async 0~3 s). My 50 ms
+     sleep is too short, so the counter never cleanly reset (PHASE1 values are
+     mid-transition, not 0) and the RTC may have been mid-load when I wrote
+     RTC04/RTC0C — so the alarm-compare + interrupt-enable state is undefined.
+  2. Minimal config: I only set RTC0C[0]|[1] (enable + sec-alarm). The Zephyr
+     path that produced live VIC bits does the full set_time + alarm_set_time
+     (sec+min+hour mask) sequence; something in that fuller config gates the
+     RTC->VIC interrupt output that my minimal writes miss.
+So this run neither confirms nor refutes "alarm on 22 vs 26" — it only proves the
+counter free-runs and that my bare-JTAG RTC-interrupt setup is incomplete.
+
+===== USEFUL SIDE-RESULT (SCU08[16]) =====
+SCU08[16]=1 clearly RUNS the counter fast (big delta/500 ms); =0 barely moved.
+This matches the driver COMMENT ("bit16=1 makes the RTC LOAD AND RUN") and
+contradicts the LS note's "clear SCU08[16] for real-time" — but the exact RATE is
+confounded by the missing CONTROL[5] poll (unclean resets), so #158/#186 rate is
+NOT resolved here either. Flag: SCU08[16] semantics are themselves disputed and
+must be pinned down in the refined test.
+
+===== REFINED PLAN (#212 attempt 2) =====
+Reuse the PROVEN interrupt-generation path instead of a hand-rolled minimal
+config. Options, in order of preference:
+  (A) Modify the Zephyr rtc_smoke to ISOLATE: after arming the alarm, MASK VIC
+      sources 22/24/25 at the VIC (leave only 26 enabled), keep the callback, and
+      report whether it fires via 26 + dump vic_raw. Callback-on-26-only firing =
+      alarm truly on 26; no fire = not on 26. Rebuild + JTAG-boot (boot-zephyr-
+      silicon-long.sh). This is the cleanest (the fast second-tick can't reach the
+      handler once 22 is masked).
+  (B) Pure-JTAG but replicate the driver EXACTLY: poll CONTROL[5] until clear
+      after each 0x5A load; use the full set_time base + alarm sec+min+hour mask;
+      then watch VIC08 bit26 specifically. Only viable once (A) confirms the RTC
+      config that lights the VIC.
