@@ -1,6 +1,26 @@
 # Device-driver program — running log
 
-## 2026-07-21 — #212 attempt 2 (silicon): alarm NOT on VIC 26 — REFUTES my own suspicion; deeper concern found
+## 2026-07-22 — #144 (part): remove the phantom WDT2 from the G3 model + DTS (datasheet: 1 watchdog)
+
+Consulted the formal task tracker (TaskList) — which corrected a wrong "nothing to do, stop the loop"
+inclination: there IS actionable non-host-power/non-CI faithfulness work pending. Picked #144 (G3 device-count
+faithfulness — remove phantom UART3-5/WDT2/SPI1), the same class as the #211 phantom-I2C-engine fix.
+
+Datasheet-grounded the counts (AST2050 V1.05): WDT = 1 ("Watchdog Timer", singular §2.13; no WDT2), flash =
+1 (SMC only, §2.8; no separate FMC/SPI1), UART = 2 physical ("integrates two sets of UART" — UART1 full flow
+control + UART2). The G3 machine reused the AST2400 SoC class (wdts_num=2, spis_num=1, uarts_num=5), so WDT2 /
+SPI1 / UART3-4 are phantoms.
+
+Did the SAFEST one first — WDT2 (not the flash/boot/console path):
+- QEMU (submodule c7d6eb3f1f): gate the _init + realize WDT loops on silicon_rev==AST2050 so the G3 creates
+  only WDT1 (i>=1 skipped); AST2400/2500 unchanged. Same opt-in-by-connection pattern as the EHCI/SDMC gates.
+- DTS: disable the inherited wdt2@1e785020 node (`&wdt2 { status = "disabled"; }`) so the kernel matches.
+- Boot-validated on kgpe-d16-bmc: reaches userspace (dropbear), zero faults, no WDT errors.
+
+REMAINING in #144 (deferred, need more care): SPI1 (0x1E630000) — verify no oracle flash-boot path uses it
+before removing (the FMC stays); UART3-4 — DELICATE (the model's UART memmap is non-standard: UART5=0x1E784000
+is the used console, UART1=0x1E783000 is SOL — must not remove those). Each is a follow-on with its own
+datasheet-address verification + boot test.
 
 Did the dedicated #212 pass properly this time. Found the Zephyr build env (west workspace `tmp/zws/`, SDK
 0.17.0, board kgpe_d16_bmc, build dir `build-rtc187` with CONFIG_RTC_ALARM). Added a #212 tight-loop to

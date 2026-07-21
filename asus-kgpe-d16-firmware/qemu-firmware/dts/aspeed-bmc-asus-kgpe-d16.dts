@@ -443,6 +443,16 @@
 };
 
 /*
+ * The AST2050 (G3) has ONE watchdog (datasheet §2.13, singular). The reusable
+ * aspeed-g4.dtsi inherits a second wdt2@1e785020 from the AST2400; the G3 has no
+ * such block (the faithful QEMU machine no longer instantiates it either, #144),
+ * so keep it disabled here to match the silicon.
+ */
+&wdt2 {
+	status = "disabled";
+};
+
+/*
  * AST2050 (G3) Video Engine (0x1e700000, VIC INT#7) — the KVM screen-capture
  * block (F8). It captures the SoC's own VGA/CRT framebuffer (or an external DVO
  * source) and JPEG/VQ-compresses it for remote KVM; OpenBMC's obmc-ikvm streams
