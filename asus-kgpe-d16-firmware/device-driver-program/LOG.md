@@ -1,5 +1,30 @@
 # Device-driver program — running log
 
+## 2026-07-22 — Gate-b batch review of WDT2/SPI1/H-PLL: CLEAN — but caught my WDT2 premise was wrong
+
+Dispatched an independent gate-b review over the recent three shared-QEMU-code fixes. It returned NO
+high-confidence functional bugs and positively verified each against the datasheet:
+- SPI1 (e92dbb3ddc): datasheet confirms one flash controller (§2.8 SMC, no SPI1); gate correct + G3-only;
+  spi[0] genuinely uninitialised on the G3 so the aspeed.c flash-init guard is needed + correct. VALID.
+- H-PLL (af16ca701e): the SCU70[11:9] table {266,233,200,166,133,100,300,24} matches the datasheet §31.6.1
+  table AND a second bit-field table (VGACRAB); bit-extraction (>>9)&0x7, 24 MHz CLKIN, bit23=LPC-reset, and
+  the programmed-path formula are all datasheet-faithful; G3-only. CONFIRMED CORRECT. (The datasheet-internal
+  000/001=Reserved vs 266/233 ambiguity doesn't matter — the actual strap decodes to 010/011, agreed by all
+  tables.)
+- WDT2 (c7d6eb3f1f): **the gate is REDUNDANT — a real finding.** The G3 SoC class
+  `aspeed_soc_ast2050_class_init` ALREADY sets wdts_num=1 (verified: soc_name="ast2050-a1", wdts_num=1,
+  spis_num=1, qom_socname="ast2400"). So the loop already created only WDT1; my `!(G3 && i>=1)` clause never
+  triggered. My commit premise ("the G3 reused the AST2400 SoC class with wdts_num=2, exposing a phantom
+  WDT2") was WRONG — I assumed the ast2400 SoC class without checking the actual class (the recurring
+  assume-without-verifying trap; the reviewer, an independent set of eyes, caught it — gate-b working).
+
+Correction (submodule afb611e129): reverted the redundant WDT2 loop-gate (dead code + misleading comment) to
+the plain `for (i = 0; i < sc->wdts_num; i++)`; KEPT the board-DTS wdt2@1e785020 disable (that IS valid — the
+model maps one WDT, so the kernel should not probe the inherited g4.dtsi wdt2). Net: WDT2 "removal" was a
+no-op (correctly documented now); SPI1 removal + H-PLL fix stand (real + review-confirmed). The distinction:
+the aspeed_soc_ast2050 class had the CORRECT wdts_num=1 but the WRONG spis_num=1 — so only SPI1 was a genuine
+phantom.
+
 ## 2026-07-22 — #142: G3-faithful H-PLL/CLKIN clock rate — FIXED + 3-oracle validated
 
 Fixed a real, well-diagnosed core-clock faithfulness bug (#142). The G3 SCU reused aspeed_2400_scu_calc_hpll,
