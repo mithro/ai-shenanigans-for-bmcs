@@ -29,3 +29,13 @@ RESULT on the FAITHFUL QEMU (SRAM removed, AHBC alias present):
 
 Location: https://127.0.0.1/login.html
 C4 RESULT: PASS — proprietary firmware booted to a running BMC web service
+
+C2-full (the OTHER regressed oracle, identical shim u-boot + our kernel) also
+re-verified on the faithful QEMU via scripts/ssh-test.py:
+  SSH_OK / kgpe-d16-bmc / Linux armv5tejl
+  C2 RESULT: PASS   (U-Boot -> Linux -> SSH login)
+
+A2P window fully characterized on silicon (a2p-sweep.tcl): the ENTIRE 0x20000
+window (0x1E720000..0x1E73FFFC) reads a uniform constant 0x04000008 at every
+word; writes ignored. Adjacent blocks read 0 (0x1E740000, SCU00), so 0x04000008
+is specific to the A2P window (empty-P-Bus idle readback), not a JTAG artifact.
