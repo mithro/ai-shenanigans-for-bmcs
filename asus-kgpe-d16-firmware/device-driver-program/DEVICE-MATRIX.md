@@ -618,8 +618,12 @@ datasheet-first, with an oracle re-boot; NOT rushed. Task #135. See FULL-TASK-LI
     (0x50) match the model bit-for-bit. **Governing-principle lesson:** the engine first didn't fire (digest
     unchanged) — MY driving: the HAC compute engine is clock-dead + held in reset at power-on (SCU0C[13]
     "Stop YCLK For HAC" datasheet §18 l.16040 + SCU04[4]=AES_RST_N Fig.43); clearing both made it compute.
-    That exposed the same reset/clock-gating gap as MDMA/MIC (the QEMU model responds without the release) →
-    extends #208. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
+    That exposed the same reset/clock-gating gap as MDMA/MIC — **now MODELED (submodule 589f68f99a):** a
+    `g3-hace-gate` SCU line (SCU0C[13] YCLK-stop OR SCU04[4] AES_RST_N) drives a HACE gpio-in; while asserted,
+    a HASH_CMD write stores the register but skips `do_hash_operation` + sets no completion status (gates the
+    COMPUTE, not the MMIO — silicon keeps the reg file live while clock-dead). Opt-in by connection (G4/G5
+    unaffected). Validated by the `hacetest` initramfs gate (YCLK-stopped → no completion; released →
+    HASH_IRQ set). #208 HACE portion done. UQ/US=Ⓝ (crypto not boot-critical). LQ/LS/LU=⬜ (mainline `aspeed-hace` driver exists but
     is not G3-validated). ZQ/ZS=⬜ (no Zephyr crypto driver). Disclosed: SHA-256 is the silicon-validated
     algo; the other hashes share the confirmed layout; AES/RC4 crypto is not separately silicon-validated.
   - **44 MIC** (memory-integrity, 0x1E640000/IRQ1): **QE=✅ (2026-07-21)** — `hw/misc/aspeed_mic_ast2050.c`

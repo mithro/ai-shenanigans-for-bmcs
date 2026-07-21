@@ -656,6 +656,44 @@ if grep -q mictest /proc/cmdline; then
 	poweroff -f 2>&1 || true
 fi
 
+# --- HACE compute-gating (only 'hacetest') — row 43 / #208 follow-up ---
+# The AST2050 HAC compute engine is off unless its YCLK (SCU0C[13]) is running AND
+# AES_RST_N (SCU04[4]) is released (silicon-confirmed, evidence soc-hace/01). QEMU
+# now models that: writing HASH_CMD only fires (and sets the R_STATUS HASH_IRQ
+# completion bit, 0x200) when the engine is enabled. Prove it: force the gate on
+# (stop YCLK) -> the command does NOT complete; release -> it does. Register-only
+# (no DRAM buffer needed); do_hash on a low-alias src is harmless.
+if grep -q hacetest /proc/cmdline; then
+	echo "=== HACE-BEGIN ==="
+	devmem 0x1E6E2000 32 0x1688A8A8                 # unlock SCU
+	devmem 0x1E6E3020 32 0x02001000                 # HASH_SRC (safe low-alias)
+	devmem 0x1E6E3024 32 0x02002000                 # HASH_DEST
+	devmem 0x1E6E302C 32 0x00000040                 # HASH_SRC_LEN = 64
+	# 1. GATE ON: stop YCLK for HAC (SCU0C[13]=1) -> compute engine off.
+	C=$(devmem 0x1E6E200C); devmem 0x1E6E200C 32 $((C | 0x2000))
+	devmem 0x1E6E301C 32 0x00000200                 # clear HASH_IRQ (W1C)
+	devmem 0x1E6E3030 32 0x00000050                 # fire SHA-256 (should be gated)
+	G=$(devmem 0x1E6E301C)
+	echo "HACE gated STATUS=${G} (HASH_IRQ 0x200 must be CLEAR)"
+	# 2. RELEASE: run YCLK (SCU0C[13]=0) + release AES_RST_N (SCU04[4]=0).
+	C=$(devmem 0x1E6E200C); devmem 0x1E6E200C 32 $((C & 0xFFFFDFFF))
+	R=$(devmem 0x1E6E2004); devmem 0x1E6E2004 32 $((R & 0xFFFFFFEF))
+	devmem 0x1E6E301C 32 0x00000200                 # clear HASH_IRQ
+	devmem 0x1E6E3030 32 0x00000050                 # fire SHA-256 (should complete)
+	E=$(devmem 0x1E6E301C)
+	echo "HACE released STATUS=${E} (HASH_IRQ 0x200 must be SET)"
+	OK=1
+	[ "$((G & 0x200))" -eq 0 ]   || OK=0            # gated -> no completion
+	[ "$((E & 0x200))" -ne 0 ]   || OK=0            # released -> completion
+	if [ "$OK" -eq 1 ]; then
+		echo "HACE RESULT: PASS (compute gated by YCLK/AES_RST_N, matches silicon)"
+	else
+		echo "HACE RESULT: FAIL"
+	fi
+	echo "=== HACE-END ==="
+	poweroff -f 2>&1 || true
+fi
+
 # --- WDT userspace validation (only when 'wdttest' on the kernel cmdline) ---
 # DEVICE-MATRIX row 38 (WDT) LU: prove userspace interfaces with the aspeed WDT
 # via /dev/watchdog. busybox watchdog issues WDIOC_SETTIMEOUT from userspace; we

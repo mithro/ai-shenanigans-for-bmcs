@@ -1,5 +1,18 @@
 # Device-driver program — running log
 
+## 2026-07-21 — #208 follow-up: HACE compute-gating modeled (YCLK/AES_RST_N), validated
+
+Closed the HACE half of the #208 gap the silicon validation exposed. Silicon holds the HAC COMPUTE engine
+off (SCU0C[13]="Stop YCLK" OR SCU04[4]=AES_RST_N) while the register FILE stays live — so, unlike MDMA/MIC
+(whole MMIO goes dark), the HACE must gate only the compute. Added a `g3-hace-gate` SCU output line (=
+SCU0C[13] || SCU04[4]) wired straight to a new HACE gpio-in; when asserted, a HASH_CMD write stores the
+register but skips do_hash_operation + sets NO completion status. Opt-in by connection (only wired on the G3
+SoC → G4/G5 romulus/etc. unchanged — the shared aspeed_hace.c change is inert there). QEMU submodule
+589f68f99a. Validated by a new `hacetest` initramfs gate: force YCLK-stop → SHA-256 command leaves R_STATUS
+HASH_IRQ (0x200) CLEAR (no compute); release YCLK+AES_RST_N → HASH_IRQ SET (computed) → HACE RESULT PASS.
+C2 boot + PSU(#198) unaffected. Applied the opt-in-by-connection lesson (#198/#208) so a shared-upstream
+change stays contained + needs no cross-machine qtest sweep.
+
 ## 2026-07-21 — 🎉 SILICON: HACE SHA-256 validated on the REAL AST2050 (row 43 QE 🔶→✅, #209 DONE)
 
 Went ahead and did the full HACE silicon hash validation (didn't stop at "feasible"). Hashed 64 zero bytes
