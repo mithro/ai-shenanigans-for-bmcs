@@ -1,5 +1,21 @@
 # Device-driver program — running log
 
+## 2026-07-21 — Gates (a)+(b): dispatched independent reviews of this session's new work (in flight)
+
+To satisfy completion gates (a) completeness/faithfulness and (b) code review on the fresh work — and because
+the earlier MDMA gate-(b) review caught a real memory-safety bug — dispatched two independent, read-only
+sub-agents (parallel, no build conflict):
+1. gate-(b) CODE REVIEW of the newest + most complex model, `hw/misc/aspeed_mic_ast2050.c` + its wiring,
+   scrutinising the Fletcher-32 fold cadence (a wrong cadence could overflow sum2 and mis-checksum non-trivial
+   pages even though the zero page passes), the in_scan re-entrancy guard's exit coverage, the error-flag
+   escalation + level-IRQ recompute, MIC14 RO-field preservation, W1C, endianness, and large-page-count
+   overflow.
+2. gate-(a) FAITHFULNESS AUDIT of the four rows marked ✅ this session (44 MIC, 45 MDMA, 47 PUART, 49 AHBC):
+   an adversarial check that each ✅ is honest (full datasheet functionality modeled, documented
+   simplifications legitimately scoped, evidence sufficient) and that nothing is missed.
+Findings will be addressed next (fixes or honest downgrades). Running in the background. This is the
+independent-verification step the goal's gates (a)/(b) require, applied to the MDMA/MIC/AHBC/PUART cluster.
+
 ## 2026-07-21 — MIC (row 44) QE ⬜→✅: full §13 model + BIT-EXACT Fletcher-32, validated
 
 Implemented the MIC (Memory Integrity Check Engine, §13, 0x1E640000, IRQ1) — `hw/misc/aspeed_mic_ast2050.c`
