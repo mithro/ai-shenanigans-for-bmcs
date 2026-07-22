@@ -1,0 +1,2629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AST2050 / ASUS KGPE-D16 open-firmware program — status report 2026-07-22</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1c2733; --muted: #5b6b7b; --line: #dde4ea;
+  --accent: #0b5fa5; --thead: #eef3f7; --row: #f7fafc; --chip: #eef3f7;
+  --ok: #1a7f37; --part: #b26a00; --blk: #0b5fa5; --todo: #8a97a3; --na: #8a97a3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10151b; --fg: #dbe4ec; --muted: #93a4b3; --line: #2a3541;
+    --accent: #6cb2ee; --thead: #1a222c; --row: #151d25; --chip: #1a222c;
+    --ok: #4ac26b; --part: #e3a008; --blk: #6cb2ee; --todo: #7a8894; --na: #7a8894;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.layout { display: flex; max-width: 1500px; margin: 0 auto; }
+nav.toc {
+  position: sticky; top: 0; align-self: flex-start; flex: 0 0 290px;
+  max-height: 100vh; overflow-y: auto; padding: 24px 8px 24px 20px;
+  border-right: 1px solid var(--line); font-size: 13px;
+}
+nav.toc > .toctitle { font-weight: 700; margin-bottom: 8px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+nav.toc ul { list-style: none; margin: 0; padding-left: 12px; }
+nav.toc > ul { padding-left: 0; }
+nav.toc li { margin: 3px 0; }
+main { flex: 1 1 auto; min-width: 0; padding: 28px 36px 80px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 12px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 10px; border-top: 2px solid var(--line); }
+h3 { font-size: 16.5px; margin: 26px 0 8px; }
+p, li { max-width: 1050px; }
+blockquote { margin: 12px 0; padding: 8px 14px; border-left: 3px solid var(--part);
+  background: var(--row); color: var(--muted); }
+code { background: var(--chip); padding: 1px 5px; border-radius: 4px;
+  font: 12.5px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; margin: 12px 0 18px; font-size: 13.5px; width: auto; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+thead th { background: var(--thead); position: sticky; top: 0; }
+tbody tr:nth-child(even) { background: var(--row); }
+td:first-child { white-space: nowrap; }
+.st { font-weight: 600; }
+.st.ok { color: var(--ok); } .st.part { color: var(--part); }
+.st.blk { color: var(--blk); } .st.todo, .st.na { color: var(--todo); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
+em { color: var(--muted); }
+@media (max-width: 1000px) { nav.toc { display: none; } main { padding: 18px; } }
+@media print { nav.toc { display: none; } body { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc"><div class="toctitle">Contents</div><div class="toc">
+<ul>
+<li><a href="#0-executive-summary">0. Executive summary</a></li>
+<li><a href="#1-qemu-emulation">1. QEMU emulation</a><ul>
+<li><a href="#11-firmware-boot-oracles-all-pass-in-ci">1.1 Firmware boot oracles (all pass in CI)</a></li>
+<li><a href="#12-ast2050-standalone-soc-internal-peripheral-model-status-qe-column">1.2 AST2050 standalone SoC — internal peripheral model status (QE column)</a></li>
+<li><a href="#13-kgpe-d16-board-level-device-model-status-qe-column">1.3 KGPE-D16 board-level device model status (QE column)</a></li>
+<li><a href="#14-qe-tally-51-devices">1.4 QE tally (51 devices)</a></li>
+</ul>
+</li>
+<li><a href="#2-individual-tests-emulation-vs-silicon">2. Individual tests: emulation vs silicon</a><ul>
+<li><a href="#21-test-harnesses">2.1 Test harnesses</a></li>
+<li><a href="#22-the-full-51-8-scoreboard">2.2 The full 51 × 8 scoreboard</a></li>
+<li><a href="#23-column-tallies-408-cells-machine-counted-2026-07-21">2.3 Column tallies (408 cells; machine-counted 2026-07-21)</a></li>
+<li><a href="#24-bmc-function-level-qemu-vs-silicon-from-silicon-statusmd">2.4 BMC-function level: QEMU vs silicon (from SILICON-STATUS.md)</a></li>
+</ul>
+</li>
+<li><a href="#3-modern-u-boot">3. Modern U-Boot</a><ul>
+<li><a href="#31-u-boot-patch-series">3.1 U-Boot patch series</a></li>
+<li><a href="#32-raptor-g3-native-u-boot-the-u-boot-oracle">3.2 Raptor G3-native U-Boot (the U-Boot oracle)</a></li>
+</ul>
+</li>
+<li><a href="#4-linux-kernel">4. Linux kernel</a><ul>
+<li><a href="#41-kernel-patch-series-kernelpatches">4.1 Kernel patch series (kernel/patches/)</a></li>
+</ul>
+</li>
+<li><a href="#5-openbmc">5. OpenBMC</a><ul>
+<li><a href="#51-key-artifacts">5.1 Key artifacts</a></li>
+</ul>
+</li>
+<li><a href="#6-zephyr">6. Zephyr</a><ul>
+<li><a href="#61-driver-validation-qemu-vs-silicon">6.1 Driver validation: QEMU vs silicon</a></li>
+</ul>
+</li>
+<li><a href="#7-wallabmc">7. WallaBMC</a></li>
+<li><a href="#8-real-hardware-testing-status">8. Real-hardware testing status</a><ul>
+<li><a href="#81-the-rig-fully-remote-controllable">8.1 The rig (fully remote-controllable)</a></li>
+<li><a href="#82-silicon-achievements-by-stack">8.2 Silicon achievements by stack</a></li>
+<li><a href="#83-rig-blocked-host-gated-silicon-cells">8.3 Rig-blocked / host-gated silicon cells</a></li>
+</ul>
+</li>
+<li><a href="#9-ci-status">9. CI status</a><ul>
+<li><a href="#91-workflows">9.1 Workflows</a></li>
+<li><a href="#92-job-inventory-d16-qemu-firmware-stack-all-green">9.2 Job inventory — D16 QEMU firmware stack (all green)</a></li>
+<li><a href="#93-recent-ci-incident-musl-toolchain">9.3 Recent CI incident: musl toolchain</a></li>
+</ul>
+</li>
+<li><a href="#10-complete-open-task-list">10. Complete open-task list</a><ul>
+<li><a href="#101-open-numbered-tasks">10.1 Open numbered tasks</a></li>
+<li><a href="#102-open-items-without-task-numbers">10.2 Open items without task numbers</a></li>
+<li><a href="#103-blocked-external-gates-code-believed-correct">10.3 Blocked (external gates — code believed correct)</a></li>
+</ul>
+</li>
+<li><a href="#appendix-a-repositories-branches">Appendix A — Repositories &amp; branches</a></li>
+<li><a href="#appendix-b-key-pull-requests">Appendix B — Key pull requests</a></li>
+<li><a href="#appendix-c-this-weeks-key-commits-branch-claudebmc-functionality">Appendix C — This week's key commits (branch claude/bmc-functionality)</a></li>
+</ul>
+</div>
+</nav>
+<main>
+<h1 id="ast2050-asus-kgpe-d16-open-firmware-program-full-status-report">AST2050 / ASUS KGPE-D16 open-firmware program — full status report</h1>
+<p><strong>Date:</strong> 2026-07-22 ·
+<strong>Branch:</strong> <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality"><code>claude/bmc-functionality</code></a> @ <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0be3042"><code>0be3042</code></a> ·
+<strong>QEMU submodule:</strong> <a href="https://github.com/mithro/qemu/tree/claude/bmc-functionality"><code>mithro/qemu</code> <code>claude/bmc-functionality</code></a> @ <a href="https://github.com/mithro/qemu/commit/afb611e129e9a47bf876ce115b1f7189905f427b"><code>afb611e129</code></a> ·
+<strong>Program docs site:</strong> <a href="https://github.com/mithro/bmc-open-firmware-docs">bmc-open-firmware-docs</a> (<a href="https://bmc-open-firmware-docs.readthedocs.io/">ReadTheDocs</a>)</p>
+<p><strong>Scope.</strong> This report covers (a) the <strong>standalone Aspeed AST2050</strong> ("G3", ARM926EJ-S / ARMv5TE) SoC — every internal peripheral engine — and (b) the <strong>full ASUS KGPE-D16 motherboard</strong> BMC subsystem — every device wired to the AST2050 per the authoritative schematic netlist RE, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/schematic-wiring/AST2050-BMC-WIRING.md">AST2050-BMC-WIRING.md</a>.</p>
+<p><strong>Task-ID note.</strong> <code>#nnn</code> identifiers are <strong>internal tracker IDs</strong> (not GitHub issues), defined in
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">DEVICE-MATRIX.md</a>,
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">FULL-TASK-LIST.md</a> and
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">LOG.md</a>.</p>
+<p><strong>Status legend</strong> (used throughout; from the <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">DEVICE-MATRIX legend</a>):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="st ok">✅</span></td>
+<td>done — evidence-backed</td>
+</tr>
+<tr>
+<td><span class="st part">🔶</span></td>
+<td>partial</td>
+</tr>
+<tr>
+<td><span class="st blk">🔷</span></td>
+<td>blocked (external/rig reason in note)</td>
+</tr>
+<tr>
+<td><span class="st todo">⬜</span></td>
+<td>todo</td>
+</tr>
+<tr>
+<td><span class="st na">Ⓝ</span></td>
+<td>n/a (justified; must survive review)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Stack-column legend:</strong> QE = QEMU full emulation · UQ/US = U-Boot in QEMU / on silicon · LQ/LS/LU = Linux in QEMU / on silicon / userspace-validated · ZQ/ZS = Zephyr in QEMU / on silicon.</p>
+<hr />
+<h2 id="0-executive-summary">0. Executive summary</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Area</th>
+<th>State</th>
+<th>Section</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(1) QEMU emulation</td>
+<td><strong>27 <span class="st ok">✅</span> / 16 <span class="st part">🔶</span> / 6 <span class="st todo">⬜</span> / 2 <span class="st na">Ⓝ</span></strong> of 51 devices; faithful G3 machine <code>kgpe-d16-bmc</code>; 4 firmware boot oracles all pass</td>
+<td><a href="#1-qemu-emulation">§1</a></td>
+</tr>
+<tr>
+<td>(2) Emulation-vs-silicon tests</td>
+<td>51 devices × 8 stacks = 408-cell scoreboard; per-peripheral bare-metal fwtests + pytest; paired <code>qemu-*</code> / <code>real-hw-*</code> evidence</td>
+<td><a href="#2-individual-tests-emulation-vs-silicon">§2</a></td>
+</tr>
+<tr>
+<td>(3) Modern U-Boot</td>
+<td>QEMU: boots to console + DM_I2C works. Silicon: past alignment abort, hangs at serial init (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#168</a> open)</td>
+<td><a href="#3-modern-u-boot">§3</a></td>
+</tr>
+<tr>
+<td>(4) Linux kernel</td>
+<td>v6.6.70 + 9 out-of-tree patches; full QEMU chain (U-Boot→kernel→SSH); silicon-proven via netboot/NFS-root</td>
+<td><a href="#4-linux-kernel">§4</a></td>
+</tr>
+<tr>
+<td>(5) OpenBMC</td>
+<td>64 MB Redfish-only image; bmcweb Redfish 1.17.0 answers <strong>in QEMU and on real silicon</strong>; 7 of 9 BMC functions both-sides PASS</td>
+<td><a href="#5-openbmc">§5</a></td>
+</tr>
+<tr>
+<td>(6) Zephyr</td>
+<td>Out-of-tree ARMv5 SoC+board port; 7 drivers, ~17 samples; ZQ 17 <span class="st ok">✅</span> / ZS 11 <span class="st ok">✅</span>; runs on real AST2050 over JTAG</td>
+<td><a href="#6-zephyr">§6</a></td>
+</tr>
+<tr>
+<td>(7) WallaBMC</td>
+<td><strong>Planned only</strong> — no AST2050 code yet; Zephyr port is the enabling prerequisite</td>
+<td><a href="#7-wallabmc">§7</a></td>
+</tr>
+<tr>
+<td>(8) Real-hardware testing</td>
+<td>JTAG + P2A + serial + Tasmota power + netboot rig fully remote; volatile-DRAM boot (no flash); extensive silicon evidence</td>
+<td><a href="#8-real-hardware-testing-status">§8</a></td>
+</tr>
+<tr>
+<td>(9) CI</td>
+<td>6 workflows; the main stack workflow runs 26 jobs incl. all 4 boot oracles; <strong>all green</strong> on branch HEAD</td>
+<td><a href="#9-ci-status">§9</a></td>
+</tr>
+<tr>
+<td>(10) Open tasks</td>
+<td>~34 open/deferred numbered tasks + unnumbered follow-ons; 3 rig-blocked; 1 hard-deferred</td>
+<td><a href="#10-complete-open-task-list">§10</a></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="1-qemu-emulation">1. QEMU emulation</h2>
+<p>The faithful AST2050 model is the QEMU machine <strong><code>kgpe-d16-bmc</code></strong> in the
+<a href="https://github.com/mithro/qemu/tree/claude/bmc-functionality"><code>mithro/qemu</code> fork, branch <code>claude/bmc-functionality</code></a>
+(submodule at <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware"><code>asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu</code></a>,
+pinned to <a href="https://github.com/mithro/qemu/commit/afb611e129e9a47bf876ce115b1f7189905f427b"><code>afb611e129</code></a>).
+The AST2050 is <strong>not supported by upstream QEMU</strong> (earliest Aspeed SoC is the AST2400/G4); the G3 SoC class (<code>aspeed_soc_ast2050</code>, silicon-rev <code>0x00000202</code>) was built by specializing the AST2400 code with G3-faithful differences, validated against the
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/dell-c410x-firmware/datasheets/">AST2050 datasheet</a> and real-silicon reads.
+The per-peripheral model program was integrated via <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/25">PR #25</a>; its integration suite reached <strong>108 passed / 0 xfailed on 2026-07-13</strong>, with further tests added since (e.g. the <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-model/integration/test_timer.py">H-PLL rate test</a>).</p>
+<h3 id="11-firmware-boot-oracles-all-pass-in-ci">1.1 Firmware boot oracles (all pass in CI)</h3>
+<p>The governing principle: <em>the legacy/proprietary firmware is the faithfulness oracle and must always keep booting</em> — a change that breaks a legacy boot is a model bug, never a firmware bug.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Oracle</th>
+<th>Firmware</th>
+<th>Proves</th>
+<th>CI job (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/d16-qemu-stack.yml">workflow</a>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>C2</strong></td>
+<td>Our U-Boot → Linux v6.6.70 → dropbear SSH</td>
+<td>Modern full chain on the faithful machine</td>
+<td><code>boot-ssh</code>, <code>boot-uboot-ssh</code></td>
+</tr>
+<tr>
+<td><strong>C3</strong></td>
+<td>Raptor 2.6.28.9 kernel + musl userspace → SSH</td>
+<td>Vintage-kernel compatibility (Raptor's real AST2050 port)</td>
+<td><code>boot-raptor</code></td>
+</tr>
+<tr>
+<td><strong>C4</strong></td>
+<td><strong>Dell vendor firmware</strong> (proprietary, from <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/dell-c410x-firmware/backup">committed archives</a>) → appweb web service</td>
+<td>The strictest faithfulness oracle</td>
+<td><code>boot-c4-web</code></td>
+</tr>
+<tr>
+<td><strong>C-UBOOT</strong></td>
+<td><strong>Raptor G3-native U-Boot</strong> (real SCU + DDR2 lowlevel_init) → <code>boot#</code> prompt</td>
+<td>Reset-table + DRAM-controller faithfulness (via the default-off <code>g3-resets</code> SCU property)</td>
+<td><code>boot-uboot-scu</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="12-ast2050-standalone-soc-internal-peripheral-model-status-qe-column">1.2 AST2050 standalone SoC — internal peripheral model status (QE column)</h3>
+<p>Source: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">DEVICE-MATRIX.md</a> (machine-tallied 2026-07-21 by <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/tally.py">tally.py</a>; <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">#142</a> updated 2026-07-22).</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Row</th>
+<th>SoC block</th>
+<th>QE</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>35</td>
+<td>SCU (clocks / resets / pinmux / straps)</td>
+<td><span class="st ok">✅</span></td>
+<td>Incl. G3-faithful H-PLL/CLKIN (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/6140784">#142</a>, fixed 2026-07-22: 24 MHz CLKIN + SCU70[11:9] table; 3-oracle validated + <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/8f66b29">deterministic rate test</a>)</td>
+</tr>
+<tr>
+<td>36</td>
+<td>VIC interrupt controller (0x1E6C0000)</td>
+<td><span class="st ok">✅</span></td>
+<td>Faithful G3 VIC (<code>TYPE_ASPEED_2050_VIC</code>), secured as kernel irqchip patch via <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/26">PR #26</a></td>
+</tr>
+<tr>
+<td>37</td>
+<td>Timers (FTTMR010-style, 3 timers)</td>
+<td><span class="st ok">✅</span></td>
+<td>Incl. PCLK-rate regression test</td>
+</tr>
+<tr>
+<td>38</td>
+<td>Watchdog (single WDT — phantom WDT2 removed)</td>
+<td><span class="st ok">✅</span></td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/c109fab">WDT2 phantom removal</a> + <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/26426ab">redundant-gate revert</a></td>
+</tr>
+<tr>
+<td>39</td>
+<td>RTC</td>
+<td><span class="st ok">✅</span></td>
+<td>Alarm-source question open on silicon side (#212)</td>
+</tr>
+<tr>
+<td>40</td>
+<td>PWM / tach</td>
+<td><span class="st ok">✅</span></td>
+<td>Drivers <span class="st na">Ⓝ</span> — PWM balls repurposed as GPIO on this board</td>
+</tr>
+<tr>
+<td>41</td>
+<td>ADC</td>
+<td><span class="st na">Ⓝ</span></td>
+<td><strong>The AST2050 has no ADC block</strong> — phantom removed from the model</td>
+</tr>
+<tr>
+<td>42</td>
+<td>PECI engine (0x1E78B000)</td>
+<td><span class="st part">🔶</span></td>
+<td>Enumeration modeled; balls A9/B9 strapped to GPIO on this board</td>
+</tr>
+<tr>
+<td>43</td>
+<td>HACE hash/crypto (0x1E6E3000)</td>
+<td><span class="st part">🔶</span></td>
+<td>SHA-256 half done (#209, silicon-validated); AES/RC4 half open (#210, firmware-unexercised)</td>
+</tr>
+<tr>
+<td>44</td>
+<td>MIC memory-integrity check (0x1E640000)</td>
+<td><span class="st ok">✅</span></td>
+<td>Bit-exact validation (#203)</td>
+</tr>
+<tr>
+<td>45</td>
+<td>MDMA memory-DMA (0x1E740000)</td>
+<td><span class="st ok">✅</span></td>
+<td>Incl. SCU04 reset-hold (#208)</td>
+</tr>
+<tr>
+<td>46</td>
+<td>2D BitBLT accelerator</td>
+<td><span class="st todo">⬜</span></td>
+<td>Unexercised by all firmware oracles</td>
+</tr>
+<tr>
+<td>47</td>
+<td>PUART LPC pass-through UART (0x1E788000)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>48</td>
+<td>PCI arbiter (0x1E78C000)</td>
+<td><span class="st todo">⬜</span></td>
+<td></td>
+</tr>
+<tr>
+<td>49</td>
+<td>AHBC AHB-bus controller (0x1E600000)</td>
+<td><span class="st part">🔶</span></td>
+<td>Boot-remap modeled (#175)</td>
+</tr>
+<tr>
+<td>50</td>
+<td>A2P AHB→PCI bridge (0x1E720000)</td>
+<td><span class="st part">🔶</span></td>
+<td>P2A window modeled (SCU7C=0x202 readable through it, == silicon); SCU70[4] gate + P-Bus target open (#176)</td>
+</tr>
+<tr>
+<td>15</td>
+<td>I2C controller — <strong>7 engines</strong> (phantom engines 8–14 removed)</td>
+<td><span class="st ok">✅</span></td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">#211</a>: G3 has 7 engines per datasheet; <code>aspeed.i2c-ast2050</code> type</td>
+</tr>
+<tr>
+<td>30</td>
+<td>UART console (UART2 @ 0x1E784000)</td>
+<td><span class="st ok">✅</span></td>
+<td>Phantom UART3/4 removal deferred (#144 — console-critical shared code)</td>
+</tr>
+<tr>
+<td>1</td>
+<td>SDMC DDR2 controller (64 MB)</td>
+<td><span class="st ok">✅</span></td>
+<td>64 MB fixed (HW-verified); DLL/4-bank fixes</td>
+</tr>
+<tr>
+<td>—</td>
+<td>SMC flash controller / SPI1</td>
+<td><span class="st ok">✅</span></td>
+<td><strong>Phantom SPI1 removed</strong> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/e88528f">dual-oracle validated</a>); G3 has one flash controller</td>
+</tr>
+<tr>
+<td>—</td>
+<td>USB 1.1 device / vhub</td>
+<td><span class="st part">🔶</span></td>
+<td>Gadget enumeration works; EP-DMA datapath partial. <strong>No EHCI/OHCI host controller exists on the AST2050</strong> (phantom EHCI gated off)</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Video engine / VGA</td>
+<td><span class="st part">🔶</span></td>
+<td>Real frame capture + JPEG datapath works in CI (<code>boot-video-capture</code>); CRTC block open (#197)</td>
+</tr>
+<tr>
+<td>—</td>
+<td>LPC (KCS ×3, vUART, port-80h snoop, iLPC2AHB)</td>
+<td><span class="st ok">✅</span>/<span class="st part">🔶</span></td>
+<td>KCS + vUART <span class="st ok">✅</span>; snoop <span class="st part">🔶</span>; HICR5/6 decode open (#206)</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Ethernet MAC ×2 (verified: datasheet "two MAC modules")</td>
+<td><span class="st ok">✅</span></td>
+<td>ftgmac100 + RTL8201CP PHY model; FAST_MODE RX bug reproduced then fixed both sides</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="13-kgpe-d16-board-level-device-model-status-qe-column">1.3 KGPE-D16 board-level device model status (QE column)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Row</th>
+<th>Board device (schematic §)</th>
+<th>QE</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>QU2 DDR2 SDRAM (§3)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>2</td>
+<td>BMC_FW1 SPI flash, socketed (§4)</td>
+<td><span class="st ok">✅</span></td>
+<td>Model done; silicon cells rig-blocked (socket empty on bench)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>LPC KCS / IPMI → SP5100 (§5)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>4</td>
+<td>LPC Ch#3 BT "mailbox" (§5)</td>
+<td><span class="st todo">⬜</span></td>
+<td>Reclassified (#134)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>LPC port-80h POST snoop (§5)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>6</td>
+<td>LPC vUART (§5)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>7</td>
+<td>TPM1 LPC pass-through (§5/§15)</td>
+<td><span class="st todo">⬜</span></td>
+<td>Header unpopulated; drivers <span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>8</td>
+<td>PCI-33 / iKVM video capture (§6)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>9</td>
+<td>USB device / vhub → SP5100 (§9)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Eth MAC1 MII → RTL8201N U5 (§7)</td>
+<td><span class="st ok">✅</span></td>
+<td>Dedicated BMC mgmt PHY (eth0)</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Eth MAC2 RMII2 / NC-SI → dual 82574L (§7)</td>
+<td><span class="st part">🔶</span></td>
+<td>NC-SI channel discovery works; OEM-0x157 responder open (#204)</td>
+</tr>
+<tr>
+<td>12</td>
+<td>VGA DAC → VGA1 (§8)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>13</td>
+<td>VGA sync buffer QU6 (§8)</td>
+<td><span class="st na">Ⓝ</span></td>
+<td>Passive buffer</td>
+</tr>
+<tr>
+<td>14</td>
+<td>DDC / EDID I2C → VGA1 (§8)</td>
+<td><span class="st todo">⬜</span></td>
+<td>#178, partly blocked on CRTC #197</td>
+</tr>
+<tr>
+<td>15</td>
+<td>AST2050 I2C controller (7 engines)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>16</td>
+<td>W83795G hwmon (QU4, I2C2 @0x2F)</td>
+<td><span class="st part">🔶</span></td>
+<td>SmartFan auto-mode + live-alarm scope remains (#183)</td>
+</tr>
+<tr>
+<td>17</td>
+<td>QU9/QU5/U23 I2C mux fabric</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>18</td>
+<td>DIMM SPD ×16 (I2C10/11 via mux)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>19</td>
+<td>DIMM TSOD ×16 (jc42)</td>
+<td><span class="st ok">✅</span></td>
+<td>(#205)</td>
+</tr>
+<tr>
+<td>20</td>
+<td>HT24LC08 FRU EEPROM (U25, I2C5 @0x54)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>21/22</td>
+<td>W83601G DIMM-LED expanders U27/U28 (I2C5)</td>
+<td><span class="st ok">✅</span></td>
+<td>Faithful <a href="https://github.com/mithro/qemu/tree/claude/bmc-functionality"><code>hw/gpio/w83601g.c</code></a> model</td>
+</tr>
+<tr>
+<td>23</td>
+<td>SB-TSI CPU thermal (I2C4 @0x4C/0x4D)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>24</td>
+<td>PSU PMBus (PSUSMB1, I2C1)</td>
+<td><span class="st ok">✅</span></td>
+<td>Phantom-sensor fix (#198)</td>
+</tr>
+<tr>
+<td>25</td>
+<td>SMBus ALERT (SALT1/2, I2C7)</td>
+<td><span class="st todo">⬜</span></td>
+<td>#135</td>
+</tr>
+<tr>
+<td>26</td>
+<td>Aux front panel (AUX_PANEL1, I2C8)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>26b</td>
+<td>PCIe-slot 1–5 SMBus + TPM-hdr I2C (I2C8_SW far ends)</td>
+<td><span class="st part">🔶</span></td>
+<td>Host-power-gated bus segments</td>
+</tr>
+<tr>
+<td>27</td>
+<td>Power control (ATXPSON#/PWRBTN#/SYSRESET#/SYS_PWRGD)</td>
+<td><span class="st ok">✅</span></td>
+<td>Modeled pwrseq latch; F2 CI job</td>
+</tr>
+<tr>
+<td>28</td>
+<td>Platform monitors (THERMTRIP#/PROCHOT#/DDR_THERM#/NMI#)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>29</td>
+<td>Platform control (CLRTC#/BIOSREVRY#/CPUnDISABLE#/PCIRST#)</td>
+<td><span class="st part">🔶</span></td>
+<td></td>
+</tr>
+<tr>
+<td>30</td>
+<td>UART console (UART2 / AST_UART1)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>31</td>
+<td>UART1 / SOL via QU8 mux → Super-I/O (§12)</td>
+<td><span class="st part">🔶</span></td>
+<td>#133</td>
+</tr>
+<tr>
+<td>32</td>
+<td>LEDs + chassis-locator button</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>33</td>
+<td>Straps (IKVMEN#/SOLEN#/IPMI_SEL)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>34</td>
+<td>24 MHz clock input (QOSC1)</td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>—</td>
+<td>AST_JTAG1 (§13)</td>
+<td><span class="st na">Ⓝ</span></td>
+<td>Debug port — the silicon access path itself</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="14-qe-tally-51-devices">1.4 QE tally (51 devices)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th><span class="st ok">✅</span> done</th>
+<th><span class="st part">🔶</span> partial</th>
+<th><span class="st blk">🔷</span> blocked</th>
+<th><span class="st todo">⬜</span> todo</th>
+<th><span class="st na">Ⓝ</span> n/a</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>27</strong></td>
+<td><strong>16</strong></td>
+<td>0</td>
+<td>6</td>
+<td>2</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="2-individual-tests-emulation-vs-silicon">2. Individual tests: emulation vs silicon</h2>
+<h3 id="21-test-harnesses">2.1 Test harnesses</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Harness</th>
+<th>What it does</th>
+<th>Where</th>
+<th>Runs against</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bare-metal <strong>fwtests</strong></td>
+<td>Per-peripheral register-level tests (<code>fwtest.c</code> per peripheral) booted with <code>-M kgpe-d16-bmc</code>, asserting reset values + functional behaviour + rates</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-model"><code>qemu-model/peripherals/</code></a></td>
+<td>QEMU (local; <strong>not CI-gated</strong>)</td>
+</tr>
+<tr>
+<td><strong>pytest integration</strong></td>
+<td>Drives the fwtests + qtest/QMP checks (e.g. <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-model/integration/test_timer.py">test_timer.py</a> PCLK/1MHz ratio, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-model">test_power.py</a> pwrseq, test_lpc.py KCS)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-model"><code>qemu-model/integration/</code></a></td>
+<td>QEMU (F2 + KCS subsets run in CI)</td>
+</tr>
+<tr>
+<td><strong>Zephyr smoke samples</strong></td>
+<td>~17 driver samples (<code>*_smoke</code>) built once, then booted <strong>both</strong> in QEMU and on real silicon over JTAG</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr"><code>zephyr/samples/</code></a></td>
+<td><strong>QEMU + silicon</strong> (same binary class)</td>
+</tr>
+<tr>
+<td><strong>Feature test scripts</strong></td>
+<td>End-to-end BMC-function tests (F1–F9: power, sensors, SOL, IPMI, USB, NC-SI, KVM, fw-update)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality"><code>openbmc/bmc-functionality/</code></a></td>
+<td>QEMU in CI; silicon manually</td>
+</tr>
+<tr>
+<td><strong>Paired evidence</strong></td>
+<td>Every silicon claim carries a transcript; QEMU and silicon results stored side-by-side (<code>qemu-*</code> vs <code>real-hw-*</code> dirs)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence"><code>evidence/</code></a> (41 dirs)</td>
+<td>both</td>
+</tr>
+<tr>
+<td><strong>Cross-access checks</strong></td>
+<td>Same register read via independent paths must agree (e.g. SCU7C=0x202 via JTAG, via culvert P2A, via Zephyr, in QEMU)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/JTAG-USAGE-GUIDE.md">JTAG-USAGE-GUIDE.md</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">PR #22</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/24">PR #24</a></td>
+<td>silicon vs QEMU</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>Local-only caveat:</strong> the qemu-model fwtest integration suite runs from a separate out-of-tree build (<code>qemu/build</code>) and is not wired into CI; after any QEMU change <strong>both</strong> build dirs must be rebuilt or the fwtests run a stale binary.</p>
+</blockquote>
+<h3 id="22-the-full-51-8-scoreboard">2.2 The full 51 × 8 scoreboard</h3>
+<p>This grid <strong>is</strong> the emulation-vs-silicon comparison, per device per stack
+(source: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">DEVICE-MATRIX.md</a>; detail per cell in <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">FULL-TASK-LIST.md</a>):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Device</th>
+<th>QE</th>
+<th>UQ</th>
+<th>US</th>
+<th>LQ</th>
+<th>LS</th>
+<th>LU</th>
+<th>ZQ</th>
+<th>ZS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>QU2 DDR2 SDRAM</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>2</td>
+<td>BMC_FW1 SPI flash</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st blk">🔷</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st blk">🔷</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>3</td>
+<td>LPC KCS / IPMI</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>4</td>
+<td>LPC Ch#3 BT</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>5</td>
+<td>LPC port-80h snoop</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>6</td>
+<td>LPC vUART</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>7</td>
+<td>TPM1 LPC pass-through</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>8</td>
+<td>PCI-33 / iKVM video capture</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>9</td>
+<td>USB device / vhub</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st blk">🔷</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Eth MAC1 → RTL8201N</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>11</td>
+<td>Eth MAC2 RMII2/NC-SI</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>12</td>
+<td>VGA DAC output</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>13</td>
+<td>VGA sync buffer QU6</td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>14</td>
+<td>DDC / EDID I2C</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>15</td>
+<td>I2C controller (7 engines)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>16</td>
+<td>W83795G hwmon</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>17</td>
+<td>QU9/QU5/U23 mux fabric</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>18</td>
+<td>DIMM SPD ×16</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>19</td>
+<td>DIMM TSOD ×16 (jc42)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>20</td>
+<td>FRU EEPROM (U25)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>21</td>
+<td>W83601G U27</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>22</td>
+<td>W83601G U28</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>23</td>
+<td>SB-TSI CPU thermal</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>24</td>
+<td>PSU PMBus</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>25</td>
+<td>SMBus ALERT</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>26</td>
+<td>Aux front panel</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>26b</td>
+<td>PCIe-slot SMBus far-ends</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>27</td>
+<td>Power control</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>28</td>
+<td>Platform monitors</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+</tr>
+<tr>
+<td>29</td>
+<td>Platform control</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>30</td>
+<td>UART console</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+</tr>
+<tr>
+<td>31</td>
+<td>UART1 / SOL mux</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>32</td>
+<td>LEDs + locator button</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>33</td>
+<td>Straps</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+</tr>
+<tr>
+<td>34</td>
+<td>24 MHz clock (QOSC1)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>—</td>
+<td>AST_JTAG1</td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>35</td>
+<td>SCU</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>36</td>
+<td>VIC</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>37</td>
+<td>Timers</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>38</td>
+<td>Watchdog</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td>39</td>
+<td>RTC</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+</tr>
+<tr>
+<td>40</td>
+<td>PWM / tach</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>41</td>
+<td>ADC (absent on G3)</td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>42</td>
+<td>PECI</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>43</td>
+<td>HACE hash/crypto</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>44</td>
+<td>MIC</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>45</td>
+<td>MDMA</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>46</td>
+<td>2D BitBLT</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>47</td>
+<td>PUART</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st todo">⬜</span></td>
+</tr>
+<tr>
+<td>48</td>
+<td>PCI arbiter</td>
+<td><span class="st todo">⬜</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>49</td>
+<td>AHBC</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+<tr>
+<td>50</td>
+<td>A2P AHB→PCI bridge</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+<td><span class="st na">Ⓝ</span></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="23-column-tallies-408-cells-machine-counted-2026-07-21">2.3 Column tallies (408 cells; machine-counted 2026-07-21)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Stack × env</th>
+<th><span class="st ok">✅</span></th>
+<th><span class="st part">🔶</span></th>
+<th><span class="st blk">🔷</span></th>
+<th><span class="st todo">⬜</span></th>
+<th><span class="st na">Ⓝ</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>QE — QEMU emulation</td>
+<td>27</td>
+<td>16</td>
+<td>0</td>
+<td>6</td>
+<td>2</td>
+</tr>
+<tr>
+<td>UQ — U-Boot @ QEMU</td>
+<td>10</td>
+<td>4</td>
+<td>0</td>
+<td>2</td>
+<td>35</td>
+</tr>
+<tr>
+<td>US — U-Boot @ silicon</td>
+<td>8</td>
+<td>5</td>
+<td>1</td>
+<td>2</td>
+<td>35</td>
+</tr>
+<tr>
+<td>LQ — Linux @ QEMU</td>
+<td>23</td>
+<td>10</td>
+<td>0</td>
+<td>8</td>
+<td>10</td>
+</tr>
+<tr>
+<td>LS — Linux @ silicon</td>
+<td>20</td>
+<td>3</td>
+<td>2</td>
+<td>15</td>
+<td>11</td>
+</tr>
+<tr>
+<td>LU — Linux userspace</td>
+<td>16</td>
+<td>6</td>
+<td>0</td>
+<td>11</td>
+<td>18</td>
+</tr>
+<tr>
+<td>ZQ — Zephyr @ QEMU</td>
+<td>17</td>
+<td>5</td>
+<td>0</td>
+<td>19</td>
+<td>10</td>
+</tr>
+<tr>
+<td>ZS — Zephyr @ silicon</td>
+<td>11</td>
+<td>4</td>
+<td>0</td>
+<td>25</td>
+<td>11</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="24-bmc-function-level-qemu-vs-silicon-from-silicon-statusmd">2.4 BMC-function level: QEMU vs silicon (from <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/SILICON-STATUS.md">SILICON-STATUS.md</a>)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>BMC function</th>
+<th>QEMU</th>
+<th>Silicon</th>
+<th>Notes / evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Host power on/off/reset</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>Plug-power-meter verified (3 W→103 W→4 W); <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">evidence/qemu</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Connect USB devices</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>Via USB/IP gadget path; vhub EP-DMA datapath silicon-retest rig-blocked</td>
+</tr>
+<tr>
+<td>3a</td>
+<td>See virtual VGA screen</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>Real silicon JPEG captured (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">real-hw-video</a>)</td>
+</tr>
+<tr>
+<td>3b</td>
+<td>Send keyboard events</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>EV_KEY KEY_A on a real host evdev device</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Full sensors</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>18 live sensors over LAN + host-KCS</td>
+</tr>
+<tr>
+<td>5</td>
+<td>System identification</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>mc info 2623/0x0D16, FRU "ASUSTeK KGPE-D16", real 256-byte DIMM SPD</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Serial-over-LAN</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">◐</span></td>
+<td>Silicon byte-flow rig-blocked (BMC_PRESENT#-high strap hands QU8 to host RS-232)</td>
+</tr>
+<tr>
+<td>7a</td>
+<td>IPMI over LAN (RMCP+)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>7b</td>
+<td>IPMI host-local (KCS)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>x86 host <code>ipmitool -I open</code> → "Found new BMC 0x0d16"</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Update firmware / BIOS</td>
+<td><span class="st part">◐</span></td>
+<td><span class="st blk">✗</span></td>
+<td>Redfish UpdateService ingest only; <strong>host-BIOS flash is board-impossible</strong> (BIOS SPI on SP5100 only, no AST_SPI node — schematic-confirmed)</td>
+</tr>
+<tr>
+<td>9</td>
+<td>NC-SI host-NIC piggyback</td>
+<td><span class="st part">◐</span></td>
+<td><span class="st part">◐</span></td>
+<td>QEMU discovers a channel on MAC2; BMC-side silicon discovery not yet run</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="3-modern-u-boot">3. Modern U-Boot</h2>
+<p>Target: <strong>OpenBMC U-Boot v2019.04-aspeed-openbmc</strong> (commit <code>dbd95a10</code>), using <code>evb-ast2400_defconfig</code> as the G3 shim, with the out-of-tree patch series in
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches"><code>uboot-patches/</code></a>. The AST2050 is <strong>not supported by upstream U-Boot</strong>.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Status</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>QEMU</strong></td>
+<td><span class="st ok">✅</span> Boots to <code>ast#</code> console; DM_I2C reads real devices</td>
+<td>Evidence: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d15-uboot/01</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d15-uboot/02</a>; built in CI (<code>build-uboot</code>) and used by the C2 full chain + C4 + C3 boots</td>
+</tr>
+<tr>
+<td><strong>Silicon</strong></td>
+<td><span class="st part">🔶</span> Runs, no console yet — <strong>#168 open</strong></td>
+<td>First JTAG boot data-aborted (DFSR=0x1 <strong>alignment fault</strong>: <code>cpu_init_cp15</code> sets the SCTLR A-bit; QEMU is lenient, silicon is not). A-bit fix (<code>orr→bic</code>) landed → now runs ~0x38000 deep into Supervisor mode, but <strong>hangs before/at <code>serial_init</code></strong> — the 0x1E784000 UART is never configured (LCR=0, divisor=0); suspected G3 UART-clock/divisor gap. Evidence: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d15-uboot/03-modern-uboot-silicon-attempt-FAILED.txt</a></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="31-u-boot-patch-series">3.1 U-Boot patch series</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Patch</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches/0001-ast2050-p2a-dram-boot.patch">0001-ast2050-p2a-dram-boot.patch</a></td>
+<td><strong>Raptor</strong> U-Boot P2A DRAM-boot for real silicon: DDR2 4-bank/64 MB config (MCR04 0xd89→0x585), 1200-baud console, env=NOWHERE</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches/0002-kgpe-d16-enable-i2c-buses.patch">0002-kgpe-d16-enable-i2c-buses.patch</a></td>
+<td>Enable the I2C buses in modern U-Boot</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches/0003-kgpe-d16-i2c-scu-reset-release.patch">0003-kgpe-d16-i2c-scu-reset-release.patch</a></td>
+<td>G3 SCU I2C reset-release so DM_I2C works (#167 fix)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches/0004-kgpe-d16-qemu-dram-init-stack.patch">0004-kgpe-d16-qemu-dram-init-stack.patch</a></td>
+<td>Relocate the pre-reloc init stack to DRAM (the G3 has <strong>no SRAM at 0x1E720000</strong> — JTAG-proven; fixed the recurring C4/C2 0-byte-serial regression)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/uboot-patches/0005-kgpe-d16-qemu-dram-preconsole.patch">0005-kgpe-d16-qemu-dram-preconsole.patch</a></td>
+<td>Pre-console relocation for the DRAM-loaded image</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="32-raptor-g3-native-u-boot-the-u-boot-oracle">3.2 Raptor G3-native U-Boot (the U-Boot oracle)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Status</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>QEMU</td>
+<td><span class="st ok">✅</span></td>
+<td>Boots to <code>boot#</code> through its <strong>real SCU + DDR2 lowlevel_init</strong> on the faithful G3 SCU (<code>g3-resets=on</code>); CI job <code>boot-uboot-scu</code>; source: <a href="https://github.com/raptor-engineering/ast2050-uboot">raptor-engineering/ast2050-uboot</a>, build under <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/raptor"><code>raptor/</code></a></td>
+</tr>
+<tr>
+<td>Silicon</td>
+<td><span class="st ok">✅</span></td>
+<td>Boots interactively to <code>boot#</code> on the real AST2050 (P2A DRAM boot, patch 0001), then TFTP-boots Linux — proven in the <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">culvert G3 port</a> work with <a href="https://github.com/mithro/culvert">mithro/culvert</a></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="4-linux-kernel">4. Linux kernel</h2>
+<p>Target: <strong>mainline v6.6.70</strong> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/scripts/build-kernel.sh">build-kernel.sh</a>) with 9 out-of-tree patches and a hand-written board DTS. The AST2050 is <strong>not supported by mainline Linux</strong> (earliest is AST2400/G4).</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Status</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>QEMU</strong></td>
+<td><span class="st ok">✅</span> Full chain</td>
+<td>U-Boot → <code>bootm</code> → kernel → dropbear <strong>SSH login</strong> on <code>-M kgpe-d16-bmc</code> (C2, in CI); NFS-root variant (C5) also in CI</td>
+</tr>
+<tr>
+<td><strong>Silicon</strong></td>
+<td><span class="st ok">✅</span> Netboot-proven</td>
+<td>JTAG/P2A boot → TFTP kernel → NFS or initramfs root; watchdog, RTC (set/get + wakealarm), 18 sensors, USB gadget enumeration on a real host, <code>/dev/video0</code> JPEG capture — all on the real AST2050</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="41-kernel-patch-series-kernelpatches">4.1 Kernel patch series (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches"><code>kernel/patches/</code></a>)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Patch</th>
+<th>Purpose</th>
+<th>Silicon-proven?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0001-clk-aspeed-add-ast2050-support.patch">0001-clk-aspeed-add-ast2050-support.patch</a></td>
+<td>AST2050/AST1100 clock support incl. the <strong>G3 shared UARTCLK gate</strong> (SCU0C[15]) that <code>clk_disable_unused</code> was killing</td>
+<td><span class="st ok">✅</span> (console survives, no 370 s WDT reset)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch">0002-ftgmac100-set-mac-speed-from-cur_speed-g3.patch</a></td>
+<td>G3 MAC SW_RST clears FAST_MODE → RX=0; re-derive speed</td>
+<td><span class="st ok">✅</span> (fixed the last real-HW OpenBMC blocker)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0003-hwmon-w83795-modern-hwmon-registration.patch">0003-hwmon-w83795-modern-hwmon-registration.patch</a></td>
+<td>W83795 modern hwmon registration</td>
+<td><span class="st ok">✅</span> (fan1=2657 rpm real reads)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0004-ipmi-kcs-bmc-aspeed-optional-lpc-clock.patch">0004-ipmi-kcs-bmc-aspeed-optional-lpc-clock.patch</a></td>
+<td>Hold the G3 LPC LCLK via the KCS node</td>
+<td><span class="st ok">✅</span></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0005-i2c-aspeed-program-full-ac-timing.patch">0005-i2c-aspeed-program-full-ac-timing.patch</a></td>
+<td>Program full I2C AC-timing (G3 wedged in MSTART on undefined tHDSTA)</td>
+<td><span class="st ok">✅</span> (i2cdetect completes)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0006-media-aspeed-video-ast2050-g3-jpeg.patch">0006-media-aspeed-video-ast2050-g3-jpeg.patch</a></td>
+<td>aspeed-video G3 JPEG capture</td>
+<td><span class="st ok">✅</span> (silicon JPEG)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0007-usb-aspeed-vhub-ast2050-g3.patch">0007-usb-aspeed-vhub-ast2050-g3.patch</a></td>
+<td>aspeed-vhub G3 port (PHY-ready gate + ISR[18] de-livelock)</td>
+<td>QEMU <span class="st ok">✅</span> / silicon EP-DMA rig-blocked</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0008-pinctrl-aspeed-g3-strap-phantom-quirk.patch">0008-pinctrl-aspeed-g3-strap-phantom-quirk.patch</a></td>
+<td>pinctrl G3 strap phantom quirk</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel/patches/0009-rtc-aspeed-ast2050-counter.patch">0009-rtc-aspeed-ast2050-counter.patch</a></td>
+<td>AST2050 RTC counter driver</td>
+<td><span class="st ok">✅</span> (silicon set/get + wakealarm)</td>
+</tr>
+</tbody>
+</table></div>
+<p>Board DTS: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/dts/aspeed-bmc-asus-kgpe-d16.dts">aspeed-bmc-asus-kgpe-d16.dts</a> (G3 VIC binding, 64 MB, board I2C topology; <code>wdt2</code> disabled — single-WDT G3). Config variants: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/kernel"><code>kernel/</code></a> (<code>kgpe-d16.config</code> + <code>-nfsroot</code>, <code>-kvm</code>, <code>-usb</code>, <code>-usbip</code>, <code>-video-cma</code>, <code>-swap</code>).</p>
+<p><strong>Legacy oracle:</strong> the Raptor <strong>2.6.28.9</strong> kernel (Raptor Engineering's original AST2050 port, analysed in <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/RAPTOR-PORTING-GUIDE.md">RAPTOR-PORTING-GUIDE.md</a>) builds with vintage gcc-4.9.4 and boots to SSH in CI (C3, incl. musl userspace — see <a href="#93-recent-ci-incident-musl-toolchain">§9.3</a>).</p>
+<hr />
+<h2 id="5-openbmc">5. OpenBMC</h2>
+<p><strong>The hard constraint: the AST2050 has 64 MB DDR2 (hardware-verified).</strong> Modern full OpenBMC does not fit; the approach is a <strong>stripped Redfish-only image</strong> — see <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/README.md">openbmc/README.md</a>.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Status</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>QEMU</strong></td>
+<td><span class="st ok">✅</span></td>
+<td>Boots over NFS-root at <code>mem=64M</code> on <code>-M kgpe-d16-bmc</code> (52,376 K available, zero OOM); systemd → bmcweb; <code>GET /redfish/v1</code> → HTTP 200, <strong>RedfishVersion 1.17.0</strong>; power/sensors/SOL/IPMI/fw-update feature jobs all green in CI</td>
+</tr>
+<tr>
+<td><strong>Silicon</strong></td>
+<td><span class="st ok">✅</span></td>
+<td><strong>OpenBMC NFS-root boots on the real AST2050</strong>; <code>curl https://192.168.66.2/redfish/v1</code> answers RedfishVersion 1.17.0 (2026-07-11, after the ftgmac100 RX fix)</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="51-key-artifacts">5.1 Key artifacts</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Artifact</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/obmc-phosphor-image-ast2050-redfish.bb">obmc-phosphor-image-ast2050-redfish.bb</a></td>
+<td>The 64 MB Redfish-only image recipe (drops webui-vue/nodejs, ikvm, full IPMI daemons; ARMv5TE <code>quanta-q71l</code> machine — same ARM926EJ-S class as the AST2050)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/obmc-phosphor-image-ast2050-full.bb">obmc-phosphor-image-ast2050-full.bb</a></td>
+<td>Fuller image for NFS-root feature testing (built on a self-hosted runner, published as the <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/releases"><code>openbmc-rootfs</code> release</a> asset)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/recipes"><code>openbmc/recipes/</code></a></td>
+<td>entity-manager / hwmon / ipmi / power / settings recipes + <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/recipes/sync-to-openbmc-tree.sh">sync-to-openbmc-tree.sh</a> (CI-linted by <code>verify-sync-complete.py</code>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/scripts/stage-openbmc-nfsroot.sh">stage-openbmc-nfsroot.sh</a> + <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/scripts/openbmc-nfsroot-test.py">openbmc-nfsroot-test.py</a></td>
+<td>NFS-root staging + boot/Redfish assertion</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality">F1–F9 feature docs + tests</a></td>
+<td>Per-function status doc + test script + evidence (see §2.4 table)</td>
+</tr>
+<tr>
+<td>Earlier milestone</td>
+<td>Modern OpenBMC (Linux 6.18.38 + bmcweb) built from source + Redfish v1.17.0 + remote power + vKVM in QEMU romulus — <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">PR #22 (docs)</a> era, superseded by the 64 MB G3-native work</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="6-zephyr">6. Zephyr</h2>
+<p>Out-of-tree ARMv5/ARM926EJ-S port under <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr"><code>asus-kgpe-d16-firmware/zephyr/</code></a> (BOARD_ROOT/SOC_ROOT overlay — <strong>no fork branch needed</strong>; reuses upstream ARM9 scaffolding from zephyrproject-rtos <a href="https://github.com/zephyrproject-rtos/zephyr/pull/101016">PR #101016</a> and open <a href="https://github.com/zephyrproject-rtos/zephyr/pull/103557">PR #103557</a>). Plan: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr/PORT-PLAN.md">PORT-PLAN.md</a>; evidence: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d14-zephyr/</a> (36 files).</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SoC</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr/soc/aspeed_g3"><code>zephyr/soc/aspeed_g3/ast2050/</code></a> (<code>SOC_ASPEED_AST2050</code> → <code>CPU_ARM926EJ_S</code>/ARMv5TEJ)</td>
+</tr>
+<tr>
+<td>Board</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr/boards/aspeed/kgpe_d16_bmc"><code>zephyr/boards/aspeed/kgpe_d16_bmc/</code></a></td>
+</tr>
+<tr>
+<td>Drivers</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr/drivers"><code>zephyr/drivers/</code></a>: <code>gpio_aspeed_g3</code>, <code>gpio_w83601g</code>, <code>i2c_aspeed_g3</code>, <code>rtc_aspeed_g3</code>, <code>wdt_aspeed_g3</code>, <code>sensor/sbtsi</code>, <code>sensor/w83795</code> (console = in-tree <code>uart_ns16550</code>)</td>
+</tr>
+<tr>
+<td>Samples (~17)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/zephyr/samples"><code>zephyr/samples/</code></a>: heartbeat/gpio/gpioh2-irq/i2c-scan/i2c/rtc/wdt/wdt-intr/w83795/w83795-fanctl/w83601g/sbtsi/fru/spd/scu/power/pmbus smokes</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="61-driver-validation-qemu-vs-silicon">6.1 Driver validation: QEMU vs silicon</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Driver / capability</th>
+<th>QEMU (ZQ)</th>
+<th>Silicon (ZS)</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kernel boot: banner (M0) → preemptive tick (M1, VIC+timer)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>4 silicon-only bugs found+fixed via UART boot-bisect (cache/TLB invalidate, VIC ack-at-entry, enable-glitch tick, entry staleness)</td>
+</tr>
+<tr>
+<td>GPIO (<code>gpio_aspeed_g3</code>)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>I2C (<code>i2c_aspeed_g3</code>)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>i2c-scan finds the FRU on real hardware</td>
+</tr>
+<tr>
+<td>WDT (incl. interrupt mode #189)</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>SCU</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>SCU7C=0x0202 on silicon == QEMU</td>
+</tr>
+<tr>
+<td>RTC counter</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>RTC alarm</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st part">🔶</span></td>
+<td>VIC-source claim (22 vs 26) <strong>unverified</strong> — #212 open</td>
+</tr>
+<tr>
+<td>W83795 hwmon</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>Read the real hwmon: live-drifting fan/temp</td>
+</tr>
+<tr>
+<td>W83601G DIMM-LED expanders</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td>Real LED drive on both chips</td>
+</tr>
+<tr>
+<td>FRU EEPROM</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st ok">✅</span></td>
+<td></td>
+</tr>
+<tr>
+<td>SB-TSI CPU thermal</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td>Silicon attempt −EIO — needs host CPU powered (#150)</td>
+</tr>
+<tr>
+<td>PSU PMBus</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td>Rig has no PMBus PSU (#165)</td>
+</tr>
+<tr>
+<td>Power control</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td>Silicon <code>power_smoke</code> FAILs on the GPIOH2 standby-rail sense read (#162)</td>
+</tr>
+<tr>
+<td>SPD via mux</td>
+<td><span class="st ok">✅</span></td>
+<td><span class="st todo">⬜</span></td>
+<td>Host/rig-gated</td>
+</tr>
+<tr>
+<td>UART console</td>
+<td><span class="st part">🔶</span></td>
+<td><span class="st part">🔶</span></td>
+<td>Static-mapped console; full driver-model console open</td>
+</tr>
+</tbody>
+</table></div>
+<p>Zephyr silicon boots run over JTAG (<code>boot-zephyr-silicon*.sh</code> in the rig's <code>~/openocd-bmc/</code>), west workspace + SDK 0.17.0 (<code>arm-zephyr-eabi</code>).</p>
+<hr />
+<h2 id="7-wallabmc">7. WallaBMC</h2>
+<p><strong>State: planned only — no AST2050/KGPE-D16 code exists yet.</strong> WallaBMC (<a href="https://github.com/tenstorrent/wallabmc">upstream</a>; fork <a href="https://github.com/mithro/wallabmc">mithro/wallabmc</a>) is a lightweight <strong>Zephyr-based</strong> BMC firmware (Redfish, web, power, console; Apache-2.0), and is the program's designated <em>Zephyr-application track</em> — the leaner fallback beside Linux-based OpenBMC for the 64 MB AST2050.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Status</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Program definition (OpenBMC = Linux track, WallaBMC = Zephyr track)</td>
+<td>Documented</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/docs/plans/2026-07-01-open-bmc-firmware-program.md">2026-07-01 program plan</a> (Phase 3)</td>
+</tr>
+<tr>
+<td>Fork created</td>
+<td><span class="st ok">✅</span></td>
+<td><a href="https://github.com/mithro/wallabmc">mithro/wallabmc</a> (upstream targets STM32/ESP32-class MCUs)</td>
+</tr>
+<tr>
+<td>Enabling prerequisite: Zephyr ARMv5/AST2050 port</td>
+<td><span class="st part">🔶</span> In progress and well advanced</td>
+<td>§6 above</td>
+</tr>
+<tr>
+<td>WallaBMC on AST2050 in QEMU</td>
+<td><span class="st todo">⬜</span> Not started</td>
+<td>Acceptance per plan: boots in QEMU via <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/firmware-testbench">firmware-testbench</a> → SSH + <code>GET /redfish/v1</code> + sensors</td>
+</tr>
+<tr>
+<td>WallaBMC on real silicon</td>
+<td><span class="st todo">⬜</span> Not started</td>
+<td></td>
+</tr>
+<tr>
+<td>Known upstream gaps to close</td>
+<td>Sensors/fans/PCIe support absent upstream</td>
+<td>Plan Phase 3</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="8-real-hardware-testing-status">8. Real-hardware testing status</h2>
+<h3 id="81-the-rig-fully-remote-controllable">8.1 The rig (fully remote-controllable)</h3>
+<p>Main doc: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/HARDWARE-ACCESS.md">HARDWARE-ACCESS.md</a>. Two SSH bridge hosts: <code>rpi4-asus-aspeed2050-dev</code> (RPi4B — JTAG/serial/power/video/PXE) and an Orange Pi (USB gadget). Documented in <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/19">PR #19</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/23">PR #23</a>.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Access path</th>
+<th>Mechanism</th>
+<th>Docs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>JTAG run-control</strong> of the AST2050</td>
+<td>RPi4 GPIO bit-bang + OpenOCD 0.12 → 20-pin <code>AST_JTAG1</code>; IDCODE <code>0x07926f0f</code>; GDB :3333</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/JTAG-USAGE-GUIDE.md">JTAG-USAGE-GUIDE.md</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openocd/rpi4-jtag.cfg">openocd/rpi4-jtag.cfg</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/24">PR #24</a></td>
+</tr>
+<tr>
+<td><strong>P2A</strong> (PCIe-to-AHB) from the x86 host</td>
+<td><a href="https://github.com/mithro/culvert">mithro/culvert</a> G3 port; independent cross-check of JTAG (both read SCU7C=0x202)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/P2A-DRAM-BOOT-SEQUENCE.md">P2A-DRAM-BOOT-SEQUENCE.md</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">PR #22</a></td>
+</tr>
+<tr>
+<td><strong>Serial consoles</strong></td>
+<td>BMC UART <code>/dev/serial-bmc-console</code>; host COM1 <code>/dev/serial-com1</code> (logged by <code>seriald</code>)</td>
+<td>HARDWARE-ACCESS.md</td>
+</tr>
+<tr>
+<td><strong>Power control</strong></td>
+<td>Tasmota plug <code>au-plug-10</code> (HTTP; board is power-on-with-AC); plug power-meter doubles as host-power evidence</td>
+<td>HARDWARE-ACCESS.md §5</td>
+</tr>
+<tr>
+<td><strong>Host PXE netboot</strong></td>
+<td>dnsmasq DHCP+TFTP on the Pi + SystemRescue (<code>tftp-no-blocksize</code> works around Intel Boot Agent PXE-E32)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/HOST-NETBOOT.md">HOST-NETBOOT.md</a></td>
+</tr>
+<tr>
+<td><strong>BMC netboot</strong></td>
+<td>JTAG halt → DDR2 train (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openocd/ddr2-init.tcl">ddr2-init.tcl</a>) → U-Boot → TFTP kernel</td>
+<td>JTAG-USAGE-GUIDE.md §8/§12</td>
+</tr>
+<tr>
+<td><strong>Video capture</strong></td>
+<td>Magewell HDMI on <code>/dev/video0</code></td>
+<td>HARDWARE-ACCESS.md §4</td>
+</tr>
+<tr>
+<td><strong>SPI-flash emulation</strong> (in progress)</td>
+<td>spispy on ULX3S FPGA → BMC_FW1 socket (<a href="https://github.com/mithro/spispy">mithro/spispy</a>); build+control proven on both hosts, board wiring is the open step</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/30">PR #30</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/31">PR #31</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/32">PR #32</a> (all open)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Standing constraint:</strong> the BMC's SPI-flash socket is <strong>empty</strong> on this bench — all silicon testing boots the BMC into <strong>volatile DRAM over JTAG or P2A</strong> (no persistent firmware). Consequences: <code>BMC_PRESENT#</code> strap sits high (SOL mux + I2C mux-ownership side-effects), P2A boot reliability degrades after ~15 cycles, and DRAM is shared with the host VGA framebuffer (fragility around host POST).</p>
+<h3 id="82-silicon-achievements-by-stack">8.2 Silicon achievements by stack</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Stack</th>
+<th>Proven on the real AST2050</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bring-up</td>
+<td>JTAG IDCODE/halt/mem-access; culvert P2A probe; DDR2 init from JTAG and P2A; cross-validated SCU7C=0x202</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/24">PR #24</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">PR #22</a></td>
+</tr>
+<tr>
+<td>U-Boot</td>
+<td>Raptor G3 U-Boot interactive <code>boot#</code>; modern U-Boot past alignment abort (console init open, #168)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d15-uboot evidence</a></td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>v6.6.70 netboot to shell; watchdog; RTC; 18 sensors; USB gadget enum on real host; video JPEG; all 5 core G3 patches validated</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/SILICON-STATUS.md">SILICON-STATUS.md</a>, <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">real-hw-* evidence</a></td>
+</tr>
+<tr>
+<td>OpenBMC</td>
+<td>NFS-root boot; Redfish v1.17.0 answers over the BMC's own PHY</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/results">openbmc/results/</a></td>
+</tr>
+<tr>
+<td>Zephyr</td>
+<td>Boots + preemptive tick; 9+ drivers/samples validated (GPIO, I2C, WDT, SCU, RTC, W83795, W83601G, FRU, heartbeat)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality/asus-kgpe-d16-firmware/openbmc/bmc-functionality/evidence">d14-zephyr evidence</a></td>
+</tr>
+<tr>
+<td>BMC functions</td>
+<td>Power on/off (plug-meter), sensors, system-ID + real DIMM SPD, IPMI LAN + KCS, VGA capture, USB/HID</td>
+<td>§2.4</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="83-rig-blocked-host-gated-silicon-cells">8.3 Rig-blocked / host-gated silicon cells</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Class</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BMC_FW1 SPI flash US/LS (row 2)</td>
+<td>Rig-blocked <span class="st blk">🔷</span></td>
+<td>Socket empty on this bench (populated by design); spispy/ULX3S emulation is the unblocking path (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/30">PR #30</a>–<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/32">#32</a>)</td>
+</tr>
+<tr>
+<td>vhub EP-DMA datapath LS (row 9)</td>
+<td>Rig-blocked <span class="st blk">🔷</span></td>
+<td>P2A boot degrades after ~15 cycles; retest deferred to avoid stranding the rig</td>
+</tr>
+<tr>
+<td>PSU PMBus ZS/LS (row 24) + SMBus-ALERT (row 25)</td>
+<td>Rig-gated (#165)</td>
+<td>No PMBus PSU present on the bench</td>
+</tr>
+<tr>
+<td>SB-TSI ZS (row 23), SPD-mux ZS (rows 17/18)</td>
+<td>Host-gated (#150)</td>
+<td>Need the host CPU powered / a populated DIMM</td>
+</tr>
+<tr>
+<td>SOL byte-flow on silicon (feature 6)</td>
+<td>Rig strap</td>
+<td><code>BMC_PRESENT#</code> high (empty flash socket) hands QU8 to the host RS-232 side</td>
+</tr>
+<tr>
+<td>DIMM TSOD LS/ZS (row 19)</td>
+<td>Hardware property <span class="st na">Ⓝ</span></td>
+<td>The bench DIMM has no thermal sensor</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="9-ci-status">9. CI status</h2>
+<p><strong>Current state: all green</strong> on branch HEAD <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0be3042"><code>0be3042</code></a> — latest runs:
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/runs/29869112369">D16 QEMU firmware stack #29869112369</a> <span class="st ok">✅</span> and
+<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/runs/29869112358">D16 KVM-over-IP #29869112358</a> <span class="st ok">✅</span>.</p>
+<h3 id="91-workflows">9.1 Workflows</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>Trigger</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/d16-qemu-stack.yml">D16 QEMU firmware stack</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/d16-qemu-stack.yml">yml</a>)</td>
+<td>push/PR on <code>asus-kgpe-d16-firmware/**</code> + dispatch</td>
+<td>The main gate: <strong>26 jobs</strong> — builds (QEMU, kernel, initramfs, 2× U-Boot, Raptor kernel+userspace) + all 4 boot oracles + D07/D08/D09 device jobs + F2/F3/F4/F5/F5b/F6/F7/F9 feature jobs + NFS-root</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/d16-kvm.yml">D16 KVM-over-IP</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/d16-kvm.yml">yml</a>)</td>
+<td>push/PR on qemu paths + dispatch</td>
+<td>F8: video probe + HID keypress; <strong>real frame capture</strong> through the modeled video engine (pixel-verified JPEG); two-VM USB/IP enumeration</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/firmware-testbench.yml">firmware-testbench</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/firmware-testbench.yml">yml</a>)</td>
+<td>push/PR on <code>firmware-testbench/**</code></td>
+<td>pytest of the two-backend test harness (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/17">PR #17</a>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/build-bmc-firmware.yml">Build C410X BMC Firmware</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/build-bmc-firmware.yml">yml</a>)</td>
+<td>push/PR on <code>dell-c410x-firmware/**</code></td>
+<td>Sister-board (Dell C410X, same AST2050) kernel + initramfs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/build-bmc-uboot.yml">Build C410X U-Boot</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/build-bmc-uboot.yml">yml</a>)</td>
+<td><strong>manual dispatch only</strong></td>
+<td>C410X U-Boot build</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/workflows/build-openbmc-rootfs.yml">Publish OpenBMC fuller rootfs</a> (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/.github/workflows/build-openbmc-rootfs.yml">yml</a>)</td>
+<td><strong>manual dispatch only</strong> (self-hosted <code>openbmc-builder</code>)</td>
+<td>Bitbakes + publishes the NFS-root rootfs consumed by the OpenBMC feature jobs (as the <code>openbmc-full-rootfs.tar</code> release asset)</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="92-job-inventory-d16-qemu-firmware-stack-all-green">9.2 Job inventory — D16 QEMU firmware stack (all green)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Group</th>
+<th>Jobs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Builds</td>
+<td><code>build-qemu</code> · <code>build-kernel</code> · <code>build-initramfs</code> · <code>build-uboot</code> (modern) · <code>build-raptor-uboot</code> (G3-native) · <code>build-raptor-kernel</code> (2.6.28, gcc-4.9.4) · <code>build-raptor-userspace</code> (musl)</td>
+</tr>
+<tr>
+<td>Boot oracles</td>
+<td><code>boot-ssh</code> (C2) · <code>boot-uboot-ssh</code> (C2 full chain) · <code>boot-raptor</code> (C3) · <code>boot-c4-web</code> (C4 vendor) · <code>boot-uboot-scu</code> (C-UBOOT, g3-resets) · <code>boot-nfsroot</code> (C5)</td>
+</tr>
+<tr>
+<td>Device validation</td>
+<td><code>boot-spd-mux</code> + <code>boot-w83601g</code> (D08) · <code>boot-sbtsi</code> (D09) · <code>boot-lpc</code> (B1) · <code>boot-ncsi</code> (D07) · <code>boot-usb</code> (F6)</td>
+</tr>
+<tr>
+<td>BMC functions</td>
+<td><code>power-control-test</code> + <code>f2-power-sysfs</code> + <code>f2-power-redfish</code> (F2) · <code>f3-sensors</code> · <code>f4-sol</code> · <code>f5-ipmi-lan</code> · <code>host-kcs</code> + <code>host-kcs-m2</code> (F5b) · <code>f7-ncsi-dedicated-phy</code> · <code>fw-update</code> (F9)</td>
+</tr>
+<tr>
+<td>Static</td>
+<td><code>sync-lint</code> (recipe sync completeness)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Gating:</strong> the 7 OpenBMC feature jobs (<code>f2-*</code>, <code>f3</code>, <code>f4</code>, <code>f5</code>, <code>host-kcs-m2</code>, <code>fw-update</code>) fetch the <code>openbmc-full-rootfs.tar</code> release asset and <strong>skip with a visible warning</strong> when absent — CI stays honest without a self-hosted dependency in the hot path.</p>
+<h3 id="93-recent-ci-incident-musl-toolchain">9.3 Recent CI incident: musl toolchain</h3>
+<p>The C3 <code>build-raptor-userspace</code> job went red 2026-07-21/22 because <strong>musl.cc (and its <code>more.musl.cc</code> mirror — same operator) became unreachable from GitHub-hosted runners</strong> (external outage; proven non-regression: failed identically on pure-docs commits). Fix sequence, now <strong>confirmed green end-to-end</strong> (build + C3 boot):</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/e79cb36">e79cb36</a></td>
+<td>Add <code>more.musl.cc</code> mirror fallback (proved insufficient — <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/runs/29862701322">run 29862701322</a> showed both hosts down from runners)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0b7281a">0b7281a</a></td>
+<td><strong>Real fix:</strong> source-aware fetch loop ending in a GitHub-hosted toolchain (<a href="https://github.com/cross-tools/musl-cross/releases/tag/20260515">cross-tools/musl-cross 20260515</a>, verified ARMv5T soft-float) — first green: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/runs/29864691318">run 29864691318</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0be3042">0be3042</a></td>
+<td>Trim doomed musl.cc retries 8→3 (~8 min/run reclaimed); <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/actions/runs/29869112369">green run 29869112369</a></td>
+</tr>
+</tbody>
+</table></div>
+<p>Script: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/qemu-firmware/raptor/scripts/build-raptor-userspace.sh">build-raptor-userspace.sh</a>.</p>
+<p><strong>Not in CI:</strong> the qemu-model per-peripheral fwtest/pytest integration suite (local-only; see §2.1 caveat) and all silicon testing (manual, via the rig).</p>
+<hr />
+<h2 id="10-complete-open-task-list">10. Complete open-task list</h2>
+<p>Tracker sources: <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">DEVICE-MATRIX.md</a> (grid + tracker section) · <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">FULL-TASK-LIST.md</a> (per-cell detail) · <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">MASTER-TASKLIST.md</a> · <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">LOG.md</a> (running history).</p>
+<h3 id="101-open-numbered-tasks">10.1 Open numbered tasks</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Subject</th>
+<th>Class / gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#132</a></td>
+<td>NC-SI on silicon — G3 RMII2 pinmux divergence</td>
+<td>Hard authoring work (not externally blocked)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">#133</a></td>
+<td>SOL QU8 mux — QEMU model + Linux path</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#134</a></td>
+<td>LPC Ch#3 BT interface model (row 4)</td>
+<td>Open (QE <span class="st todo">⬜</span>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#135</a></td>
+<td>SMBus-ALERT# model on I2C7 (row 25)</td>
+<td>Open (QE <span class="st todo">⬜</span>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">#136</a></td>
+<td>§11 GPIO monitor/control full map + silicon pass</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">#137</a></td>
+<td>Modern U-Boot umbrella</td>
+<td>Open (see #168)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#140</a></td>
+<td>LPC sub-blocks / MTD-write path / DDC</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#141</a></td>
+<td>Zephyr sustained tickful scheduling in QEMU (arm_mmu gap)</td>
+<td>Open (short-run done)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">#144</a></td>
+<td>Remove phantom UART3/4 from the G3 model</td>
+<td><strong>Deferred</strong> — console-critical shared code (SPI1 <span class="st ok">✅</span> / WDT2 <span class="st ok">✅</span> halves done)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#145</a></td>
+<td>PECI engine model completion (row 42)</td>
+<td>Open (QE <span class="st part">🔶</span>; board-unused)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#150</a></td>
+<td>Zephyr SB-TSI + SPD silicon</td>
+<td><strong>Host-power-gated</strong></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">#153</a></td>
+<td>Doc hygiene</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/MASTER-TASKLIST.md">#154</a></td>
+<td>Kconfig family rename completion</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#157</a></td>
+<td>QEMU: gate I2C engines 5/6/7 on SCU74 pinmux</td>
+<td>Open (risky — exercised by oracles)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#158</a></td>
+<td>RTC true 1 Hz on silicon</td>
+<td><strong>Physically impossible without external time reference</strong> (ZS stays <span class="st part">🔶</span>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#160</a></td>
+<td>Unidentified 0x69 I2C responder on silicon (not in schematic)</td>
+<td>Open RE question</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#161</a></td>
+<td>GPIOE6/E7 ↔ SP5100 handshake nets un-RE'd</td>
+<td>Open RE question</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#162</a></td>
+<td>GPIOH2 power-feedback: silicon <code>power_smoke</code> FAILs (standby-rail sense)</td>
+<td>Open — honest FAIL recorded</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#164</a></td>
+<td>I2C slave/target mode</td>
+<td>Open (pending IPMB/SSIF netlist confirmation)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#165</a></td>
+<td>PSU PMBus on silicon</td>
+<td><strong>Rig-gated</strong> (no PMBus PSU on bench)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">#168</a></td>
+<td>Modern U-Boot silicon console (G3 serial_init hang after A-bit fix)</td>
+<td>Open — the modern-U-Boot silicon blocker</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#176</a></td>
+<td>A2P: SCU70[4] gate + P-Bus target (row 50 → <span class="st ok">✅</span>)</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#178</a></td>
+<td>DDC/EDID I2C master (row 14)</td>
+<td>Open (partly blocked on #197)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#183</a></td>
+<td>W83795 SmartFan auto-mode + live alarm</td>
+<td>Open (CASEOPEN half done)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#186</a></td>
+<td>RTC counter minute-wrap edge</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#187</a></td>
+<td>RTC alarm: Linux + Zephyr driver validation</td>
+<td>Open (QE done)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#188</a></td>
+<td>I2C SDA bus-lock recovery (§31.5.11)</td>
+<td>Open — verified real model gap</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#189</a></td>
+<td>WDT: Linux two-stage timeout scope</td>
+<td>Open (QEMU+Zephyr halves done)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#190</a></td>
+<td>I2C buffer-pool/DMA-buffer modes</td>
+<td>Open — low-priority (firmware-unexercised)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#191</a></td>
+<td>SCU freq-counter / SCU18 IRQ</td>
+<td>Open — optional low-value</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#194</a></td>
+<td>QEMU RTC rate tracks SCU08[16]</td>
+<td>Open follow-up</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#197</a></td>
+<td>CRTC block model (prereq for #178 + full DAC)</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#204</a></td>
+<td>Dual-82574L OEM-0x157 NC-SI responder (row 11 QE → <span class="st ok">✅</span>)</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#205</a></td>
+<td>DIMM TSOD: Zephyr-in-QEMU half</td>
+<td>Open (QE/LQ/LU <span class="st ok">✅</span>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">#206</a></td>
+<td>LPC HICR5/6 ENL2H/HWMBASE decode (iLPC2AHB)</td>
+<td>Open (QE <span class="st todo">⬜</span>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/DEVICE-MATRIX.md">#210</a></td>
+<td>HACE AES/RC4 crypto half (row 43)</td>
+<td>Open — low-priority (firmware-unexercised)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">#212</a></td>
+<td>RTC alarm true VIC source (22 vs 26) — add match-checking ISR, retest both</td>
+<td><strong>Most-active open investigation</strong> (prior PASSes marked unverified)</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="102-open-items-without-task-numbers">10.2 Open items without task numbers</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPIOE6/E7 ↔ SP5100 handshake — flagged "currently untracked" (overlaps #161)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/FULL-TASK-LIST.md">FULL-TASK-LIST.md</a></td>
+</tr>
+<tr>
+<td>Deterministic absolute-rate RTC unit assertion (#142 follow-on)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">LOG.md</a></td>
+</tr>
+<tr>
+<td>SCU08[16] RTC clock-rate semantics dispute (tangles #194/#212)</td>
+<td>LOG.md</td>
+</tr>
+<tr>
+<td>CI: reorder GitHub toolchain source first to zero the musl.cc retry waste</td>
+<td>LOG.md (deferred optimisation)</td>
+</tr>
+<tr>
+<td>I2C target-mode boxes pending netlist confirmation of no IPMB/SSIF</td>
+<td>FULL-TASK-LIST.md</td>
+</tr>
+<tr>
+<td>WallaBMC bring-up (whole track, §7)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/docs/plans/2026-07-01-open-bmc-firmware-program.md">Program plan Phase 3</a></td>
+</tr>
+<tr>
+<td>spispy → BMC_FW1 wiring + write-ram BMC image + boot from emulated flash</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/30">PR #30</a>/<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/31">#31</a>/<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/32">#32</a></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="103-blocked-external-gates-code-believed-correct">10.3 Blocked (external gates — code believed correct)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SPI-flash silicon cells (row 2 US/LS)</td>
+<td>Empty socket → spispy path</td>
+</tr>
+<tr>
+<td>vhub EP-DMA silicon retest (row 9 LS)</td>
+<td>P2A boot-cycle budget</td>
+</tr>
+<tr>
+<td>PSU PMBus silicon (rows 24/25, #165)</td>
+<td>Bench PSU has no PMBus</td>
+</tr>
+<tr>
+<td>SB-TSI / SPD-mux Zephyr silicon (#150)</td>
+<td>Host CPU power / DIMM population</td>
+</tr>
+<tr>
+<td>SOL silicon byte-flow</td>
+<td>BMC_PRESENT# strap (empty flash socket)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="appendix-a-repositories-branches">Appendix A — Repositories &amp; branches</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Repo</th>
+<th>Role</th>
+<th>Key branch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs">mithro/ai-shenanigans-for-bmcs</a></td>
+<td>This program (docs, patches, tests, CI)</td>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/claude/bmc-functionality"><code>claude/bmc-functionality</code></a> (working), <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/tree/main"><code>main</code></a> @ <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/85bd82a">85bd82a</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/qemu">mithro/qemu</a></td>
+<td>Faithful AST2050 QEMU model</td>
+<td><a href="https://github.com/mithro/qemu/tree/claude/bmc-functionality"><code>claude/bmc-functionality</code></a> @ <a href="https://github.com/mithro/qemu/commit/afb611e129e9a47bf876ce115b1f7189905f427b">afb611e129</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/culvert">mithro/culvert</a></td>
+<td>P2A bridge tool, G3 port</td>
+<td><code>ast2050-support</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/spispy">mithro/spispy</a></td>
+<td>ULX3S SPI-flash emulator</td>
+<td><code>claude/oss-cad-suite-build</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/wallabmc">mithro/wallabmc</a></td>
+<td>Zephyr BMC app (planned track)</td>
+<td><code>main</code> (no AST2050 work yet)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/bmc-open-firmware-docs">mithro/bmc-open-firmware-docs</a></td>
+<td>Published program docs</td>
+<td><a href="https://bmc-open-firmware-docs.readthedocs.io/"><code>main</code> → ReadTheDocs</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/linux">mithro/linux</a> / <a href="https://github.com/mithro/u-boot">mithro/u-boot</a> / <a href="https://github.com/mithro/openbmc">mithro/openbmc</a> / <a href="https://github.com/mithro/zephyr">mithro/zephyr</a></td>
+<td>Forks reserved by the program plan</td>
+<td>AST2050 work currently lives <strong>in-repo</strong> as patches/overlays, not fork branches</td>
+</tr>
+<tr>
+<td><a href="https://github.com/raptor-engineering/ast2050-uboot">raptor-engineering/ast2050-uboot</a></td>
+<td>Upstream Raptor G3 U-Boot (oracle source)</td>
+<td>—</td>
+</tr>
+<tr>
+<td><a href="https://github.com/cross-tools/musl-cross">cross-tools/musl-cross</a></td>
+<td>CI musl toolchain backstop</td>
+<td><a href="https://github.com/cross-tools/musl-cross/releases/tag/20260515">release 20260515</a></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="appendix-b-key-pull-requests">Appendix B — Key pull requests</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>PR</th>
+<th>Subject</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/25">#25</a></td>
+<td>Faithful AST2050 QEMU model + full BMC functionality</td>
+<td><strong>Open</strong> (the main integration PR)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/32">#32</a></td>
+<td>ULX3S bench-controller foundation</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/31">#31</a></td>
+<td>spispy build + flash setup</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/30">#30</a></td>
+<td>spispy → BMC_FW1 wiring doc</td>
+<td>Open</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/29">#29</a></td>
+<td>Schematic pin-level wiring docs (the authority for the device matrix)</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/26">#26</a></td>
+<td>G3 VIC kernel irqchip patch on main</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/24">#24</a></td>
+<td>JTAG/OpenOCD configs run on the bridge Pi</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/23">#23</a></td>
+<td>Hardware capture + BIOS serial control</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/22">#22</a></td>
+<td>culvert AST2050 port — HW-verified probe + RAM read</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/17">#17</a></td>
+<td>firmware-testbench harness</td>
+<td>Merged</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/pull/16">#16</a></td>
+<td>D16 custom-QEMU firmware stack (C1–C4)</td>
+<td>Merged (<a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/7444835">7444835</a>)</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="appendix-c-this-weeks-key-commits-branch-claudebmc-functionality">Appendix C — This week's key commits (branch <code>claude/bmc-functionality</code>)</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Commit</th>
+<th>Subject</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0be3042">0be3042</a></td>
+<td>ci: trim musl.cc retry budget (github backstop in place)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/0b7281a">0b7281a</a></td>
+<td>ci: github-hosted musl toolchain source (C3 green again)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/8f66b29">8f66b29</a></td>
+<td>#142: deterministic PCLK-rate assertion</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/6140784">6140784</a></td>
+<td>#142: G3-faithful H-PLL/CLKIN — 3-oracle validated</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/26426ab">26426ab</a></td>
+<td>Gate-b review: WDT2 gate reverted; SPI1/H-PLL confirmed</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/e88528f">e88528f</a></td>
+<td>#144: remove phantom SPI1 (dual-oracle validated)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/mithro/ai-shenanigans-for-bmcs/commit/c109fab">c109fab</a></td>
+<td>#144: remove phantom WDT2 (model + DTS)</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><em>Report generated 2026-07-22 from the sources linked throughout; device statuses are the machine-tallied 2026-07-21 grid plus the 2026-07-22 <a href="https://github.com/mithro/ai-shenanigans-for-bmcs/blob/claude/bmc-functionality/asus-kgpe-d16-firmware/device-driver-program/LOG.md">LOG.md</a> updates. A more richly formatted HTML version accompanies this file.</em></p>
+</main>
+</div>
+</body>
+</html>
