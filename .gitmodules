@@ -20,3 +20,6 @@
 	path = asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu
 	url = https://github.com/mithro/qemu.git
 	branch = d16-ast2050-machine
+[submodule "asus-kgpe-d16-firmware/asus-d16-ulx3s-interface"]
+	path = asus-kgpe-d16-firmware/asus-d16-ulx3s-interface
+	url = https://github.com/mithro/asus-d16-ulx3s-interface.git
