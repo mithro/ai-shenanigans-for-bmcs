@@ -43,10 +43,14 @@ Four caveats decide what is and isn't worth wiring:
    you confirm `AST_JTAG1` pin 1 (VTref) reads ~3.3 V. A 5 V line into a Pi GPIO
    kills the pin.
 
-3. **`BMC_FW1` is a flash/module slot, not a JTAG or serial header.** 15h.org ✅
-   describes it as the slot for the ASMB4/ASMB5 management module / BMC firmware
-   carrier. That's a **flashrom (SPI)** concern, reached with the Pi's *hardware
-   SPI*, not the bit-bang JTAG. Probe it before assuming anything (see §4).
+3. **`BMC_FW1` is the socketed BMC SPI boot flash, not a JTAG or serial header.**
+   Its pinout is fully documented from the schematic
+   ([`schematic-wiring/BMC-CONNECTORS.md`](schematic-wiring/BMC-CONNECTORS.md)):
+   a 2×7 DIP socket carrying the AST2050 SPI/ROM bus (CS0=pin12, CLK=pin8,
+   MOSI=pin1, MISO=pin6) plus feature straps. That's a **flashrom (SPI)** concern
+   (Pi *hardware SPI*) or a ULX3S/spispy emulation target
+   ([`ULX3S-SPISPY-BMC-FLASH-WIRING.md`](ULX3S-SPISPY-BMC-FLASH-WIRING.md)), not
+   the bit-bang JTAG (see §4).
 
 4. **The AST2050 is EmbeddedICE-RT, not CoreSight — use a raw-JTAG adapter.**
    ARM926EJ-S debugs via **EmbeddedICE-RT over raw JTAG scan chains**, not the
@@ -65,7 +69,7 @@ Four caveats decide what is and isn't worth wiring:
 |---|---|---|---|
 | **AST_JTAG1** | AST2050 ARM926 JTAG, 20-pin ARM pinout | OpenOCD bit-bang (this guide) | ✅ Raptor |
 | **AST_UART1** | BMC console, 4-pin 3.3 V (+3.3V/TX/RX/GND), 115200 8N1 | USB-serial or Pi UART0 | ✅ Raptor |
-| **BMC_FW1** | ASMB4/5 management-module / BMC firmware slot | flashrom (SPI) — verify | 🔶 / ⚠️ |
+| **BMC_FW1** | Socketed BMC SPI boot flash (2×7 DIP) + straps | flashrom (SPI) / ULX3S emulation | ✅ [schematic](schematic-wiring/BMC-CONNECTORS.md) |
 | **NB_JTAG_HEADER** | SR5690 northbridge TAP (boundary-scan) | OpenOCD scan only | ⚠️ no x86 debug |
 | **NB_DEBUG_HEADER** | NB debug (likely POST/LPC or AMD-internal) | identify first | ⚠️ |
 | **TEST_CON1 / TEST_CON2** | Factory test connectors | unknown | ⚠️ probe first |
@@ -241,17 +245,14 @@ ground loop), but the Pi's UART0 works.
 
 ## 4. BMC_FW1 / BMC SPI flash — flashrom, not OpenOCD
 
-Per 15h.org, `BMC_FW1` is the ASMB4/5 module slot. ✅ Whether it exposes the
-AST2050's SPI **boot flash** depends on board revision, so **probe it**:
+`BMC_FW1` **is** the AST2050's socketed SPI boot-flash socket — confirmed from
+the schematic, not a guess. The pinout (2×7 DIP, SPI bus + straps) is documented
+in [`schematic-wiring/BMC-CONNECTORS.md`](schematic-wiring/BMC-CONNECTORS.md):
+CS0=pin12, CLK=pin8, MOSI=pin1, MISO=pin6, GND=pin13, `+3V3_AUX`=pin2. The
+board-off continuity check is now only a sanity step to match the socket's
+physical pin 1 to those nets before wiring.
 
-```
-Board OFF. Continuity-test BMC_FW1 pins against the BMC SPI flash chip
-(an SOIC-8 near the AST2050). If you find CS / CLK / MOSI / MISO mapping to
-the flash, it's a flashrom target. If you only find power + strap/ID lines,
-it's the management feature slot — not useful for firmware work.
-```
-
-If it *is* SPI, drive it from the Pi's **hardware SPI0** with `flashrom`
+Drive it from the Pi's **hardware SPI0** with `flashrom`
 (`linux_spi` driver) — use Raptor's `ast2050-flashrom` fork, which knows the
 AST2050's SPI controller:
 

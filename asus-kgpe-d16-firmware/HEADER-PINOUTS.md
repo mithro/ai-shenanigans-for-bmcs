@@ -18,7 +18,7 @@ RPi4B (see [`RPI4-OPENOCD-JTAG-WIRING.md`](RPI4-OPENOCD-JTAG-WIRING.md)). For th
 |---|---|---|---|
 | `AST_JTAG1` | ✅ "Standard 20-pin ARM JTAG" | Raptor page + annotated photo | full pinout |
 | `AST_UART1` | ✅ "4-pin 3.3V ARM UART" (1×4) | Raptor annotated photo | full pinout |
-| `BMC_FW1`   | 🔶 location + pin 1 only | ASUS manual §2.7.2 p2-38 | outline; signals proprietary (ASMB4) |
+| `BMC_FW1`   | ✅ full pinout | [`schematic-wiring/BMC-CONNECTORS.md`](schematic-wiring/BMC-CONNECTORS.md) | socketed BMC SPI boot flash + straps — full net/ball map |
 | `NB_JTAG_HEADER` | 🔶 AMD HDT (CPU debug) | [`JTAG-HEADERS.md`](JTAG-HEADERS.md) | HDT+ pinout there |
 | `NB_DEBUG_HEADER` | ⚠️ 2nd HDT? / LPC? | [`JTAG-HEADERS.md`](JTAG-HEADERS.md) | see HDT notes |
 | `TEST_CON1` / `TEST_CON2` | ⚠️ none | — (factory ICT) | template + probe |
@@ -70,28 +70,40 @@ even column = GND (except pins 1–2).
 
 ---
 
-## BMC_FW1 — 🔶 documented location, proprietary signals
+## BMC_FW1 — ✅ documented: socketed BMC SPI boot flash
 
-The ASUS manual (§2.7.2, "BMC header (BMC_FW1)") shows only the connector
-position and **Pin 1 at the lower-left**, with the note *"The BMC connector on
-the motherboard supports an ASUS Server Management Board 4 Series (ASMB4)."* No
-per-pin signal names are published — it is the **ASMB4‑iKVM module** edge
-connector (dedicated management NIC + KVM), a 2-row header.
+**The `BMC_FW1` pinout is fully documented from the board schematic** — see
+[`schematic-wiring/BMC-CONNECTORS.md`](schematic-wiring/BMC-CONNECTORS.md) and
+[`schematic-wiring/AST2050-BMC-WIRING.md` §4](schematic-wiring/AST2050-BMC-WIRING.md#4-spi-firmware-flash--bmc_fw1),
+which supersede the earlier "signals proprietary / unpublished" inference (the
+ASUS manual only prints the outline + pin 1, but the schematic gives every net
+and AST2050 ball).
 
-```
-        BMC_FW1  -  2-row header (ASMB4-iKVM); pin count = count on board
-        +-----------------------------+
-        |  o  o  o  o  o  o  o  o  ... |   signals = PROPRIETARY (ASMB4)
-        |  @  o  o  o  o  o  o  o  ... |   not published; do NOT probe-drive
-        +-----------------------------+
-           ^ pin 1 (lower-left, per ASUS manual)
-```
+`BMC_FW1` is a **socketed 2×7 DIP holding the BMC's SPI boot flash** (the chip is
+field-replaceable), plus three feature-strap lines the BMC samples. The AST2050
+boots from it over the SoC's SPI/ROM controller — it is **not** a mere iKVM
+feature slot; it carries the BMC's actual boot SPI. Key pins:
 
-**Relevance to firmware dev:** low/uncertain. The AST2050 itself is **onboard**
-(Raptor solders `AST_JTAG1` to the *mainboard*), so `BMC_FW1` is for the iKVM
-*feature* module, not the BMC core. Its rumored role as a BMC-SPI-flash recovery
-path is **unconfirmed** — only treat it as a flash header if continuity testing
-proves SPI signals reach the AST2050 boot flash (see probing procedure below).
+| Pin | Net | Function | AST2050 ball |
+|---|---|---|---|
+| 1  | `AST_SPIDO`   | SPI MOSI | `Y1` (`ROMD1`) |
+| 6  | `AST_SPIDI`   | SPI MISO | `AA4` (`ROMD2`) |
+| 8  | `AST_SPICLK`  | SPI clock | `Y2` (`ROMD0`) |
+| 12 | `AST_SPICS#0` | CS0 (main firmware) | `AB9` (`ROMCS0#`) |
+| 4  | `AST_SPICS#2` | CS2 (2nd / recovery) | `W7` (`ROMCS2#`) |
+| 2  | `+3V3_AUX`    | Flash power (standby) | — |
+| 3 / 7 / 10 | `AST_IKVMEN#` / `BMC_PRESENT#` / `AST_SOLEN#` | feature straps | `W1` / `A10`… / `W2` |
+| 13 | `GND` | Ground | — |
+
+See [`schematic-wiring/BMC-CONNECTORS.md`](schematic-wiring/BMC-CONNECTORS.md)
+for the full table (with NC pins) and
+[`diagrams/kgpe-d16-bmc-fw1.svg`](schematic-wiring/diagrams/kgpe-d16-bmc-fw1.svg)
+for the physical layout.
+
+**Relevance to firmware dev:** high — this is the BMC boot-flash socket, so it is
+the target for reflashing *and* for ULX3S/spispy flash emulation. Wiring for the
+emulator is in
+[`ULX3S-SPISPY-BMC-FLASH-WIRING.md`](ULX3S-SPISPY-BMC-FLASH-WIRING.md).
 
 ---
 

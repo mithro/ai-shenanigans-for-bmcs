@@ -103,6 +103,10 @@ A **socketed** 2×7 DIP holding the BMC's SPI firmware flash, so the chip is
 field-replaceable. Beyond the SPI bus it also carries three feature-strap lines
 the BMC samples. See [BMC §4](AST2050-BMC-WIRING.md#4-spi-firmware-flash--bmc_fw1).
 
+> **Orientation (per the ASUS manual §2.7.2):** unlike the odd-top convention
+> above, `BMC_FW1` has **pin 1 (square pad) at the bottom-left** and **pin 14
+> keyed (no pin) at the top-right** — odd pins on the bottom row, even on the top.
+
 ![BMC_FW1 pinout diagram](diagrams/kgpe-d16-bmc-fw1.svg)
 
 | Pin | Net | Function | BMC ball |
