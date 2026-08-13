@@ -1,0 +1,18 @@
+### VUART bound (dmesg)
+[    0.473621] 1e787000.serial: ttyS5 at MMIO 0x1e787000 (irq = 19, base_baud = 1500000) is a ASPEED VUART
+
+### /dev/ttyVUART0
+lrwxrwxrwx    1 root     root             5 Jul 11 13:58 /dev/ttyVUART0 -> ttyS5
+### iomem_base
+0x1E787000
+
+### obmc-console-server
+active
+### console dbus + socket
+:1.32                                 547 obmc-console-se root            :1.32         obmc-console@ttyVUART0.service                     -       -
+xyz.openbmc_project.Console.default   547 obmc-console-se root            :1.32         obmc-console@ttyVUART0.service                     -       -
+bb70b958: 00000002 00000000 00010000 0001 01   923 /run/systemd/io.systemd.MuteConsole
+ab8c8b01: 00000003 00000000 00000000 0001 03  7134 @fa0f739858f93202/bus/obmc-console-se/system
+c679a122: 00000002 00000000 00010000 0001 01  7140 @obmc-console.default
+### netipmid active
+active

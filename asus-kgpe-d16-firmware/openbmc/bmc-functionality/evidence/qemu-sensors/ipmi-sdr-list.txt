@@ -1,0 +1,28 @@
+fan1             | 4900 RPM          | ok
+fan2             | 5100 RPM          | ok
+fan3             | 4800 RPM          | ok
+fan4             | 3600 RPM          | ok
+fan5             | 3700 RPM          | ok
+fan6             | 3900 RPM          | ok
+fan7             | 0 RPM             | ok
+fan8             | 0 RPM             | ok
+fan1             | no reading        | ns
+fan2             | no reading        | ns
+fan3             | no reading        | ns
+fan4             | no reading        | ns
+fleeting0        | disabled          | ns
+p3v3_scaled      | 3.26 Volts        | ok
+p5v_scaled       | 4.99 Volts        | ok
+p12v_aux_scaled  | 11.97 Volts       | ok
+p1v1_ssb         | 0 Volts           | ok
+pvcc_cpu0        | 0.96 Volts        | ok
+pvcc_cpu1        | 0.96 Volts        | ok
+p3v3_aux_scaled  | 3.26 Volts        | ok
+p5v_aux_scaled   | 0 Volts           | ok
+pvcc_cpu2        | 1.47 Volts        | ok
+pvcc_cpu3        | 1.09 Volts        | ok
+p12v_scaled      | 11.97 Volts       | ok
+p3v_vbat         | 3.01 Volts        | ok
+temp2_inlet      | 44.97 degrees C   | ok
+temp1            | 41.90 degrees C   | ok
+temp3            | 0 degrees C       | ok

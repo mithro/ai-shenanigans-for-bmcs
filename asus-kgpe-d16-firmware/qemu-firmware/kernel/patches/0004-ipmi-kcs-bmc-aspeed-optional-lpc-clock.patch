@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Ansell <me@mith.ro>
+Date: Sat, 12 Jul 2026 00:00:00 +0000
+Subject: [PATCH] ipmi: kcs_bmc_aspeed: hold an optional LPC clock
+
+Take (and enable, for the device's lifetime) an optional clock from the
+KCS node. On the AST2050/AST1100 (G3) the LPC controller clock LCLK is
+a real SCU0C[8] clock gate, and a board whose only enabled LPC
+sub-device is a KCS channel (e.g. the ASUS KGPE-D16 BMC) otherwise has
+NO consumer refcounting it - so clk_disable_unused() stops the LPC
+clock and the whole host-facing LPC block (the KCS channels and the
+VUART Serial-over-LAN data path) goes dead on real silicon. This is
+the latent sibling of the KGPE-D16 UARTCLK finding (#94); it was
+masked on the silicon pass by booting with clk_ignore_unused.
+
+devm_clk_get_optional_enabled() keeps device trees without a clocks
+property probing exactly as before (the AST2400/2500/2600 dtsi kcs
+nodes reference the LCLK gate via other LPC sub-devices or not at
+all).
+
+Signed-off-by: Tim Ansell <me@mith.ro>
+---
+ drivers/char/ipmi/kcs_bmc_aspeed.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/char/ipmi/kcs_bmc_aspeed.c b/drivers/char/ipmi/kcs_bmc_aspeed.c
+index 72640da55..9f4a832d4 100644
+--- a/drivers/char/ipmi/kcs_bmc_aspeed.c
++++ b/drivers/char/ipmi/kcs_bmc_aspeed.c
+@@ -6,6 +6,7 @@
+ #define pr_fmt(fmt) "aspeed-kcs-bmc: " fmt
+ 
+ #include <linux/atomic.h>
++#include <linux/clk.h>
+ #include <linux/errno.h>
+ #include <linux/interrupt.h>
+ #include <linux/io.h>
+@@ -590,6 +591,23 @@ static int aspeed_kcs_probe(struct platform_device *pdev)
+ 	if (!priv)
+ 		return -ENOMEM;
+ 
++	/*
++	 * Hold the LPC controller clock (LCLK) while the KCS channel exists.
++	 * On the AST2050 (G3) LCLK is a real SCU0C gate and no other enabled
++	 * LPC sub-device may be around to keep it refcounted — without this,
++	 * clk_disable_unused() stops the LPC clock and the host-facing KCS
++	 * (and the rest of the LPC block) goes dead on real silicon. Optional
++	 * so DTs without a clocks property keep probing as before.
++	 */
++	{
++		struct clk *lclk;
++
++		lclk = devm_clk_get_optional_enabled(&pdev->dev, NULL);
++		if (IS_ERR(lclk))
++			return dev_err_probe(&pdev->dev, PTR_ERR(lclk),
++					     "couldn't get clock\n");
++	}
++
+ 	kcs_bmc = &priv->kcs_bmc;
+ 	kcs_bmc->dev = &pdev->dev;
+ 	kcs_bmc->channel = channel;
+-- 
+2.43.0

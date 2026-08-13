@@ -1,0 +1,418 @@
+# F-HWPASS — consolidated real-silicon demonstration (progress log)
+
+Branch `claude/bmc-hwpass` off `claude/bmc-functionality` (ca5caa3). Goal: close
+the deferred real-HW sides of F1-F5b on the real ASUS KGPE-D16 / AST2050 in ONE
+coordinated session. **No unrecoverable changes; no real flash write.**
+
+## Rig reachability (established 2026-07-12)
+- **Pi bridge `ssh asus-bmc` (user claude): REACHABLE.** `rpi4-asus-aspeed2050-dev`,
+  eth-bmc 192.168.66.1, eth-host 192.168.77.1 both up; dnsmasq TFTP
+  (`/srv/tftp-bmc`) + NFS (`/srv/nfs/openbmc{,-full}`) live.
+- **Board BMC 192.168.66.2: UP.** Pingable; `ipmitool -I lanplus … mc info` rc=0
+  (after the F5 netipmid socket-activation warmup). It is running **F5's image**
+  (all-zero dev IDs = F5's data gap, confirming it is NOT yet the F-IMG2/F-HWPASS
+  data-populated image).
+- **PXE x86 host root@192.168.77.138 (the KGPE-D16 host, runs culvert for P2A):**
+  ping + tcp/22 OPEN, but interactive SSH via the Pi hop is **flaky/hangs** from
+  this environment (the sshpass hop stalls; `sshpass -p …` typed directly is also
+  hook-blocked). This is the machine that must run `culvert` to drive the P2A
+  cold-boot, so an unattended fresh P2A reboot of a new image is at risk (see
+  "Phase B decision").
+
+## Phase A — new 64 MB image + artifacts (DONE / in progress)
+
+### KCS host-IPMI bridge swap (F-IMG3 / task #88) — DONE
+- **Root cause found:** `meta-quanta/meta-q71l/conf/machine/quanta-q71l.conf`
+  hardcoded `PREFERRED_PROVIDER_virtual/obmc-host-ipmi-hw = "phosphor-ipmi-bt"`.
+  The machine conf is parsed **after** `local.conf`, so the F0/IMG2 local.conf
+  KCS knob never won and every prior build shipped **btbridged** — and BT is not
+  drivable on the G3 (block at 0x48 vs the mainline ast2400 0x140). btbridged
+  also can never bind, so host-side KCS never worked.
+- **Fix (build tree `/home/tim/openbmc`):**
+  1. machine conf → `PREFERRED_PROVIDER_virtual/obmc-host-ipmi-hw = "phosphor-ipmi-kcs"`.
+  2. image recipe `obmc-phosphor-image-ast2050-full.bb`: explicit
+     `OBMC_IMAGE_EXTRA_INSTALL += phosphor-ipmi-kcs` + `IMAGE_INSTALL:remove =
+     "phosphor-ipmi-bt"`.
+  kcsbridge's own `SYSTEMD_SERVICE = phosphor-ipmi-kcs@ipmi-kcs3.service`
+  (`KCS_DEVICE=ipmi-kcs3`) already targets **/dev/ipmi-kcs3** — the F5b DTS
+  `kcs@2c` channel. No further wiring needed.
+- **Rebuilt (capped: systemd-run MemoryMax=20G + nice/ionice + BB -j4; fully
+  sstate-cached except do_rootfs). New image build 20260711192615, ~21.7 MB.**
+  Manifest now has **`phosphor-ipmi-kcs`** and **no `phosphor-ipmi-bt`**, plus
+  ipmid/netipmid/fru/sel + `kgpe-d16-fru-populate` + `kgpe-d16-hwmon-config` +
+  `phosphor-skeleton-control-power` (op-pwrctl) + the F-IMG2 dev_id/SOL/Chassis
+  recipes.
+
+### Combined real-HW DTB + rootfs staging — see following commits.
+
+### Combined real-HW kernel + DTB — BUILT
+- `qemu-firmware/scripts/build-kernel.sh` built the full-featured kernel
+  (`uImage-kgpe-d16`, 3.45 MB) + the **combined DTB**
+  (`aspeed-bmc-asus-kgpe-d16.dtb`, 23 645 B) with **all** feature nodes verified
+  present: `kcs@2c` (aspeed,ast2400-kcs-bmc-v2), `winbond,w83795g` hwmon@2f,
+  `serial@1e787000` vuart, power `power-up-req-n` gpio-line-names. Kernel config
+  includes `CONFIG_IPMI_KCS_BMC_CDEV_IPMI` (→ /dev/ipmi-kcs3), `CONFIG_SENSORS_W83795`
+  + the modern-hwmon patch 0003, ftgmac100 rxfix (0002), ast2050 clk (0001),
+  g3-vic. Copied to `tmp/uImage-kgpe-d16-hwpass` + `tmp/kgpe-hwpass-combined.dtb`.
+
+### Host state — KGPE-D16 x86 host is POWERED ON
+- `192.168.77.138` = the KGPE-D16 x86 host, reachable through the Pi, running
+  **`Linux 6.18.34-1-lts` (SystemRescue), uptime ~31 h**. It is the culvert P2A
+  peer (so P2A boot is viable) AND — being powered — means the W83795 rails/fans
+  are LIVE (sensors demo viable) and there is a live host-side KCS peer (host-KCS
+  demo viable). (The earlier "host unreachable" impression was a helper stdin/ssh
+  bug, not the host.)
+
+### New rootfs staged to the Pi (NEW export, non-disruptive) — DONE
+- `stage-openbmc-nfsroot.sh` unpacked build 20260711192615 to `/export/openbmc-hwpass`
+  locally (flash units neutralised), tar'd + pushed to **Pi `/srv/nfs/openbmc-hwpass`**
+  (a NEW export — **F5's `/srv/nfs/openbmc-full` untouched**). Verified on the Pi:
+  `phosphor-ipmi-kcs@ipmi-kcs3.service` enabled in multi-user.target.wants;
+  `dev_id.json` = **manuf_id 2623 (ASUSTeK) / prod_id 3350 (0x0D16 KGPE-D16)**;
+  86 MB rootfs; NFS export added + `exportfs -ra` live. squashfs also at
+  `Pi:/srv/tftp-bmc/openbmc-hwpass.squashfs-xz`.
+
+### Live-board IPMI evidence (F5's running image) — CAPTURED
+`evidence/real-hw-hwpass/board-*.txt` (from the Pi, RMCP+ cipher 17):
+`mc info` rc=0 (all-zero IDs = F5's un-populated image), `lan print 1` rc=0
+(real MAC **96:0e:ce:b9:5d:8d**, gw 192.168.66.1), `chassis status` /
+`chassis power status` rc=0 (reports "off" — but F5's kgpe-g3vic.dtb has no
+power-state GPIO wired, so this is a default, not a real STA_LINE_POWER read;
+the combined DTB fixes that).
+
+## Rig-access outage (2026-07-12, mid-session) — the boot blocker
+The rig is reached over a **WireGuard tunnel** (`wg-desktop`, workstation
+10.98.5.2/30 → peer 10.98.5.1; WG endpoint `87.121.95.37:51821`). It worked for
+the first ~part of the session (live-board mc-info/lan-print capture, the 22 MB
+squashfs + 29 MB rootfs push, the Pi-side untar/exportfs/mask staging all
+succeeded over it). Then the tunnel went **stale/flapping**: `sudo wg show`
+reported *"latest handshake: 18 minutes ago"* (WG re-handshakes every ~2 min
+under traffic, so ≥18 min = the rig-side WG endpoint stopped answering). Symptoms:
+`ssh asus-bmc` hangs; the FQDN's public A/AAAA (`87.121.95.37`, `2404:e80:…::222/3`)
+are firewalled/unreachable on :22; the WG peer `10.98.5.1` = 100% packet loss;
+brief up-windows appear then drop. This is a **rig-side infrastructure outage**,
+not a workstation problem (8.8.8.8 + the local gateway are up).
+
+**Decision (safety):** a clean P2A NFS-root boot drives ~20 sequential Pi ssh
+calls over ~4 min in `linux-boot.py`; over a flapping tunnel a mid-sequence drop
+could leave the **shared board hung mid-boot with no recovery channel**. Per the
+task's hard safety rule ("STOP if unsure; nothing unrecoverable") the
+state-mutating P2A boot was **NOT attempted** over the unstable link. Everything
+is staged so it is a single command once the tunnel is stable again:
+
+    bash asus-kgpe-d16-firmware/openbmc/bmc-functionality/hwpass-boot-and-demo.sh
+
+That runbook: stages the kernel+DTB to Pi TFTP, (idempotently) applies the realhw
+masks, logs intent to the Pi coordination log, P2A-boots the new stack (retry ×3),
+then captures system-id (populated), sensors (host on → live W83795), host-KCS
+(host at an OS → `ipmitool -I open`), power status, and SOL — and documents the
+F5-config fallback if the boot doesn't come up.
+
+## What was proven on real silicon this session (honest)
+* **Rig reached** (`ssh asus-bmc`, board `192.168.66.2` over RMCP+, KGPE-D16 x86
+  host `192.168.77.138` powered ON) — real, captured.
+* **Live board IPMI** (F5's image): `mc info` (all-zero IDs), `lan print` (real
+  MAC 96:0e:ce:b9:5d:8d), `chassis (power) status` — `evidence/real-hw-hwpass/`.
+* **New image built + staged on the rig**: kcsbridge wired to /dev/ipmi-kcs3 +
+  populated ASUSTeK 2623 / 0x0D16 IDs, at `Pi:/srv/nfs/openbmc-hwpass` (verified
+  on the Pi; F5's export untouched).
+NOT proven on silicon this session (tunnel outage, honest): booting the new image
+→ so populated-`mc info`, `sdr elist` W83795 values, host-KCS round-trip, SOL, and
+any host-power action remain STAGED-but-unbooted. Host-power *drive* is separately
+bounded by the SCU-pinmux-on-shared-pins hazard (and moot: the host is already on
+and is the P2A peer, so turning it off would strand the boot channel).
+
+## Phase B (2026-07-12, tunnel recovered ~05:52Z) — boot attempts + freeze bisect
+
+State re-verified first: Pi up 2d21h (no site power event), board still serving
+F5's image (mc info rc=0), x86 host still up (42h RAM-resident SystemRescue),
+staged export + TFTP artifacts intact. Rig claimed in the Pi coordination log.
+
+**Boot attempts (all P2A + TFTP + NFS-root):**
+| # | kernel | DTB | rootfs | outcome |
+|---|--------|-----|--------|---------|
+| 1 | uImage-kgpe-d16-hwpass (full) | combined (kcs+vuart+w83795+gpio+vhub+video) | openbmc-hwpass (new) | kernel up, eth0 100M, IP OK, NFS root mounted (rmtab) → **hard froze** minutes into systemd (NFS io flat, ping dead, serial silent) |
+| 2 | same | **safe DTB** (vhub+video disabled — never-HW-tested blocks) + seeded 00-bmc-eth0.network | openbmc-hwpass | ~90 s of systemd alive (10/10 pings) → **froze** |
+| 3 | **rxfix (F5's proven)** | **kgpe-g3vic.dtb (F5's proven)** | openbmc-hwpass (+ kcsbridge/op-pwrctl masked) | kernel up, ~12+ pings → **froze** |
+| 4 | rxfix | kgpe-g3vic.dtb | **openbmc-full (F5's proven, re-masked per F5's doc)** | CONTROL — kernel up, 13/13 then 10/12 pings (~4 min alive) → **froze** |
+| 5 | rxfix | kgpe-g3vic.dtb | RAM-only culvert initramfs (raw gzip verified, `initrd=addr,size`) | serial soak 0 bytes on 4/4 pokes (suggestive board-level; culvert-init console-on-ttyS4 behavior unproven → not conclusive) |
+| 6 | rxfix | kgpe-g3vic.dtb | openbmc-full (restoration attempt) | kernel up, 13/13 pings → **froze ~2.5 min in** (3rd consecutive freeze of the proven config) |
+
+**CONTROL VERDICT (attempts 4+6): F5's fully-proven stack — which had run for days
+on this exact board — now freezes the same way, twice. The post-outage environment
+(most plausibly board-level: marginal DDR2/SoC state; chassis at 59 °C with only
+fan1 spinning, per the live W83795G read) cannot sustain the boot. The new
+F-HWPASS image is exonerated as the freeze cause.** Supporting: Pi dmesg clean (no
+USB resets/OOM/NFS errors today), nfsd read counters advanced ~7 MB per attempt
+then went flat at each freeze, eth-bmc 0 errors.
+
+## Final rig state — SUPERSEDED by Phase C below (recovery session 2026-07-12 evening)
+**This section describes F-HWPASS's mid-day state. The regression was fully
+root-caused and fixed the same evening (Phase C.5–C.10): board now ON serving
+the new image's IPMI, all demos captured. Current state: see C.10 + the
+19:01 +09:30 coordination entry.**
+
+## F-HWPASS's rig state (as released 2026-07-12 ~16:50 +09:30, logged on the Pi)
+- **Board: FROZEN** after the attempt-6 restoration boot (the as-found "board
+  serving F5's IPMI" state could NOT be re-established — the environment
+  regression, not any action taken, prevents it). Recovery for the next
+  operator: power-cycle via Tasmota `au-plug-10`, re-run the P2A boot
+  (`hwpass-boot-and-demo.sh` or F5's procedure); consider a cold power-cycle to
+  reset the board's thermal/DDR2 state first.
+- **x86 host: LEFT ON, unharmed** (uptime advancing throughout; it is the P2A
+  peer). No host-power actions were taken; no flash writes anywhere.
+- **F5's export `/srv/nfs/openbmc-full`: realhw masks RE-APPLIED** (the bootable
+  configuration per F5's own note — a fresh 64 MB boot *requires* them; revert
+  with `f5-realhw-mask.py revert` once a boot sticks, to return it to pristine).
+- **New artifacts staged + intact** for the follow-up: `/srv/nfs/openbmc-hwpass`
+  (kcsbridge→ipmi-kcs3 + ASUSTeK 2623/0x0D16 dev_id + realhw masks; NOTE two
+  extra bisect masks — `phosphor-ipmi-kcs@ipmi-kcs3` + `org.openbmc.control.Power@0`
+  symlinks — must be removed before a full-feature boot),
+  `/srv/tftp-bmc/{uImage-kgpe-d16-hwpass, kgpe-hwpass-combined.dtb,
+  kgpe-hwpass-safe.dtb, openbmc-hwpass.squashfs-xz}`.
+- Evidence kept: the live-board F5-image IPMI captures (mc-info/lan-print/
+  chassis) + `host-w83795-sensors.txt` (real chassis fan/temp/rails). The rc=1
+  files captured against the frozen board were removed (meaningless).
+
+**Diagnostics:** attempt-1 console shows the video engine probing real silicon
+(`aspeed-video 1e700000.video: irq 24`, jpeg-header alloc) pre-freeze; serial
+poke at freeze = **0 bytes** (no getty → hard freeze, not IP loss); Pi dmesg =
+**no eth-bmc carrier flaps, 0 link errors** across all attempts (link exonerated);
+board did mount the new export. Attempt 3 freezing on F5's exact kernel+DTB means
+the freeze follows the **new image** (or a post-outage environment change —
+attempt 4 splits that). NB: the F-IMG2-derived image was only ever QEMU-proven at
+**mem=256**, never 64 — this exposed that validation gap. x86 host verified
+unharmed after each attempt (uptime advancing).
+
+## Phase C (2026-07-12, instance-HWRECOVER) — cold AC cycle recovery
+
+Mission: clear the post-outage board regression with a **cold AC power-cycle**
+(the sanctioned recoverable remedy), re-establish the PXE-host + culvert P2A
+chain, re-test F5's proven stack for stability, then run the staged demo.
+
+### C.1 Pre-cycle state + preservation (17:01 +09:30)
+- Rig claimed in the Pi coordination log. Board **frozen** (0/3 pings to
+  192.168.66.2); x86 host still up (1d19h; RAM-resident SystemRescue).
+- **Culvert snapshot taken off the live host before killing it**:
+  `/root/culvert-g3/build/src/culvert` (x86-64, 797032 B) + its one non-libc dep
+  `/usr/lib/libfdt.so.1` (164304 B) → `Pi:/home/claude/host-culvert-snapshot.tar.gz`
+  (389663 B, listing verified). Re-push after PXE = one untar.
+- Host-access helper installed: `Pi:/home/claude/pi-host-sh.sh` (mirror of
+  pi-bmc-sh.sh; sshpass → root@192.168.77.138).
+- Pre-checks: plug `au-plug-10` ON @ **50 W**; opi keyboard gadget bound
+  (`musb-hdrc.4.auto`, /dev/hidg0 present); kgpe-seriald + host-pxe +
+  host-pxe-http + bmc-tftp all `active`; com1.log offset marked (178685).
+
+### C.2 The cold cycle (17:03–17:06 +09:30)
+- `Power OFF` → meter decayed to **0 W / 0.000 A** (verified) — board fully
+  dark ~75 s (DDR2/SoC state drained).
+- `Power ON` → meter **71 W** (POST draw) — board powering back up.
+- Watching COM1 for the POST sequence (BMC-wait ~100–130 s → PXE →
+  SystemRescue) + host ssh liveness.
+
+### C.3 Chain re-established (17:07–17:13 +09:30) — ~6 min host downtime
+- POST proceeded **without any CMOS/F1 halt** straight to PXE (com1 capture:
+  `PXE 2.1 Build 086` → `PXELINUX 4.07` → `vmlinuz` + `sysresccd.img` over
+  TFTP, `airootfs.sfs` over HTTP at 17:09:15).
+- Host back at 192.168.77.138 (SystemRescue, fresh RAM, uptime 1 min).
+- Culvert re-pushed from the snapshot (one untar); **P2A verified read-only:
+  `culvert p2a vga read 0x1e6e207c` → `0x00000202` rc=0** (AST2050 A3 rev,
+  matching all prior sessions).
+- Steady-state power draw back to ~49 W (same as pre-cycle 50 W).
+
+### C.4 Critical stability test — F5's proven stack after the cold cycle
+Boot: `linux-boot.py --kernel uImage-kgpe-d16-rxfix --dtb kgpe-g3vic.dtb
+--no-initrd` → NFS root `/srv/nfs/openbmc-full` (F5's 28 masks in place),
+mem=64M. Soak target: >10 min alive past systemd start (the post-outage
+freezes hit at 2.5–5 min).
+
+**Result (attempt-7): FROZE AGAIN at ~2.5 min (soak: 25 pings OK →
+SOAK-FROZE 17:25:52), after a verified-0W cold AC cycle.** This *kills* the
+"latched DDR2/SoC state" theory — the freeze is environmental, exactly as the
+user's reframe said ("it is some type of change you have made").
+
+### C.5 THE AUDIT (user-directed reframe) — root cause found in OUR changes
+Audit of every rig-side delta between F5's proven boots and the freezing boots:
+- **Masks: NOT the cause.** `f5-realhw-mask.py`/`f5_masked_daemons.py` identical
+  between the F5 and hwpass branches; on-disk `/srv/nfs/openbmc-full` mask set =
+  F5's exact 24 realhw units + 4 shipped flash masks, netipmid `.wants` removal
+  in place. Name-for-name correct.
+- **TFTP artifacts: NOT the cause.** `uImage-kgpe-d16-rxfix` (Jul 11 17:41) and
+  `kgpe-g3vic.dtb` (Jul 10 00:46) mtimes pre-date the F-HWPASS session; never
+  overwritten.
+- **Pi NFS/disk: NOT the cause.** 19 GB free, identical export options for all
+  exports, no nfs-server journal errors.
+- **ROOT CAUSE: `etc/systemd/network/00-bmc-eth0.network`.** phosphor-network
+  wrote it into the **shared rw NFS export** at **2026-07-11 23:44:03** — ~3 min
+  into F5's proven boot (machine-id 22:29, dropbear keys 23:44 = same boot) —
+  containing **`DHCP=true` + `MACAddress=` and NO static `[Address]`**. Writing
+  it mid-run was inert (networkd doesn't re-read without a reload). But
+  **eth-bmc has NO DHCP server** (`bmc-tftp.service` dnsmasq is TFTP-only:
+  `--port=0`, no `dhcp-range`), so on every SUBSEQUENT boot systemd-networkd
+  matches eth0, takes it over, flushes the kernel-`ip=` static 192.168.66.2 and
+  waits forever for DHCP → **the NFS root dies under systemd mid-startup** →
+  every process stalls on page-in: ping dead, serial getty mute, NFS counters
+  flat — indistinguishable from a hard freeze (and NO DHCPDISCOVER ever hits the
+  wire: tcpdump on eth-bmc shows total silence — the address flush kills the
+  rootfs before the DHCP client can page itself in).
+- **Every data point fits:** F5's proven fresh boots (≤23:44 Jul 11) started
+  file-ABSENT → stable for days (the running system kept its address). Every
+  boot after 23:44 started file-PRESENT → froze at the networkd-start mark
+  (attempts 3, 4, 6 on openbmc-full; attempts 2, 3 on openbmc-hwpass after
+  F-HWPASS *seeded the same DHCP file* into it at 15:38:47 believing it helped;
+  attempt-7 post-cold-cycle). Attempt 1 (fresh export, no file) is the
+  first-boot variant: phosphor-network *live-creates* the config under the new
+  image's heavier first-boot load (F1's documented eth0-bounce). "Freezes on
+  both images + survived days before + cold cycle doesn't help" — the exact
+  signature that fooled the bisect into blaming hardware.
+- **Why it appeared "post-outage": coincidence of ordering, not the outage.**
+  The file was born during F5's last boot; nobody fresh-booted between then and
+  the outage. The first post-outage boot was simply the first boot to ever
+  start with the file present.
+- **REMEDY applied:** archived the file
+  (`evidence/real-hw-hwpass/audit-networkd-dhcp-file.txt`) then **deleted it
+  from BOTH exports**, restoring F5's exact proven fresh-boot state. NOTE for
+  every future boot: phosphor-network re-creates the file during each run —
+  **delete it before every fresh boot** (added to the runbook), or land a
+  static-Address seed/image fix later.
+
+### C.6 Corrected control boot (file-absent openbmc-full) — attempt-8
+Same F5 proven stack, network file deleted from both exports first. Boot
+17:36 +09:30: kernel + eth0 100M + IP OK. **Survived 71 zero-loss pings to
+T+6 min — 3× past the 2.2–2.7 min mark where every file-present boot died**
+(the file was never re-created during the run), confirming the
+`00-bmc-eth0.network` mechanism as the death-at-2-min cause. **Then froze at
+T+6.5 min** (SOAK-FROZE 17:43:33, NFS io flat = writeback-wedge signature) —
+a *different, later* failure with two candidate triggers, both again OUR
+accumulated state, not hardware:
+- **16 MB of persistent journal** (`system.journal` + rotated `~`) on the NFS
+  export, born during F5's stable run — F5's proven boot started with an
+  EMPTY `/var/log/journal/<mid>/`; every boot since must mmap + flush 16 MB
+  over NFS inside 64 MB at exactly the systemd-journal-flush point.
+- **My 6 early netipmid warmup probes** (17:40:30–17:43) — each RMCP+ packet
+  socket-activates a netipmid spawn (big binary page-in) mid-startup; the
+  freeze landed on the last probe. F5's proven warmup ran only after settle.
+
+### C.7 Attempt-9 — journals cleared + no early probes
+Journal files archived to `Pi:/home/claude/journal-archive/` and cleared from
+both exports (openbmc-hwpass had none — its boots died pre-flush, consistent);
+network file still absent; NO IPMI traffic until the 15-min soak passes.
+**Result: wedged at T+6.2 min again** (soak: clean run then 6 straight misses
+from 17:53:39; kernel-up 17:47:25 → 374 s; attempt-8 was 370 s — deterministic).
+Post-mortem: **attempt-9 read 9.7 MB from the export (systemd + daemons paged
+in) but wrote ZERO bytes and re-created neither the network file nor a
+journal** — F5's proven boot had written keys/group/network-file/journal by
+T+3 min. So userspace wedges early and silently; ICMP (kernel-level) survives
+to the ~370 s mark, then the whole kernel goes. The journal accumulation and
+early-probe theories are eliminated; the T+6min death is a *third* mechanism,
+still environment-shaped (identical timing across boots ≠ thermal/marginal HW).
+
+### C.8 Why every serial console was blind — and attempt-10
+All console captures end at `[4.16s] clk: Disabling unused clocks` — the
+**known G3 clk-framework issue: the modern kernel gates UARTCLK (SCU0C[15])**
+(the exact issue ddr2-init-p2a.py works around for the *next* U-Boot). ttyS4
+output dies at 4.16 s on every modern-kernel boot, so the death was never
+observable on serial. Attempt-10 = instrumented: **`clk_ignore_unused`**
+(UARTCLK stays on → live console) + `systemd.show_status=1` + 700 s capture
+spanning the death point, F5 stack on openbmc-full.
+
+**Result: attempt-10 BOOTED TO COMPLETION AND STAYED UP.** Console (finally
+live) shows the whole unit sequence through `Started Serial Getty on ttyS4` →
+**`quanta-q71l login:` prompt on real serial**; soak 96/96+ pings zero-loss
+straight through the 370 s point where 8/9 died (2+ min past it and counting;
+full PASS below). Only failure: `clear-once.service` (harmless).
+
+**The T+6.2 min mechanism, fully explained by the console:**
+`systemd[1]: Using hardware watchdog /dev/watchdog0: 'aspeed_wdt'` with a
+**2-minute hardware timeout**. On a default boot the G3 clk framework gates
+UARTCLK at t=4.16 s (our port's known clk bug — the console goes dead); when
+late-boot units (getty/status writes, ~T+4.2 min) write to the clock-dead
+UART, the writer blocks in the tty layer, PID1's console writes block PID1,
+the watchdog stops being patted, and **the aspeed WDT fires exactly 120 s
+later → SoC reset** — ICMP dies instantly, serial mute, NFS flat, and *no
+eth-bmc carrier flap* because the external RTL8201CP PHY keeps link through
+an SoC-only reset. A perfect "hard freeze / dying hardware" impersonation:
+deterministic at 370 s = console-stall time + the 2-min WDT.
+- Mitigation (proven): boot with **`clk_ignore_unused`**. Proper fix (later):
+  wire the UART/APB clocks correctly in the G3 clk driver / DTS so the 8250's
+  clock is refcounted.
+- NB the plug telemetry (`Uptime 2T23:58`, up since Jul 9 spanning the whole
+  WG outage) shows **no site power event** — the "post-outage" timing of the
+  regression was pure coincidence of fresh-boot ordering, as the audit found.
+
+### C.9 Verdict: hardware exonerated — it was our changes all along
+The user's reframe was correct. Three stacked our-side mechanisms produced the
+"board-level regression" illusion: (1) phosphor-network's DHCP
+`00-bmc-eth0.network` written into the shared rw export (killed every boot at
+T+2.2 min); (2) [not-fatal-alone accumulations: 16 MB journal etc, now
+cleared]; (3) the UARTCLK-gate + console-write + 2-min aspeed-WDT chain
+(killed file-fixed boots at T+6.2 min). The cold AC cycle was harmless but
+unnecessary; no evidence of DDR2/SoC degradation exists — attempt-10 runs
+clean on the same silicon.
+
+### C.10 THE FINAL DEMO — new kcsbridge image on real silicon (2026-07-12 evening)
+Boot: `uImage-kgpe-d16-hwpass` + **`kgpe-hwpass-safe.dtb`** (kcs@2c + w83795 +
+vuart + power-gpio; vhub/video off) + `clk_ignore_unused`, NFS root
+`/srv/nfs/openbmc-hwpass` (bisect masks removed, network file deleted, realhw
+masks kept). First TFTP load was the known flaky-DDR2 kind (kernel timed out
+once → script de-synced → clean `--skip-load` retry worked).
+
+**Stability: SOAK-PASS 144/144 pings, zero loss, 12 min** + serial login
+prompt (`quanta-q71l login:` on ttyS4) + `xyz.openbmc_project.Hwmon` slice up.
+
+**Demos captured on silicon (evidence/real-hw-hwpass/):**
+- **Host-KCS round-trip — THE flagship (host-kcs-mc-info-fru.txt):** the x86
+  host (SystemRescue) loaded `ipmi_si` (`type=kcs ports=0xca2` — the ASUS
+  SMBIOS type-38 entry mis-declares 0xCA2 as memory-mapped, forced I/O) and
+  the kernel handshake alone proved the channel:
+  `Found new BMC (man_id: 0x000a3f, prod_id: 0x0d16, dev_id: 0x01)`.
+  Then `ipmitool -I open mc info` **rc=0**: Manufacturer **2623 / "ASUSTek
+  Computer Inc."**, Product **3350 (0x0d16)** — the populated IDs, over the
+  real LPC KCS channel through the DTS `kcs@2c` → `/dev/ipmi-kcs3` →
+  kcsbridge stack. `fru print 0` **rc=0**: Board Mfg ASUSTeK Computer Inc.,
+  **Board Product KGPE-D16**, serial KGPED16-OPENBMC-0001, part
+  90-MSVDR0-G0UAY0Z.
+- **`sdr elist` over KCS rc=0 (host-kcs-sdr-chassis-sol.txt):** the full
+  KGPE-D16 sensor map enumerates (CPU_DIODE/CPU0_DTS/CPU1_DTS, VCORE0/1,
+  P12V/P5V/P3V3/P1V5/P1V1/P0V9/VBAT, FAN1-6). Readings are `ns/Disabled`:
+  see the I2C finding below.
+- **`sol info 1` rc=0** (both KCS + lanplus): full F-IMG2 SOL config —
+  Enabled true, Privilege ADMINISTRATOR, payload port 623 (closes the F4
+  SOL-config gap on silicon).
+- **`chassis status` rc=0** (reports "System Power: off" while the host is
+  demonstrably on — the STA_LINE_POWER GPIO input polarity/wiring remains an
+  open item; the command path itself works).
+- **IPMI-over-LAN (RMCP+) — root-caused + working (board-lanplus-*.txt):**
+  naive `ipmitool -I lanplus` fails with "Unexpected Open Session Response /
+  no response from RAKP 1" — the 200 MHz ARM926 answers RAKP slower than
+  ipmitool's default 1 s retransmit, so replies always arrive late.
+  **With `-N 5 -R 3` the session forms and `mc info` rc=0 shows the same
+  populated ASUSTeK 2623 / 0x0D16 over the LAN.** (F5's image answered
+  faster; the new image runs more daemons.)
+- **kcsbridge + /dev/ipmi-kcs3 live on the BMC** (dropbear check):
+  `phosphor-ipmi-kcs@ipmi-kcs3.service` active, device node present,
+  21.9 MB RAM available at steady state.
+
+**New genuine hardware finding (first-ever exercise of this path):** the
+BMC-side W83795 read fails — the w83795 driver binds at `1-002f` (DTS + udev
++ phosphor-hwmon all correct) but **every AST2050 I2C-bus-1 transaction times
+out (`Failed to set bank ... err -110`; `i2cdetect -y 1` hangs per address)**
+(`bmc-i2c1-scan.txt`). The G3 aspeed-i2c needs bring-up work on real silicon
+(clock divisor / IRQ on the G3 VIC / possible bus-sharing with the host
+SMBus master). NOT a regression — this path was never HW-tested before; the
+host-side W83795 values were captured earlier (`host-w83795-sensors.txt`).
+
+## Phase B decision (safety-bounded)
+Key hardware fact (from `HW-WIRING-power-sensors.md` §1.4 + the DTS): the power
+request lines B1/F0/B6/H2 are only **named** (`gpio-line-names`) — there is **no
+pinctrl/SCU-mux node**, so booting is safe, but *driving* host power needs SCU
+pinmux on pins shared with **SPI-flash-busy / I2C7 / video-port**, rated
+Medium-confidence and warned to "disturb boot flash or the NIC". Also **all**
+remaining host-side demos (sensors-with-host-on, host-KCS, SOL host bytes) are
+gated on the host being powered and on a fresh kernel (w83795 patch / kcs-cdev
+not in the proven `uImage-kgpe-d16-rxfix`). Per the task's hard safety rule
+("STOP if unsure; power on/off only, recoverable"), an unattended first-ever
+SCU-pinmux host-power drive + multi-stage P2A reboot driven through a flaky
+PXE-host SSH is **not** something to force. Plan: stage everything for a
+one-step supervised boot, and capture all reliably-reachable real-HW IPMI
+evidence against the live board now.

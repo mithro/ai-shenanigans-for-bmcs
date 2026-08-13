@@ -1,0 +1,114 @@
+# F8 KVM-over-IP demo -- scripts/kvm-test.py on -M kgpe-d16-bmc (AST2050), 64 MB
+# KVM kernel (Linux 6.6.70: V4L2 + aspeed-video + USB gadget/HID) + BusyBox initramfs,
+# cmdline '...f8kvm'. QEMU submodule a010d69 (aspeed.video-ast2050 @0x1e700000 +
+# aspeed.udc-ast2050 @0x1e6a0000). No QEMU source change needed.
+#
+# Proves the three-layer KVM path as far as a BMC-only QEMU machine allows:
+#  [1] VIDEO: aspeed-video probes the AST2050 video engine @0x1e700000 -> /dev/video0
+#      (name 'aspeed-video'). No VGA host source in QEMU, so this is 'driver probes +
+#      opens the capture device'; real capture needs a host emitting VGA (F8-KVM.md).
+#  [2] HID: aspeed_vhub brings up the AST2050 USB2.0 vhub (7 G3 downstream ports); a
+#      virtual keyboard+mouse gadget (configfs f_hid) enumerates on the host side as a
+#      real USB HID Keyboard+Mouse over dummy_hcd; a keypress ('a') report on /dev/hidg0
+#      crosses to the host evdev as EV_KEY/KEY_A(0x1e)/value=1 (the keypress the user asked
+#      to send). The real server host is not emulated by QEMU (F6/F8 boundary).
+# RESULT: PASS.
+
+=== F8-KVM-DEMO-BEGIN ===
+--- [1] VIDEO ENGINE: aspeed-video probe (dmesg) ---
+[    2.255842] aspeed-video 1e700000.video: irq 24
+[    2.258167] aspeed-video 1e700000.video: alloc mem size(24576) at 0x41288000 for jpeg header
+--- video capture device nodes ---
+crw-------    1 root     root       81,   0 Jan  1 00:00 /dev/video0
+/sys/class/video4linux/video0/name = aspeed-video
+F8-VIDEO: /dev/video0 present (aspeed-video bound the AST2050 video engine)
+--- [2] USB2.0 vhub probe (dmesg) ---
+[    2.001078] dummy_hcd dummy_hcd.0: USB Host+Gadget Emulator, driver 02 May 2005
+[    2.004958] dummy_hcd dummy_hcd.0: Dummy host controller
+[    2.005822] dummy_hcd dummy_hcd.0: new USB bus registered, assigned bus number 1
+[    2.085985] usb usb1: Manufacturer: Linux 6.6.70-dirty dummy_hcd
+[    2.086420] usb usb1: SerialNumber: dummy_hcd.0
+[    2.153995] aspeed_vhub 1e6a0000.usb-vhub: Initialized virtual hub in USB2 mode
+--- UDCs found (/sys/class/udc) ---
+1e6a0000.usb-vhub:p1
+1e6a0000.usb-vhub:p2
+1e6a0000.usb-vhub:p3
+1e6a0000.usb-vhub:p4
+1e6a0000.usb-vhub:p5
+1e6a0000.usb-vhub:p6
+1e6a0000.usb-vhub:p7
+dummy_udc.0
+--- [3] build a virtual HID keyboard+mouse gadget via configfs ---
+--- report descriptors the gadget will expose to the host ---
+keyboard report_desc (63 bytes):
+00000000  05 01 09 06 a1 01 05 07  19 e0 29 e7 15 00 25 01  |..........)...%.|
+00000010  75 01 95 08 81 02 95 01  75 08 81 03 95 05 75 01  |u.......u.....u.|
+00000020  05 08 19 01 29 05 91 02  95 01 75 03 91 03 95 06  |....).....u.....|
+00000030  75 08 15 00 25 65 05 07  19 00 29 65 81 00 c0     |u...%e....)e...|
+0000003f
+mouse report_desc (50 bytes):
+00000000  05 01 09 02 a1 01 09 01  a1 00 05 09 19 01 29 03  |..............).|
+00000010  15 00 25 01 95 03 75 01  81 02 95 01 75 05 81 03  |..%...u.....u...|
+00000020  05 01 09 30 09 31 15 81  25 7f 75 08 95 02 81 06  |...0.1..%.u.....|
+00000030  c0 c0                                             |..|
+binding vkvm HID gadget -> UDC 'dummy_udc.0'
+[    6.929465] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    7.115427] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    7.115890] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    7.116222] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    7.116476] usb 1-1: Manufacturer: ASUS-KGPE-D16-BMC
+[    7.116710] usb 1-1: SerialNumber: 0000A5T2050
+[    7.143067] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    7.219037] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    7.245693] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    7.251546] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+--- host-side enumeration of the virtual keyboard+mouse (dmesg) ---
+[    2.080000] usb usb1: New USB device found, idVendor=1d6b, idProduct=0002, bcdDevice= 6.06
+[    2.083599] usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    2.702790] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    6.929465] usb 1-1: new high-speed USB device number 2 using dummy_hcd
+[    7.115427] usb 1-1: New USB device found, idVendor=1d6b, idProduct=0104, bcdDevice= 6.06
+[    7.115890] usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+[    7.116222] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    7.143067] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    7.219037] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    7.245693] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    7.251546] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+--- gadget HID endpoints (/dev/hidgN = the report streams to the host) ---
+crw-------    1 root     root      245,   0 Jan  1 00:00 /dev/hidg0
+crw-------    1 root     root      245,   1 Jan  1 00:00 /dev/hidg1
+--- host input devices bound to the enumerated HID (evdev) ---
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event0 -> ../../devices/platform/gpio-keys/input/input0/event0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event1 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1/event1
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 event2 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2/event2
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input0 -> ../../devices/platform/gpio-keys/input/input0
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input1 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+lrwxrwxrwx    1 root     root             0 Jan  1 00:00 input2 -> ../../devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+vKVM keyboard evdev node: event1 (/dev/input/event1)
+--- writing keyboard report to /dev/hidg0: press 'a' then release ---
+F8-HID: wrote press report (a) to /dev/hidg0
+--- mouse report to /dev/hidg1: move +10,+5, left button ---
+F8-HID: wrote mouse report to /dev/hidg1
+--- host received these input_event bytes on /dev/input/event1 (the keypress crossing to the host) ---
+00000000  0b 00 00 00 7c 63 04 00  04 00 04 00 04 00 07 00  |....|c..........|
+00000010  0b 00 00 00 7c 63 04 00  01 00 1e 00 01 00 00 00  |....|c..........|
+00000020  0b 00 00 00 7c 63 04 00  00 00 00 00 00 00 00 00  |....|c..........|
+00000030  0b 00 00 00 72 3e 08 00  01 00 1e 00 02 00 00 00  |....r>..........|
+00000040  0b 00 00 00 72 3e 08 00  00 00 00 00 01 00 00 00  |....r>..........|
+00000050  0b 00 00 00 4f 01 09 00  01 00 1e 00 02 00 00 00  |....O...........|
+00000060  0b 00 00 00 4f 01 09 00  00 00 00 00 01 00 00 00  |....O...........|
+00000070  0b 00 00 00 1d c5 09 00  01 00 1e 00 02 00 00 00  |................|
+F8-HID-EVENT: host evdev received EV_KEY KEY_A press (value=1) ��� keypress crossed to the host
+[    2.702790] input: gpio-keys as /devices/platform/gpio-keys/input/input0
+[    7.116222] usb 1-1: Product: AST2050 vKVM keyboard+mouse (obmc-ikvm)
+[    7.143067] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.0/0003:1D6B:0104.0001/input/input1
+[    7.219037] hid-generic 0003:1D6B:0104.0001: input: USB HID v1.01 Keyboard [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input0
+[    7.245693] input: ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm) as /devices/platform/dummy_hcd.0/usb1/1-1/1-1:1.1/0003:1D6B:0104.0002/input/input2
+[    7.251546] hid-generic 0003:1D6B:0104.0002: input: USB HID v1.01 Mouse [ASUS-KGPE-D16-BMC AST2050 vKVM keyboard+mouse (obmc-ikvm)] on usb-dummy_hcd.0-1/input1
+=== F8-KVM-DEMO-END ===
+--- F8 KVM checks ---
+  [PASS] VIDEO: aspeed-video probes the AST2050 video engine @0x1e700000 -> /dev/video0
+  [PASS] HID: virtual keyboard gadget created; keypress report written to /dev/hidg0 (the byte-stream a keypress produces)
+  [INFO] HID: keypress delivered to a host-side evdev input device over dummy_hcd (EV_KEY / KEY_A)
+
+F8 KVM RESULT: PASS

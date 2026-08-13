@@ -1,0 +1,199 @@
+[1] DDR2 init (M1)...
+[2] load U-Boot + reset-boot...
+    U-Boot up.
+[3] drive U-Boot -> tftp + bootm...
+
+boot# setenv ipaddr 192.168.66.2
+boot# setenv serverip 192.168.66.1
+boot# setenv verify y
+boot# setenv fdt_high 0xffffffff
+boot# tftp 0x41000000 uImage-kgpe-d16-g3vic
+aspeednic#0: PHY at 0x20
+Using aspeednic#0 device
+TFTP from server 192.168.66.1; our IP address is 192.168.66.2
+Filename 'uImage-kgpe-d16-g3vic'.
+Load address: 0x41000000
+Loading: *#################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 #########################
+	 1.2 MiB/s
+done
+Bytes transferred = 3453560 (34b278 hex)
+boot# tftp 0x42000000 initrd-nfsbmc.cpio.gz
+aspeednic#0: PHY at 0x20
+Using aspeednic#0 device
+TFTP from server 192.168.66.1; our IP address is 192.168.66.2
+Filename 'initrd-nfsbmc.cpio.gz'.
+Load address: 0x42000000
+Loading: *#################################################################
+	 #################################################################
+	 #################################################################
+	 #################################################################
+	 ##########
+	 1.2 MiB/s
+done
+Bytes transferred = 1377987 (1506c3 hex)
+boot# tftp 0x43000000 kgpe-g3vic.dtb
+aspeednic#0: PHY at 0x20
+Using aspeednic#0 device
+TFTP from server 192.168.66.1; our IP address is 192.168.66.2
+Filename 'kgpe-g3vic.dtb'.
+Load address: 0x43000000
+Loading: *#####
+	 1.3 MiB/s
+done
+Bytes transferred = 22817 (5921 hex)
+boot# setenv bootargs earlycon console=ttyS4,115200n8 clk_ignore_unused rw init=/init initrd=0x42000000,0x1506c3
+boot# bootm 0x41000000 - 0x43000000
+## Booting kernel from Legacy Image at 41000000 ...
+   Image Name:   Linux-6.6.70-00001-g69dd008c298f
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    3453496 Bytes = 3.3 MiB
+   Load Address: 40008000
+   Entry Point:  40008000
+   Verifying Checksum ... OK
+## Flattened Device Tree blob at 43000000
+   Booting using the fdt blob at 0x43000000
+   Loading Kernel Image ... OK
+   Using Device Tree in place at 43000000, end 43008920
+
+Starting kernel ...
+
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.70-00001-g69dd008c298f-dirty (tim@desktop) (arm-linux-gnueabi-gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #17 Thu Jul  9 16:34:07 ACST 2026
+[    0.000000] CPU: ARM926EJ-S [41069265] revision 5 (ARMv5TEJ), cr=0005317f
+[    0.000000] CPU: VIVT data cache, VIVT instruction cache
+[    0.000000] OF: fdt: Machine model: ASUS KGPE-D16 BMC
+[    0.000000] earlycon: ns16550a0 at MMIO 0x1e784000 (options '')
+[    0.000000] printk: bootconsole [ns16550a0] enabled
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] OF: reserved mem: 0x43800000..0x43ffffff (8192 KiB) nomap non-reusable framebuffer@43800000
+[    0.000000] Ignoring RAM at 0x43800000-0x44000000
+[    0.000000] Consider using a HIGHMEM enabled kernel.
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000040000000-0x00000000437fffff]
+[    0.000000] Kernel command line: earlycon console=ttyS4,115200n8 clk_ignore_unused rw init=/init initrd=0x42000000,0x1506c3
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 14224
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 42864K/57344K available (7168K kernel code, 1011K rwdata, 1948K rodata, 1024K init, 183K bss, 14480K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=32, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] ftrace: allocating 30346 entries in 60 pages
+[    0.000000] ftrace: allocated 60 pages with 4 groups
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] aspeed-g3-vic: SENSE=0x903897fe EVENT=0x983f97fe DUAL=0x7c00000 edge_sources=0x6fc76801
+[    0.000000] i2c controller registered, irq 16
+[    0.000000] clocksource: FTTMR010-TIMER2: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 40773556198 ns
+[    0.000005] sched_clock: 32 bits at 47MHz, resolution 21ns, wraps every 45812984821ns
+[    0.004673] Switching to timer-based delay loop, resolution 21ns
+[    0.009993] Calibrating delay loop (skipped), value calculated using timer frequency.. 93.75 BogoMIPS (lpj=468750)
+[    0.016157] CPU: Testing write buffer coherency: ok
+[    0.019255] pid_max: default: 32768 minimum: 301
+[    0.041946] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.046354] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.076225] RCU Tasks Rude: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.082317] RCU Tasks Trace: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.088614] Setting up static identity map for 0x40100000 - 0x40100058
+[    0.095052] ASPEED Unknown rev A0 (00000202)
+[    0.101896] devtmpfs: initialized
+[    0.140741] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.146641] futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+[    0.151578] pinctrl core: initialized pinctrl subsystem
+[    0.162375] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.167570] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.233230] mc: Linux media interface: v0.10
+[    0.236046] videodev: Linux video capture interface: v2.00
+[    0.239622] pps_core: LinuxPPS API ver. 1 registered
+[    0.242561] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.248090] PTP clock support registered
+[    0.250517] EDAC MC: Ver: 3.0.0
+[    0.310346] clocksource: Switched to clocksource FTTMR010-TIMER2
+[    0.378506] NET: Registered PF_INET protocol family
+[    0.382267] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.388992] tcp_listen_portaddr_hash hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.394035] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.398740] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.403397] TCP bind hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.407634] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.411787] UDP hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.415750] UDP-Lite hash table entries: 256 (order: 0, 4096 bytes, linear)
+[    0.421603] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.467153] RPC: Registered named UNIX socket transport module.
+[    0.470662] RPC: Registered udp transport module.
+[    0.473517] RPC: Registered tcp transport module.
+[    0.476297] RPC: Registered tcp-with-tls transport module.
+[    0.479539] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.509553] Unpacking initramfs...
+[    0.521733] workingset: timestamp_bits=30 max_order=14 bucket_order=0
+[    0.560126] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.630619] NFS: Registering the id_resolver key type
+[    0.633853] Key type id_resolver registered
+[    0.636427] Key type id_legacy registered
+[    0.638988] jffs2: version 2.2. (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.687868] NET: Registered PF_ALG protocol family
+[    0.692542] io scheduler bfq registered
+[    0.763566] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.830065] printk: console [ttyS4] disabled
+[    0.834632] 1e784000.serial: ttyS4 at MMIO 0x1e784000 (irq = 19, base_baud = 1500000) is a 16550A
+[    0.839961] printk: console [ttyS4] enabled
+[    0.839961] printk: console [ttyS4] enabled
+[    0.844775] printk: bootconsole [ns16550a0] disabled
+[    0.844775] printk: bootconsole [ns16550a0] disabled
+[    0.898658] timeriomem_rng 1e6e2078.hwrng: 32bits from 0x(ptrval) @ 1us
+[    0.986106] loop: module loaded
+[    1.395051] ftgmac100 1e660000.ethernet: Read MAC address 96:0e:ce:b9:5d:8d from chip
+[    1.409496] ftgmac100 1e660000.ethernet (unnamed net_device) (uninitialized): Unsupported PHY mode rmii !
+[    1.414788] RTL8201CP Ethernet 1e660000.ethernet--1:00: attached PHY driver (mii_bus:phy_addr=1e660000.ethernet--1:00, irq=POLL)
+[    1.421136] ftgmac100 1e660000.ethernet: AST2050: leaving MACCLK at the U-Boot default
+[    1.427610] ftgmac100 1e660000.ethernet eth0: irq 20, mapped at (ptrval)
+[    1.432799] i2c_dev: i2c /dev entries driver
+[    1.436630] Driver for 1-wire Dallas network protocol.
+[    1.455000] NET: Registered PF_INET6 protocol family
+[    1.572673] Segment Routing with IPv6
+[    1.574926] In-situ OAM (IOAM) with IPv6
+[    1.577639] NET: Registered PF_PACKET protocol family
+[    1.580711] 8021q: 802.1Q VLAN Support v1.8
+[    1.583103] Key type dns_resolver registered
+[    1.883659] Freeing initrd memory: 1348K
+[    3.500328] random: crng init done
+[    4.622337] clk: Not disabling unused clocks
+[    4.644320] Freeing unused kernel image (initmem) memory: 1024K
+[    4.649030] Checked W+X mappings: passed, no W+X pages found
+[    4.652193] Run /init as init process
+[    4.764946] ftgmac100 1e660000.ethernet eth0: Link is Up - 100Mbps/Full - flow control rx/tx
+[    4.794664] ftgmac100 1e660000.ethernet eth0: entered promiscuous mode
+[    4.811729] IK-USERSPACE-UP Linux 6.6.70-00001-g69dd008c298f-dirty armv5tejl
+[    4.827281] 2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP100> mtu 1500 qdisc pfifo_fast qlen 1000
+[    4.827281]     link/ether 96:0e:ce:b9:5d:8d brd ff:ff:ff:ff:ff:ff
+[    4.827281]     inet 192.168.66.2/24 scope global eth0
+[    4.827281]        valid_lft forever preferred_lft forever
+[    4.827281]     inet6 fe80::940e:ceff:feb9:5d8d/64 scope link tentative 
+[    4.827281]        valid_lft forever preferred_lft forever
+[    9.503811] PING 192.168.66.1 (192.168.66.1): 56 data bytes
+[    9.503811] 
+[    9.503811] --- 192.168.66.1 ping statistics ---
+[    9.503811] 3 packets transmitted, 0 packets received, 100% packet loss
+[    9.570394] IK-ETH0-STATS tx=9 rx=0 txerr=0 txdrop=0 rxerr=0
+[    9.573918] IK-PINGED-PI
+[    9.589861] Generating 256 bit ed25519 key, this may take a while...
+Public key portion is:
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM++sFk6bvmu56NGeEno7wMI9zB8lfKoepbH2wPXD90S root@kgpe-d16-bmc
+Fingerprint: SHA256:ERYYK/gEyqgFpFhJ8IOLnppP6i1PAbaHARr0LhM43QQ
+[    9.762854] IK-DROPBEAR-UP listening :22
+/bin/sh: can't access tty; job control turned off
+~ # 
+
+[*] saw: '# '

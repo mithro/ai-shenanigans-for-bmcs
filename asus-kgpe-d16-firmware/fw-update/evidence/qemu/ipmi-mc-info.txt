@@ -1,0 +1,17 @@
+# rc=0
+Device ID                 : 0
+Device Revision           : 0
+Firmware Revision         : 0.00
+IPMI Version              : 2.0
+Manufacturer ID           : 0
+Manufacturer Name         : Unknown
+Product ID                : 0 (0x0000)
+Product Name              : Unknown (0x00)
+Device Available          : no
+Provides Device SDRs      : no
+Additional Device Support :
+Aux Firmware Rev Info     : 
+    0x00
+    0x00
+    0x00
+    0x00

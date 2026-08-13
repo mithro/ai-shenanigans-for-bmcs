@@ -118,6 +118,15 @@ def build_dropbear(version, build: Path) -> Path:
     return src / "dropbearmulti"
 
 
+def build_f8video(build: Path, src: Path) -> Path:
+    """Cross-compile the static F8 video-datapath demo tool (f8video.c):
+    draws the test pattern into the VGA aperture via /dev/mem and captures a
+    JPEG frame from /dev/video0, emitting it as base64 for the boot harness."""
+    out = build / "f8video"
+    run([CC, "-static", "-O2", "-Wall", "-Werror", str(src), "-o", str(out)])
+    return out
+
+
 def gen_test_key(out: Path) -> str:
     """Generate a throwaway ed25519 keypair; return the public key text."""
     priv = out / "id_kgpe_d16_test"
@@ -130,7 +139,7 @@ def gen_test_key(out: Path) -> str:
 
 
 def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
-                 pubkey: str):
+                 pubkey: str, f8video: Path):
     for d in ("bin", "sbin", "usr/bin", "usr/sbin", "dev", "proc", "sys",
               "etc/dropbear", "tmp", "run", "var/log", "root/.ssh"):
         (rootfs / d).mkdir(parents=True, exist_ok=True)
@@ -145,6 +154,8 @@ def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
         (rootfs / "sbin" / tool).symlink_to("dropbearmulti")
     shutil.copy2(init, rootfs / "init")
     os.chmod(rootfs / "init", 0o755)
+    shutil.copy2(f8video, rootfs / "usr/bin/f8video")
+    os.chmod(rootfs / "usr/bin/f8video", 0o755)
     (rootfs / "etc/passwd").write_text(
         "root:x:0:0:root:/root:/bin/sh\n")
     (rootfs / "etc/group").write_text("root:x:0:\n")
@@ -155,6 +166,31 @@ def build_rootfs(rootfs: Path, bb_src: Path, dropbearmulti: Path, init: Path,
     os.chmod(rootfs / "root", 0o755)
     os.chmod(rootfs / "root/.ssh", 0o700)
     os.chmod(rootfs / "root/.ssh/authorized_keys", 0o600)
+
+
+def tar_rootfs(rootfs: Path, out: Path):
+    """Emit the rootfs tree as a root-owned tar for NFS export (Phase 6).
+
+    The Phase-6 `boot-nfsroot` CI job extracts this into the NFS server's
+    /export as root and serves it to the faithful kgpe-d16-bmc guest, which
+    TFTP/`-kernel`-boots then mounts it over NFS (root=/dev/nfs). Same BusyBox+
+    dropbear userspace as the initramfs — so the same `/init` (via init=/init)
+    brings up eth0+dropbear and prints BMC-READY, proving the netboot+NFS path.
+
+    Every entry is forced to uid/gid 0 because the build runs unprivileged but
+    the export must be owned by root (dropbear also refuses a non-root-owned
+    ~/.ssh/authorized_keys).
+    """
+    tarpath = out / "nfs-rootfs.tar"
+
+    def root_owned(ti):
+        ti.uid = ti.gid = 0
+        ti.uname = ti.gname = "root"
+        return ti
+
+    with tarfile.open(tarpath, "w") as t:
+        t.add(rootfs, arcname=".", filter=root_owned)
+    print("NFS-export rootfs tar:", tarpath)
 
 
 def pack(rootfs: Path, out: Path):
@@ -189,13 +225,15 @@ def main():
 
     busybox = build_busybox(args.busybox_version, build)
     dropbearmulti = build_dropbear(args.dropbear_version, build)
+    f8video = build_f8video(build, here / "f8video.c")
     pubkey = gen_test_key(out)
 
     rootfs = build / "rootfs"
     if rootfs.exists():
         shutil.rmtree(rootfs)
-    build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey)
+    build_rootfs(rootfs, busybox, dropbearmulti, here / "init", pubkey, f8video)
     pack(rootfs, out)
+    tar_rootfs(rootfs, out)
     print("\nInitramfs artifacts in", out)
     run(["ls", "-la", str(out)])
 

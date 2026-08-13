@@ -1,0 +1,54 @@
+# rc=1
+
+PICMG HPM.1 Upgrade Agent 1.0.9: 
+
+Invalid HPM command: capabilities
+help                    - This help menu.
+
+check                   - Check the target information.
+check <file>            - If the user is unsure of what update is going to be 
+                          This will display the existing target version and
+                          image version on the screen
+
+upgrade <file> [component x...] [force] [activate]
+                        - Copies components from a valid HPM.1 image to the target.
+                          If one or more components specified by "component",
+                          only the specified components are copied.
+                          Otherwise, all the image components are copied.
+                          Before copy, each image component undergoes a version check
+                          and can be skipped if the target component version
+                          is the same or more recent.
+                          Use "force" to bypass the version check results.
+                          Make sure to check the versions first using the
+                          "check <file>" command.
+                          If "activate" is specified, the newly uploaded firmware
+                          is activated.
+upgstatus               - Returns the status of the last long duration command.
+
+compare <file>          - Perform "Comparison of the Active Copy" action for all the
+                          components present in the file.
+compare <file> component x - Compare only component <x> from the given <file>
+activate                - Activate the newly uploaded firmware.
+activate norollback     - Activate the newly uploaded firmware but inform
+                          the target to not automatically rollback if 
+                          the upgrade fails.
+
+targetcap               - Get the target upgrade capabilities.
+
+compprop <id> <prop>    - Get specified component properties from the target.
+                          Valid component <id>: 0-7 
+                          Properties <prop> can be one of the following: 
+                          0- General properties
+                          1- Current firmware version
+                          2- Description string
+                          3- Rollback firmware version
+                          4- Deferred firmware version
+
+abort                   - Abort the on-going firmware upgrade.
+
+rollback                - Performs a manual rollback on the IPM Controller.
+                          firmware
+rollbackstatus          - Query the rollback status.
+
+selftestresult          - Query the self test results.
+

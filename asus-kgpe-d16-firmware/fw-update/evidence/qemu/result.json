@@ -1,0 +1,9 @@
+{
+  "pass": true,
+  "steps": {
+    "serviceroot": true,
+    "updateservice_in_serviceroot": true,
+    "updateservice_get": true,
+    "ipmi_mc_info": true
+  }
+}

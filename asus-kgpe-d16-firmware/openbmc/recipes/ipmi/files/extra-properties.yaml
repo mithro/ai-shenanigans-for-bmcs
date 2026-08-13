@@ -1,0 +1,12 @@
+# F-IMG2 (d): extra (non-FRU-blob) inventory properties for ipmi-fru-parser.
+#
+# phosphor-ipmi-host's storagehandler gates `ipmitool fru print` on
+# isFruPresent(), which reads xyz.openbmc_project.Inventory.Item "Present" on the
+# FRU's inventory object. phosphor-read-eeprom writes the Asset + PrettyName from
+# the FRU blob but leaves Present at its default (false), so fru print reported
+# "Device not present" even though the data was there. The FRU-parser "extras"
+# mechanism (updateInventory merges these per inventory path) is the place to set
+# properties not carried in the FRU areas -- set Present=true for the motherboard.
+/system/chassis/motherboard:
+    xyz.openbmc_project.Inventory.Item:
+        Present: 'true'

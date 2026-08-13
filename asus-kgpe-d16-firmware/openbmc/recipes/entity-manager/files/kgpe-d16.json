@@ -1,0 +1,28 @@
+{
+    "Name": "ASUS KGPE-D16",
+    "Probe": "TRUE",
+    "Type": "Board",
+    "xyz.openbmc_project.Inventory.Decorator.Asset": {
+        "Manufacturer": "ASUSTeK Computer Inc.",
+        "Model": "KGPE-D16",
+        "PartNumber": "90-MSVDR0-G0UAY0Z",
+        "SerialNumber": "KGPED16-OPENBMC-0001",
+        "BuildDate": "2012-01-01 - 00:00:00 UTC"
+    },
+    "xyz.openbmc_project.Inventory.Decorator.AssetTag": {
+        "AssetTag": "ASUS-KGPE-D16-AST2050"
+    },
+    "xyz.openbmc_project.Inventory.Decorator.Revision": {
+        "Version": "Rev 1.xxG"
+    },
+    "xyz.openbmc_project.Inventory.Item.Chassis": {},
+    "Exposes": [
+        {
+            "Name": "W83795G",
+            "Type": "W83795G",
+            "Bus": 1,
+            "Address": "0x2f",
+            "Description": "Nuvoton/Winbond W83795G hardware monitor on BMC I2C bus 1 (fans, VCORE0/1, board rails, CPU diode + per-socket DTS). Read by phosphor-hwmon; see kgpe-d16-hwmon-config."
+        }
+    ]
+}

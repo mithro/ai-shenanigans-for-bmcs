@@ -1,0 +1,15 @@
+$ ipmitool -I lanplus -H 192.168.66.2 ... sdr type Fan
+# rc=0
+
+fan1             | B0h | ns  |  0.0 | Disabled
+fan2             | B1h | ns  |  0.0 | Disabled
+fan3             | B2h | ns  |  0.0 | Disabled
+fan4             | B3h | ns  |  0.0 | Disabled
+fan5             | B4h | ns  |  0.0 | Disabled
+fan6             | B5h | ns  |  0.0 | Disabled
+fan7             | B6h | ns  |  0.0 | Disabled
+fan8             | B7h | ns  |  0.0 | Disabled
+fan1             | C0h | ns  |  0.0 | No Reading
+fan2             | C1h | ns  |  0.0 | No Reading
+fan3             | C2h | ns  |  0.0 | No Reading
+fan4             | C3h | ns  |  0.0 | No Reading

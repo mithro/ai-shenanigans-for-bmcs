@@ -1,0 +1,12 @@
+$ ipmitool -I lanplus sdr type Voltage
+# rc=0
+
+VCORE0           | 10h | ok  |  0.0 | 0.96 Volts
+VCORE1           | 11h | ok  |  0.0 | 0.96 Volts
+P12V             | 12h | ok  |  0.0 | 11.97 Volts
+P5V              | 13h | ok  |  0.0 | 4.99 Volts
+P3V3             | 14h | ok  |  0.0 | 3.26 Volts
+P1V5             | 15h | ok  |  0.0 | 1.47 Volts
+P1V1             | 16h | ok  |  0.0 | 1.09 Volts
+P0V9             | 17h | ok  |  0.0 | 0.90 Volts
+VBAT             | 18h | ok  |  0.0 | 3.01 Volts

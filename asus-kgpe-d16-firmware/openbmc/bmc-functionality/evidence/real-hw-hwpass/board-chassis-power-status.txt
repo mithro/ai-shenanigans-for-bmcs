@@ -1,0 +1,9 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> -C 17 chassis power status
+# exit code: 124
+
+Error: Received an Unexpected Open Session Response
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+Bad response length, len=52
+Get Device ID command failed: 0xd4 Insufficient privilege level
+

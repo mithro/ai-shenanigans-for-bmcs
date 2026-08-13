@@ -19,4 +19,4 @@
 [submodule "asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu"]
 	path = asus-kgpe-d16-firmware/qemu-firmware/qemu/qemu
 	url = https://github.com/mithro/qemu.git
-	branch = d16-ast2050-machine
+	branch = ast2050-faithful

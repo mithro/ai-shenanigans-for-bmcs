@@ -1,0 +1,23 @@
+# obmc-console-client -i default (host bytes over SOL)
+# host lines fed into the VUART: 36
+# markers captured over the console: 19
+
+HOSTLINE-17 the-quick-brown-fox-jumps-over
+HOSTLINE-18 the-quick-brown-fox-jumps-over
+HOSTLINE-19 the-quick-brown-fox-jumps-over
+HOSTLINE-20 the-quick-brown-fox-jumps-over
+HOSTLINE-21 the-quick-brown-fox-jumps-over
+HOSTLINE-22 the-quick-brown-fox-jumps-over
+HOSTLINE-23 the-quick-brown-fox-jumps-over
+HOSTLINE-24 the-quick-brown-fox-jumps-over
+HOSTLINE-25 the-quick-brown-fox-jumps-over
+HOSTLINE-26 the-quick-brown-fox-jumps-over
+HOSTLINE-27 the-quick-brown-fox-jumps-over
+HOSTLINE-28 the-quick-brown-fox-jumps-over
+HOSTLINE-29 the-quick-brown-fox-jumps-over
+HOSTLINE-30 the-quick-brown-fox-jumps-over
+HOSTLINE-31 the-quick-brown-fox-jumps-over
+HOSTLINE-32 the-quick-brown-fox-jumps-over
+HOSTLINE-33 the-quick-brown-fox-jumps-over
+HOSTLINE-34 the-quick-brown-fox-jumps-over
+HOSTLINE-35 the-quick-brown-fox-jumps-over

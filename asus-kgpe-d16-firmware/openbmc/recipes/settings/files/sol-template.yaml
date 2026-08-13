@@ -1,0 +1,38 @@
+# IPMI Serial-Over-LAN (SOL) configuration object for the KGPE-D16 AST2050 BMC.
+#
+# Published on D-Bus by phosphor-settings-manager (xyz.openbmc_project.Settings)
+# at /xyz/openbmc_project/ipmi/sol/eth0 with interface xyz.openbmc_project.Ipmi.SOL.
+#
+# WHY THIS EXISTS:
+#   netipmid (phosphor-ipmi-net) Activate-Payload reads this object via the
+#   ObjectMapper (sol/sol_manager.cpp: getService(solInterface, "/.../sol/eth0")
+#   then getAllDbusProperties). host-ipmid (transporthandler.cpp Set/Get SOL
+#   Config Parameter) writes it. With no owner of the object the read returns
+#   ResourceNotFound and `ipmitool -I lanplus sol activate` fails with
+#   "No response activating SOL payload". phosphor-dbus-interfaces'
+#   Ipmi/SOL.interface.yaml states this interface "will be implemented in
+#   phosphor-settings" -- so we host it in settingsd via the BMC settings default.
+#
+# eth0 == IPMI LAN channel 1 (phosphor-ipmi-config/channel_config.json "1":"eth0").
+# Property set + defaults mirror phosphor-dbus-interfaces Ipmi/SOL.interface.yaml.
+/xyz/openbmc_project/ipmi/sol/eth0:
+    - Interface: xyz.openbmc_project.Ipmi.SOL
+      Properties:
+          Progress:
+              Default: 0
+          Enable:
+              Default: 'true'
+          ForceEncryption:
+              Default: 'true'
+          ForceAuthentication:
+              Default: 'true'
+          Privilege:
+              Default: 4
+          AccumulateIntervalMS:
+              Default: 20
+          Threshold:
+              Default: 1
+          RetryCount:
+              Default: 7
+          RetryIntervalMS:
+              Default: 100

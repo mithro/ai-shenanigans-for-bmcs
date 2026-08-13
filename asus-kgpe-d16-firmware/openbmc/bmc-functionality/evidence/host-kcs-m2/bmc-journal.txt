@@ -1,0 +1,57 @@
+Warning: Permanently added '[127.0.0.1]:12235' (ED25519) to the list of known hosts.
+=== systemctl status (bridge + ipmid) ===
+* phosphor-ipmi-kcs@ipmi-kcs3.service - Phosphor IPMI KCS DBus Bridge
+     Loaded: loaded (/usr/lib/systemd/system/phosphor-ipmi-kcs@.service; enabled; preset: enabled)
+     Active: active (running) since Sun 2026-07-12 05:57:21 UTC; 42s ago
+ Invocation: 26a4cf3d2bff4611abdc26d50a4a3f47
+   Main PID: 242 (kcsbridged)
+        CPU: 273ms
+     CGroup: /system.slice/system-phosphor\x2dipmi\x2dkcs.slice/phosphor-ipmi-kcs@ipmi-kcs3.service
+             `-242 /usr/libexec/kcsbridged -c ipmi-kcs3
+
+Jul 12 05:57:18 quanta-q71l systemd[1]: Starting Phosphor IPMI KCS DBus Bridge...
+Jul 12 05:57:21 quanta-q71l systemd[1]: Started Phosphor IPMI KCS DBus Bridge.
+* phosphor-ipmi-host.service - Phosphor Inband IPMI
+     Loaded: loaded (/usr/lib/systemd/system/phosphor-ipmi-host.service; enabled; preset: enabled)
+    Drop-In: /usr/lib/systemd/system/phosphor-ipmi-host.service.d
+             `-10-override.conf
+     Active: active (running) since Sun 2026-07-12 05:57:16 UTC; 56s ago
+ Invocation: ec488a6e81244706a1f58a9c7fd57f2b
+   Main PID: 218 (ipmid)
+        CPU: 1.265s
+=== journal: kcsbridged ===
+Jul 12 05:14:23 quanta-q71l systemd[1]: Starting Phosphor IPMI KCS DBus Bridge...
+Jul 12 05:14:33 quanta-q71l systemd[1]: Started Phosphor IPMI KCS DBus Bridge.
+-- Boot 5405289344f64e97a50cfebb30aa0d5d --
+Jul 12 05:35:08 quanta-q71l systemd[1]: Starting Phosphor IPMI KCS DBus Bridge...
+Jul 12 05:35:11 quanta-q71l systemd[1]: Started Phosphor IPMI KCS DBus Bridge.
+-- Boot e86cea633e3a4ca5831d38c919f20171 --
+Jul 12 05:57:18 quanta-q71l systemd[1]: Starting Phosphor IPMI KCS DBus Bridge...
+Jul 12 05:57:21 quanta-q71l systemd[1]: Started Phosphor IPMI KCS DBus Bridge.
+=== journal: ipmid (tail) ===
+Jul 12 05:34:55 quanta-q71l systemd[1]: Starting Phosphor Inband IPMI...
+Jul 12 05:35:01 quanta-q71l ipmid[216]: JSON file '/run/ipmi/channel_access_volatile.json' not found
+Jul 12 05:35:02 quanta-q71l ipmid[216]: i2c allow list file not found! file name: /usr/share/ipmi-providers/master_write_read_white_list.json
+Jul 12 05:35:02 quanta-q71l ipmid[216]: Registering WRITE FRU DATA command handler, netfn:0xa, cmd:0x12
+Jul 12 05:35:05 quanta-q71l ipmid[216]: Loading allowlist filter
+Jul 12 05:35:06 quanta-q71l ipmid[216]: Set restrictedMode = False
+Jul 12 05:35:06 quanta-q71l systemd[1]: Started Phosphor Inband IPMI.
+Jul 12 05:35:11 quanta-q71l ipmid[216]: New interface mapping: xyz.openbmc_project.Ipmi.Channel.ipmi_kcs3 -> channel 15
+Jul 12 05:52:33 quanta-q71l ipmid[216]: error message: map::at
+-- Boot e86cea633e3a4ca5831d38c919f20171 --
+Jul 12 05:57:04 quanta-q71l systemd[1]: Starting Phosphor Inband IPMI...
+Jul 12 05:57:11 quanta-q71l ipmid[218]: JSON file '/run/ipmi/channel_access_volatile.json' not found
+Jul 12 05:57:12 quanta-q71l ipmid[218]: i2c allow list file not found! file name: /usr/share/ipmi-providers/master_write_read_white_list.json
+Jul 12 05:57:12 quanta-q71l ipmid[218]: Registering WRITE FRU DATA command handler, netfn:0xa, cmd:0x12
+Jul 12 05:57:14 quanta-q71l ipmid[218]: Loading allowlist filter
+Jul 12 05:57:15 quanta-q71l ipmid[218]: Set restrictedMode = False
+Jul 12 05:57:16 quanta-q71l systemd[1]: Started Phosphor Inband IPMI.
+Jul 12 05:57:21 quanta-q71l ipmid[218]: New interface mapping: xyz.openbmc_project.Ipmi.Channel.ipmi_kcs3 -> channel 15
+Jul 12 05:57:39 quanta-q71l ipmid[218]: error message: map::at
+Jul 12 05:57:39 quanta-q71l ipmid[218]: No Object has implemented the interface: xyz.openbmc_project.State.BMC, NetFn: 0x6, Cmd: 0x1
+=== kcsbridged holds /dev/ipmi-kcs3 ===
+lrwx------    1 root     root            64 Jul 12 05:58 8 -> /dev/ipmi-kcs3
+=== dmesg: kcs ===
+[    0.388021] ast-kcs-bmc 1e78902c.kcs: Initialised IPMI client for channel 3
+[    0.388241] ast-kcs-bmc 1e78902c.kcs: Initialised channel 3 at 0xca2
+[    9.714469] systemd[1]: Created slice Slice /system/phosphor-ipmi-kcs.

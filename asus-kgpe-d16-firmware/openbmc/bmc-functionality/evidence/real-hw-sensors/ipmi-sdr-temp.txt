@@ -1,0 +1,7 @@
+$ ipmitool -I lanplus -H 192.168.66.2 ... sdr type Temperature
+# rc=0
+
+fleeting0        | D0h | ns  |  0.0 | Disabled
+temp2_inlet      | F0h | ns  |  0.0 | Disabled
+temp1            | F1h | ns  |  0.0 | Disabled
+temp3            | F2h | ns  |  0.0 | Disabled

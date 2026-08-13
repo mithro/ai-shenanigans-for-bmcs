@@ -1,0 +1,34 @@
+# GET /redfish/v1/Systems/system  (bmcweb, mem=256 boot; -u root:0penBmc)
+# SerialConsole (SOL) advertisement:
+{
+  "@odata.id": "/redfish/v1/Systems/system",
+  "SerialConsole": {
+    "IPMI": {
+      "ServiceEnabled": true
+    },
+    "MaxConcurrentSessions": 15,
+    "SSH": {
+      "HotKeySequenceDisplay": "Press ~. to exit console",
+      "Port": 2200,
+      "ServiceEnabled": true
+    }
+  },
+  "GraphicalConsole": {
+    "ConnectTypesSupported": [
+      "KVMIP"
+    ],
+    "MaxConcurrentSessions": 4,
+    "ServiceEnabled": true
+  }
+}
+
+# Manager GraphicalConsole (KVMIP):
+{
+  "GraphicalConsole": {
+    "ConnectTypesSupported": [
+      "KVMIP"
+    ],
+    "MaxConcurrentSessions": 4,
+    "ServiceEnabled": true
+  }
+}

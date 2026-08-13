@@ -34,6 +34,10 @@ def base_cmd(args):
         # user-net backend bound to the onboard FTGMAC100 NIC, with an SSH
         # host-forward for the C2 ssh-login test
         cmd += ["-nic", f"user,model=ftgmac100,hostfwd=tcp::{args.ssh_port}-:22"]
+    # Extra raw args passed straight to qemu-system-arm, e.g. the faithful G3 SCU
+    # reset table for the C-UBOOT oracle:
+    #   --extra=-global --extra=driver=aspeed.scu-ast2050,property=g3-resets,value=on
+    cmd += list(args.extra or [])
     return cmd
 
 
@@ -132,6 +136,9 @@ def main():
     ap.add_argument("--netdev", action="store_true",
                     help="add user-net ftgmac100 NIC with SSH hostfwd")
     ap.add_argument("--ssh-port", default=2222, type=int)
+    ap.add_argument("--extra", action="append", default=[],
+                    help="extra raw arg passed to qemu-system-arm (repeatable; "
+                         "use --extra=-flag so values starting with '-' survive)")
     args = ap.parse_args()
 
     if args.mode == "smoke":

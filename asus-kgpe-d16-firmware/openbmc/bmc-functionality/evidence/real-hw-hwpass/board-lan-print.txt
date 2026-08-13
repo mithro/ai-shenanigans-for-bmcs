@@ -1,0 +1,8 @@
+$ ipmitool -I lanplus -H 192.168.66.2 -U root -P <pw> -C 17 lan print 1
+# exit code: 124
+
+> Error: no response from RAKP 1 message
+Error: Received an Unexpected RAKP 2 message
+Bad response length, len=52
+No valid response received
+
