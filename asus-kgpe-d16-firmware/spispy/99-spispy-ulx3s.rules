@@ -1,0 +1,34 @@
+# spispy / ULX3S (ECP5-12F) udev rules — consistent dev-node naming + access
+# on the asus-bmc Raspberry Pi bridge (the host the ULX3S is plugged into).
+#
+# Install:
+#   sudo cp 99-spispy-ulx3s.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   # the login user must be in the 'plugdev' group (Raspberry Pi OS: it is by
+#   # default); otherwise:  sudo usermod -aG plugdev "$USER"  then re-login.
+#
+# Two independent USB functions appear when the ULX3S is connected:
+#
+#   1. FT231X programming / JTAG bridge      VID:PID 0403:6015   (always present)
+#      -> claimed over libusb by openFPGALoader / fujprog to load bitstreams.
+#      -> also enumerates a /dev/ttyUSB* (the FTDI UART), symlinked below.
+#
+#   2. FPGA soft-USB CDC-ACM control port    VID:PID 1d50:6130   (spispy gateware)
+#      -> enumerates /dev/ttyACM*; this is the port bin/spispy and write-ram use.
+#         VID 0x1d50 / PID 0x6130 are set in verilog/usb/usb_serial_ctrl_ep.v
+#         (the Openmoko/openmoko.org shared USB product-ID space).
+#
+# Resulting stable names:
+#   /dev/spispy-jtag  -> the FT231X programming port (0403:6015)
+#   /dev/spispy-ctrl  -> the spispy CDC-ACM control port (1d50:6130)
+
+# --- FT231X JTAG/UART bridge -------------------------------------------------
+# Stable symlink for the FTDI UART tty, and libusb access for openFPGALoader.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", SYMLINK+="spispy-jtag", GROUP="plugdev", MODE="0660"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="6015", GROUP="plugdev", MODE="0660", TAG+="uaccess"
+
+# --- spispy soft-USB CDC-ACM control port -----------------------------------
+# Stable symlink, and keep ModemManager from grabbing/probing the port (which
+# corrupts the raw command stream — see spispy README "Usage").
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="6130", SYMLINK+="spispy-ctrl", GROUP="plugdev", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6130", GROUP="plugdev", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1", TAG+="uaccess"

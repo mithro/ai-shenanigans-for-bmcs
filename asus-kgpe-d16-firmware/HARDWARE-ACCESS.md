@@ -39,6 +39,10 @@ option analysis is in [`BIOS-CONFIG-WITHOUT-MENU.md`](BIOS-CONFIG-WITHOUT-MENU.m
 | `opi`  | `opi1pc-a.iot.welland.mithis.com` | Orange Pi, USB-gadget = emulated keyboard + ECM net |
 | `rpi4` | `rpi4-asus-aspeed2050-dev.iot.welland.mithis.com` | Magewell video, COM1 serial, BMC UART, power |
 
+Both Pis draw **PoE** from `sw-netgear-gsm7252ps-s1.welland.mithis.com`
+(`10.1.5.22`); the `rpi4`/asus-bmc Pi is on port `1/0/18` — see
+[§5 Power-cycling the control hosts (PoE)](#power-cycling-the-control-hosts-themselves-poe).
+
 Both log in as **`tim`** with passwordless `sudo`. Use the persistent-mux SSH
 config so calls are fast/reliable (see `tmp/hw-access/ssh_config`):
 
@@ -234,6 +238,47 @@ curl -s "$H/cm?cmnd=Power%20TOGGLE"  # cold power-cycle
   `keysend … combo CTRL ALT DEL`.
 - From Setup: `serialkey press F10 ENTER` (save+reset) or the Exit menu.
 
+### Power-cycling the control hosts themselves (PoE)
+
+The bridge Pis (`rpi4`/asus-bmc and `opi`) are powered over **PoE** from a
+**Netgear GSM7252PS** 48-port managed switch —
+`sw-netgear-gsm7252ps-s1.welland.mithis.com` (**`10.1.5.22`**). The **asus-bmc
+Pi is on port `1/0/18`**. Power is switched by SNMP v2c on the standard
+`POWER-ETHERNET-MIB` (RFC 3621). Communities: **read-only `public`**,
+**read-write `private`**.
+
+Per-port objects are indexed `.<unit>.<port>`, so port `1/0/18` → index **`.1.18`**:
+
+| Object | OID (for `1/0/18`) | Access | Meaning |
+|---|---|---|---|
+| `pethPsePortAdminEnable` | `1.3.6.1.2.1.105.1.1.1.3.1.18` | RW | `1`=enabled (ON), `2`=disabled (OFF) |
+| `pethPsePortDetectionStatus` | `1.3.6.1.2.1.105.1.1.1.6.1.18` | RO | `1`=disabled `2`=searching `3`=deliveringPower `4`=fault `5`=test `6`=otherFault |
+| `pethPsePortPowerClassifications` | `1.3.6.1.2.1.105.1.1.1.11.1.18` | RO | detected PD power class |
+
+```sh
+SW=10.1.5.22
+# read (safe): admin state, whether power is being delivered, PD class
+snmpget -v2c -c public -Ovq $SW 1.3.6.1.2.1.105.1.1.1.3.1.18   # 1=on 2=off
+snmpget -v2c -c public -Ovq $SW 1.3.6.1.2.1.105.1.1.1.6.1.18   # 3=deliveringPower
+# power-cycle the asus-bmc Pi (read-write community):
+snmpset -v2c -c private $SW 1.3.6.1.2.1.105.1.1.1.3.1.18 i 2   # PoE OFF
+sleep 5
+snmpset -v2c -c private $SW 1.3.6.1.2.1.105.1.1.1.3.1.18 i 1   # PoE ON
+```
+
+To find another host's port, walk the admin table and the interface names:
+`snmpwalk -v2c -c public $SW 1.3.6.1.2.1.105.1.1.1.3` gives every `.<unit>.<port>`;
+`snmpwalk -v2c -c public $SW 1.3.6.1.2.1.31.1.1.1.1` (`ifName`) maps ports to the
+`1/0/N` labels. The switch reachable at `10.1.5.22` reports its own management
+address as `10.0.0.53` internally; use the DNS name / `10.1.5.22` to reach it.
+
+> **Before power-cycling, confirm the host is actually *down*, not just
+> unreachable from your vantage point.** `pethPsePortDetectionStatus` = `3`
+> (deliveringPower) means the Pi is powered and running — a lost SSH/ping is then
+> a *network/VPN* problem, not a dead Pi, and cutting PoE would needlessly reboot
+> a working host. (The `10.1.90.0/24` bridge VLAN and the `10.1.5.0/24` switch
+> VLAN can have independent reachability over the WireGuard tunnel.)
+
 ---
 
 ## 6. Netboot (PXE) context
@@ -282,7 +327,9 @@ ssh -F $CFG rpi4 'python3 ~/rig-tools/serialkey.py press DEL'         # drive (F
 ssh -F $CFG opi  "sudo python3 ~/rig-tools/keysend.py press DEL"      # type (flock)
 ssh -F $CFG rpi4 '~/rig-tools/grabframe.sh ~/hw-capture/f.png'        # screenshot (flock)
 # --- power ---
-curl -s "http://au-plug-10.iot.welland.mithis.com/cm?cmnd=Power"     # query / ON / OFF / TOGGLE
+curl -s "http://au-plug-10.iot.welland.mithis.com/cm?cmnd=Power"     # host mains (query/ON/OFF/TOGGLE)
+snmpget -v2c -c public -Ovq 10.1.5.22 1.3.6.1.2.1.105.1.1.1.6.1.18   # rpi4 PoE status (3=powered)
+snmpset -v2c -c private 10.1.5.22 1.3.6.1.2.1.105.1.1.1.3.1.18 i 2   # rpi4 PoE OFF (i 1 = ON) — port 1/0/18
 # --- daemon health ---
 ssh -F $CFG rpi4 'systemctl is-active kgpe-seriald.service'
 ssh -F $CFG opi  'cat /sys/kernel/config/usb_gadget/gadget/UDC'       # keyboard gadget bound?
